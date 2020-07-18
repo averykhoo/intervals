@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from numbers import Real
+from typing import Optional
 from typing import Tuple
 from typing import Union
 
 
 @dataclass(order=True, unsafe_hash=True, frozen=True)
-class Interval:
+class Span:
     start: Real
     start_open: bool  # todo: this is slightly broken since endpoints need to be comparable
     end: Real
@@ -44,35 +45,27 @@ class Interval:
             raise TypeError(self.start_open)
         if not isinstance(self.end_closed, bool):
             raise TypeError(self.end_closed)
-        if self.start_tuple > self.end_tuple:
+
+        if self.start_tuple > self.end_tuple:  # allow degenerate but not null intervals
             raise ValueError
 
-    def __contains__(self, other: Union[Real, 'Interval']) -> bool:
+    def __contains__(self, other: Union[Real, 'Span']) -> bool:
         if isinstance(other, Real):
-            other = Interval(other, False, other, True)
-        elif not isinstance(other, Interval):
+            return self.start_tuple <= (other, 0) <= self.end_tuple
+        elif isinstance(other, Span):
+            return self.start_tuple <= other.start_tuple and other.end_tuple <= self.end_tuple
+        else:
             raise TypeError(other)
 
-        return self.start_tuple <= other.start_tuple and other.end_tuple <= self.end_tuple
-
-    def overlaps(self, other: Union[Real, 'Interval']) -> bool:
+    def overlaps(self, other: Union[Real, 'Span']) -> bool:
         if isinstance(other, Real):
-            other = Interval(other, False, other, True)
-        elif not isinstance(other, Interval):
+            return self.start_tuple <= (other, 0) <= self.end_tuple
+        elif isinstance(other, Span):
+            return self.start_tuple <= other.end_tuple and other.start_tuple <= self.end_tuple
+        else:
             raise TypeError(other)
 
-        return self.start_tuple <= other.end_tuple and other.start_tuple <= self.end_tuple
-
-    def expand(self, distance: Real) -> 'Interval':
-        # todo: close both ends?
-        if not isinstance(distance, Real):
-            raise TypeError(distance)
-        if distance < 0:
-            raise ValueError(distance)
-
-        return Interval(self.start - distance, self.start_open, self.end + distance, self.end_closed)
-
-    def adjacent_to(self, other: Union[Real, 'Interval'], distance: Real) -> bool:
+    def adjacent_to(self, other: Union[Real, 'Span'], distance: Real) -> bool:
         if not isinstance(distance, Real):
             raise TypeError(distance)
         if distance < 0:
@@ -81,7 +74,44 @@ class Interval:
         _start_tuple = (self.start - distance, 0 if self.start_open else -1)
         _end_tuple = (self.end + distance, 1 if self.end_closed else 0)
 
-        return _start_tuple <= other.end_tuple and other.start_tuple <= _end_tuple
+        if isinstance(other, Real):
+            return _start_tuple <= (other, 0) <= _end_tuple
+        elif isinstance(other, Span):
+            return _start_tuple <= other.end_tuple and other.start_tuple <= _end_tuple
+        else:
+            raise TypeError(other)
+
+    def intersect(self, other: Union[Real, 'Span']) -> Optional['Span']:
+        if isinstance(other, Real):
+            if other in self:
+                return Span(other, False, other, True)  # degenerate interval
+
+        elif isinstance(other, Span):
+            if self.overlaps(other):
+                return Span(max(self.start, other.start),
+                            max(self.start_open, other.start_open),
+                            min(self.end, other.end),
+                            min(self.end_open, other.end_open))
+
+        else:
+            raise TypeError(other)
+
+    def shift(self, distance: Real) -> 'Span':
+        if not isinstance(distance, Real):
+            raise TypeError(distance)
+        if distance < 0:
+            raise ValueError(distance)
+
+        return Span(self.start + distance, self.start_open, self.end + distance, self.end_closed)
+
+    def expand(self, distance: Real) -> 'Span':
+        # todo: close both ends?
+        if not isinstance(distance, Real):
+            raise TypeError(distance)
+        if distance < 0:
+            raise ValueError(distance)
+
+        return Span(self.start - distance, self.start_open, self.end + distance, self.end_closed)
 
     def __repr__(self):
         return (f'{self.__class__.__name__}('
