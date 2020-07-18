@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from numbers import Real
 from typing import Optional
@@ -7,6 +8,7 @@ from typing import Union
 
 @dataclass(order=True, unsafe_hash=True, frozen=True)
 class Span:
+    # https://oeis.org/wiki/Intervals
     start: Real
     start_open: bool  # todo: this is slightly broken since endpoints need to be comparable
     end: Real
@@ -46,7 +48,14 @@ class Span:
         if not isinstance(self.end_closed, bool):
             raise TypeError(self.end_closed)
 
-        if self.start_tuple > self.end_tuple:  # allow degenerate but not null intervals
+        # check for nan
+        if math.isnan(self.start) or math.isnan(self.start):
+            raise ValueError
+
+        # todo: check for unbounded intervals, they should be considered closed
+
+        # allow degenerate but not null intervals
+        if self.start_tuple > self.end_tuple:
             raise ValueError
 
     def __contains__(self, other: Union[Real, 'Span']) -> bool:
@@ -121,16 +130,16 @@ class Span:
                 f'{repr(self.end_open)})')
 
     def __str__(self):
-        if self.start_open:
+        if self.is_degenerate:
+            return f'[{self.start}]'
+
+        if self.start_open:  # todo?: or if self.start == -math.inf
             left_bracket = '('
         else:
             left_bracket = '['
-        if self.end_closed:
+        if self.end_closed:  # todo?: and if self.end != math.inf
             right_bracket = ']'
         else:
             right_bracket = ')'
 
-        if self.start == self.end:
-            return f'{left_bracket}{self.start}{right_bracket}'
-        else:
-            return f'{left_bracket}{self.start}, {self.end}{right_bracket}'
+        return f'{left_bracket}{self.start}, {self.end}{right_bracket}'
