@@ -72,9 +72,16 @@ class Interval:
 
         return Interval(self.start - distance, self.start_open, self.end + distance, self.end_closed)
 
-    def nearby(self, other: Union[Real, 'Interval'], distance: Real) -> bool:
-        # todo: is [0, 1) within 2 of (3, 4] or not?
-        return self.expand(distance).overlaps(other)
+    def adjacent_to(self, other: Union[Real, 'Interval'], distance: Real) -> bool:
+        if not isinstance(distance, Real):
+            raise TypeError(distance)
+        if distance < 0:
+            raise ValueError(distance)
+
+        _start_tuple = (self.start - distance, 0 if self.start_open else -1)
+        _end_tuple = (self.end + distance, 1 if self.end_closed else 0)
+
+        return _start_tuple <= other.end_tuple and other.start_tuple <= _end_tuple
 
     def __repr__(self):
         return (f'{self.__class__.__name__}('
