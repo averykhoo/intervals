@@ -7,7 +7,7 @@ from typing import Union
 @dataclass(order=True, unsafe_hash=True, frozen=True)
 class Interval:
     start: Real
-    start_open: bool
+    start_open: bool  # todo: this is slightly broken since endpoints need to be comparable
     end: Real
     end_closed: bool
 
@@ -44,13 +44,8 @@ class Interval:
             raise TypeError(self.start_open)
         if not isinstance(self.end_closed, bool):
             raise TypeError(self.end_closed)
-        if self.start > self.end:
-            raise ValueError((self.start, self.end))
-        if self.start == self.end:
-            if self.start_open or not self.end_closed:
-                raise ValueError(f'both left and right bound must be closed for a degenerate interval')
-        if self.start_tuple >= self.end_tuple:
-            raise ValueError('something else went wrong')
+        if self.start_tuple > self.end_tuple:
+            raise ValueError
 
     def __contains__(self, other: Union[Real, 'Interval']) -> bool:
         if isinstance(other, Real):
