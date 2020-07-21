@@ -1,6 +1,8 @@
 import math
+import operator
 from dataclasses import dataclass
 from numbers import Real
+from typing import Callable
 from typing import Optional
 from typing import Tuple
 from typing import Union
@@ -136,7 +138,7 @@ class Interval:
     def closed(self):
         return Interval(self.start, False, self.end, True)
 
-    def __apply_operator(self, func, other):
+    def __apply_operator(self, func: Callable, other: Union[Real, 'Interval']) -> 'Interval':
         if isinstance(other, Real):
             if self.is_degenerate:
                 return Interval(func(self.start, other), False, func(self.start, other), True)
@@ -185,18 +187,13 @@ class Interval:
                             self.end_closed and not other.start_open)
 
     def __mul__(self, other: Union[Real, 'Interval']):
-        if isinstance(other, Real):
-            return Interval(self.start * other, self.start_open, self.end * other, self.end_closed)
+        return self.__apply_operator(operator.mul, other)
 
-        elif isinstance(other, Interval):
-            tmp = [self.start * other.start, self.start * other.end, self.end * other.start, self.end * other.end]
-            return Interval(min(tmp),
-                            self.start_open or other.start_open,  # todo: probably wrong
-                            max(tmp),
-                            self.end_closed and other.end_closed)  # todo: probably wrong
-
+    def __pow__(self, other: Union[Real, 'Interval']):
+        if self.start >= 0:
+            return self.__apply_operator(operator.pow, other)
         else:
-            raise TypeError
+            raise NotImplementedError
 
     def reciprocal(self):
         if 0 not in self:
