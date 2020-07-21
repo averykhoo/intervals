@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from numbers import Real
+from numbers import Rational
 from typing import Optional
 from typing import Tuple
 from typing import Union
@@ -9,9 +9,9 @@ from typing import Union
 @dataclass(order=True, unsafe_hash=True, frozen=True)
 class Interval:
     # https://oeis.org/wiki/Intervals
-    start: Real
+    start: Rational
     start_open: bool  # todo: this is slightly broken since endpoints need to be comparable
-    end: Real
+    end: Rational
     end_closed: bool
 
     @property
@@ -23,11 +23,11 @@ class Interval:
         return not self.end_closed
 
     @property
-    def start_tuple(self) -> Tuple[Real, int]:
+    def start_tuple(self) -> Tuple[Rational, int]:
         return self.start, 1 if self.start_open else 0
 
     @property
-    def end_tuple(self) -> Tuple[Real, int]:
+    def end_tuple(self) -> Tuple[Rational, int]:
         return self.end, 0 if self.end_closed else -1
 
     @property
@@ -35,13 +35,13 @@ class Interval:
         return self.start == self.end
 
     @property
-    def length(self) -> Real:
+    def length(self) -> Rational:
         return self.start - self.end
 
     def __post_init__(self):
-        if not isinstance(self.start, Real):
+        if not isinstance(self.start, Rational):
             raise TypeError(self.start)
-        if not isinstance(self.end, Real):
+        if not isinstance(self.end, Rational):
             raise TypeError(self.end)
         if not isinstance(self.start_open, bool):
             raise TypeError(self.start_open)
@@ -70,24 +70,24 @@ class Interval:
         if not self.start_tuple <= self.end_tuple:
             raise ValueError
 
-    def __contains__(self, other: Union[Real, 'Interval']) -> bool:
-        if isinstance(other, Real):
+    def __contains__(self, other: Union[Rational, 'Interval']) -> bool:
+        if isinstance(other, Rational):
             return self.start_tuple <= (other, 0) <= self.end_tuple
         elif isinstance(other, Interval):
             return self.start_tuple <= other.start_tuple and other.end_tuple <= self.end_tuple
         else:
             raise TypeError(other)
 
-    def overlaps(self, other: Union[Real, 'Interval']) -> bool:
-        if isinstance(other, Real):
+    def overlaps(self, other: Union[Rational, 'Interval']) -> bool:
+        if isinstance(other, Rational):
             return self.start_tuple <= (other, 0) <= self.end_tuple
         elif isinstance(other, Interval):
             return self.start_tuple <= other.end_tuple and other.start_tuple <= self.end_tuple
         else:
             raise TypeError(other)
 
-    def adjacent_to(self, other: Union[Real, 'Interval'], distance: Real) -> bool:
-        if not isinstance(distance, Real):
+    def adjacent_to(self, other: Union[Rational, 'Interval'], distance: Rational) -> bool:
+        if not isinstance(distance, Rational):
             raise TypeError(distance)
         if distance < 0:
             raise ValueError(distance)
@@ -95,15 +95,15 @@ class Interval:
         _start_tuple = (self.start - distance, 0 if self.start_open else -1)
         _end_tuple = (self.end + distance, 1 if self.end_closed else 0)
 
-        if isinstance(other, Real):
+        if isinstance(other, Rational):
             return _start_tuple <= (other, 0) <= _end_tuple
         elif isinstance(other, Interval):
             return _start_tuple <= other.end_tuple and other.start_tuple <= _end_tuple
         else:
             raise TypeError(other)
 
-    def intersect(self, other: Union[Real, 'Interval']) -> Optional['Interval']:
-        if isinstance(other, Real):
+    def intersect(self, other: Union[Rational, 'Interval']) -> Optional['Interval']:
+        if isinstance(other, Rational):
             if other in self:
                 return Interval(other, False, other, True)  # degenerate interval
 
@@ -117,22 +117,24 @@ class Interval:
         else:
             raise TypeError(other)
 
-    def shift(self, distance: Real) -> 'Interval':
-        if not isinstance(distance, Real):
+    def shift(self, distance: Rational) -> 'Interval':
+        if not isinstance(distance, Rational):
             raise TypeError(distance)
         if distance < 0:
             raise ValueError(distance)
 
         return Interval(self.start + distance, self.start_open, self.end + distance, self.end_closed)
 
-    def expand(self, distance: Real) -> 'Interval':
-        # todo: close both ends?
-        if not isinstance(distance, Real):
+    def expand(self, distance: Rational) -> 'Interval':
+        if not isinstance(distance, Rational):
             raise TypeError(distance)
         if distance < 0:
             raise ValueError(distance)
 
         return Interval(self.start - distance, self.start_open, self.end + distance, self.end_closed)
+
+    def closed(self):
+        return Interval(self.start, False, self.end, True)
 
     def __repr__(self):
         return (f'{self.__class__.__name__}('
