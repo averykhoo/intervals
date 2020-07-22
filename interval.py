@@ -301,10 +301,12 @@ class Interval:
             raise ValueError('Interval that is not degenerate cannot be coerced to int')
 
     def __neg__(self):
-        return Interval(-self.end, self.end_open, -self.start, self.start_closed)
+        # return Interval(-self.end, self.end_open, -self.start, self.start_closed)
+        return self._apply_monotonic_unary_function(operator.neg)
 
     def __pos__(self):
-        return Interval(self.start, self.start_open, self.end, self.end_closed)
+        # return Interval(self.start, self.start_open, self.end, self.end_closed)  # or `return self`
+        return self._apply_monotonic_unary_function(operator.pos)
 
     def __abs__(self) -> 'Interval':
         if 0 in self:
