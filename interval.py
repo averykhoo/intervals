@@ -55,25 +55,29 @@ class Interval:
 
         # check for nan
         if math.isnan(self.start) or math.isnan(self.end):
-            raise ValueError
+            raise ValueError('Interval cannot start or end with NaN')
 
         # the only infinity you can start with is negative infinity, and it must be closed
         if math.isinf(self.start):
-            if self.start_open:
-                raise ValueError
             if self.start != -math.inf:
-                raise ValueError
+                raise ValueError('Interval cannot start with positive infinity')
+            if self.start_open:
+                raise ValueError('There is no real value just after negative infinity')
 
         # the only infinity you can end with is positive infinity, and it must be closed
         if math.isinf(self.end):
-            if self.end_open:
-                raise ValueError
             if self.end != math.inf:
-                raise ValueError
+                raise ValueError('Interval cannot end with negative infinity')
+            if self.end_open:
+                raise ValueError('There is no real value just before positive infinity')
+
+        # strictly one way only
+        if self.start > self.end:
+            raise ValueError('Interval cannot go backwards')
 
         # allow degenerate but not null intervals
         if self.start_tuple > self.end_tuple:
-            raise ValueError
+            raise ValueError('Interval cannot be null')
 
     def __contains__(self, other: Union[Real, 'Interval']) -> bool:
         if isinstance(other, Real):
@@ -83,6 +87,20 @@ class Interval:
         else:
             raise TypeError(other)
 
+    def expand(self, distance: Real) -> 'Interval':
+        if not isinstance(distance, Real):
+            raise TypeError(distance)
+        if distance < 0:
+            raise ValueError(distance)
+
+        return Interval(self.start - distance, self.start_open, self.end + distance, self.end_closed)
+
+    def as_closed_interval(self):
+        if self.start_closed and self.end_closed:
+            return self
+        else:
+            return Interval(self.start, False, self.end, True)
+
     def overlaps(self, other: Union[Real, 'Interval']) -> bool:
         if isinstance(other, Real):
             return self.start_tuple <= (other, 0) <= self.end_tuple
@@ -91,14 +109,9 @@ class Interval:
         else:
             raise TypeError(other)
 
-    def adjacent_to(self, other: Union[Real, 'Interval'], distance: Real) -> bool:
-        if not isinstance(distance, Real):
-            raise TypeError(distance)
-        if distance < 0:
-            raise ValueError(distance)
-
-        _start_tuple = (self.start - distance, 0 if self.start_open else -1)
-        _end_tuple = (self.end + distance, 1 if self.end_closed else 0)
+    def adjacent_to(self, other: Union[Real, 'Interval']) -> bool:
+        _start_tuple = (self.start, 0 if self.start_open else -1)
+        _end_tuple = (self.end, 1 if self.end_closed else 0)
 
         if isinstance(other, Real):
             return _start_tuple <= (other, 0) <= _end_tuple
@@ -121,20 +134,6 @@ class Interval:
 
         else:
             raise TypeError(other)
-
-    def expand(self, distance: Real) -> 'Interval':
-        if not isinstance(distance, Real):
-            raise TypeError(distance)
-        if distance < 0:
-            raise ValueError(distance)
-
-        return Interval(self.start - distance, self.start_open, self.end + distance, self.end_closed)
-
-    def as_closed_interval(self):
-        if self.start_closed and self.end_closed:
-            return self
-        else:
-            return Interval(self.start, False, self.end, True)
 
     def _apply_monotonic_unary_function(self, func: Callable) -> 'Interval':
         _start_tuple = min((func(self.start), self.start_open),
@@ -167,7 +166,6 @@ class Interval:
                                        (func(self.end, other), self.end_open))
                     _end_tuple = max((func(self.start, other), self.start_closed),
                                      (func(self.end, other), self.end_closed))
-
                 return Interval(*_start_tuple, *_end_tuple)
 
         elif isinstance(other, Interval):
@@ -184,6 +182,7 @@ class Interval:
                              (func(x.start, y.end), x.start_closed and y.end_closed),
                              (func(x.end, y.start), x.end_closed and y.start_closed),
                              (func(x.end, y.end), x.end_closed and y.end_closed))
+
             return Interval(*_start_tuple, *_end_tuple)
 
         else:
@@ -271,12 +270,10 @@ class Interval:
 
     def __truediv__(self, other):
         if isinstance(other, Real):
-            if float(other) > 0:
-                return Interval(self.start / other, self.start_open, self.end / other, self.end_closed)
-            elif float(other) < 0:
-                return Interval(self.end / other, self.end_open, self.start / other, self.start_closed)
+            if other == 0:
+                return Interval(-math.inf, False, math.inf, True)
             else:
-                Interval(-math.inf, False, math.inf, True)
+                return self._apply_monotonic_binary_function(operator.truediv, other)
 
         elif isinstance(other, Interval):
             return self * other.reciprocal()
@@ -285,8 +282,14 @@ class Interval:
             raise TypeError
 
     def __rtruediv__(self, other):
-        if isinstance(other, (Real, Interval)):
-            return other * self.reciprocal()
+        if isinstance(other, Real):
+            if other == 0:
+                return Interval(0, False, 0, True)
+            else:
+                return other * self.reciprocal()
+
+        elif isinstance(other, Interval):
+            return self * other.reciprocal()
 
         else:
             raise TypeError
@@ -317,3 +320,7 @@ class Interval:
             _right_bracket = ']' if self.end_closed and self.end != math.inf else ')'
 
         return f'{_left_bracket}{_start}, {_end}{_right_bracket}'
+
+
+if __name__ == '__main__':
+    print(math.inf / Interval(1, False, 2, True))
