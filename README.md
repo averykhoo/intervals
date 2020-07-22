@@ -1,6 +1,9 @@
 #   time-range
 time spans and ranges (groups of time spans)
 
+#   notes:
+*   need to differentiate *position/coordinate vectors* from *distance/displacement vectors*
+
 #   what is this
 *   time span
     *   has a start time and a non-negative duration

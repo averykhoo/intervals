@@ -26,7 +26,10 @@ class Interval:
 
     @property
     def is_degenerate(self) -> bool:
-        return self.start == self.end
+        if self.start == self.end:
+            assert self.start_closed and self.end_closed
+            return True
+        return False
 
     @property
     def length(self) -> Real:
@@ -63,13 +66,13 @@ class Interval:
 
         # the only infinity you can end with is positive infinity, and it must be closed
         if math.isinf(self.end):
-            if not self.end_closed:
+            if self.end_open:
                 raise ValueError
-            if self.end_closed != math.inf:
+            if self.end != math.inf:
                 raise ValueError
 
         # allow degenerate but not null intervals
-        if not self.start_tuple <= self.end_tuple:
+        if self.start_tuple > self.end_tuple:
             raise ValueError
 
     def __contains__(self, other: Union[Real, 'Interval']) -> bool:
@@ -114,18 +117,10 @@ class Interval:
                 return Interval(max(self.start, other.start),
                                 max(self.start_open, other.start_open),
                                 min(self.end, other.end),
-                                min(self.end_open, other.end_open))
+                                min(self.end_closed, other.end_closed))
 
         else:
             raise TypeError(other)
-
-    def shift(self, distance: Real) -> 'Interval':
-        if not isinstance(distance, Real):
-            raise TypeError(distance)
-        if distance < 0:
-            raise ValueError(distance)
-
-        return Interval(self.start + distance, self.start_open, self.end + distance, self.end_closed)
 
     def expand(self, distance: Real) -> 'Interval':
         if not isinstance(distance, Real):
@@ -135,99 +130,163 @@ class Interval:
 
         return Interval(self.start - distance, self.start_open, self.end + distance, self.end_closed)
 
-    def closed(self):
-        return Interval(self.start, False, self.end, True)
+    def as_closed_interval(self):
+        if self.start_closed and self.end_closed:
+            return self
+        else:
+            return Interval(self.start, False, self.end, True)
 
-    def __apply_operator(self, func: Callable, other: Union[Real, 'Interval']) -> 'Interval':
+    def _apply_monotonic_unary_function(self, func: Callable) -> 'Interval':
+        _start_tuple = min((func(self.start), self.start_open),
+                           (func(self.end), self.end_open))
+        _end_tuple = max((func(self.start), self.start_closed),
+                         (func(self.end), self.end_closed))
+        return Interval(*_start_tuple, *_end_tuple)
+
+    def _apply_monotonic_binary_function(self,
+                                         func: Callable,
+                                         other: Union[Real, 'Interval'],
+                                         right_hand_side: bool = False
+                                         ) -> 'Interval':
+
         if isinstance(other, Real):
             if self.is_degenerate:
-                return Interval(func(self.start, other), False, func(self.start, other), True)
+                if right_hand_side:
+                    return Interval(func(other, self.start), False, func(other, self.start), True)
+                else:
+                    return Interval(func(self.start, other), False, func(self.start, other), True)
+
             else:
-                _start_tuple = min((func(self.start, other), self.start_open),
-                                   (func(self.end, other), self.end_open))
-                _end_tuple = max((func(self.start, other), self.start_closed),
-                                 (func(self.end, other), self.end_closed))
+                if right_hand_side:
+                    _start_tuple = min((func(other, self.start), self.start_open),
+                                       (func(other, self.end), self.end_open))
+                    _end_tuple = max((func(other, self.start), self.start_closed),
+                                     (func(other, self.end), self.end_closed))
+                else:
+                    _start_tuple = min((func(self.start, other), self.start_open),
+                                       (func(self.end, other), self.end_open))
+                    _end_tuple = max((func(self.start, other), self.start_closed),
+                                     (func(self.end, other), self.end_closed))
+
                 return Interval(*_start_tuple, *_end_tuple)
 
         elif isinstance(other, Interval):
-            _start_tuple = min((func(self.start, other.start), self.start_open or other.start_open),
-                               (func(self.start, other.end), self.start_open or other.end_open),
-                               (func(self.end, other.start), self.end_open or other.start_open),
-                               (func(self.end, other.end), self.end_open or other.end_open))
-            _end_tuple = max((func(self.start, other.start), self.start_closed and other.start_closed),
-                             (func(self.start, other.end), self.start_closed and other.end_closed),
-                             (func(self.end, other.start), self.end_closed and other.start_closed),
-                             (func(self.end, other.end), self.end_closed and other.end_closed))
+            if right_hand_side:
+                x, y = other, self
+            else:
+                x, y = self, other
+
+            _start_tuple = min((func(x.start, y.start), x.start_open or y.start_open),
+                               (func(x.start, y.end), x.start_open or y.end_open),
+                               (func(x.end, y.start), x.end_open or y.start_open),
+                               (func(x.end, y.end), x.end_open or y.end_open))
+            _end_tuple = max((func(x.start, y.start), x.start_closed and y.start_closed),
+                             (func(x.start, y.end), x.start_closed and y.end_closed),
+                             (func(x.end, y.start), x.end_closed and y.start_closed),
+                             (func(x.end, y.end), x.end_closed and y.end_closed))
             return Interval(*_start_tuple, *_end_tuple)
 
         else:
             raise TypeError
 
-    def __add__(self, other: Union[Real, 'Interval']):
-        if isinstance(other, Real):
-            return Interval(self.start + other, self.start_open, self.end + other, self.end_closed)
+    def __add__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        return self._apply_monotonic_binary_function(operator.add, other)
 
-        elif isinstance(other, Interval):
-            return Interval(self.start + other.start,
-                            self.start_open or other.start_open,
-                            self.end + other.end,
-                            self.end_closed and other.end_closed)
+    def __radd__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        return self._apply_monotonic_binary_function(operator.add, other, True)
 
-        else:
-            raise TypeError
+    def __sub__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        return self._apply_monotonic_binary_function(operator.sub, other)
 
-    def __sub__(self, other: Union[Real, 'Interval']):
-        if isinstance(other, Real):
-            return Interval(self.start - other, self.start_open, self.end - other, self.end_closed)
+    def __rsub__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        return self._apply_monotonic_binary_function(operator.sub, other, True)
 
-        elif isinstance(other, Interval):
-            return Interval(self.start - other.end,
-                            self.start_open or not other.end_closed,
-                            self.end - other.start,
-                            self.end_closed and not other.start_open)
+    def __mul__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        return self._apply_monotonic_binary_function(operator.mul, other)
 
-    def __mul__(self, other: Union[Real, 'Interval']):
-        return self.__apply_operator(operator.mul, other)
+    def __rmul__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        return self._apply_monotonic_binary_function(operator.mul, other, True)
 
-    def __pow__(self, other: Union[Real, 'Interval']):
-        if self.start >= 0:
-            return self.__apply_operator(operator.pow, other)
+    def __lshift__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        return self._apply_monotonic_binary_function(operator.lshift, other)
+
+    def __rlshift__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        return self._apply_monotonic_binary_function(operator.lshift, other, True)
+
+    def __rshift__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        return self._apply_monotonic_binary_function(operator.rshift, other)
+
+    def __rrshift__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        return self._apply_monotonic_binary_function(operator.rshift, other, True)
+
+    def __pow__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        if float(self.start) > 0.0:
+            return self._apply_monotonic_binary_function(operator.pow, other)
         else:
             raise NotImplementedError
 
-    def reciprocal(self):
-        if 0 not in self:
-            return Interval(1 / self.end,
-                            not self.end_closed,  # todo: check
-                            1 / self.start,
-                            not self.start_open)  # todo: check
+    def __float__(self) -> float:
+        if self.is_degenerate:
+            return float(self.start)
+        else:
+            raise ValueError
 
-        elif self.is_degenerate:
+    def __int__(self) -> int:
+        if self.is_degenerate:
+            return int(float(self.start))
+        else:
+            raise ValueError
+
+    def __abs__(self) -> 'Interval':
+        if 0 in self:
+            _start_tuple = (0, False)
+        else:
+            _start_tuple = min((abs(self.start), self.start_open),
+                               (abs(self.end), self.end_open))
+        _end_tuple = max((abs(self.start), self.start_closed),
+                         (abs(self.end), self.end_closed))
+        return Interval(*_start_tuple, *_end_tuple)
+
+    def reciprocal(self):
+        if 0 in self:
             return Interval(-math.inf, False, math.inf, True)
-        elif self.start_tuple == (0, 0):
+
+        elif self.start == 0:
             return Interval(1 / self.end,
-                            not self.end_closed,  # todo: check
+                            self.end_open,
                             math.inf,
                             True)
-        elif self.end_tuple == (0, 0):
+
+        elif self.end == 0:
             return Interval(-math.inf,
-                            False,  # todo: check
+                            False,
                             1 / self.start,
-                            not self.start_open)  # todo: check
+                            self.start_closed)
+
         else:
-            return Interval(-math.inf, False, math.inf, True)
+            return Interval(1 / self.end,
+                            self.end_open,
+                            1 / self.start,
+                            self.start_closed)
 
     def __truediv__(self, other):
         if isinstance(other, Real):
-            if other > 0:
+            if float(other) > 0:
                 return Interval(self.start / other, self.start_open, self.end / other, self.end_closed)
-            elif other < 0:
-                return Interval(self.end / other, not self.end_closed, self.start / other, not self.start_open)
+            elif float(other) < 0:
+                return Interval(self.end / other, self.end_open, self.start / other, self.start_closed)
             else:
                 Interval(-math.inf, False, math.inf, True)
 
         elif isinstance(other, Interval):
             return self * other.reciprocal()
+
+        else:
+            raise TypeError
+
+    def __rtruediv__(self, other):
+        if isinstance(other, (Real, Interval)):
+            return other * self.reciprocal()
 
         else:
             raise TypeError
