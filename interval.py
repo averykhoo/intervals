@@ -218,29 +218,52 @@ class Interval:
 
     def __pow__(self, other: Union[Real, 'Interval']) -> 'Interval':
         if isinstance(other, Interval) and not other.is_degenerate:
-            if float(self.start) > 0.0:
+            if self.is_degenerate:
+                return self.start ** other
+            elif float(self.start) > 0.0:
+                return self._apply_monotonic_binary_function(operator.pow, other)
+            elif float(self.start) < 0.0:
+                raise ValueError('non-even powers of negative numbers are complex')
+
+            # self.start == 0.0 < self.end, other.start > 0
+            elif float(other.start) > 0:
                 return self._apply_monotonic_binary_function(operator.pow, other)
             else:
-                # todo: if float(self.start) == 0.0 then it depends on other, need __rpow__
-                # todo: because if 0.0 in self and 0.0 in other then you might get a multi-interval
-                # todo: if float(self.start) < 0.0 then we only have a useful solution if other an even number
-                raise NotImplementedError  # todo
+                # todo: when self.start == 0.0 and 0.0 in other, you might get a multi-interval
+                raise NotImplementedError
 
         elif isinstance(other, (Real, Interval)):
             if isinstance(other, Interval):
                 other = other.start  # treat degenerate interval as Real
 
-            if float(other) == 0.0:
+            if self.is_degenerate:
+                return Interval(self.start ** other, False, self.start ** other, True)
+
+            elif float(other) == 0.0:
                 return Interval(1, False, 1, True)
+
+            elif float(self.start) > 0:
+                return self._apply_monotonic_binary_function(operator.pow, other)
+            elif float(self.start) < 0:
+                if float(other) % 2 == 0:
+                    return abs(self) ** other
+                else:
+                    raise ValueError('non-even powers of negative numbers are complex')
+
+            # self.start == 0 < self.end
+            elif float(other) > 0:
+                return self._apply_monotonic_binary_function(operator.pow, other)
+
+            # self.start == 0 < self.end, other < 0
             else:
-                raise NotImplementedError  # todo
+                return Interval(self.end ** other, self.end_open, math.inf, True)
 
         else:
             raise TypeError(other)
 
     def __rpow__(self, other: Union[Real, 'Interval']) -> 'Interval':
         if isinstance(other, Interval) and not other.is_degenerate:
-            raise NotImplementedError  # todo: handle in __pow__
+            raise NotImplementedError  # handled in __pow__
 
         elif isinstance(other, (Real, Interval)):
             if isinstance(other, Interval):
