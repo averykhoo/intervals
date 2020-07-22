@@ -80,10 +80,10 @@ class Interval:
             raise ValueError('Interval cannot be null')
 
     def __contains__(self, other: Union[Real, 'Interval']) -> bool:
-        if isinstance(other, Real):
-            return self.start_tuple <= (other, 0) <= self.end_tuple
-        elif isinstance(other, Interval):
+        if isinstance(other, Interval):
             return self.start_tuple <= other.start_tuple and other.end_tuple <= self.end_tuple
+        elif isinstance(other, Real):
+            return self.start_tuple <= (other, 0) <= self.end_tuple
         else:
             raise TypeError(other)
 
@@ -91,7 +91,7 @@ class Interval:
         if not isinstance(distance, Real):
             raise TypeError(distance)
         if distance < 0:
-            raise ValueError(distance)
+            raise ValueError(distance)  # todo: allow negative numbers as long as it returns a non-empty interval
 
         return Interval(self.start - distance, self.start_open, self.end + distance, self.end_closed)
 
@@ -101,36 +101,32 @@ class Interval:
         else:
             return Interval(self.start, False, self.end, True)
 
-    def overlaps(self, other: Union[Real, 'Interval']) -> bool:
-        if isinstance(other, Real):
-            return self.start_tuple <= (other, 0) <= self.end_tuple
-        elif isinstance(other, Interval):
-            return self.start_tuple <= other.end_tuple and other.start_tuple <= self.end_tuple
+    def overlaps(self, other: Union[Real, 'Interval'], or_adjacent=False) -> bool:
+        if or_adjacent:
+            _start_tuple = (self.start, 0 if self.start_open else -1)
+            _end_tuple = (self.end, 1 if self.end_closed else 0)
         else:
-            raise TypeError(other)
+            _start_tuple = self.start_tuple
+            _end_tuple = self.end_tuple
 
-    def adjacent_to(self, other: Union[Real, 'Interval']) -> bool:
-        _start_tuple = (self.start, 0 if self.start_open else -1)
-        _end_tuple = (self.end, 1 if self.end_closed else 0)
-
-        if isinstance(other, Real):
-            return _start_tuple <= (other, 0) <= _end_tuple
-        elif isinstance(other, Interval):
+        if isinstance(other, Interval):
             return _start_tuple <= other.end_tuple and other.start_tuple <= _end_tuple
+        elif isinstance(other, Real):
+            return _start_tuple <= (other, 0) <= _end_tuple
         else:
             raise TypeError(other)
 
     def intersect(self, other: Union[Real, 'Interval']) -> Optional['Interval']:
-        if isinstance(other, Real):
-            if other in self:
-                return Interval(other, False, other, True)  # degenerate interval
-
-        elif isinstance(other, Interval):
+        if isinstance(other, Interval):
             if self.overlaps(other):
                 return Interval(max(self.start, other.start),
                                 max(self.start_open, other.start_open),
                                 min(self.end, other.end),
                                 min(self.end_closed, other.end_closed))
+
+        elif isinstance(other, Real):
+            if other in self:
+                return Interval(other, False, other, True)  # degenerate interval
 
         else:
             raise TypeError(other)
@@ -147,8 +143,27 @@ class Interval:
                                          other: Union[Real, 'Interval'],
                                          right_hand_side: bool = False
                                          ) -> 'Interval':
+        if isinstance(other, Interval) and not other.is_degenerate:
+            if right_hand_side:
+                x, y = other, self
+            else:
+                x, y = self, other
 
-        if isinstance(other, Real):
+            _start_tuple = min((func(x.start, y.start), x.start_open or y.start_open),
+                               (func(x.start, y.end), x.start_open or y.end_open),
+                               (func(x.end, y.start), x.end_open or y.start_open),
+                               (func(x.end, y.end), x.end_open or y.end_open))
+            _end_tuple = max((func(x.start, y.start), x.start_closed and y.start_closed),
+                             (func(x.start, y.end), x.start_closed and y.end_closed),
+                             (func(x.end, y.start), x.end_closed and y.start_closed),
+                             (func(x.end, y.end), x.end_closed and y.end_closed))
+
+            return Interval(*_start_tuple, *_end_tuple)
+
+        elif isinstance(other, (Real, Interval)):
+            if isinstance(other, Interval):
+                other = other.start  # treat degenerate interval as Real
+
             if self.is_degenerate:
                 if right_hand_side:
                     return Interval(func(other, self.start), False, func(other, self.start), True)
@@ -168,25 +183,8 @@ class Interval:
                                      (func(self.end, other), self.end_closed))
                 return Interval(*_start_tuple, *_end_tuple)
 
-        elif isinstance(other, Interval):
-            if right_hand_side:
-                x, y = other, self
-            else:
-                x, y = self, other
-
-            _start_tuple = min((func(x.start, y.start), x.start_open or y.start_open),
-                               (func(x.start, y.end), x.start_open or y.end_open),
-                               (func(x.end, y.start), x.end_open or y.start_open),
-                               (func(x.end, y.end), x.end_open or y.end_open))
-            _end_tuple = max((func(x.start, y.start), x.start_closed and y.start_closed),
-                             (func(x.start, y.end), x.start_closed and y.end_closed),
-                             (func(x.end, y.start), x.end_closed and y.start_closed),
-                             (func(x.end, y.end), x.end_closed and y.end_closed))
-
-            return Interval(*_start_tuple, *_end_tuple)
-
         else:
-            raise TypeError
+            raise TypeError(other)
 
     def __add__(self, other: Union[Real, 'Interval']) -> 'Interval':
         return self._apply_monotonic_binary_function(operator.add, other)
@@ -219,22 +217,65 @@ class Interval:
         return self._apply_monotonic_binary_function(operator.rshift, other, True)
 
     def __pow__(self, other: Union[Real, 'Interval']) -> 'Interval':
-        if float(self.start) > 0.0:
-            return self._apply_monotonic_binary_function(operator.pow, other)
+        if isinstance(other, Interval) and not other.is_degenerate:
+            if float(self.start) > 0.0:
+                return self._apply_monotonic_binary_function(operator.pow, other)
+            else:
+                # todo: if float(self.start) == 0.0 then it depends on other, need __rpow__
+                # todo: because if 0.0 in self and 0.0 in other then you might get a multi-interval
+                # todo: if float(self.start) < 0.0 then we only have a useful solution if other an even number
+                raise NotImplementedError  # todo
+
+        elif isinstance(other, (Real, Interval)):
+            if isinstance(other, Interval):
+                other = other.start  # treat degenerate interval as Real
+
+            if float(other) == 0.0:
+                return Interval(1, False, 1, True)
+            else:
+                raise NotImplementedError  # todo
+
         else:
-            raise NotImplementedError
+            raise TypeError(other)
+
+    def __rpow__(self, other: Union[Real, 'Interval']) -> 'Interval':
+        if isinstance(other, Interval) and not other.is_degenerate:
+            raise NotImplementedError  # todo: handle in __pow__
+
+        elif isinstance(other, (Real, Interval)):
+            if isinstance(other, Interval):
+                other = other.start  # treat degenerate interval as Real
+
+            if float(other) > 0:
+                return self._apply_monotonic_binary_function(operator.pow, other, True)
+            elif float(other) == 0:
+                if 0 not in self:
+                    return Interval(0, False, 0, True)
+                elif self.is_degenerate and float(self) == 0:
+                    return Interval(1, False, 1, True)
+                else:
+                    raise ValueError(f'0.0 ** {self.__str__()} does not produce a single Interval')
+
+            elif self.is_degenerate and float(self) % 2 == 0:
+                return Interval(other ** float(self), False, other ** float(self), True)
+
+            else:
+                raise ValueError('non-even powers of negative numbers are complex')
+
+        else:
+            raise TypeError(other)
 
     def __float__(self) -> float:
         if self.is_degenerate:
             return float(self.start)
         else:
-            raise ValueError
+            raise ValueError('Interval that is not degenerate cannot be coerced to float')
 
     def __int__(self) -> int:
         if self.is_degenerate:
             return int(float(self.start))
         else:
-            raise ValueError
+            raise ValueError('Interval that is not degenerate cannot be coerced to int')
 
     def __abs__(self) -> 'Interval':
         if 0 in self:
@@ -269,27 +310,30 @@ class Interval:
                             self.start_closed)
 
     def __truediv__(self, other):
-        if isinstance(other, Real):
-            if other == 0:
+        if isinstance(other, Interval) and not other.is_degenerate:
+            return self * other.reciprocal()
+
+        elif isinstance(other, (Real, Interval)):
+            if float(other) == 0:
                 return Interval(-math.inf, False, math.inf, True)
             else:
                 return self._apply_monotonic_binary_function(operator.truediv, other)
-
-        elif isinstance(other, Interval):
-            return self * other.reciprocal()
 
         else:
             raise TypeError
 
     def __rtruediv__(self, other):
-        if isinstance(other, Real):
-            if other == 0:
+        if isinstance(other, Interval) and not other.is_degenerate:
+            return self * other.reciprocal()
+
+        elif isinstance(other, (Real, Interval)):
+
+            if float(other) == 0:
                 return Interval(0, False, 0, True)
+            elif math.isinf(float(other)):
+                raise ValueError('infinity divided by an Interval does not produce a valid Interval')
             else:
                 return other * self.reciprocal()
-
-        elif isinstance(other, Interval):
-            return self * other.reciprocal()
 
         else:
             raise TypeError
@@ -320,7 +364,3 @@ class Interval:
             _right_bracket = ']' if self.end_closed and self.end != math.inf else ')'
 
         return f'{_left_bracket}{_start}, {_end}{_right_bracket}'
-
-
-if __name__ == '__main__':
-    print(math.inf / Interval(1, False, 2, True))
