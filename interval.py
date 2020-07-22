@@ -117,16 +117,110 @@ class Interval:
             raise TypeError(other)
 
     def intersect(self, other: Union[Real, 'Interval']) -> Optional['Interval']:
-        if isinstance(other, Interval):
+        if isinstance(other, Interval) and not other.is_degenerate:
             if self.overlaps(other):
-                return Interval(max(self.start, other.start),
-                                max(self.start_open, other.start_open),
-                                min(self.end, other.end),
-                                min(self.end_closed, other.end_closed))
+                _start_tuple = max(self.start_tuple, other.start_tuple)
+                _end_tuple = min(self.end_tuple, other.end_tuple)
+                return Interval(*_start_tuple, *_end_tuple)
+            else:
+                raise ValueError(f'{str(other)} does not overlap {str(self)}, so the intersection is a null set')
 
-        elif isinstance(other, Real):
+        elif isinstance(other, (Real, Interval)):
+            if isinstance(other, Interval):
+                other = other.start  # treat degenerate interval as Real
             if other in self:
                 return Interval(other, False, other, True)  # degenerate interval
+            else:
+                raise ValueError(f'[{other}] is not in {str(self)}, so the intersection is a null set')
+
+        else:
+            raise TypeError(other)
+
+    def union(self, other: Union[Real, 'Interval']) -> Optional['Interval']:
+        if isinstance(other, Interval) and not other.is_degenerate:
+            if self.overlaps(other, or_adjacent=True):
+                _start_tuple = min(self.start_tuple, other.start_tuple)
+                _end_tuple = max(self.end_tuple, other.end_tuple)
+                return Interval(*_start_tuple, *_end_tuple)
+            else:
+                raise ValueError(f'{str(other)} is not adjacent to {str(self)}, so the union comprises two Intervals')
+
+        elif isinstance(other, (Real, Interval)):
+            if isinstance(other, Interval):
+                other = other.start  # treat degenerate interval as Real
+
+            if other in self:
+                return self
+            elif other == self.start:
+                return Interval(self.start, False, self.end, self.end_closed)
+            elif other == self.end:
+                return Interval(self.start, self.start_open, self.end, True)
+            else:
+                raise ValueError(f'[{other}] is not adjacent to {str(self)}, so the union comprises two Intervals')
+
+        else:
+            raise TypeError(other)
+
+    def difference(self, other: Union[Real, 'Interval']) -> Optional['Interval']:
+        if isinstance(other, Interval) and not other.is_degenerate:
+            if not self.overlaps(other):
+                return self
+            raise NotImplementedError  # todo
+
+        elif isinstance(other, (Real, Interval)):
+            if isinstance(other, Interval):
+                other = other.start  # treat degenerate interval as Real
+
+            if self.is_degenerate:
+                if float(self) == other:
+                    raise ValueError('difference is the null set')
+                else:
+                    return self
+
+            if other not in self:
+                return self
+            elif self.start == other:
+                return Interval(self.start, True, self.end, self.end_closed)
+            elif self.end == other:
+                return Interval(self.start, self.start_open, self.end, False)
+            else:
+                raise ValueError(f'{str(self)} difference [{other}] comprises two Intervals')
+
+        else:
+            raise TypeError(other)
+
+    def symmetric_difference(self, other: Union[Real, 'Interval']) -> Optional['Interval']:
+        if isinstance(other, Interval) and not other.is_degenerate:
+            if self.start_tuple == other.start_tuple:
+                if self.end_tuple < other.end_tuple:
+                    return Interval(*self.end_tuple, *other.end_tuple)
+                else:
+                    return Interval(*other.end_tuple, *self.end_tuple)
+            elif self.end_tuple == other.end_tuple:
+                if self.start_tuple < other.start_tuple:
+                    return Interval(*self.start_tuple, *other.start_tuple)
+                else:
+                    return Interval(*other.start_tuple, *self.start_tuple)
+
+            else:
+                raise ValueError(f'{str(self)} symmetric difference {str(other)} comprises two Intervals')
+
+        elif isinstance(other, (Real, Interval)):
+            if isinstance(other, Interval):
+                other = other.start  # treat degenerate interval as Real
+
+            if self.is_degenerate:
+                if float(self) == other:
+                    raise ValueError('symmetric difference is the null set')
+                else:
+                    raise ValueError('symmetric difference comprises two intervals')
+
+            if self.start_tuple == (other, False):
+                return Interval(self.start, True, self.end, self.end_closed)
+            elif self.end_tuple == (other, True):
+                return Interval(self.start, self.start_open, self.end, False)
+            else:
+                raise ValueError(f'{str(self)} symmetric difference [{other}] comprises two Intervals')
 
         else:
             raise TypeError(other)
