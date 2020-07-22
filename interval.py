@@ -300,6 +300,12 @@ class Interval:
         else:
             raise ValueError('Interval that is not degenerate cannot be coerced to int')
 
+    def __neg__(self):
+        return Interval(-self.end, self.end_open, -self.start, self.start_closed)
+
+    def __pos__(self):
+        return Interval(self.start, self.start_open, self.end, self.end_closed)
+
     def __abs__(self) -> 'Interval':
         if 0 in self:
             _start_tuple = (0, False)
@@ -309,6 +315,16 @@ class Interval:
         _end_tuple = max((abs(self.start), self.start_closed),
                          (abs(self.end), self.end_closed))
         return Interval(*_start_tuple, *_end_tuple)
+
+    def __invert__(self):
+        if math.isinf(self.start) and not math.isinf(self.end):
+            return Interval(self.end, self.end_closed, math.inf, True)
+        elif not math.isinf(self.start) and math.isinf(self.end):
+            return Interval(-math.inf, False, self.start, self.start_open)
+        elif math.isinf(self.start) and math.isinf(self.end):
+            raise ValueError(f'the inversion of {str(self)} is the null set, which is not a valid Interval')
+        else:
+            raise ValueError(f'the inversion of {str(self)} comprises two Intervals')
 
     def reciprocal(self):
         if 0 in self:
