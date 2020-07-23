@@ -1,4 +1,5 @@
 import math
+import operator
 from numbers import Real
 from typing import Callable
 from typing import List
@@ -8,7 +9,7 @@ from typing import Union
 
 
 class MultiInterval:
-    endpoints: List[Tuple[Real, int]]
+    endpoints: List[Tuple[Real, int]]  # todo: explain epsilon
 
     def __init__(self):
         self.endpoints = []
@@ -52,6 +53,34 @@ class MultiInterval:
         length = 0  # remaining length of open intervals, after removing half-rays (can be negative)
         n_endpoints = 0  # number of endpoints, after removing open intervals (can be negative)
         return half_rays, length, n_endpoints
+
+    # COMPARISONS
+
+    def __compare(self, func: Callable, other: Union[Real, 'MultiInterval']) -> bool:
+        if isinstance(other, MultiInterval):
+            return func(self.endpoints, other.endpoints)
+        elif isinstance(other, Real):
+            return func(self.endpoints, [(other, 0), (other, 0)])
+        else:
+            raise TypeError(other)
+
+    def __lt__(self, other: Union[Real, 'MultiInterval']):
+        return self.__compare(operator.lt, other)
+
+    def __le__(self, other: Union[Real, 'MultiInterval']):
+        return self.__compare(operator.le, other)
+
+    def __eq__(self, other: Union[Real, 'MultiInterval']):
+        return self.__compare(operator.eq, other)
+
+    def __ne__(self, other: Union[Real, 'MultiInterval']):
+        return self.__compare(operator.ne, other)
+
+    def __ge__(self, other: Union[Real, 'MultiInterval']):
+        return self.__compare(operator.ge, other)
+
+    def __gt__(self, other: Union[Real, 'MultiInterval']):
+        return self.__compare(operator.gt, other)
 
     # UTILITY
 
