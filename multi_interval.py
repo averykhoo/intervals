@@ -1,5 +1,6 @@
 import math
 import operator
+import re
 from numbers import Real
 from typing import Callable
 from typing import List
@@ -7,12 +8,73 @@ from typing import Optional
 from typing import Tuple
 from typing import Union
 
+from interval import Interval
+
 
 class MultiInterval:
     endpoints: List[Tuple[Real, int]]  # todo: explain epsilon
 
+    # CONSTRUCTORS
+
     def __init__(self):
         self.endpoints = []
+
+    @classmethod
+    def _from_intervals(cls, *intervals: Interval):
+        raise NotImplementedError
+
+    @classmethod
+    def from_str(cls, text):
+        """
+        e.g. [1, 2] or [1,2]
+        e.g. [0] or {0}
+        e.g. {} or [] or ()
+        e.g. { [1, 2) | [3, 4) } or {[1,2),[3,4)} or even [1,2)[3,4)
+        """
+        re_interval = re.compile(r'[\[(]\s*(?:(?:-\s*)?\d+(?:\.\d+)?\s*(?:[,|;]\s*(?:-\s*)?\d+(?:\.\d+)?\s*)?)?[)\]]',
+                                 flags=re.U)
+        re_set = re.compile(r'{\s*(?:(?:-\s*)?\d+(?:\.\d+)?\s*(?:[,;]\s*(?:-\s*)?\d+(?:\.\d+)?\s*)*)?}',
+                            flags=re.U)
+        re_num = re.compile(r'(?:-\s*)?\d+(?:\.\d+)?',
+                            flags=re.U)
+
+        intervals = []
+        for interval_str in re_interval.findall(text):
+            nums = re_num.findall(interval_str)
+            if len(nums) == 2:
+                if '.' in nums[0]:
+                    _start = float(nums[0])
+                else:
+                    _start = int(nums[0])
+                if '.' in nums[1]:
+                    _end = float(nums[1])
+                else:
+                    _end = int(nums[1])
+                _start_open = interval_str[0] == '('
+                _end_closed = interval_str[-1] == ']'
+                intervals.append(Interval(_start, _start_open, _end, _end_closed))
+            elif len(nums) == 1:
+                if interval_str[0] == '[':
+                    assert interval_str[-1] == ']'
+                    if '.' in nums[0]:
+                        _point = float(nums[0])
+                    else:
+                        _point = int(nums[0])
+                    intervals.append(Interval(_point, False, _point, True))
+                else:
+                    assert interval_str[-1] == ')'
+            else:
+                assert len(nums) == 0
+
+        for set_str in re_set.findall(text):
+            for num in re_num.findall(set_str):
+                if '.' in num:
+                    _point = float(num)
+                else:
+                    _point = int(num)
+                intervals.append(Interval(_point, False, _point, True))
+
+        return cls.from_intervals(*intervals)
 
     # PROPERTIES
 
@@ -23,6 +85,10 @@ class MultiInterval:
     @property
     def is_degenerate(self) -> bool:
         return len(self.endpoints) == 2 and self.inf == self.sup
+
+    @property
+    def is_contiguous(self) -> bool:
+        return len(self.endpoints) == 2
 
     @property
     def inf(self) -> Optional[Real]:
@@ -41,12 +107,12 @@ class MultiInterval:
         but because of infinities and degeneracy it's a 3-tuple of:
             (1) number of open half-rays from 0 (infinite length, uncountable points,   0 <= n <= 2)
             (2) remaining length of open sets   (finite length,   uncountable points, -inf < n < inf)
-            (3) remaining endpoints             (zero length,     countable points,   -inf < n < inf)
+            (3) avg closed endpoints            (zero length,     countable points,   -inf < n < inf)
 
-        e.g.: (1, inf)
-            = (0, inf) - (0, 1]
-            = (0, inf) - (0, 1) - [1]
-            cardinality = (1, -1, -1)
+        e.g.: (1, inf]
+            = (0, inf] - (0, 1]
+            = (0, inf] - (0, 1) - [1]
+            cardinality = (1, -1, 0)
         """
         # todo: count stuff
         half_rays = 0  # only (-inf, 0) and/or (0, inf), if -inf or inf are included
@@ -95,6 +161,43 @@ class MultiInterval:
 
     def overlaps(self, other: Union[Real, 'MultiInterval'], or_adjacent=False) -> bool:
         raise NotImplementedError
+
+    # FILTER
+
+    def filter(self,
+               start: Real = -math.inf,
+               end: Real = math.inf,
+               start_closed: bool = True,
+               end_closed: bool = True
+               ) -> 'MultiInterval':
+        raise NotImplementedError
+
+    def __getitem__(self, item: Union[slice, 'MultiInterval']) -> 'MultiInterval':
+        if isinstance(item, MultiInterval):
+            return self.intersection(item)
+
+        elif isinstance(item, slice):
+            if item.step is not None:
+                raise ValueError(item)
+
+            _start = item.start or -math.inf
+            if not isinstance(_start, Real):
+                raise TypeError(_start)
+
+            _end = item.stop or math.inf
+            if not isinstance(_end, Real):
+                raise TypeError(_end)
+
+            return self.filter(start=_start, end=_end)
+
+        else:
+            raise TypeError
+
+    def positive(self) -> 'MultiInterval':
+        return self.filter(start=0, start_closed=False)
+
+    def negative(self) -> 'MultiInterval':
+        return self.filter(end=0, end_closed=False)
 
     # MISC
 
@@ -315,7 +418,7 @@ class MultiInterval:
         raise NotImplementedError
 
     def __str__(self) -> str:
-        def _interval_to_str(start_tuple, end_tuple):
+        def _interval_to_str(start_tuple, end_tuple, fancy_inf=False):
             assert start_tuple <= end_tuple, (start_tuple, end_tuple)
 
             # unpack
@@ -326,25 +429,33 @@ class MultiInterval:
 
             # degenerate interval
             if _start == _end:
+                assert _start_epsilon == 0
+                assert _end_epsilon == 0
                 return f'[{_start}]'
 
-            # left side
-            if _start == -math.inf:
-                _start = '-∞'
-                _left_bracket = '('
-            else:
-                _start = _start
-                _left_bracket = '(' if _start_epsilon else '['
+            # print the mathematically standard but logically inconsistent way
+            if fancy_inf:
+                # left side
+                if _start == -math.inf:
+                    assert _start_epsilon == 0
+                    _start = '-∞'
+                    _left_bracket = '('
+                else:
+                    _left_bracket = '(' if _start_epsilon else '['
 
-            # right side
-            if _end == math.inf:
-                _end = '∞'
-                _right_bracket = ')'
-            else:
-                _end = _end
-                _right_bracket = ')' if _end_epsilon else ']'
+                # right side
+                if _end == math.inf:
+                    assert _end_epsilon == 0
+                    _end = '∞'
+                    _right_bracket = ')'
+                else:
+                    _right_bracket = ')' if _end_epsilon else ']'
 
-            return f'{_left_bracket}{_start}, {_end}{_right_bracket}'
+                return f'{_left_bracket}{_start}, {_end}{_right_bracket}'
+
+            # for the sake of consistency, a closed endpoint at ±inf will be square instead of round
+            else:
+                return f'{"(" if _start_epsilon else "["}{_start}, {_end}{")" if _end_epsilon else "]"}'
 
         # null set: {}
         if self.is_empty:
