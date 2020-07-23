@@ -6,7 +6,7 @@ from typing import Union
 import pandas as pd
 
 
-class Interval:
+class TimeInterval:
     from_date: datetime.datetime
     to_date: datetime.datetime
 
@@ -44,13 +44,13 @@ class Interval:
     def __hash__(self):
         return hash((self.from_date, self.to_date))
 
-    def __eq__(self, other: 'Interval') -> bool:
-        if isinstance(other, Interval):
+    def __eq__(self, other: 'TimeInterval') -> bool:
+        if isinstance(other, TimeInterval):
             return self.from_date == other.from_date and self.to_date == other.to_date
 
         return False
 
-    def __contains__(self, item: Union[datetime.date, datetime.datetime, pd.Timestamp, 'Interval']) -> bool:
+    def __contains__(self, item: Union[datetime.date, datetime.datetime, pd.Timestamp, 'TimeInterval']) -> bool:
         # contains an instant in time
         if isinstance(item, pd.Timestamp):
             return self.from_date <= item.to_pydatetime() <= self.to_date
@@ -59,7 +59,7 @@ class Interval:
             return self.from_date <= item <= self.to_date
 
         # contains an interval
-        elif isinstance(item, Interval):
+        elif isinstance(item, TimeInterval):
             return self.from_date <= item.from_date and item.to_date <= self.to_date
 
         # contains a full day (from 00:00:00.000 to 23:59:59.999)
@@ -71,7 +71,7 @@ class Interval:
         else:
             raise TypeError(item)
 
-    def overlaps(self, other: Union[datetime.date, datetime.datetime, pd.Timestamp, 'Interval']) -> bool:
+    def overlaps(self, other: Union[datetime.date, datetime.datetime, pd.Timestamp, 'TimeInterval']) -> bool:
         # contains an instant in time
         if isinstance(other, pd.Timestamp):
             return other in self
@@ -79,7 +79,7 @@ class Interval:
             return other in self
 
         # overlaps an interval
-        elif isinstance(other, Interval):
+        elif isinstance(other, TimeInterval):
             return self.from_date <= other.to_date and other.from_date <= self.to_date
 
         # overlaps a day == contains a date
@@ -90,54 +90,54 @@ class Interval:
         else:
             raise TypeError(other)
 
-    def touches(self, other: Union[datetime.date, datetime.datetime, pd.Timestamp, 'Interval']) -> bool:
-        tmp = Interval(self.from_date - datetime.timedelta(microseconds=1),
-                       self.to_date + datetime.timedelta(microseconds=1))
+    def touches(self, other: Union[datetime.date, datetime.datetime, pd.Timestamp, 'TimeInterval']) -> bool:
+        tmp = TimeInterval(self.from_date - datetime.timedelta(microseconds=1),
+                           self.to_date + datetime.timedelta(microseconds=1))
         return tmp.overlaps(other)
 
     def intersection(self,
-                     other: Union[datetime.date, datetime.datetime, pd.Timestamp, 'Interval']
-                     ) -> Optional['Interval']:
+                     other: Union[datetime.date, datetime.datetime, pd.Timestamp, 'TimeInterval']
+                     ) -> Optional['TimeInterval']:
 
         # contains an instant in time
         if isinstance(other, pd.Timestamp):
             _other = other.to_pydatetime()
             if _other in self:
-                return Interval(_other, _other)
+                return TimeInterval(_other, _other)
         elif isinstance(other, datetime.datetime):
             if other in self:
-                return Interval(other, other)
+                return TimeInterval(other, other)
 
         # overlaps an interval
-        elif isinstance(other, Interval):
+        elif isinstance(other, TimeInterval):
             if self.overlaps(other):
-                return Interval(max(self.from_date, other.from_date), min(self.to_date, other.to_date))
+                return TimeInterval(max(self.from_date, other.from_date), min(self.to_date, other.to_date))
 
         # overlaps a day == contains a date
         elif isinstance(other, datetime.date):
-            return self.intersection(Interval(other, other))
+            return self.intersection(TimeInterval(other, other))
 
         # unknown type
         else:
             raise TypeError(other)
 
-    def union(self, other: Union['Interval', datetime.date]) -> Optional['Interval']:
+    def union(self, other: Union['TimeInterval', datetime.date]) -> Optional['TimeInterval']:
         # overlaps an interval
-        if isinstance(other, Interval):
+        if isinstance(other, TimeInterval):
             if self.overlaps(other):
-                return Interval(min(self.from_date, other.from_date), max(self.to_date, other.to_date))
+                return TimeInterval(min(self.from_date, other.from_date), max(self.to_date, other.to_date))
 
             # possibly subsequent days, 1 microsecond apart: self day precedes other day
             elif other.from_date - self.to_date == datetime.timedelta(microseconds=1):
-                return Interval(self.from_date, other.to_date)
+                return TimeInterval(self.from_date, other.to_date)
 
             # other day precedes self day
             elif self.from_date - other.to_date == datetime.timedelta(microseconds=1):
-                return Interval(other.from_date, self.to_date)
+                return TimeInterval(other.from_date, self.to_date)
 
         # overlaps a day == contains a date
         elif isinstance(other, datetime.date):
-            return self.union(Interval(other, other))
+            return self.union(TimeInterval(other, other))
 
         # unknown type
         else:
@@ -147,8 +147,8 @@ class Interval:
         return f'Interval({repr(self.from_date)}, {repr(self.to_date)})'
 
 
-class IntervalUnion:
-    intervals: List[Interval]
+class TimeIntervalUnion:
+    intervals: List[TimeInterval]
 
     @property
     def duration(self):
@@ -176,10 +176,10 @@ class IntervalUnion:
                 return True
         return False
 
-    def add(self, other: Interval):
-        _other = Interval(other.from_date, other.to_date)
+    def add(self, other: TimeInterval):
+        _other = TimeInterval(other.from_date, other.to_date)
 
-        if isinstance(other, Interval):
+        if isinstance(other, TimeInterval):
             _overlapping = []
             _remainder = []
 
@@ -211,9 +211,9 @@ class IntervalUnion:
         else:
             raise TypeError
 
-    def union(self, other: 'IntervalUnion'):
-        if isinstance(other, IntervalUnion):
-            _new = IntervalUnion()
+    def union(self, other: 'TimeIntervalUnion'):
+        if isinstance(other, TimeIntervalUnion):
+            _new = TimeIntervalUnion()
             for interval in self.intervals:
                 _new.add(interval)
             for interval in other.intervals:
@@ -223,9 +223,9 @@ class IntervalUnion:
 
         raise TypeError(other)
 
-    def intersection(self, other: 'IntervalUnion'):
-        if isinstance(other, IntervalUnion):
-            _new = IntervalUnion()
+    def intersection(self, other: 'TimeIntervalUnion'):
+        if isinstance(other, TimeIntervalUnion):
+            _new = TimeIntervalUnion()
             for interval_1 in self.intervals:
                 for interval_2 in other.intervals:
                     if interval_1.overlaps(interval_2):
