@@ -1,12 +1,37 @@
+import math
 from numbers import Real
 from typing import Callable
+from typing import List
 from typing import Optional
-from typing import Set
 from typing import Tuple
 from typing import Union
 
 
-class MultiInterval(Set):
+class MultiInterval:
+    endpoints: List[Tuple[Real, int]]
+
+    def __init__(self):
+        self.endpoints = []
+
+    # PROPERTIES
+
+    @property
+    def is_empty(self) -> bool:
+        return len(self.endpoints) == 0
+
+    @property
+    def is_degenerate(self) -> bool:
+        return len(self.endpoints) == 2 and self.inf == self.sup
+
+    @property
+    def inf(self) -> Optional[Real]:
+        if len(self.endpoints) > 0:
+            return self.endpoints[0][0]
+
+    @property
+    def sup(self) -> Optional[Real]:
+        if len(self.endpoints) > 0:
+            return self.endpoints[-1][0]
 
     @property
     def cardinality(self) -> Tuple[int, float, int]:
@@ -28,13 +53,7 @@ class MultiInterval(Set):
         n_endpoints = 0  # number of endpoints, after removing open intervals (can be negative)
         return half_rays, length, n_endpoints
 
-    @property
-    def is_degenerate(self) -> bool:
-        raise NotImplementedError
-
-    @property
-    def is_empty(self) -> bool:
-        raise NotImplementedError
+    # UTILITY
 
     def __contains__(self, other: Union[Real, 'MultiInterval']) -> bool:
         raise NotImplementedError
@@ -48,7 +67,30 @@ class MultiInterval(Set):
     def overlaps(self, other: Union[Real, 'MultiInterval'], or_adjacent=False) -> bool:
         raise NotImplementedError
 
-    # COMPARISONS
+    # MISC
+
+    def _consistency_check(self):
+        # length must be even
+        assert len(self.endpoints) % 2 == 0, len(self.endpoints)
+
+        def _check_endpoint_tuple(endpoint):
+            assert isinstance(endpoint, tuple), endpoint
+            assert len(endpoint) == 2, endpoint
+            assert isinstance(endpoint[0], Real), endpoint
+            assert isinstance(endpoint[1], int), endpoint
+            assert endpoint[1] in {-1, 0, 1}, endpoint
+
+        # must be sorted
+        if len(self.endpoints) > 0:
+            prev = self.endpoints[0]
+            _check_endpoint_tuple(prev)
+
+            for elem in self.endpoints[1:]:
+                _check_endpoint_tuple(elem)
+                assert prev <= elem, (prev, elem)
+                prev = elem
+
+    # SET: BINARY RELATIONS
 
     def isdisjoint(self, other: Union[Real, 'MultiInterval']) -> bool:
         return not self.overlaps(other)
@@ -66,7 +108,7 @@ class MultiInterval(Set):
     def issuperset(self, other: Union[Real, 'MultiInterval']) -> bool:
         return other in self
 
-    # BOOLEAN ALGEBRA
+    # SET: BOOLEAN ALGEBRA
 
     def update(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
         raise NotImplementedError
@@ -92,7 +134,7 @@ class MultiInterval(Set):
     def symmetric_difference(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
         raise NotImplementedError
 
-    # ITEMS
+    # SET: ITEMS
 
     def add(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
         raise NotImplementedError
@@ -124,7 +166,7 @@ class MultiInterval(Set):
                                          ) -> 'MultiInterval':
         raise NotImplementedError
 
-    # INTERVAL ARITHMETIC (BINARY)
+    # INTERVAL ARITHMETIC: BINARY
 
     def __add__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
         raise NotImplementedError
@@ -174,7 +216,7 @@ class MultiInterval(Set):
     def __rpow__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
         raise NotImplementedError
 
-    # INTEGER ARITHMETIC
+    # INTERVAL ARITHMETIC: INTEGERS ONLY
 
     def __lshift__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
         raise NotImplementedError
@@ -188,7 +230,7 @@ class MultiInterval(Set):
     def __rrshift__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
         raise NotImplementedError
 
-    # INTERVAL ARITHMETIC (UNARY)
+    # INTERVAL ARITHMETIC: UNARY
 
     def reciprocal(self):
         raise NotImplementedError
@@ -217,19 +259,10 @@ class MultiInterval(Set):
     def __ceil__(self):  # towards +inf
         raise NotImplementedError
 
-    # CAST
+    # TYPE CASTING
 
-    def __float__(self) -> float:
-        if self.is_degenerate:
-            raise NotImplementedError  # todo
-        else:
-            raise ValueError('cannot cast non-degenerate MultiInterval to complex')
-
-    def __int__(self) -> int:
-        if self.is_degenerate:
-            return int(float(self))
-        else:
-            raise ValueError('cannot cast non-degenerate MultiInterval to complex')
+    def __bool__(self) -> bool:
+        return not self.is_empty
 
     def __complex__(self) -> complex:
         if self.is_degenerate:
@@ -237,11 +270,68 @@ class MultiInterval(Set):
         else:
             raise ValueError('cannot cast non-degenerate MultiInterval to int')
 
-    def __bool__(self) -> bool:
-        return not self.is_empty
+    def __float__(self) -> float:
+        if self.is_degenerate:
+            return float(self.inf)
+        else:
+            raise ValueError('cannot cast non-degenerate MultiInterval to float')
 
-    def __str__(self) -> str:
-        raise NotImplementedError
+    def __int__(self) -> int:
+        if self.is_degenerate:
+            return int(float(self))
+        else:
+            raise ValueError('cannot cast non-degenerate MultiInterval to complex')
 
     def __repr__(self) -> str:
         raise NotImplementedError
+
+    def __str__(self) -> str:
+        def _interval_to_str(start_tuple, end_tuple):
+            assert start_tuple <= end_tuple, (start_tuple, end_tuple)
+
+            # unpack
+            _start, _start_epsilon = start_tuple
+            _end, _end_epsilon = end_tuple
+            assert _start_epsilon in {-1, 0}, (start_tuple, end_tuple)
+            assert _end_epsilon in {0, 1}, (start_tuple, end_tuple)
+
+            # degenerate interval
+            if _start == _end:
+                return f'[{_start}]'
+
+            # left side
+            if _start == -math.inf:
+                _start = '-∞'
+                _left_bracket = '('
+            else:
+                _start = _start
+                _left_bracket = '(' if _start_epsilon else '['
+
+            # right side
+            if _end == math.inf:
+                _end = '∞'
+                _right_bracket = ')'
+            else:
+                _end = _end
+                _right_bracket = ')' if _end_epsilon else ']'
+
+            return f'{_left_bracket}{_start}, {_end}{_right_bracket}'
+
+        # null set: {}
+        if self.is_empty:
+            return '{}'
+
+        # single contiguous interval: [x, y)
+        elif len(self.endpoints) == 2:
+            return _interval_to_str(*self.endpoints)  # handles degenerate intervals too
+
+        # multiple intervals: { [x, y) | [z] | (a, b) }
+        else:
+            str_intervals = []
+            for idx in range(0, len(self.endpoints), 2):
+                str_intervals.append(_interval_to_str(self.endpoints[idx], self.endpoints[idx + 1]))
+
+            if len(str_intervals) == 1:
+                return str_intervals[0]
+
+            return f'{{ {" | ".join(str_intervals)} }}'
