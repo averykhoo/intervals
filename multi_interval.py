@@ -21,7 +21,7 @@ class MultiInterval:
                  start_closed: Optional[bool] = True,
                  end_closed: Optional[bool] = True
                  ):
-
+        # todo: typecheck and sanity check and raise appropriate errors
         if start is None:
             assert end is None
             self.endpoints = []
@@ -50,18 +50,18 @@ class MultiInterval:
         re_num = re.compile(r'(?:-\s*)?\d+(?:\.\d+)?',
                             flags=re.U)
 
-        intervals = []
+        out = MultiInterval()
         for interval_str in re_interval.findall(text):
             nums = re_num.findall(interval_str)
             if len(nums) == 2:
-                intervals.append(MultiInterval(start=float(nums[0]) if '.' in nums[0] else int(nums[0]),
-                                               end=float(nums[1]) if '.' in nums[1] else int(nums[1]),
-                                               start_closed=interval_str[0] == '[',
-                                               end_closed=interval_str[-1] == ']'))
+                out.update(MultiInterval(start=float(nums[0]) if '.' in nums[0] else int(nums[0]),
+                                         end=float(nums[1]) if '.' in nums[1] else int(nums[1]),
+                                         start_closed=interval_str[0] == '[',
+                                         end_closed=interval_str[-1] == ']'))
             elif len(nums) == 1:
                 if interval_str[0] == '[':
                     assert interval_str[-1] == ']'
-                    intervals.append(MultiInterval(start=float(nums[0]) if '.' in nums[0] else int(nums[0])))
+                    out.update(MultiInterval(start=float(nums[0]) if '.' in nums[0] else int(nums[0])))
                 else:
                     assert interval_str[-1] == ')'
             else:
@@ -69,11 +69,7 @@ class MultiInterval:
 
         for set_str in re_set.findall(text):
             for num in re_num.findall(set_str):
-                intervals.append(MultiInterval(start=float(num) if '.' in num else int(num)))
-
-        out = MultiInterval()
-        for interval in intervals:
-            out.update(interval)
+                out.update(MultiInterval(start=float(num) if '.' in num else int(num)))
 
         return out
 
