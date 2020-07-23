@@ -8,20 +8,32 @@ from typing import Optional
 from typing import Tuple
 from typing import Union
 
-from interval import Interval
-
 
 class MultiInterval:
     endpoints: List[Tuple[Real, int]]  # todo: explain epsilon
 
     # CONSTRUCTORS
 
-    def __init__(self):
-        self.endpoints = []
+    def __init__(self,
+                 start: Optional[Real] = None,
+                 end: Optional[Real] = None,
+                 *,
+                 start_closed: Optional[bool] = True,
+                 end_closed: Optional[bool] = True
+                 ):
 
-    @classmethod
-    def _from_intervals(cls, *intervals: Interval):
-        raise NotImplementedError
+        if start is None:
+            assert end is None
+            self.endpoints = []
+        else:
+            if end is None:
+                assert start_closed and end_closed
+                self.endpoints = [(start, 0), (start, 0)]
+            else:
+                _start = (start, 0 if start_closed else 1)
+                _end = (end, 0 if end_closed else -1)
+                assert _start <= _end
+                self.endpoints = [_start, _end]
 
     @classmethod
     def from_str(cls, text):
@@ -42,25 +54,14 @@ class MultiInterval:
         for interval_str in re_interval.findall(text):
             nums = re_num.findall(interval_str)
             if len(nums) == 2:
-                if '.' in nums[0]:
-                    _start = float(nums[0])
-                else:
-                    _start = int(nums[0])
-                if '.' in nums[1]:
-                    _end = float(nums[1])
-                else:
-                    _end = int(nums[1])
-                _start_open = interval_str[0] == '('
-                _end_closed = interval_str[-1] == ']'
-                intervals.append(Interval(_start, _start_open, _end, _end_closed))
+                intervals.append(MultiInterval(start=float(nums[0]) if '.' in nums[0] else int(nums[0]),
+                                               end=float(nums[1]) if '.' in nums[1] else int(nums[1]),
+                                               start_closed=interval_str[0] == '[',
+                                               end_closed=interval_str[-1] == ']'))
             elif len(nums) == 1:
                 if interval_str[0] == '[':
                     assert interval_str[-1] == ']'
-                    if '.' in nums[0]:
-                        _point = float(nums[0])
-                    else:
-                        _point = int(nums[0])
-                    intervals.append(Interval(_point, False, _point, True))
+                    intervals.append(MultiInterval(start=float(nums[0]) if '.' in nums[0] else int(nums[0])))
                 else:
                     assert interval_str[-1] == ')'
             else:
@@ -68,13 +69,13 @@ class MultiInterval:
 
         for set_str in re_set.findall(text):
             for num in re_num.findall(set_str):
-                if '.' in num:
-                    _point = float(num)
-                else:
-                    _point = int(num)
-                intervals.append(Interval(_point, False, _point, True))
+                intervals.append(MultiInterval(start=float(num) if '.' in num else int(num)))
 
-        return cls.from_intervals(*intervals)
+        out = MultiInterval()
+        for interval in intervals:
+            out.update(interval)
+
+        return out
 
     # PROPERTIES
 
@@ -269,22 +270,36 @@ class MultiInterval:
     # SET: ITEMS
 
     def add(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
+        self.update(other)
+        return self
 
     def clear(self) -> Optional['MultiInterval']:
-        raise NotImplementedError
+        self.endpoints.clear()
+        return self
 
     def copy(self) -> Optional['MultiInterval']:
-        raise NotImplementedError
+        out = MultiInterval()
+        out.endpoints = self.endpoints.copy()
+        return out
 
     def discard(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
+        if other in self:
+            self.difference_update(other)
+        return self
 
     def pop(self) -> Optional['MultiInterval']:
-        raise NotImplementedError
+        if self.is_empty:
+            raise KeyError('pop from empty MultiInterval')
+
+        out = MultiInterval()
+        self.endpoints, out.endpoints = self.endpoints[:-2], self.endpoints[-2:]
+        return out
 
     def remove(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
+        if other not in self:
+            raise KeyError(other)
+        self.difference_update(other)
+        return self
 
     # INTERVAL ARITHMETIC (GENERIC)
 
