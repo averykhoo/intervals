@@ -95,7 +95,7 @@ class Interval:
 
         return Interval(self.start - distance, self.start_open, self.end + distance, self.end_closed)
 
-    def as_closed_interval(self):
+    def closed_hull(self):
         if self.start_closed and self.end_closed:
             return self
         else:
