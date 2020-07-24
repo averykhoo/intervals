@@ -346,10 +346,12 @@ class MultiInterval:
     # SET: ITEMS (INPLACE)
 
     def add(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        # todo: use O(log(n)) algo instead
         self.update(other)
         return self
 
     def clear(self) -> 'MultiInterval':
+        self._consistency_check()
         self.endpoints.clear()
         return self
 
@@ -503,10 +505,14 @@ class MultiInterval:
 
     # INTERVAL ARITHMETIC: GENERIC
 
-    def _apply_monotonic_unary_function(self, func: Callable) -> 'MultiInterval':
-        self._consistency_check()
+    def _apply_monotonic_unary_function(self, func: Callable, inplace: bool = False) -> 'MultiInterval':
+        # by default, do this to a copy
+        if not inplace:
+            return self.copy()._apply_monotonic_unary_function(func, inplace=True)
 
+        self._consistency_check()
         _endpoints, self.endpoints = self.endpoints, []
+
         for idx in range(0, len(_endpoints), 2):
             _start = func(_endpoints[idx][0])
             _end = func(_endpoints[idx + 1][0])
@@ -521,9 +527,53 @@ class MultiInterval:
     def _apply_monotonic_binary_function(self,
                                          func: Callable,
                                          other: Union['MultiInterval', Real],
-                                         right_hand_side: bool = False
+                                         right_hand_side: bool = False,
+                                         inplace: bool = False
                                          ) -> 'MultiInterval':
-        raise NotImplementedError
+        # by default, do this to a copy
+        if not inplace:
+            return self.copy()._apply_monotonic_binary_function(func,
+                                                                other,
+                                                                right_hand_side=right_hand_side,
+                                                                inplace=True)
+
+        # get other's interval list as [((start, eps), (end, eps)), ...]
+        if isinstance(other, MultiInterval):
+            _second = [(other.endpoints[idx], other.endpoints[idx + 1]) for idx in range(0, len(other.endpoints), 2)]
+        elif isinstance(other, Real):
+            _second = [((other, 0), (other, 0))]
+        else:
+            raise TypeError(other)
+
+        # clear own endpoints while reading, since we'll replace everything
+        _endpoints, self.endpoints = self.endpoints, []
+        _first = [(_endpoints[idx], _endpoints[idx + 1]) for idx in range(0, len(_endpoints), 2)]
+
+        # swap for RHS
+        if right_hand_side:
+            _first, _second = _second, _first
+
+        # union of: func(x, y) for x in first for y in second
+        for (_first_start, _first_start_epsilon), (_first_end, _first_end_epsilon) in _first:
+            for (_second_start, _second_start_epsilon), (_second_end, _second_end_epsilon) in _second:
+                _start_start = func(_first_start, _second_start)
+                _start_end = func(_first_start, _second_end)
+                _end_start = func(_first_end, _second_start)
+                _end_end = func(_first_end, _second_end)
+
+                self.endpoints.append(min((_start_start, _first_start_epsilon or _second_start_epsilon),
+                                          (_start_end, _first_start_epsilon or -_second_end_epsilon),
+                                          (_end_start, -_first_end_epsilon or _second_start_epsilon),
+                                          (_end_end, -_first_end_epsilon or -_second_end_epsilon)))
+
+                self.endpoints.append(max((_start_start, -_first_start_epsilon or -_second_start_epsilon),
+                                          (_start_end, -_first_start_epsilon or _second_end_epsilon),
+                                          (_end_start, _first_end_epsilon or -_second_start_epsilon),
+                                          (_end_end, _first_end_epsilon or _second_end_epsilon)))
+
+        # we may be out of order or have overlapping intervals, so merge
+        self.merge_adjacent(sort=True)
+        return self
 
     # INTERVAL ARITHMETIC: BINARY
 
