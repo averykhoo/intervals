@@ -578,22 +578,22 @@ class MultiInterval:
     # INTERVAL ARITHMETIC: BINARY
 
     def __add__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self._apply_monotonic_binary_function(operator.add, other)
 
     def __radd__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self._apply_monotonic_binary_function(operator.add, other, right_hand_side=True)
 
     def __sub__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self._apply_monotonic_binary_function(operator.sub, other)
 
     def __rsub__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self._apply_monotonic_binary_function(operator.sub, other, right_hand_side=True)
 
     def __mul__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self._apply_monotonic_binary_function(operator.mul, other)
 
     def __rmul__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self._apply_monotonic_binary_function(operator.mul, other, right_hand_side=True)
 
     def __truediv__(self, other):
         raise NotImplementedError
@@ -619,7 +619,8 @@ class MultiInterval:
     def __rdivmod__(self, other):
         raise NotImplementedError
 
-    def __pow__(self, power: Union['MultiInterval', Real], modulo: Optional[Real] = None) -> 'MultiInterval':
+    # def __pow__(self, power: Union['MultiInterval', Real], modulo: Optional[Real] = None) -> 'MultiInterval':
+    def __pow__(self, power: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
     def __rpow__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
@@ -628,16 +629,16 @@ class MultiInterval:
     # INTERVAL ARITHMETIC: INTEGERS ONLY
 
     def __lshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self._apply_monotonic_binary_function(operator.lshift, other)
 
     def __rlshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self._apply_monotonic_binary_function(operator.lshift, other, right_hand_side=True)
 
     def __rshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self._apply_monotonic_binary_function(operator.rshift, other)
 
     def __rrshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self._apply_monotonic_binary_function(operator.rshift, other, right_hand_side=True)
 
     # INTERVAL ARITHMETIC: UNARY
 
