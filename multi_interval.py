@@ -8,7 +8,7 @@ from typing import Optional
 from typing import Tuple
 from typing import Union
 
-INFINITY_IS_NOT_FINITE = True
+INFINITY_IS_NOT_FINITE = True  # don't allow ±inf to be contained inside intervals
 
 
 def _str_to_num(text: str):
@@ -141,20 +141,28 @@ class MultiInterval:
         """
         intuitively this is proportional to the overall length,
         but because of infinities and degeneracy it's a 3-tuple of:
-            (1) number of open half-rays from 0 (infinite length, uncountable points,   0 <= n <= 2)
-            (2) remaining length of open sets   (finite length,   uncountable points, -inf < n < inf)
-            (3) avg closed endpoints            (zero length,     countable points,   -inf < n < inf)
+            (1) number of open half-rays from 0 (infinite length, uncountable points, int,     0 <= n <= 2)
+            (2) remaining length of open sets   (finite length,   uncountable points, float, -inf < n < inf)
+            (3) avg closed endpoints            (zero length,     countable points,   int,   -inf < n < inf)
 
         e.g.: (1, inf]
             = (0, inf] - (0, 1]
             = (0, inf] - (0, 1) - [1]
             cardinality = (1, -1, 0)
+
+        invariants that don't change overall cardinality:
+            *   moving an interval:               [1, 2) -> [2, 3)
+            *   extracting a degenerate interval: [1, 2) -> [1] + (1, 2)
+            *   splitting an interval:            [1, 3) -> [1, 2) + [2, 3)
+            *   joining intervals: [1, 2) + [2] + (2, 3) -> [1, 3)
+            *   mirroring interval:               [1, 2) -> (-2, -1]
         """
         negative_half_ray = 0  # only (-inf, 0) and/or (0, inf), if -inf or inf are included
         positive_half_ray = 0  # only (-inf, 0) and/or (0, inf), if -inf or inf are included
         length_before_zero = 0  # remaining length of open intervals, after removing half-rays (can be negative)
         length_after_zero = 0  # remaining length of open intervals, after removing half-rays (can be negative)
-        n_endpoints = 0  # number of endpoints, after removing open intervals (can be negative)
+        closed_endpoints = 0  # number of endpoints, after removing open intervals (can be negative)
+        open_endpoints = 0  # number of endpoints, after removing open intervals (can be negative)
 
         # iterate through to count all the things
         for idx in range(0, len(self.endpoints), 2):
@@ -178,16 +186,27 @@ class MultiInterval:
                 length_after_zero += _end - _start
 
             # count endpoints
-            n_endpoints += -1 if _end_epsilon else 1
-            n_endpoints += -1 if _start_epsilon else 1
+            if _end_epsilon == 0:
+                closed_endpoints += 1
+            else:
+                open_endpoints += 1
+            if _start_epsilon == 0:
+                closed_endpoints += 1
+            else:
+                open_endpoints += 1
 
-        assert 0 <= negative_half_ray <= 1
-        assert 0 <= positive_half_ray <= 1
+        # subtract half-rays
         if negative_half_ray:
+            assert negative_half_ray == 1  # sanity check
             length_before_zero = -length_before_zero
         if positive_half_ray:
+            assert positive_half_ray == 1  # sanity check
             length_after_zero = -length_after_zero
-        return negative_half_ray + positive_half_ray, length_before_zero + length_after_zero, n_endpoints
+
+        # return 3-tuple
+        return (negative_half_ray + positive_half_ray,
+                length_before_zero + length_after_zero,
+                closed_endpoints - open_endpoints)
 
     @property
     def contiguous_intervals(self) -> List['MultiInterval']:
@@ -201,7 +220,7 @@ class MultiInterval:
 
     # COMPARISONS
 
-    def __compare(self, func: Callable, other: Union[Real, 'MultiInterval']) -> bool:
+    def __compare(self, func: Callable, other: Union['MultiInterval', Real]) -> bool:
         if isinstance(other, MultiInterval):
             return func(self.endpoints, other.endpoints)
         elif isinstance(other, Real):
@@ -209,76 +228,28 @@ class MultiInterval:
         else:
             raise TypeError(other)
 
-    def __lt__(self, other: Union[Real, 'MultiInterval']):
+    def __lt__(self, other: Union['MultiInterval', Real]) -> bool:
         return self.__compare(operator.lt, other)
 
-    def __le__(self, other: Union[Real, 'MultiInterval']):
+    def __le__(self, other: Union['MultiInterval', Real]) -> bool:
         return self.__compare(operator.le, other)
 
-    def __eq__(self, other: Union[Real, 'MultiInterval']):
+    def __eq__(self, other: Union['MultiInterval', Real]) -> bool:
         return self.__compare(operator.eq, other)
 
-    def __ne__(self, other: Union[Real, 'MultiInterval']):
+    def __ne__(self, other: Union['MultiInterval', Real]) -> bool:
         return self.__compare(operator.ne, other)
 
-    def __ge__(self, other: Union[Real, 'MultiInterval']):
+    def __ge__(self, other: Union['MultiInterval', Real]) -> bool:
         return self.__compare(operator.ge, other)
 
-    def __gt__(self, other: Union[Real, 'MultiInterval']):
+    def __gt__(self, other: Union['MultiInterval', Real]) -> bool:
         return self.__compare(operator.gt, other)
 
     # UTILITY
 
-    def __contains__(self, other: Union[Real, 'MultiInterval']) -> bool:
-        raise NotImplementedError
-
-    def expand(self, distance: Real) -> 'MultiInterval':
-        raise NotImplementedError
-
-    def closed_hull(self):
-        raise NotImplementedError
-
-    def overlaps(self, other: Union[Real, 'MultiInterval'], or_adjacent=False) -> bool:
-        raise NotImplementedError
-
-    # FILTER
-
-    def filter(self,
-               start: Real = -math.inf,
-               end: Real = math.inf,
-               start_closed: bool = True,
-               end_closed: bool = True
-               ) -> 'MultiInterval':
-        raise NotImplementedError
-
-    def __getitem__(self, item: Union[slice, 'MultiInterval']) -> 'MultiInterval':
-        if isinstance(item, MultiInterval):
-            return self.intersection(item)
-
-        elif isinstance(item, slice):
-            if item.step is not None:
-                raise ValueError(item)
-
-            _start = item.start or -math.inf
-            if not isinstance(_start, Real):
-                raise TypeError(_start)
-
-            _end = item.stop or math.inf
-            if not isinstance(_end, Real):
-                raise TypeError(_end)
-
-            return self.filter(start=_start, end=_end)
-
-        else:
-            raise TypeError
-
-    def positive(self) -> 'MultiInterval':
-        return self.filter(start=0, start_closed=False)
-
-    def negative(self) -> 'MultiInterval':
-        return self.filter(end=0, end_closed=False)
-
-    # MISC
+    def __sizeof__(self) -> int:
+        return self.endpoints.__sizeof__()  # probably correct?
 
     def _consistency_check(self):
         # length must be even
@@ -311,12 +282,50 @@ class MultiInterval:
         assert math.inf not in self
         assert -math.inf not in self
 
-        # SET: BINARY RELATIONS
+    # FILTERING
 
-    def isdisjoint(self, other: Union[Real, 'MultiInterval']) -> bool:
+    def __getitem__(self, item: Union[slice, 'MultiInterval']) -> 'MultiInterval':
+        if isinstance(item, MultiInterval):
+            return self.intersection(item)
+
+        elif isinstance(item, slice):
+            if item.step is not None:
+                raise ValueError(item)
+
+            _start = item.start or -math.inf
+            if not isinstance(_start, Real):
+                raise TypeError(_start)
+
+            _end = item.stop or math.inf
+            if not isinstance(_end, Real):
+                raise TypeError(_end)
+
+            return self.intersection(MultiInterval(start=_start,
+                                                   end=_end,
+                                                   start_closed=not math.isinf(_start) or not INFINITY_IS_NOT_FINITE,
+                                                   end_closed=not math.isinf(_end) or not INFINITY_IS_NOT_FINITE))
+
+        else:
+            raise TypeError
+
+    def positive(self) -> 'MultiInterval':
+        return self.intersection(MultiInterval(start=0,
+                                               end=math.inf,
+                                               start_closed=False,
+                                               end_closed=not INFINITY_IS_NOT_FINITE))
+
+    def negative(self) -> 'MultiInterval':
+        return self.intersection(MultiInterval(start=-math.inf,
+                                               end=0,
+                                               start_closed=not INFINITY_IS_NOT_FINITE,
+                                               end_closed=False))
+
+    # SET: BINARY RELATIONS
+
+    def isdisjoint(self, other: Union['MultiInterval', Real]) -> bool:
         return not self.overlaps(other)
 
-    def issubset(self, other: Union[Real, 'MultiInterval']) -> bool:
+    def issubset(self, other: Union['MultiInterval', Real]) -> bool:
         if self.is_empty:
             return True
         elif isinstance(other, MultiInterval):
@@ -326,56 +335,30 @@ class MultiInterval:
         else:
             raise TypeError(other)
 
-    def issuperset(self, other: Union[Real, 'MultiInterval']) -> bool:
+    def issuperset(self, other: Union['MultiInterval', Real]) -> bool:
         return other in self
 
-    # SET: BOOLEAN ALGEBRA
+    # SET: ITEMS (IN-PLACE)
 
-    def update(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
-
-    def intersection_update(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
-
-    def difference_update(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
-
-    def symmetric_difference_update(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
-
-    def union(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
-
-    def intersection(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
-
-    def difference(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
-
-    def symmetric_difference(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
-        raise NotImplementedError
-
-    # SET: ITEMS
-
-    def add(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
+    def add(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         self.update(other)
         return self
 
-    def clear(self) -> Optional['MultiInterval']:
+    def clear(self) -> 'MultiInterval':
         self.endpoints.clear()
         return self
 
-    def copy(self) -> Optional['MultiInterval']:
+    def copy(self) -> 'MultiInterval':
         out = MultiInterval()
         out.endpoints = self.endpoints.copy()
         return out
 
-    def discard(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
+    def discard(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         if other in self:
             self.difference_update(other)
         return self
 
-    def pop(self) -> Optional['MultiInterval']:
+    def pop(self) -> 'MultiInterval':
         if self.is_empty:
             raise KeyError('pop from empty MultiInterval')
 
@@ -383,42 +366,92 @@ class MultiInterval:
         self.endpoints, out.endpoints = self.endpoints[:-2], self.endpoints[-2:]
         return out
 
-    def remove(self, other: Union[Real, 'MultiInterval']) -> Optional['MultiInterval']:
+    def remove(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         if other not in self:
             raise KeyError(other)
         self.difference_update(other)
         return self
 
-    # INTERVAL ARITHMETIC (GENERIC)
+    # SET: BOOLEAN ALGEBRA (IN-PLACE)
+
+    def update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        raise NotImplementedError
+
+    def intersection_update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        raise NotImplementedError
+
+    def difference_update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        raise NotImplementedError
+
+    def symmetric_difference_update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        raise NotImplementedError
+
+    # SET: BOOLEAN ALGEBRA
+
+    def union(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        raise NotImplementedError
+
+    def intersection(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        raise NotImplementedError
+
+    def difference(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        raise NotImplementedError
+
+    def symmetric_difference(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        raise NotImplementedError
+
+    # INTERVAL OPERATIONS (IN-PLACE)
+
+    def invert(self) -> 'MultiInterval':
+        raise NotImplementedError
+
+    def mirror(self) -> 'MultiInterval':
+        raise NotImplementedError
+
+    def expand(self, distance: Real) -> 'MultiInterval':
+        raise NotImplementedError
+
+    # INTERVAL OPERATIONS
+
+    def __contains__(self, other: Union['MultiInterval', Real]) -> bool:
+        raise NotImplementedError
+
+    def closed_hull(self):
+        raise NotImplementedError
+
+    def overlaps(self, other: Union['MultiInterval', Real], or_adjacent=False) -> bool:
+        raise NotImplementedError
+
+    # INTERVAL ARITHMETIC: GENERIC
 
     def _apply_monotonic_unary_function(self, func: Callable) -> 'MultiInterval':
         raise NotImplementedError
 
     def _apply_monotonic_binary_function(self,
                                          func: Callable,
-                                         other: Union[Real, 'MultiInterval'],
+                                         other: Union['MultiInterval', Real],
                                          right_hand_side: bool = False
                                          ) -> 'MultiInterval':
         raise NotImplementedError
 
     # INTERVAL ARITHMETIC: BINARY
 
-    def __add__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __add__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __radd__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __radd__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __sub__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __sub__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __rsub__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __rsub__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __mul__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __mul__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __rmul__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __rmul__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
     def __truediv__(self, other):
@@ -445,24 +478,24 @@ class MultiInterval:
     def __rdivmod__(self, other):
         raise NotImplementedError
 
-    def __pow__(self, power: Union[Real, 'MultiInterval'], modulo: Optional[Real] = None) -> 'MultiInterval':
+    def __pow__(self, power: Union['MultiInterval', Real], modulo: Optional[Real] = None) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __rpow__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __rpow__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
     # INTERVAL ARITHMETIC: INTEGERS ONLY
 
-    def __lshift__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __lshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __rlshift__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __rlshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __rshift__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __rshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __rrshift__(self, other: Union[Real, 'MultiInterval']) -> 'MultiInterval':
+    def __rrshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
     # INTERVAL ARITHMETIC: UNARY
