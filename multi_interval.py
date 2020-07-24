@@ -8,6 +8,8 @@ from typing import Optional
 from typing import Tuple
 from typing import Union
 
+INFINITY_IS_NOT_FINITE = True
+
 
 class MultiInterval:
     endpoints: List[Tuple[Real, int]]  # todo: explain epsilon
@@ -22,18 +24,44 @@ class MultiInterval:
                  end_closed: Optional[bool] = True
                  ):
         # todo: typecheck and sanity check and raise appropriate errors
+
+        # no interval, create the null set
         if start is None:
-            assert end is None
+            if end is not None:
+                raise ValueError
+            if not start_closed or not end_closed:
+                raise ValueError
             self.endpoints = []
-        else:
-            if end is None:
-                assert start_closed and end_closed
+
+        # degenerate interval
+        elif end is None and start_closed and end_closed:
+            if math.isinf(start) and INFINITY_IS_NOT_FINITE:
+                raise ValueError('the degenerate interval at infinity cannot exist')
+            if start_closed and end_closed:
+                assert not math.isinf(start)
                 self.endpoints = [(start, 0), (start, 0)]
+            elif not start_closed and not end_closed:
+                self.endpoints = []
             else:
-                _start = (start, 0 if start_closed else 1)
-                _end = (end, 0 if end_closed else -1)
-                assert _start <= _end
-                self.endpoints = [_start, _end]
+                raise ValueError((start, start_closed, end_closed))  # degenerate interval cannot be half open
+
+        # null set
+        elif end is None and not start_closed and not end_closed:
+            self.endpoints = []
+
+        # half-open degenerate interval makes no sense
+        elif end is None:
+            raise ValueError((start, start_closed, end_closed))
+
+        # contiguous interval
+        else:
+            _start = (start, 0 if start_closed else 1)
+            _end = (end, 0 if end_closed else -1)
+            if _start > _end:
+                raise ValueError((_start, _end))
+            self.endpoints = [_start, _end]
+
+        self._consistency_check()
 
     @classmethod
     def from_str(cls, text):
@@ -81,19 +109,19 @@ class MultiInterval:
 
     @property
     def is_degenerate(self) -> bool:
-        return len(self.endpoints) == 2 and self.inf == self.sup
+        return len(self.endpoints) == 2 and self.infimum == self.supremum
 
     @property
     def is_contiguous(self) -> bool:
         return len(self.endpoints) == 2
 
     @property
-    def inf(self) -> Optional[Real]:
+    def infimum(self) -> Optional[Real]:
         if len(self.endpoints) > 0:
             return self.endpoints[0][0]
 
     @property
-    def sup(self) -> Optional[Real]:
+    def supremum(self) -> Optional[Real]:
         if len(self.endpoints) > 0:
             return self.endpoints[-1][0]
 
@@ -116,6 +144,16 @@ class MultiInterval:
         length = 0  # remaining length of open intervals, after removing half-rays (can be negative)
         n_endpoints = 0  # number of endpoints, after removing open intervals (can be negative)
         return half_rays, length, n_endpoints
+
+    @property
+    def contiguous_intervals(self) -> List['MultiInterval']:
+        out = []
+        for idx in range(0, len(self.endpoints), 2):
+            out.append(MultiInterval(start=self.endpoints[idx][0],
+                                     end=self.endpoints[idx + 1][0],
+                                     start_closed=self.endpoints[idx][1] == 0,
+                                     end_closed=self.endpoints[idx + 1][1] == 0))
+        return out
 
     # COMPARISONS
 
@@ -219,7 +257,17 @@ class MultiInterval:
                 assert prev <= elem, (prev, elem)
                 prev = elem
 
-    # SET: BINARY RELATIONS
+        # no degenerate interval at infinity
+        if self.is_degenerate:
+            assert not math.isinf(self.infimum)
+
+        # infinity cannot be contained within an interval
+        assert (-math.inf, 0) > self.endpoints[0]
+        assert self.endpoints[-1] < (math.inf, 0)
+        assert math.inf not in self
+        assert -math.inf not in self
+
+        # SET: BINARY RELATIONS
 
     def isdisjoint(self, other: Union[Real, 'MultiInterval']) -> bool:
         return not self.overlaps(other)
@@ -415,7 +463,7 @@ class MultiInterval:
 
     def __float__(self) -> float:
         if self.is_degenerate:
-            return float(self.inf)
+            return float(self.infimum)
         else:
             raise ValueError('cannot cast non-degenerate MultiInterval to float')
 

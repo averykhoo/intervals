@@ -3,6 +3,7 @@
 *   `interval.Interval`: the usual contiguous intervals, where endpoints can be open or closed
     *   support for usable set functions
     *   support for most numeric operations
+    *   BUG: expects the unbounded interval to contain infinity, which is not okay since it doesn't allow 
 *   `multi_interval.MultiInterval`: a non-contiguous interval
     *   as above, but more support for more things (someday)
 *   `TimeInterval`, `TimeIntervalUnion`
