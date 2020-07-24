@@ -248,6 +248,11 @@ class MultiInterval:
 
     # UTILITY
 
+    def copy(self) -> 'MultiInterval':
+        out = MultiInterval()
+        out.endpoints = self.endpoints.copy()
+        return out
+
     def __sizeof__(self) -> int:
         return self.endpoints.__sizeof__()  # probably correct?
 
@@ -338,7 +343,7 @@ class MultiInterval:
     def issuperset(self, other: Union['MultiInterval', Real]) -> bool:
         return other in self
 
-    # SET: ITEMS (IN-PLACE)
+    # SET: ITEMS (INPLACE)
 
     def add(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         self.update(other)
@@ -347,11 +352,6 @@ class MultiInterval:
     def clear(self) -> 'MultiInterval':
         self.endpoints.clear()
         return self
-
-    def copy(self) -> 'MultiInterval':
-        out = MultiInterval()
-        out.endpoints = self.endpoints.copy()
-        return out
 
     def discard(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         if other in self:
@@ -372,7 +372,7 @@ class MultiInterval:
         self.difference_update(other)
         return self
 
-    # SET: BOOLEAN ALGEBRA (IN-PLACE)
+    # SET: BOOLEAN ALGEBRA (INPLACE)
 
     def update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
@@ -400,16 +400,62 @@ class MultiInterval:
     def symmetric_difference(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    # INTERVAL OPERATIONS (IN-PLACE)
+    # INTERVAL OPERATIONS (INPLACE)
+    def merge_adjacent(self, distance: Real = 0) -> 'MultiInterval':
+        if not isinstance(distance, Real):
+            raise TypeError(distance)
+        if distance < 0:
+            raise ValueError(distance)
+
+        if self.is_empty or self.is_contiguous:
+            return self
+
+        _endpoints, self.endpoints = self.endpoints, []
+        idx = 0
+        _end = _endpoints[0]
+        while idx < len(_endpoints):
+            self.endpoints.append(_endpoints[idx])
+            _end = max(_end, _endpoints[idx + 1])
+            idx += 2
+
+            while idx < len(_endpoints) and _endpoints[idx] <= (_end[0] + distance, _end[1] + 1):
+                _end = max(_end, _endpoints[idx + 1])
+                idx += 2
+
+            self.endpoints.append(_end)
+
+        # allow operator chaining
+        self._consistency_check()
+        return self
+
+    def abs(self) -> 'MultiInterval':
+        # todo: fix this freakishly inefficient implementation
+        self.update(self.negative().mirror())
+        self.endpoints = self[0:].endpoints
+        return self
 
     def invert(self) -> 'MultiInterval':
         raise NotImplementedError
 
     def mirror(self) -> 'MultiInterval':
-        raise NotImplementedError
+        _endpoints = []
+        for point, epsilon in self.endpoints[::-1]:
+            _endpoints.append((-point, -epsilon))
+        self.endpoints = _endpoints
+        return self
 
     def expand(self, distance: Real) -> 'MultiInterval':
-        raise NotImplementedError
+        if not isinstance(distance, Real):
+            raise TypeError(distance)
+        if distance < 0:
+            raise ValueError(distance)
+
+        for idx in range(0, len(self.endpoints), 2):
+            self.endpoints[idx] = (self.endpoints[idx][0] - distance, self.endpoints[idx][1])
+            self.endpoints[idx + 1] = (self.endpoints[idx + 1][0] + distance, self.endpoints[idx + 1][1])
+
+        self.merge_adjacent()
+        return self
 
     # INTERVAL OPERATIONS
 
@@ -504,16 +550,16 @@ class MultiInterval:
         raise NotImplementedError
 
     def __neg__(self):
-        raise NotImplementedError
+        return self.copy().mirror()
 
     def __pos__(self):
-        raise NotImplementedError
+        return self.copy()
 
     def __abs__(self):
-        raise NotImplementedError
+        return self.copy().abs()
 
     def __invert__(self):
-        raise NotImplementedError
+        return self.copy().invert()
 
     def __trunc__(self):  # towards 0.0
         raise NotImplementedError
