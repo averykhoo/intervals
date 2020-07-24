@@ -567,11 +567,17 @@ class MultiInterval:
     def __invert__(self):
         return self.copy().invert()
 
+    def exp(self):
+        return self._apply_monotonic_unary_function(math.exp)
+
+    def log(self, base: float = math.e):
+        return self._apply_monotonic_unary_function(lambda num: math.log(num, base=base))
+
+    def __round__(self, n_digits: int = 0):  # towards nearest integer
+        return self._apply_monotonic_unary_function(lambda num: round(num, ndigits=n_digits))
+
     def __trunc__(self):  # towards 0.0
         return self._apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.trunc(num))
-
-    def __round__(self, n=None):  # towards nearest integer
-        return self._apply_monotonic_unary_function(lambda num: num if math.isinf(num) else round(num, n))
 
     def __floor__(self):  # towards -inf
         return self._apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.floor(num))
