@@ -435,13 +435,16 @@ class MultiInterval:
         return self
 
     def invert(self) -> 'MultiInterval':
-        raise NotImplementedError
+        self.symmetric_difference_update(MultiInterval(start=-math.inf,
+                                                       end=math.inf,
+                                                       start_closed=not INFINITY_IS_NOT_FINITE,
+                                                       end_closed=not INFINITY_IS_NOT_FINITE))
+        return self
 
     def mirror(self) -> 'MultiInterval':
-        _endpoints = []
-        for point, epsilon in self.endpoints[::-1]:
-            _endpoints.append((-point, -epsilon))
-        self.endpoints = _endpoints
+        _endpoints, self.endpoints = self.endpoints[::-1], []
+        for point, epsilon in _endpoints:
+            self.endpoints.append((-point, -epsilon))
         return self
 
     def expand(self, distance: Real) -> 'MultiInterval':
@@ -463,7 +466,10 @@ class MultiInterval:
         raise NotImplementedError
 
     def closed_hull(self):
-        raise NotImplementedError
+        return MultiInterval(start=self.infimum,
+                             end=self.supremum,
+                             start_closed=not math.isinf(self.infimum) or not INFINITY_IS_NOT_FINITE,
+                             end_closed=not math.isinf(self.supremum) or not INFINITY_IS_NOT_FINITE)
 
     def overlaps(self, other: Union['MultiInterval', Real], or_adjacent=False) -> bool:
         raise NotImplementedError
@@ -562,16 +568,16 @@ class MultiInterval:
         return self.copy().invert()
 
     def __trunc__(self):  # towards 0.0
-        raise NotImplementedError
+        return self._apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.trunc(num))
 
-    def __round__(self, n=None):  # towards nearest
-        raise NotImplementedError
+    def __round__(self, n=None):  # towards nearest integer
+        return self._apply_monotonic_unary_function(lambda num: num if math.isinf(num) else round(num, n))
 
     def __floor__(self):  # towards -inf
-        raise NotImplementedError
+        return self._apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.floor(num))
 
     def __ceil__(self):  # towards +inf
-        raise NotImplementedError
+        return self._apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.ceil(num))
 
     # TYPE CASTING
 
