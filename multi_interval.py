@@ -11,6 +11,14 @@ from typing import Union
 INFINITY_IS_NOT_FINITE = True
 
 
+def _str_to_num(text: str):
+    text = text.strip()
+    if text.isdigit():
+        return int(text)
+    else:
+        return float(text)
+
+
 class MultiInterval:
     endpoints: List[Tuple[Real, int]]  # todo: explain epsilon
 
@@ -23,82 +31,85 @@ class MultiInterval:
                  start_closed: Optional[bool] = True,
                  end_closed: Optional[bool] = True
                  ):
-        # todo: typecheck and sanity check and raise appropriate errors
 
         # no interval, create the null set
         if start is None:
             if end is not None:
                 raise ValueError
-            if not start_closed or not end_closed:
+            if start_closed != end_closed:
                 raise ValueError
+            self.endpoints = []
+
+        # null set
+        elif end is None and not start_closed and not end_closed:
             self.endpoints = []
 
         # degenerate interval
         elif end is None and start_closed and end_closed:
             if math.isinf(start) and INFINITY_IS_NOT_FINITE:
                 raise ValueError('the degenerate interval at infinity cannot exist')
-            if start_closed and end_closed:
-                assert not math.isinf(start)
-                self.endpoints = [(start, 0), (start, 0)]
-            elif not start_closed and not end_closed:
-                self.endpoints = []
             else:
-                raise ValueError((start, start_closed, end_closed))  # degenerate interval cannot be half open
-
-        # null set
-        elif end is None and not start_closed and not end_closed:
-            self.endpoints = []
+                self.endpoints = [(start, 0), (start, 0)]
 
         # half-open degenerate interval makes no sense
         elif end is None:
             raise ValueError((start, start_closed, end_closed))
 
-        # contiguous interval
+        # infinity
+        elif math.isinf(start) and start_closed and INFINITY_IS_NOT_FINITE:
+            raise ValueError(f'{start} cannot be contained in Interval')
+        elif math.isinf(end) and end_closed and INFINITY_IS_NOT_FINITE:
+            raise ValueError(f'{start} cannot be contained in Interval')
+        elif start == math.inf and not start_closed:
+            raise ValueError('cannot start an Interval after inf')
+        elif end == -math.inf and not end_closed:
+            raise ValueError('cannot end an Interval before -inf')
+
+        # contiguous interval (possibly degenerate)
         else:
             _start = (start, 0 if start_closed else 1)
             _end = (end, 0 if end_closed else -1)
             if _start > _end:
-                raise ValueError((_start, _end))
+                raise ValueError(f'Interval start {_start} cannot be before end {_end}')
             self.endpoints = [_start, _end]
 
         self._consistency_check()
 
     @classmethod
-    def from_str(cls, text):
+    def from_str(cls, text) -> 'MultiInterval':
         """
         e.g. [1, 2] or [1,2]
         e.g. [0] or {0}
-        e.g. {} or [] or ()
+        e.g. {} or [] or () or (123)
         e.g. { [1, 2) | [3, 4) } or {[1,2),[3,4)} or even [1,2)[3,4)
         """
-        re_interval = re.compile(r'[\[(]\s*(?:(?:-\s*)?\d+(?:\.\d+)?\s*(?:[,|;]\s*(?:-\s*)?\d+(?:\.\d+)?\s*)?)?[)\]]',
-                                 flags=re.U)
-        re_set = re.compile(r'{\s*(?:(?:-\s*)?\d+(?:\.\d+)?\s*(?:[,;]\s*(?:-\s*)?\d+(?:\.\d+)?\s*)*)?}',
-                            flags=re.U)
-        re_num = re.compile(r'(?:-\s*)?\d+(?:\.\d+)?',
-                            flags=re.U)
+        re_num = re.compile(r'(?:-\s*)?(?:inf|\d+(?:\.\d+)?(?:e-?\d+)?)\s*', flags=re.U)
+        re_interval = re.compile(fr'[\[(]\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})?)?[)\]]', flags=re.U)
+        re_set = re.compile(fr'{{\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})*)?}}', flags=re.U)
 
         out = MultiInterval()
         for interval_str in re_interval.findall(text):
-            nums = re_num.findall(interval_str)
-            if len(nums) == 2:
-                out.update(MultiInterval(start=float(nums[0]) if '.' in nums[0] else int(nums[0]),
-                                         end=float(nums[1]) if '.' in nums[1] else int(nums[1]),
-                                         start_closed=interval_str[0] == '[',
-                                         end_closed=interval_str[-1] == ']'))
-            elif len(nums) == 1:
-                if interval_str[0] == '[':
-                    assert interval_str[-1] == ']'
-                    out.update(MultiInterval(start=float(nums[0]) if '.' in nums[0] else int(nums[0])))
-                else:
-                    assert interval_str[-1] == ')'
-            else:
-                assert len(nums) == 0
+            _start_closed = interval_str[0] == '['
+            _end_closed = interval_str[-1] == ']'
+            _nums = re_num.findall(interval_str)
+
+            if len(_nums) == 2:
+                out.update(MultiInterval(start=_str_to_num(_nums[0]),
+                                         end=_str_to_num(_nums[1]),
+                                         start_closed=_start_closed,
+                                         end_closed=_end_closed))
+            elif len(_nums) == 1:
+                out.update(MultiInterval(start=_str_to_num(_nums[0]),
+                                         start_closed=_start_closed,
+                                         end_closed=_end_closed))
+            elif len(_nums) > 0:
+                raise ValueError(f'Interval can only have 2 endpoints: {interval_str}')
 
         for set_str in re_set.findall(text):
             for num in re_num.findall(set_str):
-                out.update(MultiInterval(start=float(num) if '.' in num else int(num)))
+                out.update(MultiInterval(start=_str_to_num(num)))
 
+        out._consistency_check()
         return out
 
     # PROPERTIES
@@ -139,11 +150,44 @@ class MultiInterval:
             = (0, inf] - (0, 1) - [1]
             cardinality = (1, -1, 0)
         """
-        # todo: count stuff
-        half_rays = 0  # only (-inf, 0) and/or (0, inf), if -inf or inf are included
-        length = 0  # remaining length of open intervals, after removing half-rays (can be negative)
+        negative_half_ray = 0  # only (-inf, 0) and/or (0, inf), if -inf or inf are included
+        positive_half_ray = 0  # only (-inf, 0) and/or (0, inf), if -inf or inf are included
+        length_before_zero = 0  # remaining length of open intervals, after removing half-rays (can be negative)
+        length_after_zero = 0  # remaining length of open intervals, after removing half-rays (can be negative)
         n_endpoints = 0  # number of endpoints, after removing open intervals (can be negative)
-        return half_rays, length, n_endpoints
+
+        # iterate through to count all the things
+        for idx in range(0, len(self.endpoints), 2):
+            _start, _start_epsilon = self.endpoints[idx]
+            _end, _end_epsilon = self.endpoints[idx + 1]
+            assert _start <= _end
+
+            # check if half-rays exist
+            if _start == -math.inf < float(_end):
+                negative_half_ray += 1
+            if _start < math.inf == _end:
+                positive_half_ray += 1
+
+            # count length
+            if _start < _end <= 0:
+                length_before_zero += _end - _start
+            elif _start <= 0 <= float(_end):
+                length_before_zero -= _start
+                length_after_zero += _end
+            elif 0 <= float(_start) < float(_end):
+                length_after_zero += _end - _start
+
+            # count endpoints
+            n_endpoints += -1 if _end_epsilon else 1
+            n_endpoints += -1 if _start_epsilon else 1
+
+        assert 0 <= negative_half_ray <= 1
+        assert 0 <= positive_half_ray <= 1
+        if negative_half_ray:
+            length_before_zero = -length_before_zero
+        if positive_half_ray:
+            length_after_zero = -length_after_zero
+        return negative_half_ray + positive_half_ray, length_before_zero + length_after_zero, n_endpoints
 
     @property
     def contiguous_intervals(self) -> List['MultiInterval']:
