@@ -396,16 +396,22 @@ class MultiInterval:
         return self
 
     def intersection_update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        # todo: multi-way AND
         raise NotImplementedError
 
-    def difference_update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+    def difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        # todo: simple difference after `_other = MultiInterval().update(*other)`
         raise NotImplementedError
 
-    def symmetric_difference_update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        tmp = other.difference(self)
-        self.difference_update(other)
-        self.update(tmp)
+    def symmetric_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        # todo: basically a multi-way XOR, and this is not particularly efficient
         self._consistency_check()
+        for _other in other:
+            _other._consistency_check()
+            tmp = _other.difference(self)
+            self.difference_update(_other)
+            self.update(tmp)
+            self._consistency_check()
         return self
 
     # SET: BOOLEAN ALGEBRA
