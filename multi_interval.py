@@ -364,6 +364,7 @@ class MultiInterval:
 
         out = MultiInterval()
         self.endpoints, out.endpoints = self.endpoints[:-2], self.endpoints[-2:]
+        self._consistency_check()
         return out
 
     def remove(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
@@ -374,8 +375,23 @@ class MultiInterval:
 
     # SET: BOOLEAN ALGEBRA (INPLACE)
 
-    def update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+    def update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        self._consistency_check()
+        _endpoints = self.endpoints.copy()
+
+        for _other in other:
+            if isinstance(_other, MultiInterval):
+                _other._consistency_check()
+                _endpoints.extend(_other.endpoints)
+            elif isinstance(_other, Real):
+                _endpoints.append((_other, 0))
+                _endpoints.append((_other, 0))
+            else:
+                raise TypeError(_other)
+
+        self.endpoints = _endpoints
+        self.merge_adjacent(sort=True)
+        return self
 
     def intersection_update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
@@ -384,24 +400,29 @@ class MultiInterval:
         raise NotImplementedError
 
     def symmetric_difference_update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        tmp = other.difference(self)
+        self.difference_update(other)
+        self.update(tmp)
+        self._consistency_check()
+        return self
 
     # SET: BOOLEAN ALGEBRA
 
-    def union(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+    def union(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        return self.copy().update(*other)
 
     def intersection(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self.copy().intersection_update(other)
 
     def difference(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self.copy().difference_update(other)
 
     def symmetric_difference(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return self.copy().symmetric_difference_update(other)
 
     # INTERVAL OPERATIONS (INPLACE)
-    def merge_adjacent(self, distance: Real = 0) -> 'MultiInterval':
+
+    def merge_adjacent(self, distance: Real = 0, sort: bool = False) -> 'MultiInterval':
         if not isinstance(distance, Real):
             raise TypeError(distance)
         if distance < 0:
@@ -409,6 +430,12 @@ class MultiInterval:
 
         if self.is_empty or self.is_contiguous:
             return self
+
+        if sort:
+            _endpoints, self.endpoints = self.endpoints, []
+            for _start, _end in sorted((_endpoints[idx], _endpoints[idx + 1]) for idx in range(0, len(_endpoints), 2)):
+                self.endpoints.append(_start)
+                self.endpoints.append(_endpoints)
 
         _endpoints, self.endpoints = self.endpoints, []
         idx = 0
@@ -477,7 +504,19 @@ class MultiInterval:
     # INTERVAL ARITHMETIC: GENERIC
 
     def _apply_monotonic_unary_function(self, func: Callable) -> 'MultiInterval':
-        raise NotImplementedError
+        self._consistency_check()
+
+        _endpoints, self.endpoints = self.endpoints, []
+        for idx in range(0, len(_endpoints), 2):
+            _start = func(_endpoints[idx][0])
+            _end = func(_endpoints[idx + 1][0])
+            _start_epsilon = _endpoints[idx][1]
+            _end_epsilon = _endpoints[idx + 1][1]
+            self.endpoints.append(min((_start, _start_epsilon), (_end, -_end_epsilon)))
+            self.endpoints.append(max((_start, -_start_epsilon), (_end, _end_epsilon)))
+
+        self.merge_adjacent(sort=True)
+        return self
 
     def _apply_monotonic_binary_function(self,
                                          func: Callable,
