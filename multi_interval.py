@@ -395,18 +395,23 @@ class MultiInterval:
         self.merge_adjacent(sort=True)
         return self
 
-    def intersection_update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        # todo: multi-way AND
-        if self.is_empty:
-            return self
-        raise NotImplementedError
+    def intersection_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        # todo: don't be lazy and write a real implementation that isn't inefficient
+        for _other in other:
+            self.difference_update(self.difference(_other))
+            if self.is_empty:
+                break
+
+        return self
 
     def difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        self._consistency_check()
+
         # get all the other endpoints merged together
         _other = MultiInterval().update(*other).endpoints
 
         # nothing to remove
-        if self.is_empty:
+        if self.is_empty or len(_other) == 0:
             return self
 
         # clear own endpoints while reading, since we'll replace everything
@@ -515,7 +520,8 @@ class MultiInterval:
     # INTERVAL OPERATIONS
 
     def __contains__(self, other: Union['MultiInterval', Real]) -> bool:
-        raise NotImplementedError
+        # todo: write a real implementation that isn't crazy inefficient like this is
+        return self.union(other) == self
 
     def closed_hull(self):
         return MultiInterval(start=self.infimum,
