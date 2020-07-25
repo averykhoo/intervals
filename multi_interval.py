@@ -397,10 +397,26 @@ class MultiInterval:
 
     def intersection_update(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         # todo: multi-way AND
+        if self.is_empty:
+            return self
         raise NotImplementedError
 
     def difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        # todo: simple difference after `_other = MultiInterval().update(*other)`
+        # get all the other endpoints merged together
+        _other = MultiInterval().update(*other).endpoints
+
+        # nothing to remove
+        if self.is_empty:
+            return self
+
+        # clear own endpoints while reading, since we'll replace everything
+        _endpoints, self.endpoints = self.endpoints, []
+
+        other_idx = 0
+        _other_start, _other_end = _endpoints[other_idx], _endpoints[other_idx + 1]
+        for self_idx in range(0, len(_endpoints), 2):
+            _self_start, _self_end = _endpoints[self_idx], _endpoints[self_idx + 1]
+
         raise NotImplementedError
 
     def symmetric_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
@@ -437,6 +453,7 @@ class MultiInterval:
             raise ValueError(distance)
 
         if self.is_empty or self.is_contiguous:
+            self._consistency_check()
             return self
 
         if sort:
