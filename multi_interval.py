@@ -408,21 +408,43 @@ class MultiInterval:
         self._consistency_check()
 
         # get all the other endpoints merged together
-        _other = MultiInterval().update(*other).endpoints
+        _other_endpoints = MultiInterval().update(*other).endpoints
 
         # nothing to remove
-        if self.is_empty or len(_other) == 0:
+        if self.is_empty or len(_other_endpoints) == 0:
             return self
 
         # clear own endpoints while reading, since we'll replace everything
         _endpoints, self.endpoints = self.endpoints, []
 
         other_idx = 0
-        _other_start, _other_end = _endpoints[other_idx], _endpoints[other_idx + 1]
+        _other_start, _other_end = _other_endpoints[other_idx], _other_endpoints[other_idx + 1]
         for self_idx in range(0, len(_endpoints), 2):
             _self_start, _self_end = _endpoints[self_idx], _endpoints[self_idx + 1]
 
-        raise NotImplementedError
+            # skip through other until we find one that succeeds self
+            while other_idx + 2 < len(_other_endpoints) and _other_end < _self_end:
+                other_idx += 2
+                _other_start, _other_end = _other_endpoints[other_idx], _other_endpoints[other_idx + 1]
+
+                if _other_end < _self_start:
+                    continue
+
+                if _self_start < _other_start:
+                    self.endpoints.append(_self_start)
+                    self.endpoints.append(min(_self_end, (_other_start[0], _other_start[0] - 1)))
+
+                _self_start = (_other_end[0], _other_end[0] + 1)
+
+            # todo: i feel like the logic is flaky, double-check
+
+            # end of other, quick exit
+            if _other_end < _self_start:
+                assert other_idx + 2 >= len(_other_endpoints)
+                self.endpoints.extend(_endpoints[self_idx:])
+                break
+
+        return self
 
     def symmetric_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         # todo: basically a multi-way XOR, and this is not particularly efficient
