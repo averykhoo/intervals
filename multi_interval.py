@@ -1,3 +1,4 @@
+import bisect
 import math
 import operator
 import re
@@ -405,6 +406,9 @@ class MultiInterval:
         return self
 
     def difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        """
+        O(m + n) implementation, where m = len(other) and n = len(self)
+        """
         self._consistency_check()
 
         # get all the other endpoints merged together
@@ -417,33 +421,103 @@ class MultiInterval:
         # clear own endpoints while reading, since we'll replace everything
         _endpoints, self.endpoints = self.endpoints, []
 
+        # iterate through other but not necessarily until the end
         other_idx = 0
-        _other_start, _other_end = _other_endpoints[other_idx], _other_endpoints[other_idx + 1]
+        other_start, other_end = _other_endpoints[other_idx], _other_endpoints[other_idx + 1]
+
+        # iterate through self exactly once
         for self_idx in range(0, len(_endpoints), 2):
-            _self_start, _self_end = _endpoints[self_idx], _endpoints[self_idx + 1]
+            self_start, self_end = _endpoints[self_idx], _endpoints[self_idx + 1]
 
-            # skip through other until we find one that succeeds self
-            while other_idx + 2 < len(_other_endpoints) and _other_end < _self_end:
-                other_idx += 2
-                _other_start, _other_end = _other_endpoints[other_idx], _other_endpoints[other_idx + 1]
+            while True:
+                if self_start < other_start:
+                    self.endpoints.append(self_start)
+                    self.endpoints.append(min(self_end, (other_start[0], other_start[0] - 1)))
 
-                if _other_end < _self_start:
-                    continue
+                if other_end < self_end:
+                    self_start = max(self_start, (other_end[0], other_end[0] + 1))
 
-                if _self_start < _other_start:
-                    self.endpoints.append(_self_start)
-                    self.endpoints.append(min(_self_end, (_other_start[0], _other_start[0] - 1)))
+                    if other_idx + 2 < len(_other_endpoints):
+                        other_idx += 2
+                        other_start, other_end = _other_endpoints[other_idx], _other_endpoints[other_idx + 1]
+                        continue
 
-                _self_start = (_other_end[0], _other_end[0] + 1)
-
-            # todo: i feel like the logic is flaky, double-check
-
-            # end of other, quick exit
-            if _other_end < _self_start:
-                assert other_idx + 2 >= len(_other_endpoints)
-                self.endpoints.extend(_endpoints[self_idx:])
                 break
 
+            # end of other, quick exit
+            if other_end < self_start:
+                assert self_start <= self_end
+                assert other_idx + 2 >= len(_other_endpoints)
+                self.endpoints.append(self_start)
+                self.endpoints.extend(_endpoints[self_idx + 1:])
+                break
+
+        # allow operator chaining
+        self._consistency_check()
+        return self
+
+    def difference_update_logn(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        """
+        O(m log(n)) implementation, where m = len(other) and n = len(self)
+        todo: swap out and refill self.endpoints instead of re-allocating a new list every step
+        """
+
+        self._consistency_check()
+
+        # get all the other endpoints merged together
+        _other_endpoints = MultiInterval().update(*other).endpoints
+
+        # nothing to remove
+        if self.is_empty or len(_other_endpoints) == 0:
+            return self
+
+        left_bound = 0
+
+        for other_idx in range(0, len(_other_endpoints), 2):
+            other_start, other_end = _other_endpoints[other_idx], _other_endpoints[other_idx + 1]
+
+            right_bound = bisect.bisect_right(self.endpoints, other_end, lo=left_bound)
+            left_bound = bisect.bisect_left(self.endpoints, other_start, lo=left_bound, hi=right_bound)
+            assert 0 <= left_bound <= right_bound, (other_start, other_end)
+
+            # either within or between contiguous intervals
+            if right_bound == left_bound:
+                # split a contiguous interval
+                if left_bound % 2 == 1:
+                    self.endpoints = self.endpoints[:left_bound] + \
+                                     [(other_start[0], other_start[0] - 1), (other_end[0], other_end[0] + 1)] + \
+                                     self.endpoints[right_bound:]
+
+                # between intervals, do nothing
+                else:
+                    pass
+
+            # in-place replacement, one side
+            elif right_bound - left_bound == 1:
+                if left_bound % 2 == 0:
+                    self.endpoints[right_bound - 1] = (other_end[0], other_end[0] + 1)
+                else:
+                    self.endpoints[left_bound] = (other_start[0], other_start[0] - 1)
+
+            # in-place replacement, both sides
+            elif right_bound - left_bound == 2 and left_bound % 2 == 1:
+                assert right_bound % 2 == 1, (other_start, other_end)
+                self.endpoints[left_bound] = (other_start[0], other_start[0] - 1)
+                self.endpoints[right_bound - 1] = (other_end[0], other_end[0] + 1)
+
+            # merge multiple things
+            else:
+                assert right_bound - left_bound >= 2
+                if left_bound % 2 == 1:
+                    self.endpoints[left_bound] = (other_start[0], other_start[0] - 1)
+                    left_bound += 1
+                if right_bound % 2 == 1:
+                    self.endpoints[right_bound - 1] = (other_end[0], other_end[0] + 1)
+                    right_bound -= 1
+                self.endpoints = self.endpoints[:left_bound] + self.endpoints[right_bound:]
+
+        # allow operator chaining
+        self._consistency_check()
         return self
 
     def symmetric_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
