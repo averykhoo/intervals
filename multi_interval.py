@@ -358,7 +358,6 @@ class MultiInterval:
     # SET: ITEMS (INPLACE)
 
     def add(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        # todo: use O(log(n)) algo instead
         self.update(other)
         return self
 
@@ -473,7 +472,8 @@ class MultiInterval:
     def _log_n_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         """
         O(m log(n)) implementation, where m = len(other) and n = len(self)
-        todo: swap out and refill self.endpoints instead of re-allocating a new list every step
+
+        actually probably proportional to O(n) since there's list copying, so don't use this except for testing
         """
 
         self._consistency_check()
@@ -636,8 +636,7 @@ class MultiInterval:
         return self.union(other) == self
 
     def overlaps(self, *other: Union['MultiInterval', Real], or_adjacent=False) -> bool:
-        _other = MultiInterval().update(*other)
-
+        # _other = MultiInterval().update(*other)
         raise NotImplementedError  # todo
 
     def overlapping(self, other: Union['MultiInterval', Real], or_adjacent=False) -> 'MultiInterval':
@@ -952,6 +951,7 @@ def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25)
             out.endpoints.append((_endpoints[idx], 1))
             out.endpoints.append((_endpoints[idx + 1], -1))
 
+    # noinspection PyProtectedMember
     out._consistency_check()
     return out
 
@@ -961,6 +961,8 @@ if __name__ == '__main__':
     j = random_multi_interval(-100, 100, 2, 0)
     print(i, i.closed_hull)
     print(j, j.closed_hull)
+
+    # noinspection PyProtectedMember
     assert i.difference(j) == i.copy()._log_n_difference_update(j)
     print('union                ', i.union(j))
     print('intersection         ', i.intersection(j))
