@@ -1,6 +1,7 @@
 import bisect
 import math
 import operator
+import random
 import re
 from numbers import Real
 from typing import Callable
@@ -261,15 +262,16 @@ class MultiInterval:
         # length must be even
         assert len(self.endpoints) % 2 == 0, len(self.endpoints)
 
-        def _check_endpoint_tuple(endpoint):
-            assert isinstance(endpoint, tuple), endpoint
-            assert len(endpoint) == 2, endpoint
-            assert isinstance(endpoint[0], Real), endpoint
-            assert isinstance(endpoint[1], int), endpoint
-            assert endpoint[1] in {-1, 0, 1}, endpoint
-
         # must be sorted
         if len(self.endpoints) > 0:
+
+            def _check_endpoint_tuple(endpoint):
+                assert isinstance(endpoint, tuple), endpoint
+                assert len(endpoint) == 2, endpoint
+                assert isinstance(endpoint[0], Real), endpoint
+                assert isinstance(endpoint[1], int), endpoint
+                assert endpoint[1] in {-1, 0, 1}, endpoint
+
             prev = self.endpoints[0]
             _check_endpoint_tuple(prev)
 
@@ -278,15 +280,17 @@ class MultiInterval:
                 assert prev <= elem, (prev, elem)
                 prev = elem
 
-        # no degenerate interval at infinity
-        if self.is_degenerate:
-            assert not math.isinf(self.infimum)
+            # no degenerate interval at infinity
+            if self.is_degenerate:
+                assert not math.isinf(self.infimum)
 
-        # infinity cannot be contained within an interval
-        assert (-math.inf, 0) > self.endpoints[0]
-        assert self.endpoints[-1] < (math.inf, 0)
-        assert math.inf not in self
-        assert -math.inf not in self
+            # infinity cannot be contained within an interval
+            if INFINITY_IS_NOT_FINITE:
+                assert (-math.inf, 0) < self.endpoints[0]
+                assert self.endpoints[-1] < (math.inf, 0)
+            else:
+                assert (-math.inf, 0) <= self.endpoints[0]
+                assert self.endpoints[-1] <= (math.inf, 0)
 
     # FILTERING
 
@@ -380,19 +384,22 @@ class MultiInterval:
 
     def update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         self._consistency_check()
-        _endpoints = self.endpoints.copy()
+
+        if self.is_empty and len(other) == 1:
+            self.endpoints = other[0].endpoints.copy()
+            self._consistency_check()
+            return self
 
         for _other in other:
             if isinstance(_other, MultiInterval):
                 _other._consistency_check()
-                _endpoints.extend(_other.endpoints)
+                self.endpoints.extend(_other.endpoints)
             elif isinstance(_other, Real):
-                _endpoints.append((_other, 0))
-                _endpoints.append((_other, 0))
+                self.endpoints.append((_other, 0))
+                self.endpoints.append((_other, 0))
             else:
                 raise TypeError(_other)
 
-        self.endpoints = _endpoints
         self.merge_adjacent(sort=True)
         return self
 
@@ -432,10 +439,10 @@ class MultiInterval:
             while True:
                 if self_start < other_start:
                     self.endpoints.append(self_start)
-                    self.endpoints.append(min(self_end, (other_start[0], other_start[0] - 1)))
+                    self.endpoints.append(min(self_end, (other_start[0], other_start[1] - 1)))
 
                 if other_end < self_end:
-                    self_start = max(self_start, (other_end[0], other_end[0] + 1))
+                    self_start = max(self_start, (other_end[0], other_end[1] + 1))
 
                     if other_idx + 2 < len(_other_endpoints):
                         other_idx += 2
@@ -456,7 +463,7 @@ class MultiInterval:
         self._consistency_check()
         return self
 
-    def difference_update_logn(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+    def _log_n_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         """
         O(m log(n)) implementation, where m = len(other) and n = len(self)
         todo: swap out and refill self.endpoints instead of re-allocating a new list every step
@@ -485,7 +492,7 @@ class MultiInterval:
                 # split a contiguous interval
                 if left_bound % 2 == 1:
                     self.endpoints = self.endpoints[:left_bound] + \
-                                     [(other_start[0], other_start[0] - 1), (other_end[0], other_end[0] + 1)] + \
+                                     [(other_start[0], other_start[1] - 1), (other_end[0], other_end[1] + 1)] + \
                                      self.endpoints[right_bound:]
 
                 # between intervals, do nothing
@@ -495,24 +502,24 @@ class MultiInterval:
             # in-place replacement, one side
             elif right_bound - left_bound == 1:
                 if left_bound % 2 == 0:
-                    self.endpoints[right_bound - 1] = (other_end[0], other_end[0] + 1)
+                    self.endpoints[right_bound - 1] = (other_end[0], other_end[1] + 1)
                 else:
-                    self.endpoints[left_bound] = (other_start[0], other_start[0] - 1)
+                    self.endpoints[left_bound] = (other_start[0], other_start[1] - 1)
 
             # in-place replacement, both sides
             elif right_bound - left_bound == 2 and left_bound % 2 == 1:
                 assert right_bound % 2 == 1, (other_start, other_end)
-                self.endpoints[left_bound] = (other_start[0], other_start[0] - 1)
-                self.endpoints[right_bound - 1] = (other_end[0], other_end[0] + 1)
+                self.endpoints[left_bound] = (other_start[0], other_start[1] - 1)
+                self.endpoints[right_bound - 1] = (other_end[0], other_end[1] + 1)
 
             # merge multiple things
             else:
                 assert right_bound - left_bound >= 2
                 if left_bound % 2 == 1:
-                    self.endpoints[left_bound] = (other_start[0], other_start[0] - 1)
+                    self.endpoints[left_bound] = (other_start[0], other_start[1] - 1)
                     left_bound += 1
                 if right_bound % 2 == 1:
-                    self.endpoints[right_bound - 1] = (other_end[0], other_end[0] + 1)
+                    self.endpoints[right_bound - 1] = (other_end[0], other_end[1] + 1)
                     right_bound -= 1
                 self.endpoints = self.endpoints[:left_bound] + self.endpoints[right_bound:]
 
@@ -557,12 +564,14 @@ class MultiInterval:
             self._consistency_check()
             return self
 
+        # sort contiguous intervals by start, end
         if sort:
             _endpoints, self.endpoints = self.endpoints, []
             for _start, _end in sorted((_endpoints[idx], _endpoints[idx + 1]) for idx in range(0, len(_endpoints), 2)):
                 self.endpoints.append(_start)
-                self.endpoints.append(_endpoints)
+                self.endpoints.append(_end)
 
+        # merge adjacent intervals
         _endpoints, self.endpoints = self.endpoints, []
         idx = 0
         _end = _endpoints[0]
@@ -626,7 +635,15 @@ class MultiInterval:
                              end_closed=not math.isinf(self.supremum) or not INFINITY_IS_NOT_FINITE)
 
     def overlaps(self, other: Union['MultiInterval', Real], or_adjacent=False) -> bool:
-        raise NotImplementedError
+        raise NotImplementedError  # todo
+
+    def overlapping(self, other: Union['MultiInterval', Real], or_adjacent=False) -> 'MultiInterval':
+        # todo: something more efficient
+        out = MultiInterval()
+        for interval in self.contiguous_intervals:
+            if other.overlaps(interval, or_adjacent=or_adjacent):
+                out.update(interval)
+        return out
 
     # INTERVAL ARITHMETIC: GENERIC
 
@@ -833,8 +850,8 @@ class MultiInterval:
             # unpack
             _start, _start_epsilon = start_tuple
             _end, _end_epsilon = end_tuple
-            assert _start_epsilon in {-1, 0}, (start_tuple, end_tuple)
-            assert _end_epsilon in {0, 1}, (start_tuple, end_tuple)
+            assert _start_epsilon in {1, 0}, (start_tuple, end_tuple)
+            assert _end_epsilon in {0, -1}, (start_tuple, end_tuple)
 
             # degenerate interval
             if _start == _end:
@@ -883,4 +900,59 @@ class MultiInterval:
             if len(str_intervals) == 1:
                 return str_intervals[0]
 
-            return f'{{ {" | ".join(str_intervals)} }}'
+            return f'{{ {" , ".join(str_intervals)} }}'
+
+
+def random_multi_interval(start, end, n, decimals=2):
+    _points = set()
+    while len(_points) < 2 * n:
+        if decimals:
+            _points.add(round(start + (end - start) * random.random(), decimals))
+        else:
+            _points.add(int(start + (end - start) * random.random()))
+
+    _endpoints = sorted(_points)
+
+    out = MultiInterval()
+    for idx in range(0, len(_endpoints), 2):
+        x = random.random()
+
+        # degenerate interval
+        if x < 0.2 or _endpoints[idx] == _endpoints[idx + 1]:
+            out.endpoints.append((_endpoints[idx], 0))
+            out.endpoints.append((_endpoints[idx], 0))
+
+        # closed interval
+        elif x < 0.4:
+            out.endpoints.append((_endpoints[idx], 0))
+            out.endpoints.append((_endpoints[idx + 1], 0))
+
+        # open interval
+        elif x < 0.6:
+            out.endpoints.append((_endpoints[idx], 1))
+            out.endpoints.append((_endpoints[idx + 1], -1))
+
+        # open-closed interval
+        elif x < 0.8:
+            out.endpoints.append((_endpoints[idx], 1))
+            out.endpoints.append((_endpoints[idx + 1], 0))
+
+        # closed-open interval
+        else:
+            out.endpoints.append((_endpoints[idx], 0))
+            out.endpoints.append((_endpoints[idx + 1], -1))
+
+    out._consistency_check()
+    return out
+
+
+if __name__ == '__main__':
+    i = random_multi_interval(0, 1000, 2, 0)
+    j = random_multi_interval(0, 1000, 2, 0)
+    print(i)
+    print(j)
+    assert i.difference(j) == i.copy()._log_n_difference_update(j)
+    print('union                ', i.union(j))
+    print('intersection         ', i.intersection(j))
+    print('difference           ', i.difference(j))
+    print('symmetric_difference ', i.symmetric_difference(j))
