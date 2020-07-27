@@ -139,6 +139,13 @@ class MultiInterval:
             return self.endpoints[-1][0]
 
     @property
+    def closed_hull(self):
+        return MultiInterval(start=self.infimum,
+                             end=self.supremum,
+                             start_closed=not (math.isinf(self.infimum) and INFINITY_IS_NOT_FINITE),
+                             end_closed=not (math.isinf(self.supremum) and INFINITY_IS_NOT_FINITE))
+
+    @property
     def cardinality(self) -> Tuple[int, float, int]:
         """
         intuitively this is proportional to the overall length,
@@ -282,7 +289,7 @@ class MultiInterval:
 
             # no degenerate interval at infinity
             if self.is_degenerate:
-                assert not math.isinf(self.infimum)
+                assert not (math.isinf(self.infimum) and INFINITY_IS_NOT_FINITE)
 
             # infinity cannot be contained within an interval
             if INFINITY_IS_NOT_FINITE:
@@ -312,8 +319,8 @@ class MultiInterval:
 
             return self.intersection(MultiInterval(start=_start,
                                                    end=_end,
-                                                   start_closed=not math.isinf(_start) or not INFINITY_IS_NOT_FINITE,
-                                                   end_closed=not math.isinf(_end) or not INFINITY_IS_NOT_FINITE))
+                                                   start_closed=not (math.isinf(_start) and INFINITY_IS_NOT_FINITE),
+                                                   end_closed=not (math.isinf(_end) and INFINITY_IS_NOT_FINITE)))
 
         else:
             raise TypeError
@@ -543,14 +550,14 @@ class MultiInterval:
     def union(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         return self.copy().update(*other)
 
-    def intersection(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self.copy().intersection_update(other)
+    def intersection(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        return self.copy().intersection_update(*other)
 
-    def difference(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self.copy().difference_update(other)
+    def difference(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        return self.copy().difference_update(*other)
 
-    def symmetric_difference(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self.copy().symmetric_difference_update(other)
+    def symmetric_difference(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        return self.copy().symmetric_difference_update(*other)
 
     # INTERVAL OPERATIONS (INPLACE)
 
@@ -628,13 +635,9 @@ class MultiInterval:
         # todo: write a real implementation that isn't crazy inefficient like this is
         return self.union(other) == self
 
-    def closed_hull(self):
-        return MultiInterval(start=self.infimum,
-                             end=self.supremum,
-                             start_closed=not math.isinf(self.infimum) or not INFINITY_IS_NOT_FINITE,
-                             end_closed=not math.isinf(self.supremum) or not INFINITY_IS_NOT_FINITE)
+    def overlaps(self, *other: Union['MultiInterval', Real], or_adjacent=False) -> bool:
+        _other = MultiInterval().update(*other)
 
-    def overlaps(self, other: Union['MultiInterval', Real], or_adjacent=False) -> bool:
         raise NotImplementedError  # todo
 
     def overlapping(self, other: Union['MultiInterval', Real], or_adjacent=False) -> 'MultiInterval':
@@ -903,8 +906,12 @@ class MultiInterval:
             return f'{{ {" , ".join(str_intervals)} }}'
 
 
-def random_multi_interval(start, end, n, decimals=2):
+def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25):
     _points = set()
+    if random.random() < neg_inf:
+        _points.add(-math.inf)
+    if random.random() < pos_inf:
+        _points.add(math.inf)
     while len(_points) < 2 * n:
         if decimals:
             _points.add(round(start + (end - start) * random.random(), decimals))
@@ -918,28 +925,31 @@ def random_multi_interval(start, end, n, decimals=2):
         x = random.random()
 
         # degenerate interval
-        if x < 0.2 or _endpoints[idx] == _endpoints[idx + 1]:
+        if (x < 0.2 or _endpoints[idx] == _endpoints[idx + 1]) \
+                and not (math.isinf(_endpoints[idx]) and INFINITY_IS_NOT_FINITE):
             out.endpoints.append((_endpoints[idx], 0))
             out.endpoints.append((_endpoints[idx], 0))
 
         # closed interval
-        elif x < 0.4:
+        elif x < 0.4 \
+                and not (math.isinf(_endpoints[idx]) and INFINITY_IS_NOT_FINITE) \
+                and not (math.isinf(_endpoints[idx + 1]) and INFINITY_IS_NOT_FINITE):
             out.endpoints.append((_endpoints[idx], 0))
-            out.endpoints.append((_endpoints[idx + 1], 0))
-
-        # open interval
-        elif x < 0.6:
-            out.endpoints.append((_endpoints[idx], 1))
-            out.endpoints.append((_endpoints[idx + 1], -1))
-
-        # open-closed interval
-        elif x < 0.8:
-            out.endpoints.append((_endpoints[idx], 1))
             out.endpoints.append((_endpoints[idx + 1], 0))
 
         # closed-open interval
-        else:
+        elif x < 0.6 and not (math.isinf(_endpoints[idx]) and INFINITY_IS_NOT_FINITE):
             out.endpoints.append((_endpoints[idx], 0))
+            out.endpoints.append((_endpoints[idx + 1], -1))
+
+        # open-closed interval
+        elif x < 0.8 and not (math.isinf(_endpoints[idx + 1]) and INFINITY_IS_NOT_FINITE):
+            out.endpoints.append((_endpoints[idx], 1))
+            out.endpoints.append((_endpoints[idx + 1], 0))
+
+        # open interval
+        else:
+            out.endpoints.append((_endpoints[idx], 1))
             out.endpoints.append((_endpoints[idx + 1], -1))
 
     out._consistency_check()
@@ -947,10 +957,10 @@ def random_multi_interval(start, end, n, decimals=2):
 
 
 if __name__ == '__main__':
-    i = random_multi_interval(0, 1000, 2, 0)
-    j = random_multi_interval(0, 1000, 2, 0)
-    print(i)
-    print(j)
+    i = random_multi_interval(-100, 100, 2, 0)
+    j = random_multi_interval(-100, 100, 2, 0)
+    print(i, i.closed_hull)
+    print(j, j.closed_hull)
     assert i.difference(j) == i.copy()._log_n_difference_update(j)
     print('union                ', i.union(j))
     print('intersection         ', i.intersection(j))
