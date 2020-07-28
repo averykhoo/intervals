@@ -378,6 +378,7 @@ class MultiInterval:
             return self.intersection(item)
 
         elif isinstance(item, slice):
+            # todo: just find the appropriate endpoints via bisect and return it
             if item.step is not None:
                 raise ValueError(item)
 
@@ -861,10 +862,10 @@ class MultiInterval:
         return self._apply_monotonic_binary_function(operator.mul, other, right_hand_side=True)
 
     def __truediv__(self, other):
-        raise NotImplementedError
+        raise NotImplementedError  # todo
 
     def __rtruediv__(self, other):
-        raise NotImplementedError
+        raise NotImplementedError  # todo
 
     def __floordiv__(self, other):
         raise NotImplementedError
@@ -873,7 +874,7 @@ class MultiInterval:
         raise NotImplementedError
 
     def __mod__(self, other):
-        raise NotImplementedError
+        raise NotImplementedError  # todo
 
     def __rmod__(self, other):
         raise NotImplementedError
@@ -908,7 +909,7 @@ class MultiInterval:
     # INTERVAL ARITHMETIC: UNARY
 
     def reciprocal(self):
-        raise NotImplementedError
+        raise NotImplementedError  # todo
 
     def __neg__(self):
         return self.copy().mirror()
