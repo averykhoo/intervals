@@ -159,19 +159,21 @@ class MultiInterval:
         assert is_end is False
         count = 1
         for point, is_end in _points[1:]:
-            assert point >= start
             if is_end:
-                if count in counts:
+                assert start <= (point[0], point[1] + 1), (start, point, _points)
+                if count in counts and start <= point:
                     out.endpoints.append(start)
                     out.endpoints.append(point)
                 start = (point[0], point[1] + 1)
                 count -= 1
 
             elif point == start:
+                assert point >= start, (start, point, _points)
                 count += 1
                 continue
 
             else:
+                assert point >= start, (start, point, _points)
                 if count in counts:
                     out.endpoints.append(start)
                     out.endpoints.append((point[0], point[1] - 1))
@@ -457,7 +459,7 @@ class MultiInterval:
     # SET: BOOLEAN ALGEBRA (INPLACE)
 
     def update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        tmp = MultiInterval.merge(self, *other)
+        tmp = MultiInterval.merge(self, *other)  # todo: temp for error-checking
 
         self._consistency_check()
 
@@ -481,8 +483,7 @@ class MultiInterval:
         return self
 
     def intersection_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        # todo: remove; this is temporary for error-checking
-        tmp = self.difference(MultiInterval().union(*[~_other for _other in other]))
+        tmp = self.difference(MultiInterval().union(*[~_other for _other in other]))  # todo: temp for error-checking
 
         # todo: don't be lazy and write a real implementation that isn't inefficient
         for _other in other:
@@ -497,6 +498,8 @@ class MultiInterval:
         """
         O(m + n) implementation, where m = len(other) and n = len(self)
         """
+        tmp = self.copy()._log_n_difference_update(*other)  # todo: temp for error-checking
+
         self._consistency_check()
         if len(other) == 0:
             raise ValueError
@@ -544,6 +547,7 @@ class MultiInterval:
 
         # allow operator chaining
         self._consistency_check()
+        assert self == tmp
         return self
 
     def _log_n_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
@@ -614,6 +618,8 @@ class MultiInterval:
         return self
 
     def symmetric_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        tmp = MultiInterval.merge(self, *other, counts=range(1, 999, 2))  # todo: temp for error-checking
+
         # todo: basically a multi-way XOR, and this is not particularly efficient
         self._consistency_check()
         if len(other) == 0:
@@ -621,10 +627,11 @@ class MultiInterval:
 
         for _other in other:
             _other._consistency_check()
-            tmp = _other.difference(self)
+            _tmp = _other.difference(self)
             self.difference_update(_other)
-            self.update(tmp)
-            self._consistency_check()
+            self.update(_tmp)
+
+        assert self == tmp
         return self
 
     # SET: BOOLEAN ALGEBRA
@@ -719,17 +726,43 @@ class MultiInterval:
         # todo: write a real implementation that isn't crazy inefficient like this is
         return self.union(other) == self
 
-    def overlaps(self, *other: Union['MultiInterval', Real], or_adjacent: bool = False) -> bool:
-        # _other = MultiInterval().update(*other)
-        raise NotImplementedError  # todo
-
     def overlapping(self, other: Union['MultiInterval', Real], or_adjacent: bool = False) -> 'MultiInterval':
-        # todo: something more efficient
+        if isinstance(other, Real):
+            other = MultiInterval(other)
+        if not isinstance(other, MultiInterval):
+            raise TypeError(other)
+
+        if self.is_empty or other.is_empty:
+            return MultiInterval()
+
+        if or_adjacent:
+            adj = 1
+        else:
+            adj = 0
+
+        _endpoints = self.endpoints.copy()
         out = MultiInterval()
-        for interval in self.contiguous_intervals:
-            if other.overlaps(interval, or_adjacent=or_adjacent):
-                out.update(interval)
+        other_idx = 0
+        other_start = other.endpoints[other_idx]
+        other_end = other.endpoints[other_idx + 1]
+
+        for idx in range(0, len(_endpoints), 2):
+            start, start_epsilon = _endpoints[idx]
+            end, end_epsilon = _endpoints[idx + 1]
+
+            while other_idx + 2 < len(other.endpoints) and other_end < (start, start_epsilon - adj):
+                other_idx += 2
+                other_start = other.endpoints[other_idx]
+                other_end = other.endpoints[other_idx + 1]
+
+            if (start, start_epsilon - adj) <= other_end and other_start <= (end, end_epsilon + adj):
+                out.endpoints.append((start, start_epsilon))
+                out.endpoints.append((end, end_epsilon))
+
         return out
+
+    def overlaps(self, other: Union['MultiInterval', Real], or_adjacent: bool = False) -> bool:
+        return not self.overlapping(other, or_adjacent=or_adjacent).is_empty
 
     # INTERVAL ARITHMETIC: GENERIC
 
@@ -1041,14 +1074,13 @@ def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25)
 
 
 if __name__ == '__main__':
-    i = random_multi_interval(-100, 100, 2, 0)
-    j = random_multi_interval(-100, 100, 2, 0)
-    print(i, i.closed_hull)
-    print(j, j.closed_hull)
-
-    # noinspection PyProtectedMember
-    assert i.difference(j) == i.copy()._log_n_difference_update(j)
-    print('union                ', i.union(j))
-    print('intersection         ', i.intersection(j))
-    print('difference           ', i.difference(j))
-    print('symmetric_difference ', i.symmetric_difference(j))
+    for _ in range(1000):
+        i = random_multi_interval(-100, 100, 2, 0)
+        j = random_multi_interval(-100, 100, 2, 0)
+        print(i, i.closed_hull)
+        print(j, j.closed_hull)
+        print('union                ', i.union(j))
+        print('intersection         ', i.intersection(j))
+        print('difference           ', i.difference(j))
+        print('symmetric_difference ', i.symmetric_difference(j))
+        print('overlapping          ', i.overlapping(j))
