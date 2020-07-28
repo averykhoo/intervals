@@ -92,6 +92,8 @@ class MultiInterval:
         re_interval = re.compile(fr'[\[(]\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})?)?[)\]]', flags=re.U)
         re_set = re.compile(fr'{{\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})*)?}}', flags=re.U)
 
+        assert isinstance(text, str), text
+
         out = MultiInterval()
         for interval_str in re_interval.findall(text):
             _start_closed = interval_str[0] == '['
@@ -484,6 +486,7 @@ class MultiInterval:
 
     def intersection_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         tmp = self.difference(MultiInterval().union(*[~_other for _other in other]))  # todo: temp for error-checking
+        tmp2 = MultiInterval.merge(self, *other, counts=[1 + len(other)])  # todo: temp for error-checking
 
         # todo: don't be lazy and write a real implementation that isn't inefficient
         for _other in other:
@@ -492,6 +495,7 @@ class MultiInterval:
                 break
         self._consistency_check()
         assert self == tmp
+        assert self == tmp2
         return self
 
     def difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
