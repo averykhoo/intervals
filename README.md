@@ -1,5 +1,6 @@
 #   (Time) Intervals for Python
 *A GLORIOUS EXERCISE IN YAK-SHAVING*
+
 *   `interval.Interval`: the usual contiguous intervals, where endpoints can be open or closed
     *   support for usable set functions
     *   support for most numeric operations
@@ -27,3 +28,7 @@
         *   somewhat non-intuitive since boundaries aren't respected
         *   e.g. (1pm to 4pm) minus (3pm to 5pm) equals (1pm to 3pm)
         *   even though 3pm was removed from the range, it's still included in the range
+        
+        
+#   todo?
+*   iterate over int within multi-interval with at most one half-ray

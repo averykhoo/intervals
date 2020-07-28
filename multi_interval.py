@@ -3,8 +3,10 @@ import math
 import operator
 import random
 import re
+import warnings
 from numbers import Real
 from typing import Callable
+from typing import Iterable
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -44,6 +46,7 @@ class MultiInterval:
 
         # null set
         elif end is None and not start_closed and not end_closed:
+            warnings.warn(f'creating a closed interval: ({start}) == []')
             self.endpoints = []
 
         # degenerate interval
@@ -112,6 +115,71 @@ class MultiInterval:
                 out.update(MultiInterval(start=_str_to_num(num)))
 
         out._consistency_check()
+        return out
+
+    @classmethod
+    def merge(cls,
+              *interval: Union['MultiInterval', Real],
+              counts: Optional[Iterable[int]] = None
+              ) -> 'MultiInterval':
+
+        # check counts
+        if counts is not None:
+            counts = set(counts)
+            if not all(isinstance(elem, int) for elem in counts):
+                raise TypeError(counts)
+
+        # check intervals
+        _points = []
+        n_intervals = 0
+        for _interval in interval:
+            n_intervals += 1
+            if isinstance(_interval, MultiInterval):
+                for idx in range(0, len(_interval.endpoints), 2):
+                    _points.append((_interval.endpoints[idx], False))
+                    _points.append((_interval.endpoints[idx + 1], True))
+            elif isinstance(_interval, Real):
+                _points.append(((_interval, 0), False))
+                _points.append(((_interval, 0), True))
+            else:
+                raise TypeError(_interval)
+
+        # set counts if not yet set
+        if counts is None:
+            counts = set(range(1, n_intervals + 1))
+
+        # sort points
+        _points = sorted(_points)
+
+        out = MultiInterval()
+        if len(_points) == 0:
+            return out
+
+        start, is_end = _points[0]
+        assert is_end is False
+        count = 1
+        for point, is_end in _points[1:]:
+            assert point >= start
+            if is_end:
+                if count in counts:
+                    out.endpoints.append(start)
+                    out.endpoints.append(point)
+                start = (point[0], point[1] + 1)
+                count -= 1
+
+            elif point == start:
+                count += 1
+                continue
+
+            else:
+                if count in counts:
+                    out.endpoints.append(start)
+                    out.endpoints.append((point[0], point[1] - 1))
+                start = point
+                count += 1
+
+        assert count == 0
+        out.merge_adjacent()
         return out
 
     # PROPERTIES
@@ -389,6 +457,8 @@ class MultiInterval:
     # SET: BOOLEAN ALGEBRA (INPLACE)
 
     def update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        tmp = MultiInterval.merge(self, *other)
+
         self._consistency_check()
 
         if self.is_empty and len(other) == 1:
@@ -407,15 +477,20 @@ class MultiInterval:
                 raise TypeError(_other)
 
         self.merge_adjacent(sort=True)
+        assert self == tmp
         return self
 
     def intersection_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        # todo: remove; this is temporary for error-checking
+        tmp = self.difference(MultiInterval().union(*[~_other for _other in other]))
+
         # todo: don't be lazy and write a real implementation that isn't inefficient
         for _other in other:
             self.difference_update(self.difference(_other))
             if self.is_empty:
                 break
-
+        self._consistency_check()
+        assert self == tmp
         return self
 
     def difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
@@ -423,6 +498,8 @@ class MultiInterval:
         O(m + n) implementation, where m = len(other) and n = len(self)
         """
         self._consistency_check()
+        if len(other) == 0:
+            raise ValueError
 
         # get all the other endpoints merged together
         _other_endpoints = MultiInterval().update(*other).endpoints
@@ -477,6 +554,8 @@ class MultiInterval:
         """
 
         self._consistency_check()
+        if len(other) == 0:
+            raise ValueError
 
         # get all the other endpoints merged together
         _other_endpoints = MultiInterval().update(*other).endpoints
@@ -537,6 +616,9 @@ class MultiInterval:
     def symmetric_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         # todo: basically a multi-way XOR, and this is not particularly efficient
         self._consistency_check()
+        if len(other) == 0:
+            raise ValueError
+
         for _other in other:
             _other._consistency_check()
             tmp = _other.difference(self)
@@ -604,10 +686,12 @@ class MultiInterval:
         return self
 
     def invert(self) -> 'MultiInterval':
-        self.symmetric_difference_update(MultiInterval(start=-math.inf,
-                                                       end=math.inf,
-                                                       start_closed=not INFINITY_IS_NOT_FINITE,
-                                                       end_closed=not INFINITY_IS_NOT_FINITE))
+        other = MultiInterval(start=-math.inf,
+                              end=math.inf,
+                              start_closed=not INFINITY_IS_NOT_FINITE,
+                              end_closed=not INFINITY_IS_NOT_FINITE)
+        self.endpoints, other.endpoints = other.endpoints, self.endpoints
+        self.difference_update(other)
         return self
 
     def mirror(self) -> 'MultiInterval':
@@ -635,11 +719,11 @@ class MultiInterval:
         # todo: write a real implementation that isn't crazy inefficient like this is
         return self.union(other) == self
 
-    def overlaps(self, *other: Union['MultiInterval', Real], or_adjacent=False) -> bool:
+    def overlaps(self, *other: Union['MultiInterval', Real], or_adjacent: bool = False) -> bool:
         # _other = MultiInterval().update(*other)
         raise NotImplementedError  # todo
 
-    def overlapping(self, other: Union['MultiInterval', Real], or_adjacent=False) -> 'MultiInterval':
+    def overlapping(self, other: Union['MultiInterval', Real], or_adjacent: bool = False) -> 'MultiInterval':
         # todo: something more efficient
         out = MultiInterval()
         for interval in self.contiguous_intervals:
