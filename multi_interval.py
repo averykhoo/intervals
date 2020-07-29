@@ -271,6 +271,18 @@ class MultiInterval:
         return self.is_empty or not (math.isinf(self.infimum) or math.isinf(self.supremum))
 
     @property
+    def finite(self) -> 'MultiInterval':
+        # ignores INFINITY_IS_NOT_FINITE
+        self._consistency_check()
+        out = MultiInterval()
+        for idx in range(0, len(self.endpoints), 2):
+            if not (math.isinf(self.endpoints[idx][0]) or math.isinf(self.endpoints[idx + 1][0])):
+                out.endpoints.append(self.endpoints[idx])
+                out.endpoints.append(self.endpoints[idx + 1])
+        out._consistency_check()
+        return out
+
+    @property
     def is_integral(self) -> bool:
         if self.is_empty or not self.is_finite:
             return False
@@ -864,6 +876,7 @@ class MultiInterval:
             if self.is_empty:
                 return MultiInterval()
 
+            # deal with infinity if it's not allowed in a closed interval
             elif math.isinf(other) and INFINITY_IS_NOT_FINITE:
                 if or_adjacent and self.infimum == other:
                     assert other == -math.inf
@@ -878,6 +891,8 @@ class MultiInterval:
                                          start_closed=self.endpoints[-2][1] == 0,
                                          end_closed=False)
                 return MultiInterval()
+
+            # convert to interval
             else:
                 other = MultiInterval(other)
 
@@ -887,32 +902,45 @@ class MultiInterval:
         if self.is_empty or other.is_empty:
             return MultiInterval()
 
+        # whether to consider adjacent points (one epsilon away)
         if or_adjacent:
             adj_epsilon = 1
         else:
             adj_epsilon = 0
 
+        # iterate exactly once through other
         out = MultiInterval()
         other_idx = 0
+        other._consistency_check()
         other_start = other.endpoints[other_idx]
         other_end = other.endpoints[other_idx + 1]
 
+        # iterate exactly once through self
         for idx in range(0, len(self.endpoints), 2):
             start, start_epsilon = self.endpoints[idx]
             end, end_epsilon = self.endpoints[idx + 1]
 
+            # look for the next possibly overlapping segment in other
             while other_idx + 2 < len(other.endpoints) and other_end < (start, start_epsilon - adj_epsilon):
                 other_idx += 2
                 other_start = other.endpoints[other_idx]
                 other_end = other.endpoints[other_idx + 1]
 
-            if (start, start_epsilon - adj_epsilon) <= other_end and other_start <= (end, end_epsilon + adj_epsilon):
+            # no more overlapping segments, exit
+            if (start, start_epsilon - adj_epsilon) > other_end:
+                assert other_idx + 2 >= len(other.endpoints)
+                break
+
+            # check if other segment overlaps current segment
+            elif other_start <= (end, end_epsilon + adj_epsilon):
                 out.endpoints.append((start, start_epsilon))
                 out.endpoints.append((end, end_epsilon))
 
+        out._consistency_check()
         return out
 
     def overlaps(self, other: Union['MultiInterval', Real], or_adjacent: bool = False) -> bool:
+        # too complex for it to be worth making this more efficient
         return not self.overlapping(other, or_adjacent=or_adjacent).is_empty
 
     # INTERVAL ARITHMETIC: GENERIC
