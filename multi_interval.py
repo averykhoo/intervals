@@ -190,23 +190,27 @@ class MultiInterval:
 
     @property
     def is_empty(self) -> bool:
+        self._consistency_check()
         return len(self.endpoints) == 0
 
     @property
     def is_degenerate(self) -> bool:
-        return len(self.endpoints) == 2 and self.infimum == self.supremum
+        self._consistency_check()
+        return all(self.endpoints[idx] == self.endpoints[idx + 1] for idx in range(0, len(self.endpoints), 2))
 
     @property
     def is_contiguous(self) -> bool:
-        return len(self.endpoints) == 2
+        return len(self.copy().merge_adjacent().endpoints) == 2
 
     @property
     def infimum(self) -> Optional[Real]:
+        self._consistency_check()
         if len(self.endpoints) > 0:
             return self.endpoints[0][0]
 
     @property
     def supremum(self) -> Optional[Real]:
+        self._consistency_check()
         if len(self.endpoints) > 0:
             return self.endpoints[-1][0]
 
@@ -238,6 +242,8 @@ class MultiInterval:
             *   joining intervals: [1, 2) + [2] + (2, 3) -> [1, 3)
             *   mirroring interval:               [1, 2) -> (-2, -1]
         """
+        self._consistency_check()
+
         negative_half_ray = 0  # only (-inf, 0) and/or (0, inf), if -inf or inf are included
         positive_half_ray = 0  # only (-inf, 0) and/or (0, inf), if -inf or inf are included
         length_before_zero = 0  # remaining length of open intervals, after removing half-rays (can be negative)
@@ -247,31 +253,31 @@ class MultiInterval:
 
         # iterate through to count all the things
         for idx in range(0, len(self.endpoints), 2):
-            _start, _start_epsilon = self.endpoints[idx]
-            _end, _end_epsilon = self.endpoints[idx + 1]
-            assert _start <= _end
+            start, start_epsilon = self.endpoints[idx]
+            end, end_epsilon = self.endpoints[idx + 1]
+            assert start <= end
 
             # check if half-rays exist
-            if _start == -math.inf < float(_end):
+            if start == -math.inf < float(end):
                 negative_half_ray += 1
-            if _start < math.inf == _end:
+            if start < math.inf == end:
                 positive_half_ray += 1
 
             # count length
-            if _start < _end <= 0:
-                length_before_zero += _end - _start
-            elif _start <= 0 <= float(_end):
-                length_before_zero -= _start
-                length_after_zero += _end
-            elif 0 <= float(_start) < float(_end):
-                length_after_zero += _end - _start
+            if start < end <= 0:
+                length_before_zero += end - start
+            elif start <= 0 <= float(end):
+                length_before_zero -= start
+                length_after_zero += end
+            elif 0 <= float(start) < float(end):
+                length_after_zero += end - start
 
             # count endpoints
-            if _end_epsilon == 0:
+            if end_epsilon == 0:
                 closed_endpoints += 1
             else:
                 open_endpoints += 1
-            if _start_epsilon == 0:
+            if start_epsilon == 0:
                 closed_endpoints += 1
             else:
                 open_endpoints += 1
@@ -330,6 +336,7 @@ class MultiInterval:
     # UTILITY
 
     def copy(self) -> 'MultiInterval':
+        self._consistency_check()
         out = MultiInterval()
         out.endpoints = self.endpoints.copy()
         return out
@@ -360,8 +367,8 @@ class MultiInterval:
                 prev = elem
 
             # no degenerate interval at infinity
-            if self.is_degenerate:
-                assert not (math.isinf(self.infimum) and INFINITY_IS_NOT_FINITE)
+            if self.endpoints[0] == self.endpoints[-1]:
+                assert not (math.isinf(self.endpoints[0][0]) and INFINITY_IS_NOT_FINITE)
 
             # infinity cannot be contained within an interval
             if INFINITY_IS_NOT_FINITE:
@@ -421,7 +428,7 @@ class MultiInterval:
         elif isinstance(other, MultiInterval):
             return self in other
         elif isinstance(other, Real):
-            return self.is_degenerate and float(self) == other
+            return self.is_degenerate and self.is_contiguous and float(self) == other
         else:
             raise TypeError(other)
 
@@ -661,8 +668,10 @@ class MultiInterval:
         if distance < 0:
             raise ValueError(distance)
 
-        if self.is_empty or self.is_contiguous:
-            self._consistency_check()
+        if len(self.endpoints) == 0:
+            return self
+        elif len(self.endpoints) == 2:
+            assert self.endpoints[0] <= self.endpoints[1]  # consistency check
             return self
 
         # sort contiguous intervals by start, end
@@ -780,12 +789,12 @@ class MultiInterval:
         _endpoints, self.endpoints = self.endpoints, []
 
         for idx in range(0, len(_endpoints), 2):
-            _start = func(_endpoints[idx][0])
-            _end = func(_endpoints[idx + 1][0])
-            _start_epsilon = _endpoints[idx][1]
-            _end_epsilon = _endpoints[idx + 1][1]
-            self.endpoints.append(min((_start, _start_epsilon), (_end, -_end_epsilon)))
-            self.endpoints.append(max((_start, -_start_epsilon), (_end, _end_epsilon)))
+            start = func(_endpoints[idx][0])
+            end = func(_endpoints[idx + 1][0])
+            start_epsilon = _endpoints[idx][1]
+            end_epsilon = _endpoints[idx + 1][1]
+            self.endpoints.append(min((start, start_epsilon), (end, -end_epsilon)))
+            self.endpoints.append(max((start, -start_epsilon), (end, end_epsilon)))
 
         self.merge_adjacent(sort=True)
         return self
@@ -908,8 +917,37 @@ class MultiInterval:
 
     # INTERVAL ARITHMETIC: UNARY
 
-    def reciprocal(self):
-        raise NotImplementedError  # todo
+    def reciprocal(self) -> 'MultiInterval':
+        if 0 in self:
+            return MultiInterval(start=-math.inf,
+                                 end=math.inf,
+                                 start_closed=not INFINITY_IS_NOT_FINITE,
+                                 end_closed=not INFINITY_IS_NOT_FINITE)
+
+        elif self.is_empty:
+            return MultiInterval()
+
+        out = MultiInterval()
+        for idx in range(0, len(self.endpoints), 2):
+            start, start_epsilon = self.endpoints[idx]
+            end, end_epsilon = self.endpoints[idx + 1]
+
+            if start == 0:
+                assert start_epsilon > 0
+                out.endpoints.append((1 / end, -end_epsilon))
+                out.endpoints.append((math.inf, -1))
+
+            elif end == 0:
+                assert end_epsilon < 0
+                out.endpoints.append((-math.inf, 1))
+                out.endpoints.append((1 / start, -start_epsilon))
+
+            else:
+                out.endpoints.append(min((1 / start, start_epsilon), (1 / end, -end_epsilon)))
+                out.endpoints.append(max((1 / start, -start_epsilon), (1 / end, end_epsilon)))
+
+        out.merge_adjacent()
+        return out
 
     def __neg__(self):
         return self.copy().mirror()
@@ -947,19 +985,19 @@ class MultiInterval:
         return not self.is_empty
 
     def __complex__(self) -> complex:
-        if self.is_degenerate:
+        if self.is_degenerate and self.is_contiguous:
             return complex(float(self))
         else:
             raise ValueError('cannot cast non-degenerate MultiInterval to int')
 
     def __float__(self) -> float:
-        if self.is_degenerate:
+        if self.is_degenerate and self.is_contiguous:
             return float(self.infimum)
         else:
             raise ValueError('cannot cast non-degenerate MultiInterval to float')
 
     def __int__(self) -> int:
-        if self.is_degenerate:
+        if self.is_degenerate and self.is_contiguous:
             return int(float(self))
         else:
             raise ValueError('cannot cast non-degenerate MultiInterval to complex')
@@ -972,40 +1010,40 @@ class MultiInterval:
             assert start_tuple <= end_tuple, (start_tuple, end_tuple)
 
             # unpack
-            _start, _start_epsilon = start_tuple
-            _end, _end_epsilon = end_tuple
-            assert _start_epsilon in {1, 0}, (start_tuple, end_tuple)
-            assert _end_epsilon in {0, -1}, (start_tuple, end_tuple)
+            start, start_epsilon = start_tuple
+            end, end_epsilon = end_tuple
+            assert start_epsilon in {1, 0}, (start_tuple, end_tuple)
+            assert end_epsilon in {0, -1}, (start_tuple, end_tuple)
 
             # degenerate interval
-            if _start == _end:
-                assert _start_epsilon == 0
-                assert _end_epsilon == 0
-                return f'[{_start}]'
+            if start == end:
+                assert start_epsilon == 0
+                assert end_epsilon == 0
+                return f'[{start}]'
 
             # print the mathematically standard but logically inconsistent way
             if fancy_inf:
                 # left side
-                if _start == -math.inf:
-                    assert _start_epsilon == 0
-                    _start = '-∞'
+                if start == -math.inf:
+                    assert start_epsilon == 0
+                    start = '-∞'
                     _left_bracket = '('
                 else:
-                    _left_bracket = '(' if _start_epsilon else '['
+                    _left_bracket = '(' if start_epsilon else '['
 
                 # right side
-                if _end == math.inf:
-                    assert _end_epsilon == 0
-                    _end = '∞'
+                if end == math.inf:
+                    assert end_epsilon == 0
+                    end = '∞'
                     _right_bracket = ')'
                 else:
-                    _right_bracket = ')' if _end_epsilon else ']'
+                    _right_bracket = ')' if end_epsilon else ']'
 
-                return f'{_left_bracket}{_start}, {_end}{_right_bracket}'
+                return f'{_left_bracket}{start}, {end}{_right_bracket}'
 
             # for the sake of consistency, a closed endpoint at ±inf will be square instead of round
             else:
-                return f'{"(" if _start_epsilon else "["}{_start}, {_end}{")" if _end_epsilon else "]"}'
+                return f'{"(" if start_epsilon else "["}{start}, {end}{")" if end_epsilon else "]"}'
 
         # null set: {}
         if self.is_empty:
@@ -1084,6 +1122,7 @@ if __name__ == '__main__':
         j = random_multi_interval(-100, 100, 2, 0)
         print(i, i.closed_hull)
         print(j, j.closed_hull)
+        print(j.reciprocal())
         print('union                ', i.union(j))
         print('intersection         ', i.intersection(j))
         print('difference           ', i.difference(j))
