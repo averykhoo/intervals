@@ -86,7 +86,7 @@ class MultiInterval:
         self._consistency_check()
 
     @classmethod
-    def from_str(cls, text) -> 'MultiInterval':
+    def from_str(cls, text: str) -> 'MultiInterval':
         """
         e.g. [1, 2] or [1,2]
         e.g. [0] or {0}
@@ -255,25 +255,29 @@ class MultiInterval:
 
     @property
     def is_contiguous(self) -> bool:
+        # note that { [1] , (1, 2] } is contiguous
         return len(self.copy().merge_adjacent().endpoints) == 2
 
     @property
     def is_degenerate(self) -> bool:
-        self._consistency_check()
-        return all(self.endpoints[idx] == self.endpoints[idx + 1] for idx in range(0, len(self.endpoints), 2))
+        if self.is_empty:
+            return False
+        else:
+            return all(self.endpoints[idx] == self.endpoints[idx + 1] for idx in range(0, len(self.endpoints), 2))
 
     @property
-    def is_finite(self):
-        return not (math.isinf(self.infimum) or math.isinf(self.supremum))
+    def is_finite(self) -> bool:
+        # ignores INFINITY_IS_NOT_FINITE
+        return self.is_empty or not (math.isinf(self.infimum) or math.isinf(self.supremum))
 
     @property
     def is_integral(self) -> bool:
-        if not self.is_finite:
+        if self.is_empty or not self.is_finite:
             return False
         for idx in range(0, len(self.endpoints), 2):
-            if self.endpoints[idx] != self.endpoints[idx + 1]:
+            if self.endpoints[idx] != self.endpoints[idx + 1]:  # check degeneracy
                 return False
-            if self.endpoints[idx][0] % 1 != 0:
+            if self.endpoints[idx][0] % 1 != 0:  # check that it has no fractional part
                 return False
         return True
 
@@ -294,30 +298,45 @@ class MultiInterval:
         return self.is_empty or self.endpoints[-1] <= (0, 0)
 
     @property
+    def positive(self) -> 'MultiInterval':
+        return self.intersection(MultiInterval(start=0,
+                                               end=math.inf,
+                                               start_closed=False,
+                                               end_closed=not INFINITY_IS_NOT_FINITE))
+
+    @property
+    def negative(self) -> 'MultiInterval':
+        return self.intersection(MultiInterval(start=-math.inf,
+                                               end=0,
+                                               start_closed=not INFINITY_IS_NOT_FINITE,
+                                               end_closed=False))
+
+    @property
     def infimum(self) -> Optional[Real]:
-        self._consistency_check()
-        if len(self.endpoints) > 0:
+        if not self.is_empty:
             return self.endpoints[0][0]
 
     @property
     def supremum(self) -> Optional[Real]:
-        self._consistency_check()
-        if len(self.endpoints) > 0:
+        if not self.is_empty:
             return self.endpoints[-1][0]
 
     @property
-    def degenerate_points(self):
-        self._consistency_check()
-        return [self.endpoints[idx][0]
-                for idx in range(0, len(self.endpoints), 2)
-                if self.endpoints[idx] == self.endpoints[idx + 1]]
+    def degenerate_points(self) -> Set[Real]:
+        if self.is_empty:
+            return set()
+        else:
+            return set([self.endpoints[idx][0]
+                        for idx in range(0, len(self.endpoints), 2)
+                        if self.endpoints[idx] == self.endpoints[idx + 1]])
 
     @property
-    def closed_hull(self):
-        return MultiInterval(start=self.infimum,
-                             end=self.supremum,
-                             start_closed=not (math.isinf(self.infimum) and INFINITY_IS_NOT_FINITE),
-                             end_closed=not (math.isinf(self.supremum) and INFINITY_IS_NOT_FINITE))
+    def closed_hull(self) -> Optional['MultiInterval']:
+        if not self.is_empty:
+            return MultiInterval(start=self.infimum,
+                                 end=self.supremum,
+                                 start_closed=not (math.isinf(self.infimum) and INFINITY_IS_NOT_FINITE),
+                                 end_closed=not (math.isinf(self.supremum) and INFINITY_IS_NOT_FINITE))
 
     @property
     def cardinality(self) -> Tuple[int, float, int]:
@@ -457,6 +476,7 @@ class MultiInterval:
                 assert endpoint[1] in {-1, 0, 1}, endpoint
                 if endpoint[0] == 0 and math.copysign(1.0, endpoint[0]) == -1.0:
                     warnings.warn('negative zero exists in this interval')
+                assert not (math.isinf(endpoint[0]) and endpoint[1] == 0 and INFINITY_IS_NOT_FINITE)
 
             prev = self.endpoints[0]
             _check_endpoint_tuple(prev)
@@ -477,8 +497,6 @@ class MultiInterval:
             else:
                 assert (-math.inf, 0) <= self.endpoints[0]
                 assert self.endpoints[-1] <= (math.inf, 0)
-
-    # FILTERING
 
     def __getitem__(self, item: Union[slice, 'MultiInterval', Real]) -> 'MultiInterval':
         if isinstance(item, MultiInterval):
@@ -511,26 +529,13 @@ class MultiInterval:
         else:
             raise TypeError
 
-    @property
-    def positive(self) -> 'MultiInterval':
-        return self.intersection(MultiInterval(start=0,
-                                               end=math.inf,
-                                               start_closed=False,
-                                               end_closed=not INFINITY_IS_NOT_FINITE))
-
-    @property
-    def negative(self) -> 'MultiInterval':
-        return self.intersection(MultiInterval(start=-math.inf,
-                                               end=0,
-                                               start_closed=not INFINITY_IS_NOT_FINITE,
-                                               end_closed=False))
-
     # SET: BINARY RELATIONS
 
     def isdisjoint(self, other: Union['MultiInterval', Real]) -> bool:
         return not self.overlaps(other)
 
     def issubset(self, other: Union['MultiInterval', Real]) -> bool:
+        # i.e. other contains all elements of self
         if self.is_empty:
             return True
         elif isinstance(other, MultiInterval):
@@ -541,6 +546,7 @@ class MultiInterval:
             raise TypeError(other)
 
     def issuperset(self, other: Union['MultiInterval', Real]) -> bool:
+        # i.e. self contains all elements of other
         return other in self
 
     # SET: ITEMS (INPLACE)
@@ -562,9 +568,12 @@ class MultiInterval:
     def pop(self) -> 'MultiInterval':
         if self.is_empty:
             raise KeyError('pop from empty MultiInterval')
+        self._consistency_check()
 
         out = MultiInterval()
         self.endpoints, out.endpoints = self.endpoints[:-2], self.endpoints[-2:]
+
+        out._consistency_check()
         self._consistency_check()
         return out
 
@@ -738,7 +747,7 @@ class MultiInterval:
         return self
 
     def symmetric_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        tmp = MultiInterval.merge(self, *other, counts=range(1, 999, 2))  # todo: temp for error-checking
+        tmp = MultiInterval.merge(self, *other, counts=range(1, len(other) + 1, 2))  # todo: temp for error-checking
 
         # todo: basically a multi-way XOR, and this is not particularly efficient
         self._consistency_check()
@@ -849,8 +858,29 @@ class MultiInterval:
         return self.union(other) == self
 
     def overlapping(self, other: Union['MultiInterval', Real], or_adjacent: bool = False) -> 'MultiInterval':
+        self._consistency_check()
+
         if isinstance(other, Real):
-            other = MultiInterval(other)
+            if self.is_empty:
+                return MultiInterval()
+
+            elif math.isinf(other) and INFINITY_IS_NOT_FINITE:
+                if or_adjacent and self.infimum == other:
+                    assert other == -math.inf
+                    return MultiInterval(start=-math.inf,
+                                         end=self.endpoints[1][0],
+                                         start_closed=False,
+                                         end_closed=self.endpoints[1][1] == 0)
+                if or_adjacent and self.supremum == other:
+                    assert other == math.inf
+                    return MultiInterval(start=self.endpoints[-2][0],
+                                         end=math.inf,
+                                         start_closed=self.endpoints[-2][1] == 0,
+                                         end_closed=False)
+                return MultiInterval()
+            else:
+                other = MultiInterval(other)
+
         if not isinstance(other, MultiInterval):
             raise TypeError(other)
 
@@ -858,26 +888,25 @@ class MultiInterval:
             return MultiInterval()
 
         if or_adjacent:
-            adj = 1
+            adj_epsilon = 1
         else:
-            adj = 0
+            adj_epsilon = 0
 
-        _endpoints = self.endpoints.copy()
         out = MultiInterval()
         other_idx = 0
         other_start = other.endpoints[other_idx]
         other_end = other.endpoints[other_idx + 1]
 
-        for idx in range(0, len(_endpoints), 2):
-            start, start_epsilon = _endpoints[idx]
-            end, end_epsilon = _endpoints[idx + 1]
+        for idx in range(0, len(self.endpoints), 2):
+            start, start_epsilon = self.endpoints[idx]
+            end, end_epsilon = self.endpoints[idx + 1]
 
-            while other_idx + 2 < len(other.endpoints) and other_end < (start, start_epsilon - adj):
+            while other_idx + 2 < len(other.endpoints) and other_end < (start, start_epsilon - adj_epsilon):
                 other_idx += 2
                 other_start = other.endpoints[other_idx]
                 other_end = other.endpoints[other_idx + 1]
 
-            if (start, start_epsilon - adj) <= other_end and other_start <= (end, end_epsilon + adj):
+            if (start, start_epsilon - adj_epsilon) <= other_end and other_start <= (end, end_epsilon + adj_epsilon):
                 out.endpoints.append((start, start_epsilon))
                 out.endpoints.append((end, end_epsilon))
 
