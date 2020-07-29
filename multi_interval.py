@@ -9,6 +9,7 @@ from typing import Callable
 from typing import Iterable
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
 from typing import Union
 
@@ -133,7 +134,7 @@ class MultiInterval:
 
     @classmethod
     def merge(cls,
-              *interval: Union['MultiInterval', Real],
+              *interval: Union['MultiInterval', Real, Set[int], List[int], Tuple[int, int]],
               counts: Optional[Iterable[int]] = None
               ) -> 'MultiInterval':
 
@@ -148,13 +149,56 @@ class MultiInterval:
         n_intervals = 0
         for _interval in interval:
             n_intervals += 1
+
+            # is an interval
             if isinstance(_interval, MultiInterval):
                 for idx in range(0, len(_interval.endpoints), 2):
                     _points.append((_interval.endpoints[idx], False))
                     _points.append((_interval.endpoints[idx + 1], True))
+
+            # is a real number (degenerate interval)
             elif isinstance(_interval, Real):
                 _points.append(((_interval, 0), False))
                 _points.append(((_interval, 0), True))
+
+            # is a set (of real numbers)
+            elif isinstance(_interval, Set):
+                for elem in _interval:
+                    if not isinstance(elem, Real):
+                        raise TypeError(elem)
+                    _points.append(((elem, 0), False))
+                    _points.append(((elem, 0), True))
+
+            # is a list of 2 reals (shorthand for closed interval)
+            elif isinstance(_interval, List):
+                if len(_interval) == 1:  # degenerate case
+                    if not isinstance(_interval[0], Real):
+                        raise TypeError(_interval[0])
+                    _points.append(((_interval[0], 0), False))
+                    _points.append(((_interval[0], 0), True))
+                elif len(_interval) == 2:  # non-degenerate case
+                    if not isinstance(_interval[0], Real):
+                        raise TypeError(_interval[0])
+                    if not isinstance(_interval[1], Real):
+                        raise TypeError(_interval[1])
+                    _points.append(((_interval[0], 0), False))
+                    _points.append(((_interval[1], 0), True))
+                elif len(_interval) > 2:
+                    raise TypeError(_interval)
+
+            # is a tuple (shorthand for open interval)
+            elif isinstance(_interval, Tuple):
+                if len(_interval) == 2:
+                    if not isinstance(_interval[0], Real):
+                        raise TypeError(_interval[0])
+                    if not isinstance(_interval[1], Real):
+                        raise TypeError(_interval[1])
+                    _points.append(((_interval[0], 1), False))
+                    _points.append(((_interval[1], -1), True))
+                elif len(_interval) > 2:
+                    raise TypeError(_interval)
+
+            # is something else, invalid
             else:
                 raise TypeError(_interval)
 
@@ -164,15 +208,16 @@ class MultiInterval:
 
         # sort points
         _points = sorted(_points)
-
-        out = MultiInterval()
         if len(_points) == 0:
-            return out
+            return MultiInterval()
+        out = MultiInterval()
 
+        # go through all the endpoints and count how many are open for each interval
         start, is_end = _points[0]
         assert is_end is False
         count = 1
         for point, is_end in _points[1:]:
+            # found an endpoint, only break off interval if we didn't just break it, then decrement count
             if is_end:
                 assert start <= (point[0], point[1] + 1), (start, point, _points)
                 if count in counts and start <= point:
@@ -181,11 +226,13 @@ class MultiInterval:
                 start = (point[0], point[1] + 1)
                 count -= 1
 
+            # found the same start point, just increment count
             elif point == start:
                 assert point >= start, (start, point, _points)
                 count += 1
                 continue
 
+            # found a new start point, break off current interval and increment count
             else:
                 assert point >= start, (start, point, _points)
                 if count in counts:
@@ -194,6 +241,7 @@ class MultiInterval:
                 start = point
                 count += 1
 
+        # merge all the intervals we kept
         assert count == 0
         out.merge_adjacent()
         return out
@@ -206,23 +254,28 @@ class MultiInterval:
         return len(self.endpoints) == 0
 
     @property
+    def is_contiguous(self) -> bool:
+        return len(self.copy().merge_adjacent().endpoints) == 2
+
+    @property
     def is_degenerate(self) -> bool:
         self._consistency_check()
         return all(self.endpoints[idx] == self.endpoints[idx + 1] for idx in range(0, len(self.endpoints), 2))
 
     @property
+    def is_finite(self):
+        return not (math.isinf(self.infimum) or math.isinf(self.supremum))
+
+    @property
     def is_integral(self) -> bool:
-        self._consistency_check()
+        if not self.is_finite:
+            return False
         for idx in range(0, len(self.endpoints), 2):
             if self.endpoints[idx] != self.endpoints[idx + 1]:
                 return False
             if self.endpoints[idx][0] % 1 != 0:
                 return False
         return True
-
-    @property
-    def is_contiguous(self) -> bool:
-        return len(self.copy().merge_adjacent().endpoints) == 2
 
     @property
     def is_positive(self) -> bool:
@@ -757,7 +810,7 @@ class MultiInterval:
 
     def abs(self) -> 'MultiInterval':
         # todo: fix this freakishly inefficient implementation
-        self.update(self.negative().mirror())
+        self.update(self.negative.mirror())
         self.endpoints = self[0:].endpoints
         return self
 
