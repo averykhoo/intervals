@@ -993,6 +993,12 @@ class MultiInterval:
         if right_hand_side:
             _first, _second = _second, _first
 
+        # only allow empty first arg, not second
+        if len(_second) == 0:
+            raise ValueError(f'cannot run {func} with null set')
+        elif len(_first) == 0:
+            return MultiInterval()
+
         # union of: func(x, y) for x in first for y in second
         for (_first_start, _first_start_epsilon), (_first_end, _first_end_epsilon) in _first:
             for (_second_start, _second_start_epsilon), (_second_end, _second_end_epsilon) in _second:
@@ -1036,10 +1042,29 @@ class MultiInterval:
         return self._apply_monotonic_binary_function(operator.mul, other, right_hand_side=True)
 
     def __truediv__(self, other):
-        raise NotImplementedError  # todo
+        # todo: deal with inf and zero
+        if isinstance(other, MultiInterval):
+            if other.is_empty:
+                raise ValueError('cannot divide by nothing')
+            return self * other.reciprocal()
+
+        elif isinstance(other, Real):
+            if float(other) == 0:
+                return MultiInterval(start=-math.inf,
+                                     end=math.inf,
+                                     start_closed=not INFINITY_IS_NOT_FINITE,
+                                     end_closed=not INFINITY_IS_NOT_FINITE)
+            else:
+                return self._apply_monotonic_binary_function(operator.truediv, other)
+
+        else:
+            raise TypeError(other)
 
     def __rtruediv__(self, other):
-        raise NotImplementedError  # todo
+        # todo: deal with inf and zero
+        if self.is_empty:
+            raise ValueError('cannot divide by nothing')
+        return other * self.reciprocal()
 
     def __floordiv__(self, other):
         raise NotImplementedError
