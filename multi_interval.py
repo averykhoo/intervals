@@ -956,29 +956,29 @@ class MultiInterval:
         """
         edge cases all the way down
 
-        | POW >= 0   | 0         | 0 to 1    | 1         | 1 to inf        | inf  |
-        |------------|-----------|-----------|-----------|-----------------|------|
-        | inf        | monotonic | monotonic | monotonic | monotonic       | inf  |
-        | 1 to inf   | monotonic | monotonic | monotonic | monotonic       | inf  |
-        | 1          | monotonic | monotonic | monotonic | monotonic       | 1    |
-        | 0 to 1     | monotonic | monotonic | monotonic | monotonic       | 0    |
-        | 0          | 1         | 0         | 0         | 0               | 0    |
-        | -1 to 0    | -1        | COMPLEX!  | no change | ONLY FINITE INT | 0    |
-        | -1         | -1        | COMPLEX!  | no change | ONLY FINITE INT | -1   |
-        | -inf to -1 | -1        | COMPLEX!  | no change | ONLY FINITE INT | -inf |
-        | -inf       | -1        | COMPLEX!  | no change | ONLY FINITE INT | -inf |
+        | POW >= 0   | 0             | 0 to 1        | 1              | 1 to inf        | inf  |
+        |------------|---------------|---------------|----------------|-----------------|------|
+        | inf        | 1             | inf           | inf            | inf             | inf  |
+        | 1 to inf   | monotonic     | monotonic     | monotonic      | monotonic       | inf  |
+        | 1          | monotonic (1) | monotonic (1) | monotonic  (1) | monotonic (1)   | 1    |
+        | 0 to 1     | monotonic     | monotonic     | monotonic      | monotonic       | 0    |
+        | 0          | 1             | 0             | 0              | 0               | 0    |
+        | -1 to 0    | -1            | COMPLEX!      | no change      | ONLY FINITE INT | 0    |
+        | -1         | -1            | COMPLEX!      | no change      | ONLY FINITE INT | -1   |
+        | -inf to -1 | -1            | COMPLEX!      | no change      | ONLY FINITE INT | -inf |
+        | -inf       | -1            | inf           | -inf           | neg if odd      | inf  |
 
-        | POW <= 0   | 0         | 0 to -1   | -1         | -1 to -inf      | -inf |
-        |------------|-----------|-----------|------------|-----------------|------|
-        | inf        | monotonic | monotonic | monotonic  | monotonic       | 0    |
-        | 1 to inf   | monotonic | monotonic | monotonic  | monotonic       | 0    |
-        | 1          | monotonic | monotonic | monotonic  | monotonic       | 1    |
-        | 0 to 1     | monotonic | monotonic | monotonic  | monotonic       | inf  |
-        | 0          | 1         | ±inf      | ±inf       | ±inf            | ±inf |
-        | -1 to 0    | -1        | COMPLEX!  | reciprocal | ONLY FINITE INT | -inf |
-        | -1         | -1        | COMPLEX!  | reciprocal | ONLY FINITE INT | -1   |
-        | -inf to -1 | -1        | COMPLEX!  | reciprocal | ONLY FINITE INT | 0    |
-        | -inf       | -1        | COMPLEX!  | reciprocal | ONLY FINITE INT | 0    |
+        | POW <= 0   | 0             | 0 to -1       | -1            | -1 to -inf      | -inf |
+        |------------|---------------|---------------|---------------|-----------------|------|
+        | inf        | 1             | 0             | 0             | 0               | 0    |
+        | 1 to inf   | monotonic     | monotonic     | monotonic     | monotonic       | 0    |
+        | 1          | monotonic (1) | monotonic (1) | monotonic (1) | monotonic (1)   | 1    |
+        | 0 to 1     | monotonic     | monotonic     | monotonic     | monotonic       | inf  |
+        | 0          | 1             | ±inf          | ±inf          | ±inf            | ±inf |
+        | -1 to 0    | -1            | COMPLEX!      | reciprocal    | ONLY FINITE INT | -inf |
+        | -1         | -1            | COMPLEX!      | reciprocal    | ONLY FINITE INT | -1   |
+        | -inf to -1 | -1            | COMPLEX!      | reciprocal    | ONLY FINITE INT | 0    |
+        | -inf       | -1            | 0             | 0             | 0               | 0    |
         """
         if modulo is not None:
             if isinstance(power, Real):
@@ -1025,7 +1025,17 @@ class MultiInterval:
             return MultiInterval()
 
         elif self.is_positive:
-            return self._apply_monotonic_binary_function(operator.pow, power)
+            if math.inf in self:
+                out = [self._apply_monotonic_binary_function(operator.pow, power)]
+                if 0 in power:
+                    out.append(1)
+                if not power.is_non_negative:
+                    out.append(0)
+                if not power.is_non_positive:
+                    out.append(math.inf)
+                return MultiInterval.merge(*out)
+            else:
+                return self._apply_monotonic_binary_function(operator.pow, power)
 
         elif self == 0:
             # contains -inf to inf
