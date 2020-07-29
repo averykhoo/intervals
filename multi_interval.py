@@ -54,6 +54,9 @@ class MultiInterval:
             if math.isinf(start) and INFINITY_IS_NOT_FINITE:
                 raise ValueError('the degenerate interval at infinity cannot exist')
             else:
+                if start == 0 and math.copysign(1.0, start) == -1.0:
+                    warnings.warn('negative zero will be converted to zero')
+                    start = 0.0
                 self.endpoints = [(start, 0), (start, 0)]
 
         # half-open degenerate interval makes no sense
@@ -72,6 +75,15 @@ class MultiInterval:
 
         # contiguous interval (possibly degenerate)
         else:
+            if start == 0 and math.copysign(1.0, start) == -1.0:
+                warnings.warn('negative zero will be converted to zero')
+                start = 0.0
+                if end == 0 and math.copysign(1.0, end) == -1.0:
+                    end = 0.0
+            elif end == 0 and math.copysign(1.0, end) == -1.0:
+                warnings.warn('negative zero will be converted to zero')
+                end = 0.0
+
             _start = (start, 0 if start_closed else 1)
             _end = (end, 0 if end_closed else -1)
             if _start > _end:
@@ -357,6 +369,8 @@ class MultiInterval:
                 assert isinstance(endpoint[0], Real), endpoint
                 assert isinstance(endpoint[1], int), endpoint
                 assert endpoint[1] in {-1, 0, 1}, endpoint
+                if endpoint[0] == 0 and math.copysign(1.0, endpoint[0]) == -1.0:
+                    warnings.warn('negative zero exists in this interval')
 
             prev = self.endpoints[0]
             _check_endpoint_tuple(prev)
@@ -380,7 +394,7 @@ class MultiInterval:
 
     # FILTERING
 
-    def __getitem__(self, item: Union[slice, 'MultiInterval']) -> 'MultiInterval':
+    def __getitem__(self, item: Union[slice, 'MultiInterval', Real]) -> 'MultiInterval':
         if isinstance(item, MultiInterval):
             return self.intersection(item)
 
@@ -401,6 +415,12 @@ class MultiInterval:
                                                    end=_end,
                                                    start_closed=not (math.isinf(_start) and INFINITY_IS_NOT_FINITE),
                                                    end_closed=not (math.isinf(_end) and INFINITY_IS_NOT_FINITE)))
+
+        elif isinstance(item, Real):
+            if item in self:
+                return MultiInterval(item)
+            else:
+                return MultiInterval()
 
         else:
             raise TypeError
@@ -943,8 +963,8 @@ class MultiInterval:
                 out.endpoints.append((1 / start, -start_epsilon))
 
             else:
-                out.endpoints.append(min((1 / start, start_epsilon), (1 / end, -end_epsilon)))
-                out.endpoints.append(max((1 / start, -start_epsilon), (1 / end, end_epsilon)))
+                out.endpoints.append((1 / end, -end_epsilon))
+                out.endpoints.append((1 / start, -start_epsilon))
 
         out.merge_adjacent()
         return out
@@ -1117,14 +1137,16 @@ def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25)
 
 
 if __name__ == '__main__':
-    for _ in range(1000):
-        i = random_multi_interval(-100, 100, 2, 0)
-        j = random_multi_interval(-100, 100, 2, 0)
-        print(i, i.closed_hull)
-        print(j, j.closed_hull)
-        print(j.reciprocal())
-        print('union                ', i.union(j))
-        print('intersection         ', i.intersection(j))
-        print('difference           ', i.difference(j))
-        print('symmetric_difference ', i.symmetric_difference(j))
-        print('overlapping          ', i.overlapping(j))
+    # for _ in range(1000):
+    #     i = random_multi_interval(-100, 100, 2, 0)
+    #     j = random_multi_interval(-100, 100, 2, 0)
+    #     print(i, i.closed_hull)
+    #     print(j, j.closed_hull)
+    #     print(j.reciprocal())
+    #     print('union                ', i.union(j))
+    #     print('intersection         ', i.intersection(j))
+    #     print('difference           ', i.difference(j))
+    #     print('symmetric_difference ', i.symmetric_difference(j))
+    #     print('overlapping          ', i.overlapping(j))
+
+    print(MultiInterval(-0.0, 1)[0])
