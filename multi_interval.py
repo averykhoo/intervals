@@ -956,29 +956,29 @@ class MultiInterval:
         """
         edge cases all the way down
 
-        | POW >= 0   | 0           | 0 to 1      | 1           | 1 to inf        | inf  |
-        |------------|-------------|-------------|-------------|-----------------|------|
-        | inf        | monotonic 1 | monotonic   | monotonic   | monotonic       | inf  |
-        | 1 to inf   | monotonic 1 | monotonic   | monotonic   | monotonic       | inf  |
-        | 1          | monotonic 1 | monotonic 1 | monotonic 1 | monotonic 1     | 1    |
-        | 0 to 1     | monotonic 1 | monotonic   | monotonic   | monotonic       | 0    |
-        | 0          | monotonic 1 | monotonic 0 | monotonic 0 | monotonic 0     | 0    |
-        | -1 to 0    | -1          | COMPLEX!    | no change   | ONLY FINITE INT | 0    |
-        | -1         | -1          | COMPLEX!    | no change   | ONLY FINITE INT | -1   |
-        | -inf to -1 | -1          | COMPLEX!    | no change   | ONLY FINITE INT | -inf |
-        | -inf       | -1          | inf         | -inf        | neg if odd      | inf  |
+        | POW >= 0   | 0           | 0 to 1         | 1              | 1 to inf        | inf  |
+        |------------|-------------|----------------|----------------|-----------------|------|
+        | inf        | monotonic 1 | monotonic inf  | monotonic == i | monotonic inf   | inf  |
+        | 1 to inf   | monotonic 1 | monotonic -> 0 | monotonic ==   | monotonic -> i  | inf  |
+        | 1          | monotonic 1 | monotonic 1    | monotonic == 1 | monotonic 1     | 1    |
+        | 0 to 1     | monotonic 1 | monotonic -> 1 | monotonic ==   | monotonic -> 0  | 0    |
+        | 0          | monotonic 1 | monotonic 0    | monotonic == 0 | monotonic 0     | 0    |
+        | -1 to 0    | 1           | COMPLEX!       | no change      | ONLY FINITE INT | 0    |
+        | -1         | 1           | COMPLEX!       | no change      | ONLY FINITE INT | -1   |
+        | -inf to -1 | 1           | COMPLEX!       | no change      | ONLY FINITE INT | -inf |
+        | -inf       | 1           | inf            | no change -inf | inf, neg if odd | inf  |
 
-        | POW <= 0   | 0           | 0 to -1     | -1          | -1 to -inf      | -inf |
-        |------------|-------------|-------------|-------------|-----------------|------|
-        | inf        | monotonic 1 | monotonic   | monotonic   | monotonic       | inf  |
-        | 1 to inf   | monotonic 1 | monotonic   | monotonic   | monotonic       | 0    |
-        | 1          | monotonic 1 | monotonic 1 | monotonic 1 | monotonic 1     | 1    |
-        | 0 to 1     | monotonic 1 | monotonic   | monotonic   | monotonic       | inf  |
-        | 0          | monotonic 1 | ±inf        | ±inf        | ±inf            | ±inf |
-        | -1 to 0    | -1          | COMPLEX!    | reciprocal  | ONLY FINITE INT | -inf |
-        | -1         | -1          | COMPLEX!    | reciprocal  | ONLY FINITE INT | -1   |
-        | -inf to -1 | -1          | COMPLEX!    | reciprocal  | ONLY FINITE INT | 0    |
-        | -inf       | -1          | 0           | 0           | 0               | 0    |
+        | POW <= 0   | 0           | 0 to -1        | -1             | -1 to -inf      | -inf |
+        |------------|-------------|----------------|----------------|-----------------|------|
+        | inf        | monotonic 1 | monotonic 0    | monotonic 0    | monotonic 0     | 0    |
+        | 1 to inf   | monotonic 1 | monotonic      | monotonic      | monotonic       | 0    |
+        | 1          | monotonic 1 | monotonic 1    | monotonic 1    | monotonic 1     | 1    |
+        | 0 to 1     | monotonic 1 | monotonic      | monotonic      | monotonic       | inf  |
+        | 0          | monotonic 1 | ±inf           | ±inf           | ±inf            | ±inf |
+        | -1 to 0    | 1           | COMPLEX!       | reciprocal     | ONLY FINITE INT | -inf |
+        | -1         | 1           | COMPLEX!       | reciprocal     | ONLY FINITE INT | -1   |
+        | -inf to -1 | 1           | COMPLEX!       | reciprocal     | ONLY FINITE INT | 0    |
+        | -inf       | 1           | 0              | reciprocal 0   | 0               | 0    |
         """
         if modulo is not None:
             if isinstance(power, Real):
