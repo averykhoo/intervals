@@ -15,14 +15,6 @@ from typing import Union
 INFINITY_IS_NOT_FINITE = True  # don't allow ±inf to be contained inside intervals
 
 
-def _str_to_num(text: str):
-    text = text.strip()
-    if text.isdigit():
-        return int(text)
-    else:
-        return float(text)
-
-
 class MultiInterval:
     endpoints: List[Tuple[Real, int]]  # todo: explain epsilon
 
@@ -100,9 +92,17 @@ class MultiInterval:
         e.g. {} or [] or () or (123)
         e.g. { [1, 2) | [3, 4) } or {[1,2),[3,4)} or even [1,2)[3,4)
         """
+
         re_num = re.compile(r'(?:-\s*)?(?:inf|\d+(?:\.\d+)?(?:e-?\d+)?)\s*', flags=re.U)
         re_interval = re.compile(fr'[\[(]\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})?)?[)\]]', flags=re.U)
         re_set = re.compile(fr'{{\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})*)?}}', flags=re.U)
+
+        def _str_to_num(_num: str) -> Union[int, float]:
+            _num = _num.strip()
+            if ''.join(_num.split()).lstrip('-').isdigit():
+                return int(_num)
+            else:
+                return float(_num)
 
         assert isinstance(text, str), text
 
@@ -211,8 +211,34 @@ class MultiInterval:
         return all(self.endpoints[idx] == self.endpoints[idx + 1] for idx in range(0, len(self.endpoints), 2))
 
     @property
+    def is_integral(self) -> bool:
+        self._consistency_check()
+        for idx in range(0, len(self.endpoints), 2):
+            if self.endpoints[idx] != self.endpoints[idx + 1]:
+                return False
+            if self.endpoints[idx][0] % 1 != 0:
+                return False
+        return True
+
+    @property
     def is_contiguous(self) -> bool:
         return len(self.copy().merge_adjacent().endpoints) == 2
+
+    @property
+    def is_positive(self) -> bool:
+        return not self.is_empty and self.endpoints[0] > (0, 0)
+
+    @property
+    def is_negative(self) -> bool:
+        return not self.is_empty and self.endpoints[-1] < (0, 0)
+
+    @property
+    def is_non_negative(self) -> bool:
+        return self.is_empty or self.endpoints[0] >= (0, 0)
+
+    @property
+    def is_non_positive(self) -> bool:
+        return self.is_empty or self.endpoints[-1] <= (0, 0)
 
     @property
     def infimum(self) -> Optional[Real]:
@@ -225,6 +251,13 @@ class MultiInterval:
         self._consistency_check()
         if len(self.endpoints) > 0:
             return self.endpoints[-1][0]
+
+    @property
+    def degenerate_points(self):
+        self._consistency_check()
+        return [self.endpoints[idx][0]
+                for idx in range(0, len(self.endpoints), 2)
+                if self.endpoints[idx] == self.endpoints[idx + 1]]
 
     @property
     def closed_hull(self):
@@ -403,18 +436,18 @@ class MultiInterval:
             if item.step is not None:
                 raise ValueError(item)
 
-            _start = item.start or -math.inf
-            if not isinstance(_start, Real):
-                raise TypeError(_start)
+            start = item.start or -math.inf
+            if not isinstance(start, Real):
+                raise TypeError(start)
 
-            _end = item.stop or math.inf
-            if not isinstance(_end, Real):
-                raise TypeError(_end)
+            end = item.stop or math.inf
+            if not isinstance(end, Real):
+                raise TypeError(end)
 
-            return self.intersection(MultiInterval(start=_start,
-                                                   end=_end,
-                                                   start_closed=not (math.isinf(_start) and INFINITY_IS_NOT_FINITE),
-                                                   end_closed=not (math.isinf(_end) and INFINITY_IS_NOT_FINITE)))
+            return self.intersection(MultiInterval(start=start,
+                                                   end=end,
+                                                   start_closed=not (math.isinf(start) and INFINITY_IS_NOT_FINITE),
+                                                   end_closed=not (math.isinf(end) and INFINITY_IS_NOT_FINITE)))
 
         elif isinstance(item, Real):
             if item in self:
@@ -425,12 +458,14 @@ class MultiInterval:
         else:
             raise TypeError
 
+    @property
     def positive(self) -> 'MultiInterval':
         return self.intersection(MultiInterval(start=0,
                                                end=math.inf,
                                                start_closed=False,
                                                end_closed=not INFINITY_IS_NOT_FINITE))
 
+    @property
     def negative(self) -> 'MultiInterval':
         return self.intersection(MultiInterval(start=-math.inf,
                                                end=0,
@@ -914,9 +949,109 @@ class MultiInterval:
     def __rdivmod__(self, other):
         raise NotImplementedError
 
-    # def __pow__(self, power: Union['MultiInterval', Real], modulo: Optional[Real] = None) -> 'MultiInterval':
-    def __pow__(self, power: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+    def __pow__(self,
+                power: Union['MultiInterval', Real],
+                modulo: Optional[Union['MultiInterval', Real]] = None
+                ) -> 'MultiInterval':
+        """
+        edge cases all the way down
+
+        | POW >= 0   | 0         | 0 to 1    | 1         | 1 to inf        | inf  |
+        |------------|-----------|-----------|-----------|-----------------|------|
+        | inf        | monotonic | monotonic | monotonic | monotonic       | inf  |
+        | 1 to inf   | monotonic | monotonic | monotonic | monotonic       | inf  |
+        | 1          | monotonic | monotonic | monotonic | monotonic       | 1    |
+        | 0 to 1     | monotonic | monotonic | monotonic | monotonic       | 0    |
+        | 0          | 1         | 0         | 0         | 0               | 0    |
+        | -1 to 0    | -1        | COMPLEX!  | no change | ONLY FINITE INT | 0    |
+        | -1         | -1        | COMPLEX!  | no change | ONLY FINITE INT | -1   |
+        | -inf to -1 | -1        | COMPLEX!  | no change | ONLY FINITE INT | -inf |
+        | -inf       | -1        | COMPLEX!  | no change | ONLY FINITE INT | -inf |
+
+        | POW <= 0   | 0         | 0 to -1   | -1         | -1 to -inf      | -inf |
+        |------------|-----------|-----------|------------|-----------------|------|
+        | inf        | monotonic | monotonic | monotonic  | monotonic       | 0    |
+        | 1 to inf   | monotonic | monotonic | monotonic  | monotonic       | 0    |
+        | 1          | monotonic | monotonic | monotonic  | monotonic       | 1    |
+        | 0 to 1     | monotonic | monotonic | monotonic  | monotonic       | inf  |
+        | 0          | 1         | ±inf      | ±inf       | ±inf            | ±inf |
+        | -1 to 0    | -1        | COMPLEX!  | reciprocal | ONLY FINITE INT | -inf |
+        | -1         | -1        | COMPLEX!  | reciprocal | ONLY FINITE INT | -1   |
+        | -inf to -1 | -1        | COMPLEX!  | reciprocal | ONLY FINITE INT | 0    |
+        | -inf       | -1        | COMPLEX!  | reciprocal | ONLY FINITE INT | 0    |
+        """
+        if modulo is not None:
+            if isinstance(power, Real):
+                if math.isinf(power):
+                    raise TypeError('pow() 3rd argument not allowed unless all arguments are integral')
+                power = MultiInterval(power)
+            if not isinstance(power, MultiInterval):
+                raise TypeError(power)
+
+            if isinstance(modulo, Real):
+                if math.isinf(modulo):
+                    raise TypeError('pow() 3rd argument not allowed unless all arguments are integral')
+                modulo = MultiInterval(modulo)
+            if not isinstance(modulo, MultiInterval):
+                raise TypeError(modulo)
+
+            # modular exponentiation only valid on integers
+            if not self.is_integral or not power.is_integral or not modulo.is_integral:
+                raise TypeError('pow() 3rd argument not allowed unless all arguments are integral')
+
+            # modular exponentiation only valid for non-negative integer powers
+            if not power.is_non_negative:
+                raise ValueError('pow() 2nd argument cannot be negative when 3rd argument specified')
+
+            # with a bespoke implementation of pow()
+            # it would be possible to group by (base, mod) then use the highest exp
+            out = MultiInterval()
+            for base in self.degenerate_points:
+                for exp in power.degenerate_points:
+                    for mod in modulo.degenerate_points:
+                        out.update(pow(int(float(base)), int(float(exp)), int(float(mod))))
+            return out
+
+        if isinstance(power, Real):
+            if math.isinf(power):
+                raise NotImplementedError  # todo: many special cases
+            else:
+                power = MultiInterval(power)
+
+        if not isinstance(power, MultiInterval):
+            raise TypeError(power)
+
+        elif self.is_empty or power.is_empty:
+            return MultiInterval()
+
+        elif self.is_positive:
+            return self._apply_monotonic_binary_function(operator.pow, power)
+
+        elif self == 0:
+            # contains -inf to inf
+            if not power.is_non_negative:
+                return MultiInterval(start=-math.inf,
+                                     end=math.inf,
+                                     start_closed=not INFINITY_IS_NOT_FINITE,
+                                     end_closed=not INFINITY_IS_NOT_FINITE)
+
+            # contains 1
+            elif 0 in power:
+                if not power.is_non_positive:
+                    return MultiInterval.merge(0, 1)
+                else:
+                    return MultiInterval(1)
+
+            # only 0
+            else:
+                assert power.is_positive
+                return MultiInterval(0)
+
+        elif self.is_negative:
+            raise NotImplementedError  # todo: many special cases
+
+        else:
+            return MultiInterval.merge(self.positive ** power, self[0] ** power, self.negative ** power)
 
     def __rpow__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
@@ -1137,16 +1272,14 @@ def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25)
 
 
 if __name__ == '__main__':
-    # for _ in range(1000):
-    #     i = random_multi_interval(-100, 100, 2, 0)
-    #     j = random_multi_interval(-100, 100, 2, 0)
-    #     print(i, i.closed_hull)
-    #     print(j, j.closed_hull)
-    #     print(j.reciprocal())
-    #     print('union                ', i.union(j))
-    #     print('intersection         ', i.intersection(j))
-    #     print('difference           ', i.difference(j))
-    #     print('symmetric_difference ', i.symmetric_difference(j))
-    #     print('overlapping          ', i.overlapping(j))
-
-    print(MultiInterval(-0.0, 1)[0])
+    for _ in range(1000):
+        i = random_multi_interval(-100, 100, 2, 0)
+        j = random_multi_interval(-100, 100, 2, 0)
+        print(i, i.closed_hull)
+        print(j, j.closed_hull)
+        print(j.reciprocal())
+        print('union                ', i.union(j))
+        print('intersection         ', i.intersection(j))
+        print('difference           ', i.difference(j))
+        print('symmetric_difference ', i.symmetric_difference(j))
+        print('overlapping          ', i.overlapping(j))
