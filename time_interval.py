@@ -68,8 +68,8 @@ class DateTimeInterval:
             # convert to datetime
             if isinstance(end, pd.Timestamp):
                 end = end.to_pydatetime()
-            elif isinstance(start, str):
-                start = datetime.datetime.strptime(start, '%Y-%m-%d').date()
+            elif isinstance(end, str):
+                end = datetime.datetime.strptime(end, '%Y-%m-%d').date()
 
             if isinstance(end, datetime.datetime):
                 # not the most elegant way of doing this, but probably the most obvious
