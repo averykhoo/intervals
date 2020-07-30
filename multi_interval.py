@@ -1073,6 +1073,8 @@ class MultiInterval:
         raise NotImplementedError
 
     def __mod__(self, other):
+        # other MUST be finite and cannot include zero
+        # process the positive and negative parts separately?
         raise NotImplementedError  # todo
 
     def __rmod__(self, other):
