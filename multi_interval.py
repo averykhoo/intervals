@@ -945,10 +945,10 @@ class MultiInterval:
 
     # INTERVAL ARITHMETIC: GENERIC
 
-    def _apply_monotonic_unary_function(self, func: Callable, inplace: bool = False) -> 'MultiInterval':
+    def apply_monotonic_unary_function(self, func: Callable, inplace: bool = False) -> 'MultiInterval':
         # by default, do this to a copy
         if not inplace:
-            return self.copy()._apply_monotonic_unary_function(func, inplace=True)
+            return self.copy().apply_monotonic_unary_function(func, inplace=True)
 
         self._consistency_check()
         _endpoints, self.endpoints = self.endpoints, []
@@ -964,18 +964,18 @@ class MultiInterval:
         self.merge_adjacent(sort=True)
         return self
 
-    def _apply_monotonic_binary_function(self,
-                                         func: Callable,
-                                         other: Union['MultiInterval', Real],
-                                         right_hand_side: bool = False,
-                                         inplace: bool = False
-                                         ) -> 'MultiInterval':
+    def apply_monotonic_binary_function(self,
+                                        func: Callable,
+                                        other: Union['MultiInterval', Real],
+                                        right_hand_side: bool = False,
+                                        inplace: bool = False
+                                        ) -> 'MultiInterval':
         # by default, do this to a copy
         if not inplace:
-            return self.copy()._apply_monotonic_binary_function(func,
-                                                                other,
-                                                                right_hand_side=right_hand_side,
-                                                                inplace=True)
+            return self.copy().apply_monotonic_binary_function(func,
+                                                               other,
+                                                               right_hand_side=right_hand_side,
+                                                               inplace=True)
 
         # get other's interval list as [((start, eps), (end, eps)), ...]
         if isinstance(other, MultiInterval):
@@ -1024,22 +1024,22 @@ class MultiInterval:
     # INTERVAL ARITHMETIC: BINARY
 
     def __add__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self._apply_monotonic_binary_function(operator.add, other)
+        return self.apply_monotonic_binary_function(operator.add, other)
 
     def __radd__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self._apply_monotonic_binary_function(operator.add, other, right_hand_side=True)
+        return self.apply_monotonic_binary_function(operator.add, other, right_hand_side=True)
 
     def __sub__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self._apply_monotonic_binary_function(operator.sub, other)
+        return self.apply_monotonic_binary_function(operator.sub, other)
 
     def __rsub__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self._apply_monotonic_binary_function(operator.sub, other, right_hand_side=True)
+        return self.apply_monotonic_binary_function(operator.sub, other, right_hand_side=True)
 
     def __mul__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self._apply_monotonic_binary_function(operator.mul, other)
+        return self.apply_monotonic_binary_function(operator.mul, other)
 
     def __rmul__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self._apply_monotonic_binary_function(operator.mul, other, right_hand_side=True)
+        return self.apply_monotonic_binary_function(operator.mul, other, right_hand_side=True)
 
     def __truediv__(self, other):
         # todo: deal with inf and zero
@@ -1055,7 +1055,7 @@ class MultiInterval:
                                      start_closed=not INFINITY_IS_NOT_FINITE,
                                      end_closed=not INFINITY_IS_NOT_FINITE)
             else:
-                return self._apply_monotonic_binary_function(operator.truediv, other)
+                return self.apply_monotonic_binary_function(operator.truediv, other)
 
         else:
             raise TypeError(other)
@@ -1162,7 +1162,7 @@ class MultiInterval:
             return MultiInterval()
 
         elif self.is_positive:
-            return self._apply_monotonic_binary_function(operator.pow, power)
+            return self.apply_monotonic_binary_function(operator.pow, power)
 
         elif self == 0:
             # contains -inf to inf
@@ -1196,16 +1196,16 @@ class MultiInterval:
     # INTERVAL ARITHMETIC: INTEGERS ONLY
 
     def __lshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self._apply_monotonic_binary_function(operator.lshift, other)
+        return self.apply_monotonic_binary_function(operator.lshift, other)
 
     def __rlshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self._apply_monotonic_binary_function(operator.lshift, other, right_hand_side=True)
+        return self.apply_monotonic_binary_function(operator.lshift, other, right_hand_side=True)
 
     def __rshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self._apply_monotonic_binary_function(operator.rshift, other)
+        return self.apply_monotonic_binary_function(operator.rshift, other)
 
     def __rrshift__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self._apply_monotonic_binary_function(operator.rshift, other, right_hand_side=True)
+        return self.apply_monotonic_binary_function(operator.rshift, other, right_hand_side=True)
 
     # INTERVAL ARITHMETIC: UNARY
 
@@ -1254,22 +1254,22 @@ class MultiInterval:
         return self.copy().invert()
 
     def exp(self):
-        return self._apply_monotonic_unary_function(math.exp)
+        return self.apply_monotonic_unary_function(math.exp)
 
     def log(self, base: float = math.e):
-        return self._apply_monotonic_unary_function(lambda num: math.log(num, base=base))
+        return self.apply_monotonic_unary_function(lambda num: math.log(num, base=base))
 
     def __round__(self, n_digits: int = 0):  # towards nearest integer
-        return self._apply_monotonic_unary_function(lambda num: round(num, ndigits=n_digits))
+        return self.apply_monotonic_unary_function(lambda num: round(num, ndigits=n_digits))
 
     def __trunc__(self):  # towards 0.0
-        return self._apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.trunc(num))
+        return self.apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.trunc(num))
 
     def __floor__(self):  # towards -inf
-        return self._apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.floor(num))
+        return self.apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.floor(num))
 
     def __ceil__(self):  # towards +inf
-        return self._apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.ceil(num))
+        return self.apply_monotonic_unary_function(lambda num: num if math.isinf(num) else math.ceil(num))
 
     # TYPE CASTING
 
