@@ -1,4 +1,5 @@
 import datetime
+import math
 import operator
 from numbers import Real
 from typing import List
@@ -105,19 +106,23 @@ class DateTimeInterval:
 
     @property
     def infimum(self) -> Optional[datetime.datetime]:
-        raise NotImplementedError
+        if not self.is_empty:
+            return datetime.datetime.fromtimestamp(float(self.interval.infimum))
 
     @property
     def supremum(self) -> Optional[datetime.datetime]:
-        raise NotImplementedError
+        if not self.is_empty:
+            return datetime.datetime.fromtimestamp(float(self.interval.supremum))
 
     @property
     def degenerate_points(self) -> Set[datetime.datetime]:
-        raise NotImplementedError
+        return set([datetime.datetime.fromtimestamp(float(point)) for point in self.interval.degenerate_points])
 
     @property
     def closed_hull(self) -> Optional['DateTimeInterval']:
-        raise NotImplementedError
+        if not self.is_empty:
+            return DateTimeInterval(start=datetime.datetime.fromtimestamp(float(self.interval.infimum)),
+                                    end=datetime.datetime.fromtimestamp(float(self.interval.supremum)))
 
     @property
     def cardinality(self) -> Tuple[float, int]:
@@ -126,8 +131,19 @@ class DateTimeInterval:
         return _len, _points
 
     @property
+    def total_duration(self) -> datetime.timedelta:
+        _len, _points = self.cardinality
+        return datetime.timedelta(seconds=_len)
+
+    @property
     def contiguous_intervals(self) -> List['DateTimeInterval']:
-        raise NotImplementedError
+        out = []
+        for idx in range(0, len(self.interval.endpoints), 2):
+            out.append(DateTimeInterval(start=datetime.datetime.fromtimestamp(float(self.interval.endpoints[idx][0])),
+                                        end=datetime.datetime.fromtimestamp(float(self.interval.endpoints[idx + 1][0])),
+                                        start_closed=self.interval.endpoints[idx][1] == 0,
+                                        end_closed=self.interval.endpoints[idx + 1][1] == 0))
+        return out
 
     # COMPARISONS
 
@@ -160,7 +176,48 @@ class DateTimeInterval:
         return self.interval.__sizeof__()  # probably correct?
 
     def __getitem__(self, item: Union[slice, DATETIME_LIKE]) -> 'DateTimeInterval':
-        raise NotImplementedError
+        if isinstance(item, DateTimeInterval):
+            return self.intersection(item)
+
+        elif isinstance(item, slice):
+            if item.step is not None:
+                raise ValueError(item)
+
+            if item.start is None:
+                start = -math.inf
+            elif isinstance(item.start, (datetime.datetime, pd.Timestamp)):
+                start = item.start.timestamp()
+            elif isinstance(item.start, datetime.date):
+                start = datetime.datetime.combine(item.start, datetime.time.min).timestamp()
+            elif isinstance(item.start, str):
+                start = datetime.datetime.strptime(item.start, '%Y-%m-%d').timestamp()
+            else:
+                raise TypeError(item.start)
+
+            if item.stop is None:
+                end = math.inf
+            elif isinstance(item.stop, (datetime.datetime, pd.Timestamp, datetime.date)):
+                end = DateTimeInterval(item.stop).supremum.timestamp()  # gotta round up
+            elif isinstance(item.stop, str):
+                end = datetime.datetime.strptime(item.stop, '%Y-%m-%d').timestamp()
+            else:
+                raise TypeError(item.stop)
+
+            out = DateTimeInterval()
+            out.interval = self.interval.intersection(MultiInterval(start=start,
+                                                                    end=end,
+                                                                    start_closed=not math.isinf(start),
+                                                                    end_closed=not math.isinf(end)))
+            return out
+
+        elif isinstance(item, (DateTimeInterval, datetime.date, pd.Timestamp)):
+            if item in self:
+                return DateTimeInterval(item)
+            else:
+                return DateTimeInterval()
+
+        else:
+            raise TypeError
 
     # SET: BINARY RELATIONS
 
@@ -172,29 +229,6 @@ class DateTimeInterval:
 
     def issuperset(self, other: DATETIME_LIKE) -> bool:
         return self.interval.issuperset(_datetime_interval(other))
-
-    # SET: ITEMS (INPLACE)
-
-    def add(self, other: DATETIME_LIKE) -> 'DateTimeInterval':
-        self.interval.add(_datetime_interval(other))
-        return self
-
-    def clear(self) -> 'DateTimeInterval':
-        self.interval.clear()
-        return self
-
-    def discard(self, other: DATETIME_LIKE) -> 'DateTimeInterval':
-        self.interval.discard(_datetime_interval(other))
-        return self
-
-    def pop(self) -> 'DateTimeInterval':
-        out = DateTimeInterval()
-        out.interval = self.interval.pop()
-        return out
-
-    def remove(self, other: DATETIME_LIKE) -> 'DateTimeInterval':
-        self.interval.remove(_datetime_interval(other))
-        return self
 
     # SET: BOOLEAN ALGEBRA (INPLACE)
 
@@ -230,13 +264,17 @@ class DateTimeInterval:
 
     # INTERVAL OPERATIONS (INPLACE)
 
-    def expand(self, distance: Union[datetime.timedelta]) -> 'DateTimeInterval':
-        raise NotImplementedError
+    def expand(self, distance: Union[datetime.timedelta, pd.Timedelta]) -> 'DateTimeInterval':
+        if isinstance(distance, (datetime.timedelta, pd.Timedelta)):
+            self.interval.expand(distance.total_seconds())
+            return self
+        else:
+            raise TypeError(distance)
 
     # INTERVAL OPERATIONS
 
     def __contains__(self, other: DATETIME_LIKE) -> bool:
-        raise NotImplementedError
+        return _datetime_interval(other) in self.interval
 
     def overlapping(self, other: DATETIME_LIKE, or_adjacent: bool = False) -> 'DateTimeInterval':
         out = DateTimeInterval()
@@ -284,11 +322,47 @@ class DateTimeInterval:
         else:
             raise TypeError(other)
 
-    def __repr__(self) -> str:
-        raise NotImplementedError
-
     def __str__(self) -> str:
-        raise NotImplementedError
+        def _interval_to_str(start_tuple, end_tuple):
+            assert start_tuple <= end_tuple, (start_tuple, end_tuple)
+
+            # unpack
+            start, start_epsilon = start_tuple
+            end, end_epsilon = end_tuple
+            assert start_epsilon in {1, 0}, (start_tuple, end_tuple)
+            assert end_epsilon in {0, -1}, (start_tuple, end_tuple)
+            assert not math.isinf(start)
+            assert not math.isinf(end)
+
+            # degenerate interval
+            if start == end:
+                assert start_epsilon == 0
+                assert end_epsilon == 0
+                return f'[{datetime.datetime.fromtimestamp(start).strftime("%Y-%m-%d %H:M:%S")}]'
+
+            return f'{"(" if start_epsilon else "["}' \
+                   f'{datetime.datetime.fromtimestamp(start).strftime("%Y-%m-%d %H:M:%S")}, ' \
+                   f'{datetime.datetime.fromtimestamp(end).strftime("%Y-%m-%d %H:M:%S")}' \
+                   f'{")" if end_epsilon else "]"}'
+
+        # null set: {}
+        if self.is_empty:
+            return '{}'
+
+        # single contiguous interval: [x, y)
+        elif len(self.interval.endpoints) == 2:
+            return _interval_to_str(*self.interval.endpoints)  # handles degenerate intervals too
+
+        # multiple intervals: { [x, y) | [z] | (a, b) }
+        else:
+            str_intervals = []
+            for idx in range(0, len(self.interval.endpoints), 2):
+                str_intervals.append(_interval_to_str(self.interval.endpoints[idx], self.interval.endpoints[idx + 1]))
+
+            if len(str_intervals) == 1:
+                return str_intervals[0]
+
+            return f'{{ {" , ".join(str_intervals)} }}'
 
 
 class TimeDeltaInterval:
@@ -336,19 +410,23 @@ class TimeDeltaInterval:
 
     @property
     def infimum(self) -> Optional[datetime.timedelta]:
-        raise NotImplementedError
+        if not self.is_empty:
+            return datetime.timedelta(seconds=float(self.interval.infimum))
 
     @property
     def supremum(self) -> Optional[datetime.timedelta]:
-        raise NotImplementedError
+        if not self.is_empty:
+            return datetime.timedelta(seconds=float(self.interval.supremum))
 
     @property
     def degenerate_points(self) -> Set[datetime.timedelta]:
-        raise NotImplementedError
+        return set([datetime.timedelta(seconds=float(point)) for point in self.interval.degenerate_points])
 
     @property
     def closed_hull(self) -> Optional['TimeDeltaInterval']:
-        raise NotImplementedError
+        if not self.is_empty:
+            return TimeDeltaInterval(start=datetime.timedelta(seconds=float(self.interval.infimum)),
+                                     end=datetime.timedelta(seconds=float(self.interval.supremum)))
 
     @property
     def cardinality(self) -> Tuple[float, int]:
@@ -358,7 +436,13 @@ class TimeDeltaInterval:
 
     @property
     def contiguous_intervals(self) -> List['TimeDeltaInterval']:
-        raise NotImplementedError
+        out = []
+        for idx in range(0, len(self.interval.endpoints), 2):
+            out.append(TimeDeltaInterval(start=datetime.timedelta(seconds=float(self.interval.endpoints[idx][0])),
+                                         end=datetime.timedelta(seconds=float(self.interval.endpoints[idx + 1][0])),
+                                         start_closed=self.interval.endpoints[idx][1] == 0,
+                                         end_closed=self.interval.endpoints[idx + 1][1] == 0))
+        return out
 
     # COMPARISONS
 
@@ -389,9 +473,6 @@ class TimeDeltaInterval:
 
     def __sizeof__(self) -> int:
         return self.interval.__sizeof__()  # probably correct?
-
-    def __getitem__(self, item: Union[slice, TIMEDELTA_LIKE]) -> 'TimeDeltaInterval':
-        raise NotImplementedError
 
     # SET: BINARY RELATIONS
 
@@ -461,13 +542,17 @@ class TimeDeltaInterval:
 
     # INTERVAL OPERATIONS (INPLACE)
 
-    def expand(self, distance: Union[datetime.timedelta]) -> 'TimeDeltaInterval':
-        raise NotImplementedError
+    def expand(self, distance: Union[datetime.timedelta, pd.Timedelta]) -> 'TimeDeltaInterval':
+        if isinstance(distance, (datetime.timedelta, pd.Timedelta)):
+            self.interval.expand(distance.total_seconds())
+            return self
+        else:
+            raise TypeError(distance)
 
     # INTERVAL OPERATIONS
 
     def __contains__(self, other: TIMEDELTA_LIKE) -> bool:
-        raise NotImplementedError
+        return _timedelta_interval(other) in self.interval
 
     def overlapping(self, other: TIMEDELTA_LIKE, or_adjacent: bool = False) -> 'TimeDeltaInterval':
         out = TimeDeltaInterval()
@@ -544,8 +629,44 @@ class TimeDeltaInterval:
         out.interval = self.interval / other
         return out
 
-    def __repr__(self) -> str:
-        raise NotImplementedError
-
     def __str__(self) -> str:
-        raise NotImplementedError
+        def _interval_to_str(start_tuple, end_tuple):
+            assert start_tuple <= end_tuple, (start_tuple, end_tuple)
+
+            # unpack
+            start, start_epsilon = start_tuple
+            end, end_epsilon = end_tuple
+            assert start_epsilon in {1, 0}, (start_tuple, end_tuple)
+            assert end_epsilon in {0, -1}, (start_tuple, end_tuple)
+            assert not math.isinf(start)
+            assert not math.isinf(end)
+
+            # degenerate interval
+            if start == end:
+                assert start_epsilon == 0
+                assert end_epsilon == 0
+                return f'[{datetime.timedelta(seconds=start)}]'
+
+            return f'{"(" if start_epsilon else "["}' \
+                   f'{datetime.timedelta(seconds=start)}, ' \
+                   f'{datetime.timedelta(seconds=end)}' \
+                   f'{")" if end_epsilon else "]"}'
+
+        # null set: {}
+        if self.is_empty:
+            return '{}'
+
+        # single contiguous interval: [x, y)
+        elif len(self.interval.endpoints) == 2:
+            return _interval_to_str(*self.interval.endpoints)  # handles degenerate intervals too
+
+        # multiple intervals: { [x, y) | [z] | (a, b) }
+        else:
+            str_intervals = []
+            for idx in range(0, len(self.interval.endpoints), 2):
+                str_intervals.append(_interval_to_str(self.interval.endpoints[idx], self.interval.endpoints[idx + 1]))
+
+            if len(str_intervals) == 1:
+                return str_intervals[0]
+
+            return f'{{ {" , ".join(str_intervals)} }}'
