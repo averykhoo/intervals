@@ -3,6 +3,8 @@ import operator
 from dataclasses import dataclass
 from numbers import Real
 from typing import Callable
+from typing import Iterable
+from typing import List
 from typing import Optional
 from typing import Tuple
 from typing import Union
@@ -499,3 +501,126 @@ class Interval:
             _right_bracket = ']' if self.end_closed and self.end != math.inf else ')'
 
         return f'{_left_bracket}{_start}, {_end}{_right_bracket}'
+
+
+class MultipleInterval:
+    intervals: List[Interval]
+
+    @property
+    def length(self):
+        return sum((interval.length for interval in self.intervals))
+
+    @property
+    def infimum(self):
+        if len(self.intervals) > 0:
+            return min(interval.start for interval in self.intervals)
+
+    @property
+    def supremum(self):
+        if len(self.intervals) > 0:
+            return max(interval.end for interval in self.intervals)
+
+    def __init__(self, *intervals: Optional[Interval]):
+        if intervals is None:
+            self.intervals = []
+        elif isinstance(intervals, Iterable):
+            self.intervals = sorted(intervals)
+        else:
+            raise TypeError(intervals)
+
+    def __iter__(self):
+        return iter(self.intervals)
+
+    def __contains__(self, item: Union['MultipleInterval', Interval, Real]):
+        if isinstance(item, MultipleInterval):
+            _intervals = item.intervals
+        elif isinstance(item, Interval):
+            _intervals = [item]
+        elif isinstance(item, Real):
+            _intervals = [Interval(item, False, item, True)]
+        else:
+            raise TypeError(item)
+
+        for _interval in _intervals:
+            for interval in self.intervals:
+                if _interval in interval:
+                    break
+            else:
+                return False
+
+        return True
+
+    def update(self, other: Union['MultipleInterval', Interval, Real]):
+        if isinstance(other, MultipleInterval):
+            _other = other.intervals
+        elif isinstance(other, Interval):
+            _other = [other]
+        elif isinstance(other, Real):
+            _other = [Interval(other, False, other, True)]
+        else:
+            raise TypeError(other)
+
+        for other in _other:
+            _intervals, self.intervals = self.intervals, []
+            for interval in _intervals:
+                if other.overlaps(interval, or_adjacent=True):
+                    other = other.union(interval)
+                else:
+                    self.intervals.append(interval)
+            self.intervals.append(other)
+
+        self.intervals.sort()
+        return self
+
+    def intersection_update(self, other: Union['MultipleInterval', Interval, Real]):
+        if isinstance(other, MultipleInterval):
+            _other = other.intervals
+        elif isinstance(other, Interval):
+            _other = [other]
+        elif isinstance(other, Real):
+            _other = [Interval(other, False, other, True)]
+        else:
+            raise TypeError(other)
+
+        _intervals, self.intervals = self.intervals, []
+        for interval_1 in _intervals:
+            for interval_2 in _other:
+                if interval_1.overlaps(interval_2):
+                    self.update(interval_1.intersect(interval_2))
+
+        return self
+
+    def difference_update(self, other: Union['MultipleInterval', Interval, Real]):
+        if isinstance(other, MultipleInterval):
+            _other = other.intervals
+        elif isinstance(other, Interval):
+            _other = [other]
+        elif isinstance(other, Real):
+            _other = [Interval(other, False, other, True)]
+        else:
+            raise TypeError(other)
+
+        for other in _other:
+            _intervals, self.intervals = self.intervals, []
+            for interval in _intervals:
+                if other.overlaps(interval):
+                    if interval.start_tuple < other.start_tuple:
+                        self.intervals.append(Interval(interval.start, interval.start_open,
+                                                       other.start, other.start_open))
+                    if other.end_tuple < interval.end_tuple:
+                        self.intervals.append(Interval(other.end, other.end_closed,
+                                                       interval.end, interval.end_closed))
+                else:
+                    self.intervals.append(interval)
+
+        return self
+
+    def __repr__(self):
+        return repr(self.intervals)
+
+    def __str__(self):
+        return f'{{ {" ; ".join(str(interval) for interval in self.intervals)} }}'
+
+
+if __name__ == '__main__':
+    mi1 = MultipleInterval()

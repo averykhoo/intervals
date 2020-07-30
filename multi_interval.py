@@ -527,6 +527,9 @@ class MultiInterval:
             if not isinstance(end, Real):
                 raise TypeError(end)
 
+            if start > end:
+                raise ValueError('slice cannot go backwards')
+
             return self.intersection(MultiInterval(start=start,
                                                    end=end,
                                                    start_closed=not (math.isinf(start) and INFINITY_IS_NOT_FINITE),
