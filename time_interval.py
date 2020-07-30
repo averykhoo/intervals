@@ -1,5 +1,7 @@
 import datetime
 import operator
+from collections import Callable
+from numbers import Real
 from typing import List
 from typing import Optional
 from typing import Set
@@ -9,6 +11,17 @@ from typing import Union
 import pandas as pd
 
 from multi_interval import MultiInterval
+
+DATE_LIKE = Union['DateTimeInterval', datetime.datetime, datetime.date]
+
+
+def _get_interval(dti: DATE_LIKE):
+    if isinstance(dti, datetime.date):
+        dti = DateTimeInterval(dti)
+    if not isinstance(dti, DateTimeInterval):
+        raise TypeError(dti)
+
+    return dti.interval
 
 
 class DateTimeInterval:
@@ -107,39 +120,67 @@ class DateTimeInterval:
     def contiguous_intervals(self) -> List['DateTimeInterval']:
         raise NotImplementedError
 
+    # GENERIC
+
+    def __compare(self, func: Callable, other: DATE_LIKE) -> bool:
+        if isinstance(other, DateTimeInterval):
+            return func(self.interval, other.interval)
+        elif isinstance(other, datetime.date):
+            return func(self.interval, DateTimeInterval(other))
+        else:
+            raise TypeError(other)
+
+    def apply_monotonic_unary_function(self, func: Callable, inplace: bool = False) -> 'DateTimeInterval':
+        # by default, do this to a copy
+        if not inplace:
+            return self.copy().apply_monotonic_unary_function(func, inplace=True)
+
+        self.interval.apply_monotonic_unary_function(func, inplace=True)
+        return self
+
+    def apply_monotonic_binary_function(self,
+                                        func: Callable,
+                                        other: DATE_LIKE,
+                                        right_hand_side: bool = False,
+                                        inplace: bool = False,
+                                        allowed_other_type=Real
+                                        ) -> 'DateTimeInterval':
+
+        # by default, do this to a copy
+        if not inplace:
+            return self.copy().apply_monotonic_binary_function(func,
+                                                               other,
+                                                               right_hand_side=right_hand_side,
+                                                               inplace=True,
+                                                               allowed_other_type=allowed_other_type)
+
+        if not isinstance(other, allowed_other_type):
+            raise TypeError(other)
+
+        self.interval.apply_monotonic_binary_function(func, other, right_hand_side=right_hand_side, inplace=True)
+        return self
+
     # COMPARISONS
 
-    def __lt__(self, other: 'DateTimeInterval') -> bool:
-        if not isinstance(other, DateTimeInterval):
-            raise TypeError(other)
-        return operator.lt(self.interval, other.interval)
+    def __lt__(self, other: DATE_LIKE) -> bool:
+        return self.__compare(operator.lt, other)
 
-    def __le__(self, other: 'DateTimeInterval') -> bool:
-        if not isinstance(other, DateTimeInterval):
-            raise TypeError(other)
-        return operator.le(self.interval, other.interval)
+    def __le__(self, other: DATE_LIKE) -> bool:
+        return self.__compare(operator.le, other)
 
-    def __eq__(self, other: 'DateTimeInterval') -> bool:
-        if not isinstance(other, DateTimeInterval):
-            raise TypeError(other)
-        return operator.eq(self.interval, other.interval)
+    def __eq__(self, other: DATE_LIKE) -> bool:
+        return self.__compare(operator.eq, other)
 
-    def __ne__(self, other: 'DateTimeInterval') -> bool:
-        if not isinstance(other, DateTimeInterval):
-            raise TypeError(other)
-        return operator.ne(self.interval, other.interval)
+    def __ne__(self, other: DATE_LIKE) -> bool:
+        return self.__compare(operator.ne, other)
 
-    def __ge__(self, other: 'DateTimeInterval') -> bool:
-        if not isinstance(other, DateTimeInterval):
-            raise TypeError(other)
-        return operator.ge(self.interval, other.interval)
+    def __ge__(self, other: DATE_LIKE) -> bool:
+        return self.__compare(operator.ge, other)
 
-    def __gt__(self, other: 'DateTimeInterval') -> bool:
-        if not isinstance(other, DateTimeInterval):
-            raise TypeError(other)
-        return operator.gt(self.interval, other.interval)
+    def __gt__(self, other: DATE_LIKE) -> bool:
+        return self.__compare(operator.gt, other)
 
-        # UTILITY
+    # UTILITY
 
     def copy(self) -> 'DateTimeInterval':
         out = DateTimeInterval()
@@ -149,93 +190,105 @@ class DateTimeInterval:
     def __sizeof__(self) -> int:
         return self.interval.__sizeof__()  # probably correct?
 
-    def __getitem__(self, item: Union[slice, 'DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
+    def __getitem__(self, item: Union[slice, DATE_LIKE]) -> 'DateTimeInterval':
         raise NotImplementedError
 
     # SET: BINARY RELATIONS
 
-    def isdisjoint(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> bool:
-        raise NotImplementedError
+    def isdisjoint(self, other: DATE_LIKE) -> bool:
+        return self.interval.isdisjoint(_get_interval(other))
 
-    def issubset(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> bool:
-        raise NotImplementedError
+    def issubset(self, other: DATE_LIKE) -> bool:
+        return self.interval.issubset(_get_interval(other))
 
-    def issuperset(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> bool:
-        raise NotImplementedError
+    def issuperset(self, other: DATE_LIKE) -> bool:
+        return self.interval.issuperset(_get_interval(other))
 
     # SET: ITEMS (INPLACE)
 
-    def add(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
-        raise NotImplementedError
+    def add(self, other: DATE_LIKE) -> 'DateTimeInterval':
+        self.interval.add(_get_interval(other))
+        return self
 
     def clear(self) -> 'DateTimeInterval':
-        raise NotImplementedError
+        self.interval.clear()
+        return self
 
-    def discard(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
-        raise NotImplementedError
+    def discard(self, other: DATE_LIKE) -> 'DateTimeInterval':
+        self.interval.discard(_get_interval(other))
+        return self
 
     def pop(self) -> 'DateTimeInterval':
-        raise NotImplementedError
+        out = DateTimeInterval()
+        out.interval = self.interval.pop()
+        return out
 
-    def remove(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
-        raise NotImplementedError
+    def remove(self, other: DATE_LIKE) -> 'DateTimeInterval':
+        self.interval.remove(_get_interval(other))
+        return self
 
     # SET: BOOLEAN ALGEBRA (INPLACE)
 
-    def update(self, *other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
-        raise NotImplementedError
+    def update(self, *other: DATE_LIKE) -> 'DateTimeInterval':
+        self.interval.update(*[_get_interval(_other) for _other in other])
+        return self
 
-    def intersection_update(self, *other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
-        raise NotImplementedError
+    def intersection_update(self, *other: DATE_LIKE) -> 'DateTimeInterval':
+        self.interval.intersection_update(*[_get_interval(_other) for _other in other])
+        return self
 
-    def difference_update(self, *other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
-        raise NotImplementedError
+    def difference_update(self, *other: DATE_LIKE) -> 'DateTimeInterval':
+        self.interval.difference_update(*[_get_interval(_other) for _other in other])
+        return self
 
-    def symmetric_difference_update(self, *other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
-        raise NotImplementedError
+    def symmetric_difference_update(self, *other: DATE_LIKE) -> 'DateTimeInterval':
+        self.interval.symmetric_difference_update(*[_get_interval(_other) for _other in other])
+        return self
 
     # SET: BOOLEAN ALGEBRA
 
-    def union(self, *other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
+    def union(self, *other: DATE_LIKE) -> 'DateTimeInterval':
         return self.copy().update(*other)
 
-    def intersection(self, *other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
+    def intersection(self, *other: DATE_LIKE) -> 'DateTimeInterval':
         return self.copy().intersection_update(*other)
 
-    def difference(self, *other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
+    def difference(self, *other: DATE_LIKE) -> 'DateTimeInterval':
         return self.copy().difference_update(*other)
 
-    def symmetric_difference(self, *other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
+    def symmetric_difference(self, *other: DATE_LIKE) -> 'DateTimeInterval':
         return self.copy().symmetric_difference_update(*other)
 
     # INTERVAL OPERATIONS (INPLACE)
 
-    def expand(self, distance: Union[datetime.datetime, datetime.date]) -> 'DateTimeInterval':
+    def expand(self, distance: Union[datetime.timedelta]) -> 'DateTimeInterval':
         raise NotImplementedError
 
     # INTERVAL OPERATIONS
 
-    def __contains__(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> bool:
+    def __contains__(self, other: DATE_LIKE) -> bool:
         raise NotImplementedError
 
-    def overlapping(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date], or_adjacent: bool = False) -> 'DateTimeInterval':
-        raise NotImplementedError
+    def overlapping(self, other: DATE_LIKE, or_adjacent: bool = False) -> 'DateTimeInterval':
+        out = DateTimeInterval()
+        out.interval = self.interval.overlapping(_get_interval(other), or_adjacent=or_adjacent)
+        return out
 
-    def overlaps(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date], or_adjacent: bool = False) -> bool:
-        raise NotImplementedError
+    def overlaps(self, other: DATE_LIKE, or_adjacent: bool = False) -> bool:
+        return self.interval.overlaps(_get_interval(other), or_adjacent=or_adjacent)
 
     # INTERVAL ARITHMETIC: BINARY
 
-    def __add__(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
+    def __add__(self, other: None) -> 'DateTimeInterval':
         raise NotImplementedError
 
-    def __radd__(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
+    def __radd__(self, other: None) -> 'DateTimeInterval':
         raise NotImplementedError
 
-    def __sub__(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
+    def __sub__(self, other: None) -> 'DateTimeInterval':
         raise NotImplementedError
 
-    def __rsub__(self, other: Union['DateTimeInterval', datetime.datetime, datetime.date]) -> 'DateTimeInterval':
+    def __rsub__(self, other: None) -> 'DateTimeInterval':
         raise NotImplementedError
 
     def __repr__(self) -> str:
