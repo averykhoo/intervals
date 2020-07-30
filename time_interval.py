@@ -38,8 +38,8 @@ class DateTimeInterval:
     interval: MultiInterval
 
     def __init__(self,
-                 start: Optional[Union[datetime.datetime, datetime.date]] = None,
-                 end: Optional[Union[datetime.datetime, datetime.date]] = None,
+                 start: Optional[Union[datetime.datetime, datetime.date, str]] = None,
+                 end: Optional[Union[datetime.datetime, datetime.date, str]] = None,
                  *,
                  start_closed: Optional[bool] = True,
                  end_closed: Optional[bool] = True
@@ -47,9 +47,13 @@ class DateTimeInterval:
 
         _end = None
         if start is not None:
-            # already a datetime / timestamp, do nothing
+            # convert to datetime
             if isinstance(start, pd.Timestamp):
                 start = start.to_pydatetime()
+            elif isinstance(start, str):
+                start = datetime.datetime.strptime(start, '%Y-%m-%d').date()
+
+            # already a datetime / timestamp, do nothing
             if isinstance(start, datetime.datetime):
                 start = start.timestamp()
 
@@ -61,9 +65,12 @@ class DateTimeInterval:
                 raise TypeError(start)
 
         if end is not None:
-            # round up to end of day / hour / min / etc
+            # convert to datetime
             if isinstance(end, pd.Timestamp):
                 end = end.to_pydatetime()
+            elif isinstance(start, str):
+                start = datetime.datetime.strptime(start, '%Y-%m-%d').date()
+
             if isinstance(end, datetime.datetime):
                 # not the most elegant way of doing this, but probably the most obvious
                 if end.hour == 0 and end.minute == 0 and end.second == 0 and end.microsecond == 0:
@@ -185,21 +192,15 @@ class DateTimeInterval:
 
             if item.start is None:
                 start = -math.inf
-            elif isinstance(item.start, (datetime.datetime, pd.Timestamp)):
-                start = item.start.timestamp()
-            elif isinstance(item.start, datetime.date):
-                start = datetime.datetime.combine(item.start, datetime.time.min).timestamp()
-            elif isinstance(item.start, str):
-                start = datetime.datetime.strptime(item.start, '%Y-%m-%d').timestamp()
+            elif isinstance(item.start, (datetime.datetime, pd.Timestamp, str)):
+                start = DateTimeInterval(item.start).infimum.timestamp()
             else:
                 raise TypeError(item.start)
 
             if item.stop is None:
                 end = math.inf
-            elif isinstance(item.stop, (datetime.datetime, pd.Timestamp, datetime.date)):
+            elif isinstance(item.stop, (datetime.date, pd.Timestamp, str)):
                 end = DateTimeInterval(item.stop).supremum.timestamp()  # gotta round up
-            elif isinstance(item.stop, str):
-                end = datetime.datetime.strptime(item.stop, '%Y-%m-%d').timestamp()
             else:
                 raise TypeError(item.stop)
 
@@ -334,16 +335,25 @@ class DateTimeInterval:
             assert not math.isinf(start)
             assert not math.isinf(end)
 
+            start = datetime.datetime.fromtimestamp(start)
+            end = datetime.datetime.fromtimestamp(end)
+            if start.time() == datetime.time.min:
+                _start = start.strftime("%Y-%m-%d")
+            else:
+                _start = start.strftime("%Y-%m-%d %H:%M")
+
+            if end.time() == datetime.time.max:
+                _end = end.strftime("%Y-%m-%d")
+            else:
+                _end = end.strftime("%Y-%m-%d %H:%M")
+
             # degenerate interval
             if start == end:
                 assert start_epsilon == 0
                 assert end_epsilon == 0
-                return f'[{datetime.datetime.fromtimestamp(start).strftime("%Y-%m-%d %H:M:%S")}]'
+                return f'[{_start}]'
 
-            return f'{"(" if start_epsilon else "["}' \
-                   f'{datetime.datetime.fromtimestamp(start).strftime("%Y-%m-%d %H:M:%S")}, ' \
-                   f'{datetime.datetime.fromtimestamp(end).strftime("%Y-%m-%d %H:M:%S")}' \
-                   f'{")" if end_epsilon else "]"}'
+            return f'{"(" if start_epsilon else "["}{_start} , {_end}{")" if end_epsilon else "]"}'
 
         # null set: {}
         if self.is_empty:
@@ -362,7 +372,7 @@ class DateTimeInterval:
             if len(str_intervals) == 1:
                 return str_intervals[0]
 
-            return f'{{ {" , ".join(str_intervals)} }}'
+            return f'{{ {" ; ".join(str_intervals)} }}'
 
 
 class TimeDeltaInterval:
@@ -670,3 +680,10 @@ class TimeDeltaInterval:
                 return str_intervals[0]
 
             return f'{{ {" , ".join(str_intervals)} }}'
+
+
+if __name__ == '__main__':
+    x = DateTimeInterval(datetime.date(2018, 8, 1), datetime.date(2019, 8, 31))
+    print(x.update(x+datetime.timedelta(999)))
+    print(x['2018-01-01':'2018-08-08'])
+    print(x.intersection(DateTimeInterval(datetime.date(2018, 9, 1), datetime.date(2019, 5, 30))))
