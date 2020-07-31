@@ -331,7 +331,6 @@ class Interval:
             elif float(other.start) > 0:
                 return self._apply_monotonic_binary_function(operator.pow, other)
             else:
-                # todo: when self.start == 0.0 and 0.0 in other, you might get a multi-interval
                 raise NotImplementedError
 
         elif isinstance(other, (Real, Interval)):
@@ -705,8 +704,8 @@ if __name__ == '__main__':
 
     # testing other code
     for _ in range(1000):
-        i1 = random_multi_interval(-100, 100, 2, 0)
-        j1 = random_multi_interval(-100, 100, 2, 0)
+        i1 = random_multi_interval(-100, 100, 20, 2)
+        j1 = random_multi_interval(-100, 100, 20, 2)
         i2 = MultipleInterval.from_multi_interval(i1)
         j2 = MultipleInterval.from_multi_interval(j1)
         print()

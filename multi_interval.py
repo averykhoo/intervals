@@ -1,4 +1,3 @@
-import bisect
 import math
 import operator
 import random
@@ -135,7 +134,7 @@ class MultiInterval:
 
     @classmethod
     def merge(cls,
-              *interval: Union['MultiInterval', Real, Set[int], List[int], Tuple[int, int]],
+              *interval: Union['MultiInterval', Real, Set[int], List[int], Tuple[int, int], str],
               counts: Optional[Iterable[int]] = None
               ) -> 'MultiInterval':
 
@@ -144,6 +143,8 @@ class MultiInterval:
             counts = set(counts)
             if not all(isinstance(elem, int) for elem in counts):
                 raise TypeError(counts)
+            if any(elem <= 0 for elem in counts):
+                raise ValueError(counts)
 
         # check intervals
         _points = []
@@ -198,6 +199,58 @@ class MultiInterval:
                     _points.append(((_interval[1], -1), True))
                 elif len(_interval) > 2:
                     raise TypeError(_interval)
+
+            # is a string
+            elif isinstance(_interval, str):
+                # todo: properly merge string parsing code in here
+                # """
+                #         e.g. [1, 2] or [1,2]
+                #         e.g. [0] or {0}
+                #         e.g. {} or [] or () or (123)
+                #         e.g. { [1, 2) | [3, 4) } or {[1,2),[3,4)} or even [1,2)[3,4)
+                #         """
+                #
+                # re_num = re.compile(r'(?:-\s*)?(?:inf|\d+(?:\.\d+)?(?:e-?\d+)?)\s*', flags=re.U)
+                # re_interval = re.compile(fr'[\[(]\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})?)?[)\]]', flags=re.U)
+                # re_set = re.compile(fr'{{\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})*)?}}', flags=re.U)
+                #
+                # def _str_to_num(_num: str) -> Union[int, float]:
+                #     _num = _num.strip()
+                #     if ''.join(_num.split()).lstrip('-').isdigit():
+                #         return int(_num)
+                #     else:
+                #         return float(_num)
+                #
+                # assert isinstance(text, str), text
+                #
+                # out = MultiInterval()
+                # for interval_str in re_interval.findall(text):
+                #     _start_closed = interval_str[0] == '['
+                #     _end_closed = interval_str[-1] == ']'
+                #     _nums = re_num.findall(interval_str)
+                #
+                #     if len(_nums) == 2:
+                #         out.update(MultiInterval(start=_str_to_num(_nums[0]),
+                #                                  end=_str_to_num(_nums[1]),
+                #                                  start_closed=_start_closed,
+                #                                  end_closed=_end_closed))
+                #     elif len(_nums) == 1:
+                #         out.update(MultiInterval(start=_str_to_num(_nums[0]),
+                #                                  start_closed=_start_closed,
+                #                                  end_closed=_end_closed))
+                #     elif len(_nums) > 0:
+                #         raise ValueError(f'Interval can only have 2 endpoints: {interval_str}')
+                #
+                # for set_str in re_set.findall(text):
+                #     for num in re_num.findall(set_str):
+                #         out.update(MultiInterval(start=_str_to_num(num)))
+                #
+                # out._consistency_check()
+                # return out
+                _endpoints = MultiInterval.from_str(_interval).endpoints
+                for idx in range(0, len(_endpoints), 2):
+                    _points.append((_endpoints[idx], False))
+                    _points.append((_endpoints[idx + 1], True))
 
             # is something else, invalid
             else:
@@ -488,8 +541,11 @@ class MultiInterval:
     def __sizeof__(self) -> int:
         return self.endpoints.__sizeof__()  # probably correct?
 
-    def _consistency_check(self):
-        return
+    def _consistency_check(self, skip=False):
+        # switch this to default to True for actual use
+        if skip:
+            return
+
         # length must be even
         assert len(self.endpoints) % 2 == 0, len(self.endpoints)
 
@@ -617,14 +673,8 @@ class MultiInterval:
     # SET: BOOLEAN ALGEBRA (INPLACE)
 
     def update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        tmp = self.update2(self, *other)  # todo: temp for error-checking
-
         self._consistency_check()
-        self.update1(*other)  # winner
-        assert self == tmp
-        return self
 
-    def update1(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         if self.is_empty and len(other) == 1:
             self.endpoints = other[0].endpoints.copy()
             self._consistency_check()
@@ -641,55 +691,21 @@ class MultiInterval:
                 raise TypeError(_other)
 
         self.merge_adjacent(sort=True)
+        self._consistency_check()
         return self
-
-    def update2(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return MultiInterval.merge(self, *other)  # todo: temp for error-checking
 
     def intersection_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        tmp = self.intersection_update1(*other)
-        tmp2 = self.intersection_update2(*other)  # todo: WINNER BY FAR
-
-        self.intersection_update3(*other)
-
         self._consistency_check()
-        assert self == tmp
-        assert self == tmp2
-        return self
-
-    def intersection_update1(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return self.difference(MultiInterval().union(*[~_other for _other in other]))  # todo: temp for error-checking
-
-    def intersection_update2(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return MultiInterval.merge(self, *other, counts=[1 + len(other)])  # todo: temp for error-checking
-
-    def intersection_update3(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        # todo: don't be lazy and write a real implementation that isn't inefficient
-        for _other in other:
-            self.difference_update(self.difference(_other))
-            if self.is_empty:
-                break
+        self.endpoints = MultiInterval.merge(self, *other, counts=[1 + len(other)]).endpoints
+        self._consistency_check()
         return self
 
     def difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         """
         O(m + n) implementation, where m = len(other) and n = len(self)
         """
-        tmp = self.copy()._log_n_difference_update(*other)  # todo: temp for error-checking
-
         self._consistency_check()
 
-        self._difference_update(*other)  # todo: winner!
-
-        # allow operator chaining
-        self._consistency_check()
-        assert self == tmp
-        return self
-
-    def _difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        """
-        O(m + n) implementation, where m = len(other) and n = len(self)
-        """
         if len(other) == 0:
             raise ValueError
 
@@ -735,98 +751,13 @@ class MultiInterval:
                 break
 
         # allow operator chaining
-        return self
-
-    def _log_n_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        """
-        O(m log(n)) implementation, where m = len(other) and n = len(self)
-
-        actually probably proportional to O(n) since there's list copying, so don't use this except for testing
-        """
-
-        if len(other) == 0:
-            raise ValueError
-
-        # get all the other endpoints merged together
-        _other_endpoints = MultiInterval().update(*other).endpoints
-
-        # nothing to remove
-        if self.is_empty or len(_other_endpoints) == 0:
-            return self
-
-        left_bound = 0
-
-        for other_idx in range(0, len(_other_endpoints), 2):
-            other_start, other_end = _other_endpoints[other_idx], _other_endpoints[other_idx + 1]
-
-            right_bound = bisect.bisect_right(self.endpoints, other_end, lo=left_bound)
-            left_bound = bisect.bisect_left(self.endpoints, other_start, lo=left_bound, hi=right_bound)
-            assert 0 <= left_bound <= right_bound, (other_start, other_end)
-
-            # either within or between contiguous intervals
-            if right_bound == left_bound:
-                # split a contiguous interval
-                if left_bound % 2 == 1:
-                    self.endpoints = self.endpoints[:left_bound] + \
-                                     [(other_start[0], other_start[1] - 1), (other_end[0], other_end[1] + 1)] + \
-                                     self.endpoints[right_bound:]
-
-                # between intervals, do nothing
-                else:
-                    pass
-
-            # in-place replacement, one side
-            elif right_bound - left_bound == 1:
-                if left_bound % 2 == 0:
-                    self.endpoints[right_bound - 1] = (other_end[0], other_end[1] + 1)
-                else:
-                    self.endpoints[left_bound] = (other_start[0], other_start[1] - 1)
-
-            # in-place replacement, both sides
-            elif right_bound - left_bound == 2 and left_bound % 2 == 1:
-                assert right_bound % 2 == 1, (other_start, other_end)
-                self.endpoints[left_bound] = (other_start[0], other_start[1] - 1)
-                self.endpoints[right_bound - 1] = (other_end[0], other_end[1] + 1)
-
-            # merge multiple things
-            else:
-                assert right_bound - left_bound >= 2
-                if left_bound % 2 == 1:
-                    self.endpoints[left_bound] = (other_start[0], other_start[1] - 1)
-                    left_bound += 1
-                if right_bound % 2 == 1:
-                    self.endpoints[right_bound - 1] = (other_end[0], other_end[1] + 1)
-                    right_bound -= 1
-                self.endpoints = self.endpoints[:left_bound] + self.endpoints[right_bound:]
-
-        # allow operator chaining
+        self._consistency_check()
         return self
 
     def symmetric_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        tmp = self.symmetric_difference_update1(*other)  # todo: winner
-
-        # todo: basically a multi-way XOR, and this is not particularly efficient
         self._consistency_check()
-        self.symmetric_difference_update2(*other)
-
-        assert self == tmp
-        return self
-
-    def symmetric_difference_update1(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        return MultiInterval.merge(self, *other, counts=range(1, len(other) + 1, 2))  # todo: temp for error-checking
-
-    def symmetric_difference_update2(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
-
-        # todo: basically a multi-way XOR, and this is not particularly efficient
-        if len(other) == 0:
-            raise ValueError
-
-        for _other in other:
-            _other._consistency_check()
-            _tmp = _other.difference(self)
-            self.difference_update(_other)
-            self.update(_tmp)
-
+        self.endpoints = MultiInterval.merge(self, *other, counts=range(1, len(other) + 1, 2)).endpoints
+        self._consistency_check()
         return self
 
     # SET: BOOLEAN ALGEBRA
@@ -922,6 +853,33 @@ class MultiInterval:
     def __contains__(self, other: Union['MultiInterval', Real]) -> bool:
         # todo: write a real implementation that isn't crazy inefficient like this is
         return self.union(other) == self
+
+        # if isinstance(other, int):
+        #     return bisect.bisect_left(self._segments, other) % 2 == 1
+        #
+        # elif isinstance(other, Segment):
+        #
+        #     left_bound = bisect.bisect_right(self._segments, other.start)
+        #     right_bound = bisect.bisect_left(self._segments, other.end, lo=left_bound)
+        #     assert 0 <= left_bound <= right_bound, other
+        #
+        #     # within an existing segment
+        #     return right_bound == left_bound and left_bound % 2 == 1
+        #
+        # elif isinstance(other, MultiSegment):
+        #     self_idx = 0
+        #     for other_idx in range(0, len(other._segments), 2):
+        #         while self._segments[self_idx + 1] < other._segments[other_idx]:
+        #             self_idx += 2
+        #         if self._segments[self_idx] > other._segments[other_idx]:
+        #             return False
+        #         if self._segments[self_idx + 1] < other._segments[other_idx + 1]:
+        #             return False
+        #
+        #     return True
+        #
+        # else:
+        #     raise TypeError(other)
 
     def overlapping(self, other: Union['MultiInterval', Real], or_adjacent: bool = False) -> 'MultiInterval':
         self._consistency_check()
@@ -1462,37 +1420,15 @@ def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25)
 
 
 if __name__ == '__main__':
-    i = random_multi_interval(-10000, 10000, 2000, 2)
-    j = random_multi_interval(-10000, 10000, 2000, 2)
+    i = random_multi_interval(-100, 100, 3, 0)
+    j = random_multi_interval(-100, 100, 3, 0)
     t = time.time()
     for _ in range(100):
-        print_ = (i, i.closed_hull, i.reciprocal())
-        print_ = (j, j.closed_hull, j.reciprocal())
-        print_ = ('union:                ', i.union(j))
-        print_ = ('intersection:         ', i.intersection(j))
-        print_ = ('difference:           ', i.difference(j))
-        print_ = ('symmetric_difference: ', i.symmetric_difference(j))
-        print_ = ('overlapping:          ', i.overlapping(j))
+        print(i, i.closed_hull, i.reciprocal())
+        print(j, j.closed_hull, j.reciprocal())
+        print('union:                ', i.union(j))
+        print('intersection:         ', i.intersection(j))
+        print('difference:           ', i.difference(j))
+        print('symmetric_difference: ', i.symmetric_difference(j))
+        print('overlapping:          ', i.overlapping(j))
     print(time.time() - t)
-
-    # t = time.time()
-    # for _ in range(1000):
-    #     print_ = (i, i.closed_hull, i.reciprocal())
-    #     print_ = (j, j.closed_hull, j.reciprocal())
-    #     print_ = ('union:                ', i.union(j))
-    #     print_ = ('intersection:         ', i.intersection(j))
-    #     print_ = ('difference:           ', i.difference(j))
-    #     print_ = ('symmetric_difference: ', i.symmetric_difference(j))
-    #     print_ = ('overlapping:          ', i.overlapping(j))
-    # print(time.time() - t)
-
-    # t = time.time()
-    # for _ in range(10000):
-    #     print_ = (i, i.closed_hull, i.reciprocal())
-    #     print_ = (j, j.closed_hull, j.reciprocal())
-    #     print_ = ('union:                ', i.union(j))
-    #     print_ = ('intersection:         ', i.intersection(j))
-    #     print_ = ('difference:           ', i.difference(j))
-    #     print_ = ('symmetric_difference: ', i.symmetric_difference(j))
-    #     print_ = ('overlapping:          ', i.overlapping(j))
-    # print(time.time() - t)
