@@ -550,6 +550,9 @@ class MultipleInterval:
     def __iter__(self):
         return iter(self.intervals)
 
+    def __eq__(self, other):
+        return type(self) == type(other) and self.intervals == other.intervals
+
     def __contains__(self, item: Union['MultipleInterval', Interval, Real]):
         if isinstance(item, MultipleInterval):
             _intervals = item.intervals
@@ -708,18 +711,29 @@ if __name__ == '__main__':
         j2 = MultipleInterval.from_multi_interval(j1)
         print()
         print('i1', i1)
-        print('i1', i2)
+        print('i2', i2)
+        assert MultipleInterval.from_multi_interval(i1) == i2
         print('j1', j1)
-        print('j1', j2)
-        print('reciprocal           ', MultipleInterval.from_multi_interval(j1.reciprocal()))
-        print('reciprocal           ', j2.reciprocal())
+        print('j2', j2)
+        assert MultipleInterval.from_multi_interval(j1) == j2
+        print('i reciprocal         ', MultipleInterval.from_multi_interval(i1.reciprocal()))
+        print('i reciprocal         ', i2.reciprocal())
+        assert MultipleInterval.from_multi_interval(i1.reciprocal()) == i2.reciprocal()
+        print('j reciprocal         ', MultipleInterval.from_multi_interval(j1.reciprocal()))
+        print('j reciprocal         ', j2.reciprocal())
+        assert MultipleInterval.from_multi_interval(j1.reciprocal()) == j2.reciprocal()
         print('union                ', MultipleInterval.from_multi_interval(i1.union(j1)))
         print('union                ', i2.union(j2))
+        assert MultipleInterval.from_multi_interval(i1.union(j1)) == i2.union(j2)
         print('intersection         ', MultipleInterval.from_multi_interval(i1.intersection(j1)))
         print('intersection         ', i2.intersection(j2))
+        assert MultipleInterval.from_multi_interval(i1.intersection(j1)) == i2.intersection(j2)
         print('difference           ', MultipleInterval.from_multi_interval(i1.difference(j1)))
         print('difference           ', i2.difference(j2))
+        assert MultipleInterval.from_multi_interval(i1.difference(j1)) == i2.difference(j2)
         print('symmetric_difference ', MultipleInterval.from_multi_interval(i1.symmetric_difference(j1)))
         print('symmetric_difference ', i2.symmetric_difference(j2))
+        assert MultipleInterval.from_multi_interval(i1.symmetric_difference(j1)) == i2.symmetric_difference(j2)
         print('overlapping          ', MultipleInterval.from_multi_interval(i1.overlapping(j1)))
         print('overlapping          ', i2.overlapping(j2))
+        assert MultipleInterval.from_multi_interval(i1.overlapping(j1)) == i2.overlapping(j2)

@@ -1240,6 +1240,7 @@ class MultiInterval:
         for idx in range(0, len(self.endpoints), 2):
             start, start_epsilon = self.endpoints[idx]
             end, end_epsilon = self.endpoints[idx + 1]
+            print(start, start_epsilon, end, end_epsilon)
 
             if start == 0:
                 assert start_epsilon > 0
@@ -1254,8 +1255,8 @@ class MultiInterval:
             else:
                 out.endpoints.append((1 / end, -end_epsilon))
                 out.endpoints.append((1 / start, -start_epsilon))
-
-        out.merge_adjacent()
+            print(out.endpoints)
+        out.merge_adjacent(sort=True)
         return out
 
     def __neg__(self):
