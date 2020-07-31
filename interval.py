@@ -3,11 +3,13 @@ import operator
 from dataclasses import dataclass
 from numbers import Real
 from typing import Callable
-from typing import Iterable
 from typing import List
 from typing import Optional
 from typing import Tuple
 from typing import Union
+
+from multi_interval import MultiInterval
+from multi_interval import random_multi_interval
 
 
 @dataclass(order=True, unsafe_hash=True, frozen=True)
@@ -63,15 +65,15 @@ class Interval:
         if math.isinf(self.start):
             if self.start != -math.inf:
                 raise ValueError('Interval cannot start with positive infinity')
-            if self.start_open:
-                raise ValueError('There is no real value just after negative infinity')
+            if self.start_closed:
+                raise ValueError('infinity is not finite')
 
         # the only infinity you can end with is positive infinity, and it must be closed
         if math.isinf(self.end):
             if self.end != math.inf:
                 raise ValueError('Interval cannot end with negative infinity')
-            if self.end_open:
-                raise ValueError('There is no real value just before positive infinity')
+            if self.end_closed:
+                raise ValueError('infinity is not finite')
 
         # strictly one way only
         if self.start > self.end:
@@ -430,17 +432,17 @@ class Interval:
 
     def reciprocal(self):
         if 0 in self:
-            return Interval(-math.inf, False, math.inf, True)
+            return Interval(-math.inf, True, math.inf, False)
 
         elif self.start == 0:
             return Interval(1 / self.end,
                             self.end_open,
                             math.inf,
-                            True)
+                            False)
 
         elif self.end == 0:
             return Interval(-math.inf,
-                            False,
+                            True,
                             1 / self.start,
                             self.start_closed)
 
@@ -510,6 +512,22 @@ class Interval:
 class MultipleInterval:
     intervals: List[Interval]
 
+    def __init__(self, *intervals: Optional[Interval]):
+        self.intervals = []
+        for interval in intervals:
+            if isinstance(interval, Interval):
+                self.update(interval)
+            else:
+                raise TypeError(Interval)
+
+    @classmethod
+    def from_multi_interval(cls, multi_interval: MultiInterval):
+        return MultipleInterval(*[Interval(interval.infimum,
+                                           not interval.infimum_closed,
+                                           interval.supremum,
+                                           interval.supremum_closed
+                                           ) for interval in multi_interval.contiguous_intervals])
+
     @property
     def length(self):
         return sum((interval.length for interval in self.intervals))
@@ -524,13 +542,10 @@ class MultipleInterval:
         if len(self.intervals) > 0:
             return max(interval.end for interval in self.intervals)
 
-    def __init__(self, *intervals: Optional[Interval]):
-        if intervals is None:
-            self.intervals = []
-        elif isinstance(intervals, Iterable):
-            self.intervals = sorted(intervals)
-        else:
-            raise TypeError(intervals)
+    def copy(self):
+        out = MultipleInterval()
+        out.intervals = self.intervals.copy()
+        return out
 
     def __iter__(self):
         return iter(self.intervals)
@@ -553,6 +568,31 @@ class MultipleInterval:
                 return False
 
         return True
+
+    def reciprocal(self):
+        out = MultipleInterval()
+        for interval in self:
+            out.update(interval.reciprocal())
+        return out
+
+    def overlapping(self, other: Union['MultipleInterval', Interval, Real], or_adjacent: bool = False):
+        if isinstance(other, MultipleInterval):
+            _other = other.intervals
+        elif isinstance(other, Interval):
+            _other = [other]
+        elif isinstance(other, Real):
+            _other = [Interval(other, False, other, True)]
+        else:
+            raise TypeError(other)
+
+        out = MultipleInterval()
+        for interval in self.intervals:
+            for other in _other:
+                if interval.overlaps(other, or_adjacent=or_adjacent):
+                    out.update(interval)
+                    break
+
+        return out
 
     def update(self, other: Union['MultipleInterval', Interval, Real]):
         if isinstance(other, MultipleInterval):
@@ -619,6 +659,29 @@ class MultipleInterval:
 
         return self
 
+    def symmetric_difference_update(self, *other: Union['MultipleInterval', Real]) -> 'MultipleInterval':
+        if len(other) == 0:
+            raise ValueError
+
+        for _other in other:
+            _tmp = _other.difference(self)
+            self.difference_update(_other)
+            self.update(_tmp)
+
+        return self
+
+    def union(self, *other: Union['MultipleInterval', Real]) -> 'MultipleInterval':
+        return self.copy().update(*other)
+
+    def intersection(self, *other: Union['MultipleInterval', Real]) -> 'MultipleInterval':
+        return self.copy().intersection_update(*other)
+
+    def difference(self, *other: Union['MultipleInterval', Real]) -> 'MultipleInterval':
+        return self.copy().difference_update(*other)
+
+    def symmetric_difference(self, *other: Union['MultipleInterval', Real]) -> 'MultipleInterval':
+        return self.copy().symmetric_difference_update(*other)
+
     def __repr__(self):
         return repr(self.intervals)
 
@@ -627,9 +690,36 @@ class MultipleInterval:
 
 
 if __name__ == '__main__':
-    other = MultipleInterval(Interval(1, False, 2, True))
-    print(other)
-    print(MultipleInterval(Interval(0, False, 1, True)))
-    print(MultipleInterval(Interval(0, False, 1, True)).update(other))
-    print(MultipleInterval(Interval(0, False, 1, True)).difference_update(other))
-    print(MultipleInterval(Interval(0, False, 1, True)).intersection_update(other))
+    # first = MultipleInterval(Interval(0, False, 1, True))
+    # second = MultipleInterval(Interval(1, False, 2, True))
+    # print(first)
+    # print(second)
+    # print(first.overlapping(second))
+    # print(first.union(second))
+    # print(first.intersection(second))
+    # print(first.difference(second))
+    # print(first.symmetric_difference(second))
+
+    # testing other code
+    for _ in range(1000):
+        i1 = random_multi_interval(-100, 100, 2, 0)
+        j1 = random_multi_interval(-100, 100, 2, 0)
+        i2 = MultipleInterval.from_multi_interval(i1)
+        j2 = MultipleInterval.from_multi_interval(j1)
+        print()
+        print('i1', i1)
+        print('i1', i2)
+        print('j1', j1)
+        print('j1', j2)
+        print('reciprocal           ', MultipleInterval.from_multi_interval(j1.reciprocal()))
+        print('reciprocal           ', j2.reciprocal())
+        print('union                ', MultipleInterval.from_multi_interval(i1.union(j1)))
+        print('union                ', i2.union(j2))
+        print('intersection         ', MultipleInterval.from_multi_interval(i1.intersection(j1)))
+        print('intersection         ', i2.intersection(j2))
+        print('difference           ', MultipleInterval.from_multi_interval(i1.difference(j1)))
+        print('difference           ', i2.difference(j2))
+        print('symmetric_difference ', MultipleInterval.from_multi_interval(i1.symmetric_difference(j1)))
+        print('symmetric_difference ', i2.symmetric_difference(j2))
+        print('overlapping          ', MultipleInterval.from_multi_interval(i1.overlapping(j1)))
+        print('overlapping          ', i2.overlapping(j2))

@@ -324,14 +324,28 @@ class MultiInterval:
                                                end_closed=False))
 
     @property
-    def infimum(self) -> Optional[Real]:
-        if not self.is_empty:
-            return self.endpoints[0][0]
+    def infimum(self) -> Real:
+        if self.is_empty:
+            raise KeyError('no infimum in empty interval')
+        return self.endpoints[0][0]
 
     @property
-    def supremum(self) -> Optional[Real]:
-        if not self.is_empty:
-            return self.endpoints[-1][0]
+    def infimum_closed(self) -> bool:
+        if self.is_empty:
+            raise KeyError('no infimum in empty interval')
+        return self.endpoints[0][1] == 0
+
+    @property
+    def supremum(self) -> Real:
+        if self.is_empty:
+            raise KeyError('no supremum in empty interval')
+        return self.endpoints[-1][0]
+
+    @property
+    def supremum_closed(self) -> bool:
+        if self.is_empty:
+            raise KeyError('no supremum in empty interval')
+        return self.endpoints[-1][1] == 0
 
     @property
     def degenerate_points(self) -> Set[Real]:
@@ -1412,14 +1426,13 @@ def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25)
 
 
 if __name__ == '__main__':
-    for _ in range(1000):
-        i = random_multi_interval(-100, 100, 2, 0)
-        j = random_multi_interval(-100, 100, 2, 0)
-        print(i, i.closed_hull)
-        print(j, j.closed_hull)
-        print(j.reciprocal())
-        print('union                ', i.union(j))
-        print('intersection         ', i.intersection(j))
-        print('difference           ', i.difference(j))
-        print('symmetric_difference ', i.symmetric_difference(j))
-        print('overlapping          ', i.overlapping(j))
+    for _ in range(100):
+        i = random_multi_interval(-1000, 1000, 2, 0)
+        j = random_multi_interval(-1000, 1000, 2, 0)
+        print(i, i.closed_hull, i.reciprocal())
+        print(j, j.closed_hull, j.reciprocal())
+        print('union:                ', i.union(j))
+        print('intersection:         ', i.intersection(j))
+        print('difference:           ', i.difference(j))
+        print('symmetric_difference: ', i.symmetric_difference(j))
+        print('overlapping:          ', i.overlapping(j))
