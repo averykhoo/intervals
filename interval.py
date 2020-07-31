@@ -79,7 +79,7 @@ class Interval:
 
         # allow degenerate but not null intervals
         if self.start_tuple > self.end_tuple:
-            raise ValueError('Interval cannot be null')
+            raise ValueError('Interval cannot be negative')
 
     def __contains__(self, other: Union[Real, 'Interval']) -> bool:
         if isinstance(other, Interval):
@@ -123,7 +123,9 @@ class Interval:
             if self.overlaps(other):
                 _start_tuple = max(self.start_tuple, other.start_tuple)
                 _end_tuple = min(self.end_tuple, other.end_tuple)
-                return Interval(*_start_tuple, *_end_tuple)
+                assert _start_tuple[1] in {0, 1}
+                assert _end_tuple[1] in {-1, 0}
+                return Interval(_start_tuple[0], _start_tuple[1] > 0, _end_tuple[0], _end_tuple[1] == 0)
             else:
                 raise ValueError(f'{str(other)} does not overlap {str(self)}, so the intersection is a null set')
 
@@ -143,7 +145,9 @@ class Interval:
             if self.overlaps(other, or_adjacent=True):
                 _start_tuple = min(self.start_tuple, other.start_tuple)
                 _end_tuple = max(self.end_tuple, other.end_tuple)
-                return Interval(*_start_tuple, *_end_tuple)
+                assert _start_tuple[1] in {0, 1}
+                assert _end_tuple[1] in {-1, 0}
+                return Interval(_start_tuple[0], _start_tuple[1] > 0, _end_tuple[0], _end_tuple[1] == 0)
             else:
                 raise ValueError(f'{str(other)} is not adjacent to {str(self)}, so the union comprises two Intervals')
 
@@ -623,4 +627,9 @@ class MultipleInterval:
 
 
 if __name__ == '__main__':
-    mi1 = MultipleInterval()
+    other = MultipleInterval(Interval(1, False, 2, True))
+    print(other)
+    print(MultipleInterval(Interval(0, False, 1, True)))
+    print(MultipleInterval(Interval(0, False, 1, True)).update(other))
+    print(MultipleInterval(Interval(0, False, 1, True)).difference_update(other))
+    print(MultipleInterval(Interval(0, False, 1, True)).intersection_update(other))
