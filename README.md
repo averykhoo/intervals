@@ -36,8 +36,3 @@
     *   note to self:
         need to differentiate ***position/coordinate vectors*** from ***distance/displacement vectors***,
         i.e. ***timestamps*** and ***timedeltas*** 
-*   update: keep
-*   intersection: use merge
-*   difference: keep
-*   sym diff: use merge
-*   merge update instead of class method

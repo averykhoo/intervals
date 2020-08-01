@@ -1,3 +1,4 @@
+import bisect
 import math
 import operator
 import random
@@ -86,65 +87,24 @@ class MultiInterval:
         self._consistency_check()
 
     @classmethod
-    def from_str(cls, text: str) -> 'MultiInterval':
-        """
-        e.g. [1, 2] or [1,2]
-        e.g. [0] or {0}
-        e.g. {} or [] or () or (123)
-        e.g. { [1, 2) | [3, 4) } or {[1,2),[3,4)} or even [1,2)[3,4)
-        """
-
-        re_num = re.compile(r'(?:-\s*)?(?:inf|\d+(?:\.\d+)?(?:e-?\d+)?)\s*', flags=re.U)
-        re_interval = re.compile(fr'[\[(]\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})?)?[)\]]', flags=re.U)
-        re_set = re.compile(fr'{{\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})*)?}}', flags=re.U)
-
-        def _str_to_num(_num: str) -> Union[int, float]:
-            _num = _num.strip()
-            if ''.join(_num.split()).lstrip('-').isdigit():
-                return int(_num)
-            else:
-                return float(_num)
-
-        assert isinstance(text, str), text
-
-        out = MultiInterval()
-        for interval_str in re_interval.findall(text):
-            _start_closed = interval_str[0] == '['
-            _end_closed = interval_str[-1] == ']'
-            _nums = re_num.findall(interval_str)
-
-            if len(_nums) == 2:
-                out.update(MultiInterval(start=_str_to_num(_nums[0]),
-                                         end=_str_to_num(_nums[1]),
-                                         start_closed=_start_closed,
-                                         end_closed=_end_closed))
-            elif len(_nums) == 1:
-                out.update(MultiInterval(start=_str_to_num(_nums[0]),
-                                         start_closed=_start_closed,
-                                         end_closed=_end_closed))
-            elif len(_nums) > 0:
-                raise ValueError(f'Interval can only have 2 endpoints: {interval_str}')
-
-        for set_str in re_set.findall(text):
-            for num in re_num.findall(set_str):
-                out.update(MultiInterval(start=_str_to_num(num)))
-
-        out._consistency_check()
-        return out
-
-    @classmethod
     def merge(cls,
               *interval: Union['MultiInterval', Real, Set[int], List[int], Tuple[int, int], str],
-              counts: Optional[Iterable[int]] = None
+              n_overlaps: Optional[Union[int, Iterable[int]]] = None
               ) -> 'MultiInterval':
 
         # check counts
-        if counts is not None:
-            counts = set(counts)
-            if not all(isinstance(elem, int) for elem in counts):
-                raise TypeError(counts)
-            if any(elem <= 0 for elem in counts):
-                raise ValueError(counts)
+        _overlaps = None
+        if n_overlaps is not None:
+            if isinstance(n_overlaps, int):
+                _overlaps = {n_overlaps}
+            elif isinstance(n_overlaps, Iterable):
+                _overlaps = set(n_overlaps)
+                if not all(isinstance(elem, int) for elem in _overlaps):
+                    raise TypeError(n_overlaps)
+                if any(elem <= 0 for elem in _overlaps):
+                    raise ValueError(n_overlaps)
+            else:
+                raise TypeError(n_overlaps)
 
         # check intervals
         _points = []
@@ -202,63 +162,58 @@ class MultiInterval:
 
             # is a string
             elif isinstance(_interval, str):
-                # todo: properly merge string parsing code in here
-                # """
-                #         e.g. [1, 2] or [1,2]
-                #         e.g. [0] or {0}
-                #         e.g. {} or [] or () or (123)
-                #         e.g. { [1, 2) | [3, 4) } or {[1,2),[3,4)} or even [1,2)[3,4)
-                #         """
-                #
-                # re_num = re.compile(r'(?:-\s*)?(?:inf|\d+(?:\.\d+)?(?:e-?\d+)?)\s*', flags=re.U)
-                # re_interval = re.compile(fr'[\[(]\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})?)?[)\]]', flags=re.U)
-                # re_set = re.compile(fr'{{\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})*)?}}', flags=re.U)
-                #
-                # def _str_to_num(_num: str) -> Union[int, float]:
-                #     _num = _num.strip()
-                #     if ''.join(_num.split()).lstrip('-').isdigit():
-                #         return int(_num)
-                #     else:
-                #         return float(_num)
-                #
-                # assert isinstance(text, str), text
-                #
-                # out = MultiInterval()
-                # for interval_str in re_interval.findall(text):
-                #     _start_closed = interval_str[0] == '['
-                #     _end_closed = interval_str[-1] == ']'
-                #     _nums = re_num.findall(interval_str)
-                #
-                #     if len(_nums) == 2:
-                #         out.update(MultiInterval(start=_str_to_num(_nums[0]),
-                #                                  end=_str_to_num(_nums[1]),
-                #                                  start_closed=_start_closed,
-                #                                  end_closed=_end_closed))
-                #     elif len(_nums) == 1:
-                #         out.update(MultiInterval(start=_str_to_num(_nums[0]),
-                #                                  start_closed=_start_closed,
-                #                                  end_closed=_end_closed))
-                #     elif len(_nums) > 0:
-                #         raise ValueError(f'Interval can only have 2 endpoints: {interval_str}')
-                #
-                # for set_str in re_set.findall(text):
-                #     for num in re_num.findall(set_str):
-                #         out.update(MultiInterval(start=_str_to_num(num)))
-                #
-                # out._consistency_check()
-                # return out
-                _endpoints = MultiInterval.from_str(_interval).endpoints
-                for idx in range(0, len(_endpoints), 2):
-                    _points.append((_endpoints[idx], False))
-                    _points.append((_endpoints[idx + 1], True))
+                # e.g. [1, 2] or [1,2]
+                # e.g. [0] or {0}
+                # e.g. {} or [] or () or (123)
+                # e.g. { [1, 2) | [3, 4) } or {[1,2),[3,4)} or even [1,2)[3,4)
+
+                re_num = re.compile(r'(?:-\s*)?(?:inf|\d+(?:\.\d+)?(?:e-?\d+)?)\s*', flags=re.U)
+                re_interval = re.compile(fr'[\[(]\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})?)?[)\]]', flags=re.U)
+                re_set = re.compile(fr'{{\s*(?:{re_num.pattern}(?:[,;]\s*{re_num.pattern})*)?}}', flags=re.U)
+
+                def _str_to_num(_num: str) -> Union[int, float]:
+                    _num = _num.strip()
+                    if ''.join(_num.split()).lstrip('-').isdigit():
+                        return int(_num)
+                    else:
+                        return float(_num)
+
+                out = MultiInterval()
+                for interval_str in re_interval.findall(_interval):
+                    _start_closed = interval_str[0] == '['
+                    _end_closed = interval_str[-1] == ']'
+                    _nums = re_num.findall(interval_str)
+
+                    if len(_nums) == 1:
+                        if _start_closed != _end_closed:
+                            raise ValueError(interval_str)
+                        elif _start_closed:
+                            out.update(MultiInterval(start=_str_to_num(_nums[0])))
+
+                    elif len(_nums) == 2:
+                        out.update(MultiInterval(start=_str_to_num(_nums[0]),
+                                                 end=_str_to_num(_nums[1]),
+                                                 start_closed=_start_closed,
+                                                 end_closed=_end_closed))
+                    elif len(_nums) > 2:
+                        raise ValueError(f'Interval can only have 2 endpoints: {interval_str}')
+
+                for set_str in re_set.findall(_interval):
+                    for num in re_num.findall(set_str):
+                        out.update(MultiInterval(start=_str_to_num(num)))
+
+                out._consistency_check()
+                for idx in range(0, len(out.endpoints), 2):
+                    _points.append((out.endpoints[idx], False))
+                    _points.append((out.endpoints[idx + 1], True))
 
             # is something else, invalid
             else:
                 raise TypeError(_interval)
 
         # set counts if not yet set
-        if counts is None:
-            counts = set(range(1, n_intervals + 1))
+        if _overlaps is None:
+            _overlaps = set(range(1, n_intervals + 1))
 
         # sort points
         _points = sorted(_points)
@@ -269,34 +224,34 @@ class MultiInterval:
         # go through all the endpoints and count how many are open for each interval
         start, is_end = _points[0]
         assert is_end is False
-        count = 1
+        count_overlaps = 1
         for point, is_end in _points[1:]:
             # found an endpoint, only break off interval if we didn't just break it, then decrement count
             if is_end:
                 assert start <= (point[0], point[1] + 1), (start, point, _points)
-                if count in counts and start <= point:
+                if count_overlaps in _overlaps and start <= point:
                     out.endpoints.append(start)
                     out.endpoints.append(point)
                 start = (point[0], point[1] + 1)
-                count -= 1
+                count_overlaps -= 1
 
             # found the same start point, just increment count
             elif point == start:
                 assert point >= start, (start, point, _points)
-                count += 1
+                count_overlaps += 1
                 continue
 
             # found a new start point, break off current interval and increment count
             else:
                 assert point >= start, (start, point, _points)
-                if count in counts:
+                if count_overlaps in _overlaps:
                     out.endpoints.append(start)
                     out.endpoints.append((point[0], point[1] - 1))
                 start = point
-                count += 1
+                count_overlaps += 1
 
         # merge all the intervals we kept
-        assert count == 0
+        assert count_overlaps == 0
         out.merge_adjacent()
         return out
 
@@ -696,7 +651,7 @@ class MultiInterval:
 
     def intersection_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         self._consistency_check()
-        self.endpoints = MultiInterval.merge(self, *other, counts=[1 + len(other)]).endpoints
+        self.endpoints = MultiInterval.merge(self, *other, n_overlaps=len(other) + 1).endpoints
         self._consistency_check()
         return self
 
@@ -756,7 +711,7 @@ class MultiInterval:
 
     def symmetric_difference_update(self, *other: Union['MultiInterval', Real]) -> 'MultiInterval':
         self._consistency_check()
-        self.endpoints = MultiInterval.merge(self, *other, counts=range(1, len(other) + 1, 2)).endpoints
+        self.endpoints = MultiInterval.merge(self, *other, n_overlaps=range(1, len(other) + 1, 2)).endpoints
         self._consistency_check()
         return self
 
@@ -851,35 +806,41 @@ class MultiInterval:
     # INTERVAL OPERATIONS
 
     def __contains__(self, other: Union['MultiInterval', Real]) -> bool:
-        # todo: write a real implementation that isn't crazy inefficient like this is
-        return self.union(other) == self
+        tmp = self.union(other) == self  # todo: for error checking
 
-        # if isinstance(other, int):
-        #     return bisect.bisect_left(self._segments, other) % 2 == 1
-        #
-        # elif isinstance(other, Segment):
-        #
-        #     left_bound = bisect.bisect_right(self._segments, other.start)
-        #     right_bound = bisect.bisect_left(self._segments, other.end, lo=left_bound)
-        #     assert 0 <= left_bound <= right_bound, other
-        #
-        #     # within an existing segment
-        #     return right_bound == left_bound and left_bound % 2 == 1
-        #
-        # elif isinstance(other, MultiSegment):
-        #     self_idx = 0
-        #     for other_idx in range(0, len(other._segments), 2):
-        #         while self._segments[self_idx + 1] < other._segments[other_idx]:
-        #             self_idx += 2
-        #         if self._segments[self_idx] > other._segments[other_idx]:
-        #             return False
-        #         if self._segments[self_idx + 1] < other._segments[other_idx + 1]:
-        #             return False
-        #
-        #     return True
-        #
-        # else:
-        #     raise TypeError(other)
+        if isinstance(other, MultiInterval):
+            self_idx = 0
+            for other_idx in range(0, len(other.endpoints), 2):
+                while self_idx + 2 < len(self.endpoints) and self.endpoints[self_idx + 1] < other.endpoints[other_idx]:
+                    self_idx += 2
+                if self.endpoints[self_idx + 1] < other.endpoints[other_idx]:
+                    assert self_idx + 2 >= len(self.endpoints)
+                    assert not tmp
+                    return False
+                if self.endpoints[self_idx] > other.endpoints[other_idx]:
+                    assert not tmp
+                    return False
+                if self.endpoints[self_idx + 1] < other.endpoints[other_idx + 1]:
+                    assert not tmp
+                    return False
+
+            assert tmp
+            return True
+
+        elif isinstance(other, Real):
+            idx = bisect.bisect_left(self.endpoints, (other, 0))
+            if idx % 2 == 1:
+                assert tmp
+                return True  # between existing endpoints
+            elif idx < len(self.endpoints) and self.endpoints[idx] == (other, 0):
+                assert tmp
+                return True  # touching start point
+            assert not tmp
+            return False
+
+        else:
+            assert not tmp
+            raise TypeError(other)
 
     def overlapping(self, other: Union['MultiInterval', Real], or_adjacent: bool = False) -> 'MultiInterval':
         self._consistency_check()
@@ -1420,15 +1381,18 @@ def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25)
 
 
 if __name__ == '__main__':
-    i = random_multi_interval(-100, 100, 3, 0)
-    j = random_multi_interval(-100, 100, 3, 0)
     t = time.time()
-    for _ in range(100):
+    for _ in range(10000):
+        i = random_multi_interval(-100, 100, 3, 0)
+        j = random_multi_interval(-100, 100, 3, 0)
         print(i, i.closed_hull, i.reciprocal())
         print(j, j.closed_hull, j.reciprocal())
-        print('union:                ', i.union(j))
-        print('intersection:         ', i.intersection(j))
-        print('difference:           ', i.difference(j))
+        print('union:                ', i.union(j), i.union(j) in j, j in i.union(j))
+        print('intersection:         ', i.intersection(j), i.intersection(j) in i, i.intersection(j) in j)
+        print('difference:           ', i.difference(j), i.difference(j) in i, i.difference(j) in j)
         print('symmetric_difference: ', i.symmetric_difference(j))
         print('overlapping:          ', i.overlapping(j))
+        if i in j or j in i:
+            print('!')
+            break
     print(time.time() - t)
