@@ -542,25 +542,28 @@ class MultiInterval:
             return self.intersection(item)
 
         elif isinstance(item, slice):
-            # todo: just find the appropriate endpoints via bisect and return it
-            if item.step is not None:
-                raise ValueError(item)
+            if item.step is not None or not isinstance(item.start, Real) or not isinstance(item.stop, Real):
+                raise TypeError(item)
 
             start = item.start or -math.inf
-            if not isinstance(start, Real):
-                raise TypeError(start)
-
+            start_epsilon = 1 if (math.isinf(start) and INFINITY_IS_NOT_FINITE) else 0
             end = item.stop or math.inf
-            if not isinstance(end, Real):
-                raise TypeError(end)
+            end_epsilon = -1 if (math.isinf(end) and INFINITY_IS_NOT_FINITE) else 0
 
-            if start > end:
+            if (start, start_epsilon) > (end, end_epsilon):
                 raise ValueError('slice cannot go backwards')
 
-            return self.intersection(MultiInterval(start=start,
-                                                   end=end,
-                                                   start_closed=not (math.isinf(start) and INFINITY_IS_NOT_FINITE),
-                                                   end_closed=not (math.isinf(end) and INFINITY_IS_NOT_FINITE)))
+            out = MultiInterval()
+            left_idx = bisect.bisect_left(self.endpoints, (start, start_epsilon))
+            if left_idx % 2 == 1:
+                out.endpoints.append((start, start_epsilon))
+            right_idx = bisect.bisect_right(self.endpoints, (end, end_epsilon))
+            out.endpoints.extend(self.endpoints[left_idx:right_idx])
+            if right_idx % 2 == 1:
+                out.endpoints.append((end, end_epsilon))
+
+            out._consistency_check()
+            return out
 
         elif isinstance(item, Real):
             if item in self:
@@ -770,9 +773,7 @@ class MultiInterval:
         return self
 
     def abs(self) -> 'MultiInterval':
-        # todo: fix this freakishly inefficient implementation
-        self.update(self.negative.mirror())
-        self.endpoints = self[0:].endpoints
+        self.endpoints = MultiInterval.merge(self[0], self.positive, self.negative.mirror()).endpoints
         return self
 
     def invert(self) -> 'MultiInterval':
@@ -806,7 +807,7 @@ class MultiInterval:
     # INTERVAL OPERATIONS
 
     def __contains__(self, other: Union['MultiInterval', Real]) -> bool:
-        tmp = self.union(other) == self  # todo: for error checking
+        self._consistency_check()
 
         if isinstance(other, MultiInterval):
             self_idx = 0
@@ -815,31 +816,23 @@ class MultiInterval:
                     self_idx += 2
                 if self.endpoints[self_idx + 1] < other.endpoints[other_idx]:
                     assert self_idx + 2 >= len(self.endpoints)
-                    assert not tmp
                     return False
                 if self.endpoints[self_idx] > other.endpoints[other_idx]:
-                    assert not tmp
                     return False
                 if self.endpoints[self_idx + 1] < other.endpoints[other_idx + 1]:
-                    assert not tmp
                     return False
 
-            assert tmp
             return True
 
         elif isinstance(other, Real):
             idx = bisect.bisect_left(self.endpoints, (other, 0))
             if idx % 2 == 1:
-                assert tmp
                 return True  # between existing endpoints
             elif idx < len(self.endpoints) and self.endpoints[idx] == (other, 0):
-                assert tmp
                 return True  # touching start point
-            assert not tmp
             return False
 
         else:
-            assert not tmp
             raise TypeError(other)
 
     def overlapping(self, other: Union['MultiInterval', Real], or_adjacent: bool = False) -> 'MultiInterval':
@@ -1382,7 +1375,8 @@ def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25)
 
 if __name__ == '__main__':
     t = time.time()
-    for _ in range(10000):
+    for _ in range(100):
+        print()
         i = random_multi_interval(-100, 100, 3, 0)
         j = random_multi_interval(-100, 100, 3, 0)
         print(i, i.closed_hull, i.reciprocal())
@@ -1392,7 +1386,7 @@ if __name__ == '__main__':
         print('difference:           ', i.difference(j), i.difference(j) in i, i.difference(j) in j)
         print('symmetric_difference: ', i.symmetric_difference(j))
         print('overlapping:          ', i.overlapping(j))
-        if i in j or j in i:
-            print('!')
-            break
+        print('abs:                  ', abs(i))
+        print('i[-50:50]', i[-50:50])
+        print('j[4:44]', j[4:44])
     print(time.time() - t)
