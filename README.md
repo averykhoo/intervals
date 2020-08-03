@@ -10,25 +10,17 @@
     *   the `__pow__` operation is not closed (neither is `__rpow__`)
     *   neither are `__divmod__`, `__floordiv__`, or `__rfloordiv__`,
         since that can result in infinite integer sequences, e.g. [0, inf) // 1 == range(infinity)   
-*   `TimeInterval`, `TimeIntervalUnion`
-    *   hacky initial implementation for time spans and ranges (groups of time spans)
+    *   does not and will never support complex numbers, because that requires building a graphics processing library
+        *   minkowski addition/subtraction
+        *   convex hulls
+        *   boolean operations on shapes with curves
+        *   erosion
+        *   translation, rotation, scaling, skewing
+        *   spirals
+*   `time_interval.DateTimeInterval` and `time_interval.TimeDeltaInterval`: non-contiguous time intervals
+    *   behaves somewhat like `datetime.datetime` and `datetime.timedelta` merged with `multi_interval.MultiInterval`
 *   `Segment`, `MultiSegment`
     *   an attempt to figure out the logic of intervals and multi-intervals
-
-#   notes
-*   `TimeInterval` == time span
-    *   has a start time and a non-negative duration
-    *   stored as a tuple of start_time, end_time
-    *   always inclusive of start and end times
-*   `TimeIntervalUnion` == time range
-    *   zero or more non-overlapping time spans
-    *   if an overlapping time span is added, it is merged into the existing span
-    *   same idea for removing a time span
-    *   boolean logic works on time ranges
-        *   somewhat non-intuitive since boundaries aren't respected
-        *   e.g. (1pm to 4pm) minus (3pm to 5pm) equals (1pm to 3pm)
-        *   even though 3pm was removed from the range, it's still included in the range
-        
         
 #   todo?
 *   iterate over int within multi-interval with at most one half-ray
