@@ -557,7 +557,7 @@ class MultiInterval:
             left_idx = bisect.bisect_left(self.endpoints, (start, start_epsilon))
             if left_idx % 2 == 1:
                 out.endpoints.append((start, start_epsilon))
-            right_idx = bisect.bisect_right(self.endpoints, (end, end_epsilon))
+            right_idx = bisect.bisect_right(self.endpoints, (end, end_epsilon), lo=left_idx)
             out.endpoints.extend(self.endpoints[left_idx:right_idx])
             if right_idx % 2 == 1:
                 out.endpoints.append((end, end_epsilon))
