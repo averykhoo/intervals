@@ -810,6 +810,8 @@ class MultiInterval:
         self._consistency_check()
 
         if isinstance(other, MultiInterval):
+            if self.is_empty:
+                return False
             self_idx = 0
             for other_idx in range(0, len(other.endpoints), 2):
                 while self_idx + 2 < len(self.endpoints) and self.endpoints[self_idx + 1] < other.endpoints[other_idx]:
