@@ -542,7 +542,11 @@ class MultiInterval:
             return self.intersection(item)
 
         elif isinstance(item, slice):
-            if item.step is not None or not isinstance(item.start, Real) or not isinstance(item.stop, Real):
+            if item.step is not None:
+                raise TypeError(item)
+            if not (item.start is None or isinstance(item.start, Real)):
+                raise TypeError(item)
+            if not (item.stop is None or isinstance(item.stop, Real)):
                 raise TypeError(item)
 
             start = item.start or -math.inf
@@ -1326,9 +1330,9 @@ class MultiInterval:
 
 def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25):
     _points = set()
-    if random.random() < neg_inf:
+    if random.random() < neg_inf and n > 1:
         _points.add(-math.inf)
-    if random.random() < pos_inf:
+    if random.random() < pos_inf and n > 1:
         _points.add(math.inf)
     while len(_points) < 2 * n:
         if decimals:
@@ -1343,8 +1347,8 @@ def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25)
         x = random.random()
 
         # degenerate interval
-        if (x < 0.2 or _endpoints[idx] == _endpoints[idx + 1]) \
-                and not (math.isinf(_endpoints[idx]) and INFINITY_IS_NOT_FINITE):
+        if (not (math.isinf(_endpoints[idx]) and INFINITY_IS_NOT_FINITE) and
+                (x < 0.2 or _endpoints[idx] == _endpoints[idx + 1])):
             out.endpoints.append((_endpoints[idx], 0))
             out.endpoints.append((_endpoints[idx], 0))
 
@@ -1379,8 +1383,8 @@ if __name__ == '__main__':
     t = time.time()
     for _ in range(100):
         print()
-        i = random_multi_interval(-100, 100, 3, 0)
-        j = random_multi_interval(-100, 100, 3, 0)
+        i = random_multi_interval(-100, 100, random.randint(0, 5), 0)
+        j = random_multi_interval(-100, 100, random.randint(0, 5), 0)
         print(i, i.closed_hull, i.reciprocal())
         print(j, j.closed_hull, j.reciprocal())
         print('union:                ', i.union(j), i.union(j) in j, j in i.union(j))
@@ -1390,5 +1394,7 @@ if __name__ == '__main__':
         print('overlapping:          ', i.overlapping(j))
         print('abs:                  ', abs(i))
         print('i[-50:50]', i[-50:50])
-        print('j[4:44]', j[4:44])
+        print('j[4:]', j[4:])
+        print('i[:0]', i[:0])
+        print('j[:]', j[:])
     print(time.time() - t)

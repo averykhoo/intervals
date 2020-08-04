@@ -353,7 +353,7 @@ class DateTimeInterval:
                 assert end_epsilon == 0
                 return f'[{_start}]'
 
-            return f'{"(" if start_epsilon else "["}{_start} , {_end}{")" if end_epsilon else "]"}'
+            return f'{"(" if start_epsilon else "["}{_start} to {_end}{")" if end_epsilon else "]"}'
 
         # null set: {}
         if self.is_empty:
@@ -373,6 +373,8 @@ class DateTimeInterval:
                 return str_intervals[0]
 
             return f'{{ {" ; ".join(str_intervals)} }}'
+
+    __repr__ = __str__
 
 
 class TimeDeltaInterval:
@@ -684,6 +686,6 @@ class TimeDeltaInterval:
 
 if __name__ == '__main__':
     x = DateTimeInterval(datetime.date(2018, 8, 1), datetime.date(2019, 8, 31))
-    print(x.update(x+datetime.timedelta(999)))
+    print(x.update(x + datetime.timedelta(999)))
     print(x['2018-01-01':'2018-08-08'])
     print(x.intersection(DateTimeInterval(datetime.date(2018, 9, 1), datetime.date(2019, 5, 30))))
