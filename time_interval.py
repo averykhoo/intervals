@@ -138,9 +138,13 @@ class DateTimeInterval:
         return _len, _points
 
     @property
-    def total_duration(self) -> datetime.timedelta:
+    def total_seconds(self) -> float:
         _len, _points = self.cardinality
-        return datetime.timedelta(seconds=_len)
+        return _len
+
+    @property
+    def total_duration(self) -> datetime.timedelta:
+        return datetime.timedelta(seconds=self.total_seconds)
 
     @property
     def contiguous_intervals(self) -> List['DateTimeInterval']:
@@ -554,9 +558,12 @@ class TimeDeltaInterval:
 
     # INTERVAL OPERATIONS (INPLACE)
 
-    def expand(self, distance: Union[datetime.timedelta, pd.Timedelta]) -> 'TimeDeltaInterval':
+    def expand(self, distance: Union[datetime.timedelta, pd.Timedelta], inplace=False) -> 'TimeDeltaInterval':
+        if not inplace:
+            return self.copy().expand(distance, inplace=True)
+
         if isinstance(distance, (datetime.timedelta, pd.Timedelta)):
-            self.interval.expand(distance.total_seconds())
+            self.interval.expand(distance.total_seconds(), inplace=True)
             return self
         else:
             raise TypeError(distance)

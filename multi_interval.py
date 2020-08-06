@@ -795,7 +795,10 @@ class MultiInterval:
             self.endpoints.append((-point, -epsilon))
         return self
 
-    def expand(self, distance: Real) -> 'MultiInterval':
+    def expand(self, distance: Real, inplace=False) -> 'MultiInterval':
+        if not inplace:
+            return self.copy().expand(distance, inplace=True)
+
         if not isinstance(distance, Real):
             raise TypeError(distance)
         if distance < 0:
