@@ -81,7 +81,7 @@ class MultiInterval:
             _start = (start, 0 if start_closed else 1)
             _end = (end, 0 if end_closed else -1)
             if _start > _end:
-                raise ValueError(f'Interval start {_start} cannot be before end {_end}')
+                raise ValueError(f'Interval start {_start} is after end {_end}')
             self.endpoints = [_start, _end]
 
         self._consistency_check()
