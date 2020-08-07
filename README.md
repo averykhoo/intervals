@@ -1,10 +1,7 @@
 #   (Time) Intervals for Python
 *A GLORIOUS EXERCISE IN YAK-SHAVING*
 
-*   `interval.Interval`: the usual contiguous intervals, where endpoints can be open or closed
-    *   support for usable set functions
-    *   support for most numeric operations
-*   `interval.MultipleInterval`: operations on groups of `Interval` objects
+##  Numeric Intervals
 *   `multi_interval.MultiInterval`: a non-contiguous interval
     *   as above, but more support for more things (someday)
     *   the `__pow__` operation is not closed (neither is `__rpow__`)
@@ -18,6 +15,15 @@
         *   erosion
         *   translation, rotation, scaling, skewing
         *   spirals
+        
+##  Time Intervals
 *   `time_interval.DateTimeInterval` and `time_interval.TimeDeltaInterval`: non-contiguous time intervals
     *   behaves somewhat like `datetime.datetime` and `datetime.timedelta` merged with `multi_interval.MultiInterval`
+    *   also accepts `pandas.Timestamp` and `pandas.Timedelta`
+    *   uses `dateutil` to parse date strings
 
+##  alternative implementation of numeric intervals, for debugging
+*   `interval.Interval`: the usual contiguous intervals, where endpoints can be open or closed
+    *   support for usable set functions
+    *   support for most numeric operations
+*   `interval.MultipleInterval`: operations on groups of `Interval` objects

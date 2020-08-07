@@ -1,5 +1,6 @@
 import math
 import operator
+import random
 from dataclasses import dataclass
 from numbers import Real
 from typing import Callable
@@ -692,47 +693,54 @@ class MultipleInterval:
 
 
 if __name__ == '__main__':
-    # first = MultipleInterval(Interval(0, False, 1, True))
-    # second = MultipleInterval(Interval(1, False, 2, True))
-    # print(first)
-    # print(second)
-    # print(first.overlapping(second))
-    # print(first.union(second))
-    # print(first.intersection(second))
-    # print(first.difference(second))
-    # print(first.symmetric_difference(second))
 
-    # testing other code
+    # testing multi_interval.MultiInterval
     for _ in range(1000):
-        i1 = random_multi_interval(-100, 100, 20, 2)
-        j1 = random_multi_interval(-100, 100, 20, 2)
+        i1 = random_multi_interval(random.randint(-1000, 0),
+                                   random.randint(0, 1000),
+                                   random.randint(0, 100),
+                                   random.randint(0, 3))
+        j1 = random_multi_interval(random.randint(-1000, 0),
+                                   random.randint(0, 1000),
+                                   random.randint(0, 100),
+                                   random.randint(0, 3))
+
+        print()
         i2 = MultipleInterval.from_multi_interval(i1)
         j2 = MultipleInterval.from_multi_interval(j1)
-        print()
+
         print('i1', i1)
         print('i2', i2)
         assert MultipleInterval.from_multi_interval(i1) == i2
+
         print('j1', j1)
         print('j2', j2)
         assert MultipleInterval.from_multi_interval(j1) == j2
+
         print('i reciprocal         ', MultipleInterval.from_multi_interval(i1.reciprocal()))
         print('i reciprocal         ', i2.reciprocal())
         assert MultipleInterval.from_multi_interval(i1.reciprocal()) == i2.reciprocal()
+
         print('j reciprocal         ', MultipleInterval.from_multi_interval(j1.reciprocal()))
         print('j reciprocal         ', j2.reciprocal())
         assert MultipleInterval.from_multi_interval(j1.reciprocal()) == j2.reciprocal()
+
         print('union                ', MultipleInterval.from_multi_interval(i1.union(j1)))
         print('union                ', i2.union(j2))
         assert MultipleInterval.from_multi_interval(i1.union(j1)) == i2.union(j2)
+
         print('intersection         ', MultipleInterval.from_multi_interval(i1.intersection(j1)))
         print('intersection         ', i2.intersection(j2))
         assert MultipleInterval.from_multi_interval(i1.intersection(j1)) == i2.intersection(j2)
+
         print('difference           ', MultipleInterval.from_multi_interval(i1.difference(j1)))
         print('difference           ', i2.difference(j2))
         assert MultipleInterval.from_multi_interval(i1.difference(j1)) == i2.difference(j2)
+
         print('symmetric_difference ', MultipleInterval.from_multi_interval(i1.symmetric_difference(j1)))
         print('symmetric_difference ', i2.symmetric_difference(j2))
         assert MultipleInterval.from_multi_interval(i1.symmetric_difference(j1)) == i2.symmetric_difference(j2)
+
         print('overlapping          ', MultipleInterval.from_multi_interval(i1.overlapping(j1)))
         print('overlapping          ', i2.overlapping(j2))
         assert MultipleInterval.from_multi_interval(i1.overlapping(j1)) == i2.overlapping(j2)
