@@ -8,6 +8,7 @@ from typing import Set
 from typing import Tuple
 from typing import Union
 
+import dateutil.parser
 import pandas as pd
 
 from multi_interval import MultiInterval
@@ -51,7 +52,7 @@ class DateTimeInterval:
             if isinstance(start, pd.Timestamp):
                 start = start.to_pydatetime()
             elif isinstance(start, str):
-                start = datetime.datetime.strptime(start, '%Y-%m-%d').date()
+                start = dateutil.parser.parse(start, dayfirst=True)
 
             # already a datetime / timestamp, do nothing
             if isinstance(start, datetime.datetime):
@@ -69,7 +70,7 @@ class DateTimeInterval:
             if isinstance(end, pd.Timestamp):
                 end = end.to_pydatetime()
             elif isinstance(end, str):
-                end = datetime.datetime.strptime(end, '%Y-%m-%d').date()
+                end = dateutil.parser.parse(end, dayfirst=True)
 
             if isinstance(end, datetime.datetime):
                 # not the most elegant way of doing this, but probably the most obvious
@@ -692,7 +693,7 @@ class TimeDeltaInterval:
 
 
 if __name__ == '__main__':
-    x = DateTimeInterval(datetime.date(2018, 8, 1), datetime.date(2019, 8, 31))
+    x = DateTimeInterval('2/8/2018 12:34:56', '31 oct 2019 2pm')
     print(x.update(x + datetime.timedelta(999)))
     print(x['2018-01-01':'2018-08-08'])
     print(x.intersection(DateTimeInterval(datetime.date(2018, 9, 1), datetime.date(2019, 5, 30))))
