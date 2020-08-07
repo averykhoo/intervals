@@ -1016,7 +1016,7 @@ class MultiInterval:
     def __rmul__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         return self.apply_monotonic_binary_function(operator.mul, other, right_hand_side=True)
 
-    def __truediv__(self, other):
+    def __truediv__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         # todo: deal with inf and zero
         if isinstance(other, MultiInterval):
             if other.is_empty:
@@ -1035,30 +1035,96 @@ class MultiInterval:
         else:
             raise TypeError(other)
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         # todo: deal with inf and zero
         if self.is_empty:
             raise ValueError('cannot divide by nothing')
         return other * self.reciprocal()
 
-    def __floordiv__(self, other):
-        raise NotImplementedError
+    def __floordiv__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        out = self.__truediv__(other)
+        if not out.is_finite:
+            raise OverflowError('cannot convert float infinity to integer')
 
-    def __rfloordiv__(self, other):
-        raise NotImplementedError
+        _endpoints, out.endpoints = out.endpoints, []
+        for point, _ in _endpoints:
+            out.endpoints.append((math.floor(point), 0))
+        out.merge_adjacent()
+        return out
 
-    def __mod__(self, other):
+    def __rfloordiv__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
+        out = self.__rtruediv__(other)
+        if not out.is_finite:
+            raise OverflowError('cannot convert float infinity to integer')
+
+        _endpoints, out.endpoints = out.endpoints, []
+        for point, _ in _endpoints:
+            out.endpoints.append((math.floor(point), 0))
+        out.merge_adjacent()
+        return out
+
+    def __mod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         # other MUST be finite and cannot include zero
         # process the positive and negative parts separately?
-        raise NotImplementedError  # todo
 
-    def __rmod__(self, other):
+        if isinstance(other, MultiInterval):
+            if 0 in other:
+                raise ZeroDivisionError(other)  # todo: decide if this is an error or not (also see below)
+            elif not self.is_finite:
+                raise ValueError('cannot mod infinity')
+            elif self.is_empty or other.is_empty:
+                return MultiInterval()
+            elif not other.is_non_negative:
+                return self.__mod__(other.negative.mirror()).mirror().union(self.__mod__(other.positive))
+
+            # current state: other.is_positive & self.is_finite & not(self.is_empty) & not(other.is_empty)
+            raise NotImplementedError  # todo
+
+        elif isinstance(other, Real):
+            if float(other) == 0:
+                raise ZeroDivisionError(other)  # todo: decide if this is an error or not (see above)
+            elif not self.is_finite:
+                raise ValueError('cannot mod infinity')
+            elif self.is_empty:
+                return MultiInterval()
+            elif other < 0:
+                return self.__mod__(-other).mirror()
+
+            # current state: (other > 0) & self.is_finite & not(self.is_empty)
+            out = MultiInterval()
+            for idx in range(0, len(self.endpoints), 2):
+                start = self.endpoints[idx][0]
+                end = self.endpoints[idx + 1][0]
+                start_epsilon = self.endpoints[idx][1]
+                end_epsilon = self.endpoints[idx + 1][1]
+                delta_floor = (end // other) - (start // other)
+                assert delta_floor >= 0
+                if delta_floor == 0:
+                    out.endpoints.append((start % other, start_epsilon))
+                    out.endpoints.append((end % other, end_epsilon))
+                elif delta_floor == 1:
+                    out.endpoints.append((0, 0))
+                    out.endpoints.append((end % other, end_epsilon))
+                    out.endpoints.append((start % other, start_epsilon))
+                    out.endpoints.append((other, -1))
+                else:
+                    return MultiInterval(start=0,
+                                         end=other,
+                                         end_closed=False)
+
+            out.merge_adjacent(sort=True)
+            return out
+
+        else:
+            raise TypeError(other)
+
+    def __rmod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __divmod__(self, other):
+    def __divmod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
-    def __rdivmod__(self, other):
+    def __rdivmod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
 
     def __pow__(self,
