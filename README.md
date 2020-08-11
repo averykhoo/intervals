@@ -27,3 +27,11 @@
     *   support for usable set functions
     *   support for most numeric operations
 *   `interval.MultipleInterval`: operations on groups of `Interval` objects
+
+##  notes:
+*   for mod, can use a perspective transform (projective but not affine)
+    to convert the rectangle between the 2 intervals in the 
+    into a trapezoid in a cartesian-like space
+    then use the coverage to determine the output
+    *   but in practice only need 2 points, check for overlap, then determine if closed
+    *   can probably overlap with the mod of real numbers, or real number mod
