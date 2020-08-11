@@ -43,7 +43,9 @@ class DateTimeInterval:
                  end: Optional[Union[datetime.datetime, datetime.date, str]] = None,
                  *,
                  start_closed: Optional[bool] = True,
-                 end_closed: Optional[bool] = True
+                 end_closed: Optional[bool] = True,
+                 day_first=True,
+                 year_first=False,
                  ):
 
         _end = None
@@ -52,7 +54,7 @@ class DateTimeInterval:
             if isinstance(start, pd.Timestamp):
                 start = start.to_pydatetime()
             elif isinstance(start, str):
-                start = dateutil.parser.parse(start, dayfirst=True)
+                start = dateutil.parser.parse(start, dayfirst=day_first, yearfirst=year_first)
 
             # already a datetime / timestamp, do nothing
             if isinstance(start, datetime.datetime):
@@ -70,7 +72,7 @@ class DateTimeInterval:
             if isinstance(end, pd.Timestamp):
                 end = end.to_pydatetime()
             elif isinstance(end, str):
-                end = dateutil.parser.parse(end, dayfirst=True)
+                end = dateutil.parser.parse(end, dayfirst=day_first, yearfirst=year_first)
 
             if isinstance(end, datetime.datetime):
                 # not the most elegant way of doing this, but probably the most obvious
@@ -693,7 +695,8 @@ class TimeDeltaInterval:
 
 
 if __name__ == '__main__':
+    print(DateTimeInterval('2018/02/01', '31 oct 2019 2pm'))
     x = DateTimeInterval('2/8/2018 12:34:56', '31 oct 2019 2pm')
     print(x.update(x + datetime.timedelta(999)))
-    print(x['2018-01-01':'2018-08-08'])
+    print(x['2018/02/01':'2018-08-08'])
     print(x.intersection(DateTimeInterval(datetime.date(2018, 9, 1), datetime.date(2019, 5, 30))))
