@@ -1041,6 +1041,7 @@ class MultiInterval:
             raise ValueError('cannot divide by nothing')
         return other * self.reciprocal()
 
+    # noinspection DuplicatedCode
     def __floordiv__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         out = self.__truediv__(other)
         if not out.is_finite:
@@ -1052,6 +1053,7 @@ class MultiInterval:
         out.merge_adjacent()
         return out
 
+    # noinspection DuplicatedCode
     def __rfloordiv__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         out = self.__rtruediv__(other)
         if not out.is_finite:
