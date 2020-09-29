@@ -95,6 +95,10 @@ class DateTimeInterval:
             else:
                 raise TypeError(end)
 
+            # flipped interval
+            if end < start:
+                raise ValueError(f'start ({start}) cannot be after end ({end})')
+
         self.interval = MultiInterval(start=start,
                                       end=end or _end,
                                       start_closed=start_closed,
