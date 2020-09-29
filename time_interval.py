@@ -44,8 +44,8 @@ class DateTimeInterval:
                  *,
                  start_closed: Optional[bool] = True,
                  end_closed: Optional[bool] = True,
-                 day_first=True,
-                 year_first=False,
+                 day_first: bool = True,
+                 year_first: bool = False,
                  ):
 
         # handle nan
