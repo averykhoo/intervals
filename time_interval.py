@@ -48,6 +48,12 @@ class DateTimeInterval:
                  year_first=False,
                  ):
 
+        # handle nan
+        if pd.isna(end):
+            end = None
+        if pd.isna(start):
+            start, end = end, None
+
         _end = None
         if start is not None:
             # convert to datetime

@@ -30,6 +30,12 @@ class MultiInterval:
                  end_closed: Optional[bool] = True
                  ):
 
+        # handle nan
+        if math.isnan(end):
+            end = None
+        if math.isnan(start):
+            start, end = end, None
+
         # no interval, create the null set
         if start is None:
             if end is not None:
