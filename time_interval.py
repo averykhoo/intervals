@@ -54,6 +54,11 @@ class DateTimeInterval:
         if pd.isna(start):
             start, end = end, None
 
+        # for printing in error message below
+        start_str = str(start)
+        end_str = str(end)
+
+        # convert start to unix datetime
         _end = None
         if start is not None:
             # convert to datetime
@@ -73,6 +78,7 @@ class DateTimeInterval:
             else:
                 raise TypeError(start)
 
+        # convert end to unix datetime
         if end is not None:
             # convert to datetime
             if isinstance(end, pd.Timestamp):
@@ -103,7 +109,7 @@ class DateTimeInterval:
 
             # flipped interval
             if end < start:
-                raise ValueError(f'start ({start}) cannot be after end ({end})')
+                raise ValueError(f'start ({start_str}) cannot be after end ({end_str})')
 
         self.interval = MultiInterval(start=start,
                                       end=end or _end,
