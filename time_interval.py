@@ -88,6 +88,9 @@ class DateTimeInterval:
 
             if isinstance(end, datetime.datetime):
                 # not the most elegant way of doing this, but probably the most obvious
+                # also, an end date that is open doesn't really make sense with this method
+                # because that only excludes the last microsecond of the day
+                # logically speaking, [Tuesday to Saturday) == [Tuesday to Friday] == (Monday to Friday]
                 if end.hour == 0 and end.minute == 0 and end.second == 0 and end.microsecond == 0:
                     end = end.replace(hour=23, minute=59, second=59, microsecond=999999).timestamp()
                 elif end.minute == 0 and end.second == 0 and end.microsecond == 0:
@@ -374,6 +377,9 @@ class DateTimeInterval:
             if start == end:
                 assert start_epsilon == 0
                 assert end_epsilon == 0
+
+            # possibly non-degenerate (e.g. full day)
+            if _start == _end and start_epsilon == 0 and end_epsilon == 0:
                 return f'[{_start}]'
 
             return f'{"(" if start_epsilon else "["}{_start} to {_end}{")" if end_epsilon else "]"}'
