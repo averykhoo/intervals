@@ -31,9 +31,9 @@ class MultiInterval:
                  ):
 
         # handle nan
-        if math.isnan(end):
+        if end is not None and math.isnan(end):
             end = None
-        if math.isnan(start):
+        if start is not None and math.isnan(start):
             start, end = end, None
 
         # no interval, create the null set

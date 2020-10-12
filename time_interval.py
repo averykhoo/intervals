@@ -354,21 +354,21 @@ class DateTimeInterval:
             assert start_tuple <= end_tuple, (start_tuple, end_tuple)
 
             # unpack
-            start, start_epsilon = start_tuple
-            end, end_epsilon = end_tuple
+            start_unix_timestamp, start_epsilon = start_tuple
+            end_unix_timestamp, end_epsilon = end_tuple
             assert start_epsilon in {1, 0}, (start_tuple, end_tuple)
             assert end_epsilon in {0, -1}, (start_tuple, end_tuple)
-            assert not math.isinf(start)
-            assert not math.isinf(end)
+            assert not math.isinf(start_unix_timestamp)
+            assert not math.isinf(end_unix_timestamp)
 
-            start = datetime.datetime.fromtimestamp(start)
-            end = datetime.datetime.fromtimestamp(end)
-            if start.time() == datetime.time.min:
+            start: datetime.datetime = datetime.datetime.fromtimestamp(start_unix_timestamp)
+            end: datetime.datetime = datetime.datetime.fromtimestamp(end_unix_timestamp)
+            if start.time() == datetime.time.min and end.date() > start.date():
                 _start = start.strftime("%Y-%m-%d")
             else:
                 _start = start.strftime("%Y-%m-%d %H:%M")
 
-            if end.time() == datetime.time.max:
+            if end.time() == datetime.time.max and end.date() > start.date():
                 _end = end.strftime("%Y-%m-%d")
             else:
                 _end = end.strftime("%Y-%m-%d %H:%M")
@@ -722,3 +722,4 @@ if __name__ == '__main__':
     print(x.update(x + datetime.timedelta(999)))
     print(x['2018/02/01':'2018-08-08'])
     print(x.intersection(DateTimeInterval(datetime.date(2018, 9, 1), datetime.date(2019, 5, 30))))
+    print(DateTimeInterval('2018/02/01', '2018/02/01 2pm'))
