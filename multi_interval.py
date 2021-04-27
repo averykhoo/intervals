@@ -14,11 +14,30 @@ from typing import Set
 from typing import Tuple
 from typing import Union
 
+# this affects whether it's possible to create an interval closed at infinity
+# mathematically it doesn't make sense, but it's possible to represent and work with
+# turning this flag off should never be needed in practice, and hence isn't recommended
 INFINITY_IS_NOT_FINITE = True  # don't allow ±inf to be contained inside intervals
 
 
 class MultiInterval:
-    endpoints: List[Tuple[Real, int]]  # todo: explain epsilon
+    """
+    represents zero or more non-overlapping intervals
+    each interval can be degenerate or infinite
+    adjacent intervals are merged automatically if you use the provided functions
+
+    each interval is represented as a pair of endpoints
+    each endpoint is represented as a tuple of the point's location and epsilon
+    where epsilon is either -1, 0, or 1
+
+    epsilon helps to represent whether the point is open or closed in a way that simplifies the algorithms
+        *   epsilon=0 represents a closed start or end point
+        *   epsilon=1 represents an open start point
+        *   epsilon=-1 represents an open end point
+    this representation makes comparing two points trivial, regardless of whether they are start or end points
+    and this is important because it allows interval union to run in linear time (for 2 intervals)
+    """
+    endpoints: List[Tuple[Real, int]]  # (location, epsilon)
 
     # CONSTRUCTORS
 
@@ -51,6 +70,7 @@ class MultiInterval:
 
         # degenerate interval
         elif end is None and start_closed and end_closed:
+            assert start is not None  # convince type checker
             if math.isinf(start) and INFINITY_IS_NOT_FINITE:
                 raise ValueError('the degenerate interval at infinity cannot exist')
             else:
@@ -64,9 +84,10 @@ class MultiInterval:
             raise ValueError((start, start_closed, end_closed))
 
         # infinity
-        elif math.isinf(start) and start_closed and INFINITY_IS_NOT_FINITE:
+        # nullity checks are unnecessary, but help to convince the type checker
+        elif start is not None and math.isinf(start) and start_closed and INFINITY_IS_NOT_FINITE:
             raise ValueError(f'{start} cannot be contained in Interval')
-        elif math.isinf(end) and end_closed and INFINITY_IS_NOT_FINITE:
+        elif end is not None and math.isinf(end) and end_closed and INFINITY_IS_NOT_FINITE:
             raise ValueError(f'{start} cannot be contained in Interval')
         elif start == math.inf and not start_closed:
             raise ValueError('cannot start an Interval after inf')
@@ -75,6 +96,7 @@ class MultiInterval:
 
         # contiguous interval (possibly degenerate)
         else:
+            assert end is not None  # convince type checker
             if start == 0 and math.copysign(1.0, start) == -1.0:
                 warnings.warn('negative zero will be converted to zero')
                 start = 0.0
@@ -167,6 +189,7 @@ class MultiInterval:
                     raise TypeError(_interval)
 
             # is a string
+            # maybe refactor this out into a from_string function?
             elif isinstance(_interval, str):
                 # e.g. [1, 2] or [1,2]
                 # e.g. [0] or {0}
@@ -270,35 +293,40 @@ class MultiInterval:
 
     @property
     def is_contiguous(self) -> bool:
+        """
+        check if this is a non-empty contiguous interval
+        a singleton degenerate interval is considered contiguous
+
+        note that { [1] , (1, 2] } is contiguous
+        while it's not possible to create such an interval using the provided methods, you can manually make one
+        hence we need to merge adjacent intervals before we can do this check
+        """
         # note that { [1] , (1, 2] } is contiguous
         return len(self.copy().merge_adjacent().endpoints) == 2
 
     @property
     def is_degenerate(self) -> bool:
-        if self.is_empty:
+        """
+        multi-interval is degenerate if it is not empty and all contained intervals are degenerate
+        """
+        if self.is_empty:  # this runs _consistency_check
             return False
         else:
             return all(self.endpoints[idx] == self.endpoints[idx + 1] for idx in range(0, len(self.endpoints), 2))
 
     @property
     def is_finite(self) -> bool:
-        # ignores INFINITY_IS_NOT_FINITE
+        """
+        checks if the start or end point is at infinity
+        ignores INFINITY_IS_NOT_FINITE because it would be silly to always return False in that scenario
+        """
         return self.is_empty or not (math.isinf(self.infimum) or math.isinf(self.supremum))
 
     @property
-    def finite(self) -> 'MultiInterval':
-        # ignores INFINITY_IS_NOT_FINITE
-        self._consistency_check()
-        out = MultiInterval()
-        for idx in range(0, len(self.endpoints), 2):
-            if not (math.isinf(self.endpoints[idx][0]) or math.isinf(self.endpoints[idx + 1][0])):
-                out.endpoints.append(self.endpoints[idx])
-                out.endpoints.append(self.endpoints[idx + 1])
-        out._consistency_check()
-        return out
-
-    @property
     def is_integral(self) -> bool:
+        """
+        checks whether this is a non-empty set of integers (ie. degenerate points at integers)
+        """
         if self.is_empty or not self.is_finite:
             return False
         for idx in range(0, len(self.endpoints), 2):
@@ -325,10 +353,26 @@ class MultiInterval:
         return self.is_empty or self.endpoints[-1] <= (0, 0)
 
     @property
+    def finite(self) -> 'MultiInterval':
+        """
+        returns a new MultiInterval made from all finite contained intervals
+        ignores INFINITY_IS_NOT_FINITE because it would be silly
+        """
+        self._consistency_check()
+        out = MultiInterval()
+        for idx in range(0, len(self.endpoints), 2):
+            if not (math.isinf(self.endpoints[idx][0]) or math.isinf(self.endpoints[idx + 1][0])):
+                out.endpoints.append(self.endpoints[idx])
+                out.endpoints.append(self.endpoints[idx + 1])
+        out._consistency_check()
+        out.merge_adjacent()
+        return out
+
+    @property
     def positive(self) -> 'MultiInterval':
         return self.intersection(MultiInterval(start=0,
                                                end=math.inf,
-                                               start_closed=False,
+                                               start_closed=False,  # zero is not positive
                                                end_closed=not INFINITY_IS_NOT_FINITE))
 
     @property
@@ -336,30 +380,30 @@ class MultiInterval:
         return self.intersection(MultiInterval(start=-math.inf,
                                                end=0,
                                                start_closed=not INFINITY_IS_NOT_FINITE,
-                                               end_closed=False))
+                                               end_closed=False))  # zero is not positive
 
     @property
     def infimum(self) -> Real:
         if self.is_empty:
-            raise KeyError('no infimum in empty interval')
+            raise KeyError('no infimum in empty interval')  # basically min of empty list
         return self.endpoints[0][0]
 
     @property
-    def infimum_closed(self) -> bool:
+    def infimum_is_closed(self) -> bool:
         if self.is_empty:
-            raise KeyError('no infimum in empty interval')
+            raise KeyError('no infimum in empty interval')  # basically min of empty list
         return self.endpoints[0][1] == 0
 
     @property
     def supremum(self) -> Real:
         if self.is_empty:
-            raise KeyError('no supremum in empty interval')
+            raise KeyError('no supremum in empty interval')  # basically max of empty list
         return self.endpoints[-1][0]
 
     @property
-    def supremum_closed(self) -> bool:
+    def supremum_is_closed(self) -> bool:
         if self.is_empty:
-            raise KeyError('no supremum in empty interval')
+            raise KeyError('no supremum in empty interval')  # basically max of empty list
         return self.endpoints[-1][1] == 0
 
     @property
@@ -373,6 +417,10 @@ class MultiInterval:
 
     @property
     def closed_hull(self) -> Optional['MultiInterval']:
+        """
+        smallest contiguous cover
+        closed at endpoints unless the point is at infinity
+        """
         if not self.is_empty:
             return MultiInterval(start=self.infimum,
                                  end=self.supremum,
@@ -466,6 +514,11 @@ class MultiInterval:
     # COMPARISONS
 
     def __compare(self, func: Callable, other: Union['MultiInterval', Real]) -> bool:
+        """
+        compares two intervals as if they were lists
+        not especially meaningful but might be helpful for very similar intervals
+        does not call merge_adjacent before comparison
+        """
         if isinstance(other, MultiInterval):
             return func(self.endpoints, other.endpoints)
         elif isinstance(other, Real):
@@ -500,7 +553,7 @@ class MultiInterval:
         return out
 
     def __sizeof__(self) -> int:
-        return self.endpoints.__sizeof__()  # probably correct?
+        return self.endpoints.__sizeof__()  # probably correct? not sure if it counts the size of this obj though
 
     def _consistency_check(self, skip=False):
         # switch this to default to True for actual use
@@ -808,7 +861,7 @@ class MultiInterval:
         if not isinstance(distance, Real):
             raise TypeError(distance)
         if distance < 0:
-            raise ValueError(distance)
+            raise ValueError(distance)  # todo: allow negative numbers
 
         for idx in range(0, len(self.endpoints), 2):
             self.endpoints[idx] = (self.endpoints[idx][0] - distance, self.endpoints[idx][1])

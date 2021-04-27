@@ -178,7 +178,7 @@ class Interval:
         if isinstance(other, Interval) and not other.is_degenerate:
             if not self.overlaps(other):
                 return self
-            raise NotImplementedError  # todo
+            raise NotImplementedError  # todo (but never used, even for testing)
 
         elif isinstance(other, (Real, Interval)):
             if isinstance(other, Interval):
@@ -531,9 +531,9 @@ class MultipleInterval:
     @classmethod
     def from_multi_interval(cls, multi_interval: MultiInterval):
         return MultipleInterval(*[Interval(interval.infimum,
-                                           not interval.infimum_closed,
+                                           not interval.infimum_is_closed,
                                            interval.supremum,
-                                           interval.supremum_closed
+                                           interval.supremum_is_closed
                                            ) for interval in multi_interval.contiguous_intervals])
 
     @property
