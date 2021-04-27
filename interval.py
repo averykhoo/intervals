@@ -15,7 +15,11 @@ from multi_interval import random_multi_interval
 
 @dataclass(order=True, unsafe_hash=True, frozen=True)
 class Interval:
-    # https://oeis.org/wiki/Intervals
+    """
+    simple interval, see: https://oeis.org/wiki/Intervals
+    possibly a single point (ie. a degenerate interval)
+    possibly infinite, but cannot be closed at infinity (hence cannot be a point at infinity)
+    """
     start: Real
     start_open: bool
     end: Real
@@ -510,6 +514,10 @@ class Interval:
 
 
 class MultipleInterval:
+    """
+    naive version of MultiInterval
+    useful for testing correctness of MultiInterval
+    """
     intervals: List[Interval]
 
     def __init__(self, *intervals: Optional[Interval]):
@@ -530,6 +538,11 @@ class MultipleInterval:
 
     @property
     def length(self):
+        """
+        total length, possibly zero or infinite
+        in retrospect, not really the best way to compare interval length
+        since infinite lengths are intuitively comparable, even if mathematically equal
+        """
         return sum((interval.length for interval in self.intervals))
 
     @property

@@ -19,7 +19,7 @@
         *   boolean operations on shapes with curves
         *   erosion
         *   translation, rotation, scaling, skewing
-        *   spirals
+        *   spirals, circles, ellipses, maybe parabolas
         
 ##  Time Intervals
 *   `time_interval.DateTimeInterval` and `time_interval.TimeDeltaInterval`: non-contiguous time intervals
