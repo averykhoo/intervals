@@ -14,15 +14,17 @@ from typing import Set
 from typing import Tuple
 from typing import Union
 
+# FLAGS
+
+# run a bunch of asserts after each operation to make sure nothing went wrong
+# may be disabled for production use, since (so far) nothing has ever gone wrong
+# but since it's decently fast, it can actually be left enabled
+CONSISTENCY_CHECK = True
+
 # this affects whether it's possible to create an interval closed at infinity
 # mathematically it doesn't make sense, but it's possible to represent and work with
 # turning this flag off should never be needed in practice, and hence isn't recommended
 INFINITY_IS_NOT_FINITE = True  # don't allow ±inf to be contained inside intervals
-
-# run a bunch of asserts to make sure nothing went wrong
-# may be disabled for production use, since (so far) nothing has ever gone wrong
-# but since it's decently fast, it can actually be left enabled
-CONSISTENCY_CHECK = True
 
 
 class MultiInterval:
@@ -39,6 +41,7 @@ class MultiInterval:
         *   epsilon=0 represents a closed start or end point
         *   epsilon=1 represents an open start point
         *   epsilon=-1 represents an open end point
+
     this representation makes comparing two points trivial, regardless of whether they are start or end points
     and this is important because it allows interval union to run in linear time (for 2 intervals)
     """
@@ -121,9 +124,25 @@ class MultiInterval:
 
     @classmethod
     def merge(cls,
-              *interval: Union['MultiInterval', Real, Set[int], List[int], Tuple[int, int], str],
-              n_overlaps: Optional[Union[int, Iterable[int]]] = None
+              *interval: Union['MultiInterval', Real, Set[Real], List[Real], Tuple[Real, Real], str],
+              n_overlaps: Optional[Union[int, Iterable[int]]] = None,
               ) -> 'MultiInterval':
+        """
+        merge a bunch of MultiIntervals, each represented as:
+            *   MultiInterval
+            *   real number (ie. degenerate interval)
+            *   set of real numbers (ie. multiple degenerate intervals)
+            *   list of length 2 (represents a single closed interval)
+            *   tuple of length 2 (represents a single open interval)
+            *   string (somewhat fuzzy parsing of open, closed, half-open, and half-closed intervals)
+
+        optionally, only return segments with exactly some number of overlaps
+        by default returns all segments, which is equivalent to (but slightly slower than) a union/update operation
+        setting n_overlaps to special values will produce intersections and symmetric differences
+
+        :param interval: interval(s) to be merged
+        :param n_overlaps: return segments with this many overlaps (None means any number)
+        """
 
         # check counts
         _overlaps = None
@@ -684,7 +703,7 @@ class MultiInterval:
         self._consistency_check()
 
         out = MultiInterval()
-        self.endpoints, out.endpoints = self.endpoints[:-2], self.endpoints[-2:]
+        self.endpoints, out.endpoints = self.endpoints[:-2], self.endpoints[-2:]  # popping last item is faster
 
         out._consistency_check()
         self._consistency_check()
@@ -735,11 +754,15 @@ class MultiInterval:
         if len(other) == 0:
             raise ValueError
 
+        # nothing to remove from
+        if self.is_empty:
+            return self
+
         # get all the other endpoints merged together
         _other_endpoints = MultiInterval().update(*other).endpoints
 
         # nothing to remove
-        if self.is_empty or len(_other_endpoints) == 0:
+        if len(_other_endpoints) == 0:
             return self
 
         # clear own endpoints while reading, since we'll replace everything
@@ -851,7 +874,7 @@ class MultiInterval:
         return self
 
     def abs(self) -> 'MultiInterval':
-        self.endpoints = MultiInterval.merge(self[0], self.positive, self.negative.mirror()).endpoints
+        self.endpoints = MultiInterval().update(self[0], self.positive, self.negative.mirror()).endpoints
         return self
 
     def invert(self) -> 'MultiInterval':
@@ -1292,7 +1315,7 @@ class MultiInterval:
             # contains 1
             elif 0 in power:
                 if not power.is_non_positive:
-                    return MultiInterval.merge(0, 1)
+                    return MultiInterval().update(0, 1)
                 else:
                     return MultiInterval(1)
 
@@ -1305,7 +1328,7 @@ class MultiInterval:
             raise NotImplementedError  # todo: many special cases
 
         else:
-            return MultiInterval.merge(self.positive ** power, self[0] ** power, self.negative ** power)
+            return MultiInterval().update(self.positive ** power, self[0] ** power, self.negative ** power)
 
     def __rpow__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         raise NotImplementedError
