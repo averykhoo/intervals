@@ -19,6 +19,11 @@ from typing import Union
 # turning this flag off should never be needed in practice, and hence isn't recommended
 INFINITY_IS_NOT_FINITE = True  # don't allow ±inf to be contained inside intervals
 
+# run a bunch of asserts to make sure nothing went wrong
+# may be disabled for production use, since (so far) nothing has ever gone wrong
+# but since it's decently fast, it can actually be left enabled
+CONSISTENCY_CHECK = True
+
 
 class MultiInterval:
     """
@@ -555,9 +560,9 @@ class MultiInterval:
     def __sizeof__(self) -> int:
         return self.endpoints.__sizeof__()  # probably correct enough, although it doesn't count the size of this obj
 
-    def _consistency_check(self, skip=False):
-        # switch this to default to True for actual use
-        if skip:
+    def _consistency_check(self):
+        # may be set to True for production use, since this is just a bunch of asserts
+        if not CONSISTENCY_CHECK:
             return
 
         # length must be even
@@ -1468,11 +1473,21 @@ class MultiInterval:
             return f'{{ {" , ".join(str_intervals)} }}'
 
 
-def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25):
+def random_multi_interval(start, end, n, decimals=2, prob_neg_inf=0.25, prob_pos_inf=0.25) -> MultiInterval:
+    """
+    generate a random MultiInterval for testing
+
+    :param start: infimum not before
+    :param end: supremum not after
+    :param n: number of sub intervals
+    :param decimals: how many digits after the dot in a float
+    :param prob_neg_inf: probability of getting -inf as the infimum
+    :param prob_pos_inf: probability of getting inf as the supremum
+    """
     _points = set()
-    if random.random() < neg_inf and n > 1:
+    if random.random() < prob_neg_inf and n > 1:
         _points.add(-math.inf)
-    if random.random() < pos_inf and n > 1:
+    if random.random() < prob_pos_inf and n > 1:
         _points.add(math.inf)
     while len(_points) < 2 * n:
         if decimals:
@@ -1493,9 +1508,9 @@ def random_multi_interval(start, end, n, decimals=2, neg_inf=0.25, pos_inf=0.25)
             out.endpoints.append((_endpoints[idx], 0))
 
         # closed interval
-        elif x < 0.4 \
-                and not (math.isinf(_endpoints[idx]) and INFINITY_IS_NOT_FINITE) \
-                and not (math.isinf(_endpoints[idx + 1]) and INFINITY_IS_NOT_FINITE):
+        elif (x < 0.4
+              and not (math.isinf(_endpoints[idx]) and INFINITY_IS_NOT_FINITE)
+              and not (math.isinf(_endpoints[idx + 1]) and INFINITY_IS_NOT_FINITE)):
             out.endpoints.append((_endpoints[idx], 0))
             out.endpoints.append((_endpoints[idx + 1], 0))
 
