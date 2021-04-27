@@ -723,3 +723,4 @@ if __name__ == '__main__':
     print(x['2018/02/01':'2018-08-08'])
     print(x.intersection(DateTimeInterval(datetime.date(2018, 9, 1), datetime.date(2019, 5, 30))))
     print(DateTimeInterval('2018/02/01', '2018/02/01 2pm'))
+    print(DateTimeInterval('2/1/18 1030am', '11:30 18/02/01'))
