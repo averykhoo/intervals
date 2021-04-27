@@ -1512,12 +1512,18 @@ def random_multi_interval(start, end, n, decimals=2, prob_neg_inf=0.25, prob_pos
         _points.add(-math.inf)
     if random.random() < prob_pos_inf and n > 1:
         _points.add(math.inf)
-    while len(_points) < 2 * n:
-        if decimals:
-            _points.add(round(start + (end - start) * random.random(), decimals))
-        else:
-            _points.add(int(start + (end - start) * random.random()))
 
+    if decimals:
+        while len(_points) < 2 * n:
+            if decimals:
+                _points.add(round(start + (end - start) * random.random(), decimals))
+    else:
+        # _points.add(int(start + (end - start) * random.random()))
+        _points.update(range(start, end + 1))
+        _points = sorted(_points)
+        assert len(_points) >= 2 * n, (start, end, n, decimals, len(_points))
+        random.shuffle(_points)
+        _points = set(_points[:2 * n])
     _endpoints = sorted(_points)
 
     out = MultiInterval()

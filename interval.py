@@ -708,25 +708,31 @@ class MultipleInterval:
 if __name__ == '__main__':
 
     # testing multi_interval.MultiInterval
-    for _ in range(1000):
-        i1 = random_multi_interval(random.randint(-1000, 0),
-                                   random.randint(0, 1000),
-                                   random.randint(0, 100),
-                                   random.randint(0, 3))
-        j1 = random_multi_interval(random.randint(-1000, 0),
-                                   random.randint(0, 1000),
-                                   random.randint(0, 100),
-                                   random.randint(0, 3))
-
+    for idx in range(1000):
         print()
-        i2 = MultipleInterval.from_multi_interval(i1)
-        j2 = MultipleInterval.from_multi_interval(j1)
+        print(idx)
+
+        try:
+            i1 = random_multi_interval(random.randint(-1000, 0),
+                                       random.randint(0, 1000),
+                                       random.randint(0, 100),
+                                       random.randint(0, 3))
+            j1 = random_multi_interval(random.randint(-1000, 0),
+                                       random.randint(0, 1000),
+                                       random.randint(0, 100),
+                                       random.randint(0, 3))
+        except AssertionError:
+            continue
 
         print('i1', i1)
+        i2 = MultipleInterval.from_multi_interval(i1)
+
+        print('j1', j1)
+        j2 = MultipleInterval.from_multi_interval(j1)
+
         print('i2', i2)
         assert MultipleInterval.from_multi_interval(i1) == i2
 
-        print('j1', j1)
         print('j2', j2)
         assert MultipleInterval.from_multi_interval(j1) == j2
 
@@ -757,3 +763,6 @@ if __name__ == '__main__':
         print('overlapping          ', MultipleInterval.from_multi_interval(i1.overlapping(j1)))
         print('overlapping          ', i2.overlapping(j2))
         assert MultipleInterval.from_multi_interval(i1.overlapping(j1)) == i2.overlapping(j2)
+
+    print()
+    print('done!')
