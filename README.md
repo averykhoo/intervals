@@ -4,8 +4,8 @@
 ##  Numeric Intervals
 *   `multi_interval.MultiInterval`: a non-contiguous interval
     *   `__mod__` is only partly implemented, `__rmod__` is not yet implemented
-        *   but it's possible
-        *   notes in the [ppt](./interval-modulo.pptx)
+        *   it's not impossible, but since the intuition is hard to grasp, it's probably not useful
+        *   diagrams in the [ppt](./interval-modulo.pptx)
     *   the `__pow__` and `__rpow__` operations are not closed
         *   negative number powers result in complex numbers
         *   if modulo is specified, then the same problems appear as for mod
