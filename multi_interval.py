@@ -281,7 +281,7 @@ class MultiInterval:
 
         # merge all the intervals we kept
         assert count_overlaps == 0
-        out.merge_adjacent()
+        out.merge_adjacent(sort=False)
         return out
 
     # PROPERTIES
@@ -300,9 +300,9 @@ class MultiInterval:
         note that { [1] , (1, 2] } is contiguous
         while it's not possible to create such an interval using the provided methods, you can manually make one
         hence we need to merge adjacent intervals before we can do this check
+        we shouldn't need to sort, so skip that
         """
-        # note that { [1] , (1, 2] } is contiguous
-        return len(self.copy().merge_adjacent().endpoints) == 2
+        return len(self.copy().merge_adjacent(sort=False).endpoints) == 2
 
     @property
     def is_degenerate(self) -> bool:
@@ -365,7 +365,7 @@ class MultiInterval:
                 out.endpoints.append(self.endpoints[idx])
                 out.endpoints.append(self.endpoints[idx + 1])
         out._consistency_check()
-        out.merge_adjacent()
+        out.merge_adjacent(sort=False)
         return out
 
     @property
@@ -553,7 +553,7 @@ class MultiInterval:
         return out
 
     def __sizeof__(self) -> int:
-        return self.endpoints.__sizeof__()  # probably correct? not sure if it counts the size of this obj though
+        return self.endpoints.__sizeof__()  # probably correct enough, although it doesn't count the size of this obj
 
     def _consistency_check(self, skip=False):
         # switch this to default to True for actual use
@@ -711,7 +711,7 @@ class MultiInterval:
             else:
                 raise TypeError(_other)
 
-        self.merge_adjacent(sort=True)
+        self.merge_adjacent()
         self._consistency_check()
         return self
 
@@ -797,7 +797,16 @@ class MultiInterval:
 
     # INTERVAL OPERATIONS (INPLACE)
 
-    def merge_adjacent(self, distance: Real = 0, sort: bool = False) -> 'MultiInterval':
+    def merge_adjacent(self, distance: Real = 0, sort: bool = True) -> 'MultiInterval':
+        """
+        merges adjacent intervals
+        adjacent usually means touching, but we can merge at a distance too
+        sorting can be skipped if we're sure that the input is already sorted
+
+        :param distance:
+        :param sort:
+        :return:
+        """
         if not isinstance(distance, Real):
             raise TypeError(distance)
         if distance < 0:
@@ -810,6 +819,7 @@ class MultiInterval:
             return self
 
         # sort contiguous intervals by start, end
+        # not a no-op for an already-sorted list because we're sorting pairs of points, so there's overhead
         if sort:
             _endpoints, self.endpoints = self.endpoints, []
             for _start, _end in sorted((_endpoints[idx], _endpoints[idx + 1]) for idx in range(0, len(_endpoints), 2)):
@@ -867,7 +877,7 @@ class MultiInterval:
             self.endpoints[idx] = (self.endpoints[idx][0] - distance, self.endpoints[idx][1])
             self.endpoints[idx + 1] = (self.endpoints[idx + 1][0] + distance, self.endpoints[idx + 1][1])
 
-        self.merge_adjacent()
+        self.merge_adjacent(sort=False)
         return self
 
     # INTERVAL OPERATIONS
@@ -995,7 +1005,7 @@ class MultiInterval:
             self.endpoints.append(min((start, start_epsilon), (end, -end_epsilon)))
             self.endpoints.append(max((start, -start_epsilon), (end, end_epsilon)))
 
-        self.merge_adjacent(sort=True)
+        self.merge_adjacent()
         return self
 
     def apply_monotonic_binary_function(self,
@@ -1052,7 +1062,7 @@ class MultiInterval:
                                           (_end_end, _first_end_epsilon or _second_end_epsilon)))
 
         # we may be out of order or have overlapping intervals, so merge
-        self.merge_adjacent(sort=True)
+        self.merge_adjacent()
         return self
 
     # INTERVAL ARITHMETIC: BINARY
@@ -1109,7 +1119,7 @@ class MultiInterval:
         _endpoints, out.endpoints = out.endpoints, []
         for point, _ in _endpoints:
             out.endpoints.append((math.floor(point), 0))
-        out.merge_adjacent()
+        out.merge_adjacent(sort=False)
         return out
 
     # noinspection DuplicatedCode
@@ -1121,7 +1131,7 @@ class MultiInterval:
         _endpoints, out.endpoints = out.endpoints, []
         for point, _ in _endpoints:
             out.endpoints.append((math.floor(point), 0))
-        out.merge_adjacent()
+        out.merge_adjacent(sort=False)
         return out
 
     def __mod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
@@ -1173,7 +1183,7 @@ class MultiInterval:
                                          end=other,
                                          end_closed=False)
 
-            out.merge_adjacent(sort=True)
+            out.merge_adjacent()
             return out
 
         else:
@@ -1339,7 +1349,7 @@ class MultiInterval:
             else:
                 out.endpoints.append((1 / end, -end_epsilon))
                 out.endpoints.append((1 / start, -start_epsilon))
-        out.merge_adjacent(sort=True)
+        out.merge_adjacent()
         return out
 
     def __neg__(self):
