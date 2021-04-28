@@ -8,7 +8,6 @@ from typing import Set
 from typing import Tuple
 from typing import Union
 
-import dateutil.parser
 import pandas as pd
 
 from multi_interval import MultiInterval
@@ -44,20 +43,18 @@ class DateTimeInterval:
     interval: MultiInterval
 
     def __init__(self,
-                 start: Optional[Union[datetime.datetime, datetime.date, str]] = None,
-                 end: Optional[Union[datetime.datetime, datetime.date, str]] = None,
+                 start: Optional[Union[datetime.datetime, datetime.date]] = None,
+                 end: Optional[Union[datetime.datetime, datetime.date]] = None,
                  *,
                  start_closed: Optional[bool] = True,
                  end_closed: Optional[bool] = True,
-                 day_first: bool = True,  # WARNING: may produce unexpected results
-                 year_first: bool = False,  # WARNING: may produce unexpected results
+                 # day_first: bool = True,  # WARNING: may produce unexpected results
+                 # year_first: bool = False,  # WARNING: may produce unexpected results
                  ):
-        """
-        using strings for dates is supported but NOT recommended
-        if dates are provided as a string, it should be "dd/mm/yyyy HH:MM" or "dd mmm yyyy II:MM am/pm"
-        if an iso8601-formatted date is to be parsed, set day_first=False and year_first=True
-        strings are always parsed into datetimes, never into dates, so the interval will not span a full day
-        """
+        # using strings to input dates is possible but NOT recommended
+        # if dates are provided as a string, it should be "dd/mm/yyyy HH:MM" or "dd mmm yyyy II:MM am/pm"
+        # if an iso8601-formatted date is to be parsed, set day_first=False and year_first=True
+        # strings are always parsed into datetimes, never into dates, so the interval will not span a full day
 
         # handle nan
         if pd.isna(end):
@@ -75,8 +72,8 @@ class DateTimeInterval:
             # convert to datetime
             if isinstance(start, pd.Timestamp):
                 start = start.to_pydatetime()
-            elif isinstance(start, str):
-                start = dateutil.parser.parse(start, dayfirst=day_first, yearfirst=year_first)
+            # elif isinstance(start, str):
+            #     start = dateutil.parser.parse(start, dayfirst=day_first, yearfirst=year_first)
 
             # already a datetime / timestamp, do nothing
             if isinstance(start, datetime.datetime):
@@ -94,8 +91,8 @@ class DateTimeInterval:
             # convert to datetime
             if isinstance(end, pd.Timestamp):
                 end = end.to_pydatetime()
-            elif isinstance(end, str):
-                end = dateutil.parser.parse(end, dayfirst=day_first, yearfirst=year_first)
+            # elif isinstance(end, str):
+            #     end = dateutil.parser.parse(end, dayfirst=day_first, yearfirst=year_first)
 
             if isinstance(end, datetime.datetime):
                 # not the most elegant way of doing this, but probably the most obvious
@@ -229,14 +226,14 @@ class DateTimeInterval:
 
             if item.start is None:
                 start = -math.inf
-            elif isinstance(item.start, (datetime.datetime, datetime.date, pd.Timestamp, str)):
+            elif isinstance(item.start, (datetime.datetime, datetime.date, pd.Timestamp)):
                 start = DateTimeInterval(item.start).infimum.timestamp()
             else:
                 raise TypeError(item.start)
 
             if item.stop is None:
                 end = math.inf
-            elif isinstance(item.stop, (datetime.datetime, datetime.date, pd.Timestamp, str)):
+            elif isinstance(item.stop, (datetime.datetime, datetime.date, pd.Timestamp)):
                 end = DateTimeInterval(item.stop).supremum.timestamp()  # gotta round up datetime.date
             else:
                 raise TypeError(item.stop)
@@ -728,12 +725,8 @@ class TimeDeltaInterval:
 
 
 if __name__ == '__main__':
-    print(DateTimeInterval('2018/02/01', '31 oct 2019 2pm'))  # parsed as ydm, dMy
-    x = DateTimeInterval('2/8/2018 12:34:56', '31 oct 2019 2pm')
-    print(x.update(x + datetime.timedelta(999)))
-    print(x['2018/02/01':'2018-08-08'])
+    x = DateTimeInterval(datetime.date(2018, 9, 1))
+    print(x)
+    print(x.update(x + datetime.timedelta(999)))  # update in-place
+    print(x[datetime.date(2018, 1, 2):datetime.date(2018, 8, 9)])
     print(x.intersection(DateTimeInterval(datetime.date(2018, 9, 1), datetime.date(2019, 5, 30))))
-    print(DateTimeInterval('2018/02/01', '2018/02/01 2pm'))  # parsed as ydm
-    print(DateTimeInterval('11:30 18/02/01', '2/1/18 1030am'))  # parsed as dmy
-    print(DateTimeInterval('2018-08-09'))  # parsed as ydm (datetime!)
-    print(DateTimeInterval(datetime.date(2018, 9, 1)))
