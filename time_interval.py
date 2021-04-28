@@ -20,7 +20,7 @@ TIMEDELTA_LIKE = Union['TimeDeltaInterval', datetime.timedelta, pd.Timedelta]
 def _datetime_interval(dti: DATETIME_LIKE):
     if isinstance(dti, DateTimeInterval):
         return dti.interval
-    elif isinstance(dti, (datetime.date, pd.Timestamp)):
+    elif isinstance(dti, (datetime.datetime, datetime.date, pd.Timestamp)):
         return DateTimeInterval(dti).interval
     else:
         raise TypeError(dti)
@@ -36,6 +36,11 @@ def _timedelta_interval(tdi: TIMEDELTA_LIKE):
 
 
 class DateTimeInterval:
+    """
+    multiple contiguous time intervals
+    possibly degenerate but never infinite
+    refer to MultiInterval for more detailed explanations
+    """
     interval: MultiInterval
 
     def __init__(self,
@@ -44,9 +49,15 @@ class DateTimeInterval:
                  *,
                  start_closed: Optional[bool] = True,
                  end_closed: Optional[bool] = True,
-                 day_first: bool = True,
-                 year_first: bool = False,
+                 day_first: bool = True,  # WARNING: may produce unexpected results
+                 year_first: bool = False,  # WARNING: may produce unexpected results
                  ):
+        """
+        using strings for dates is supported but NOT recommended
+        if dates are provided as a string, it should be "dd/mm/yyyy HH:MM" or "dd mmm yyyy II:MM am/pm"
+        if an iso8601-formatted date is to be parsed, set day_first=False and year_first=True
+        strings are always parsed into datetimes, never into dates, so the interval will not span a full day
+        """
 
         # handle nan
         if pd.isna(end):
@@ -218,15 +229,15 @@ class DateTimeInterval:
 
             if item.start is None:
                 start = -math.inf
-            elif isinstance(item.start, (datetime.datetime, pd.Timestamp, str)):
+            elif isinstance(item.start, (datetime.datetime, datetime.date, pd.Timestamp, str)):
                 start = DateTimeInterval(item.start).infimum.timestamp()
             else:
                 raise TypeError(item.start)
 
             if item.stop is None:
                 end = math.inf
-            elif isinstance(item.stop, (datetime.date, pd.Timestamp, str)):
-                end = DateTimeInterval(item.stop).supremum.timestamp()  # gotta round up
+            elif isinstance(item.stop, (datetime.datetime, datetime.date, pd.Timestamp, str)):
+                end = DateTimeInterval(item.stop).supremum.timestamp()  # gotta round up datetime.date
             else:
                 raise TypeError(item.stop)
 
@@ -237,7 +248,7 @@ class DateTimeInterval:
                                                                     end_closed=not math.isinf(end)))
             return out
 
-        elif isinstance(item, (DateTimeInterval, datetime.date, pd.Timestamp)):
+        elif isinstance(item, (datetime.datetime, datetime.date, pd.Timestamp)):
             if item in self:
                 return DateTimeInterval(item)
             else:
@@ -717,10 +728,12 @@ class TimeDeltaInterval:
 
 
 if __name__ == '__main__':
-    print(DateTimeInterval('2018/02/01', '31 oct 2019 2pm'))
+    print(DateTimeInterval('2018/02/01', '31 oct 2019 2pm'))  # parsed as ydm, dMy
     x = DateTimeInterval('2/8/2018 12:34:56', '31 oct 2019 2pm')
     print(x.update(x + datetime.timedelta(999)))
     print(x['2018/02/01':'2018-08-08'])
     print(x.intersection(DateTimeInterval(datetime.date(2018, 9, 1), datetime.date(2019, 5, 30))))
-    print(DateTimeInterval('2018/02/01', '2018/02/01 2pm'))
-    print(DateTimeInterval('2/1/18 1030am', '11:30 18/02/01'))
+    print(DateTimeInterval('2018/02/01', '2018/02/01 2pm'))  # parsed as ydm
+    print(DateTimeInterval('11:30 18/02/01', '2/1/18 1030am'))  # parsed as dmy
+    print(DateTimeInterval('2018-08-09'))  # parsed as ydm (datetime!)
+    print(DateTimeInterval(datetime.date(2018, 9, 1)))
