@@ -1419,7 +1419,7 @@ class MultiInterval:
         if self.is_degenerate and self.is_contiguous:
             return complex(float(self))
         else:
-            raise ValueError('cannot cast non-degenerate MultiInterval to int')
+            raise ValueError('cannot cast non-degenerate MultiInterval to complex')
 
     def __float__(self) -> float:
         if self.is_degenerate and self.is_contiguous:
@@ -1431,7 +1431,7 @@ class MultiInterval:
         if self.is_degenerate and self.is_contiguous:
             return int(float(self))
         else:
-            raise ValueError('cannot cast non-degenerate MultiInterval to complex')
+            raise ValueError('cannot cast non-degenerate MultiInterval to int')
 
     def __repr__(self) -> str:
         raise NotImplementedError
