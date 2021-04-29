@@ -19,15 +19,15 @@
         *   boolean operations on shapes with curves
         *   erosion
         *   translation, rotation, scaling, skewing
-        *   spirals, circles, ellipses, maybe parabolas
+        *   spirals (eg. raising complex number to a power), circles, ellipses, maybe parabolas
         
 ##  Time Intervals
 *   `time_interval.DateTimeInterval` and `time_interval.TimeDeltaInterval`: non-contiguous time intervals
     *   behaves somewhat like `datetime.datetime` and `datetime.timedelta` merged with `multi_interval.MultiInterval`
     *   also accepts `pandas.Timestamp` and `pandas.Timedelta`
-    *   uses `dateutil` to parse date strings
-        *   WARNING: `day_first=True` means YMD gets parsed as YDM, which is super unintuitive
-        *   but `day_first=False` means DMY gets parsed as MDY, which is also super unintuitive
+    *   ~~uses `dateutil` to parse date strings~~
+        *   ~~WARNING: `day_first=True` means YMD gets parsed as YDM, which is super unintuitive~~
+        *   ~~but `day_first=False` means DMY gets parsed as MDY, which is also super unintuitive~~
 
 ##  alternative implementation of numeric intervals, for debugging
 *   `interval.Interval`: the usual contiguous intervals, where endpoints can be open or closed
