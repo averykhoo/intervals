@@ -7,7 +7,7 @@
         *   it's not impossible, but since the intuition is hard to grasp, it's probably not useful
         *   diagrams in the [ppt](./interval-modulo.pptx)
     *   the `__pow__` and `__rpow__` operations are not closed
-        *   negative number powers result in complex numbers
+        *   negative number raised to fractional powers result in complex numbers
         *   if modulo is specified, then the same problems appear as for mod
         *   but the special cases are enumerable, so it's possible to implement
     *   neither are `__divmod__`, `__floordiv__`, or `__rfloordiv__`
