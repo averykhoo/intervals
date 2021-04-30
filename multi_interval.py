@@ -1453,6 +1453,7 @@ class MultiInterval:
                 return f'[{start}]'
 
             # print the mathematically standard but logically inconsistent way
+            # todo: correctly handle INFINITY_IS_NOT_FINITE flag
             if fancy_inf:
                 # left side
                 if start == -math.inf:
