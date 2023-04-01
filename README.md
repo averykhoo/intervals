@@ -43,6 +43,7 @@
   coverage to determine the output
   * but in practice only need 2 points, check for overlap, then determine if closed
   * can probably overlap with the mod of real numbers, or real number mod
+  * see powerpoint and screenshots for an idea of how it works
 
 # TODO
 
