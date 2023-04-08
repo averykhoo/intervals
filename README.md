@@ -52,3 +52,5 @@
   * adjoining -> touching but not intersecting
   * intersecting -> not fully overlapping
   * overlapping -> complete intersection (ie. proper subset or superset)
+* finish `__mod__()`
+* allow interval modulo for `__pow__()`
