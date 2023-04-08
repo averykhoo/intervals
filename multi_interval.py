@@ -1177,7 +1177,7 @@ class MultiInterval:
                 return self.__mod__(other.negative.mirror()).mirror().union(self.__mod__(other.positive))
 
             # current state: other.is_positive & self.is_finite & not(self.is_empty) & not(other.is_empty)
-            raise NotImplemented  # todo
+            return NotImplemented  # todo
 
         elif isinstance(other, Real):
             if float(other) == 0:
