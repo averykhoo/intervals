@@ -1177,7 +1177,7 @@ class MultiInterval:
                 return self.__mod__(other.negative.mirror()).mirror().union(self.__mod__(other.positive))
 
             # current state: other.is_positive & self.is_finite & not(self.is_empty) & not(other.is_empty)
-            raise NotImplementedError  # todo
+            raise NotImplemented  # todo
 
         elif isinstance(other, Real):
             if float(other) == 0:
@@ -1218,13 +1218,13 @@ class MultiInterval:
             raise TypeError(other)
 
     def __rmod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return NotImplemented
 
     def __divmod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return NotImplemented
 
     def __rdivmod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return NotImplemented
 
     def __pow__(self,
                 power: Union['MultiInterval', Real],
@@ -1291,7 +1291,7 @@ class MultiInterval:
 
         if isinstance(power, Real):
             if math.isinf(power):
-                raise NotImplementedError  # todo: many special cases
+                return NotImplemented  # todo: many special cases
             else:
                 power = MultiInterval(power)
 
@@ -1325,13 +1325,13 @@ class MultiInterval:
                 return MultiInterval(0)
 
         elif self.is_negative:
-            raise NotImplementedError  # todo: many special cases
+            return NotImplemented  # todo: many special cases
 
         else:
             return MultiInterval().update(self.positive ** power, self[0] ** power, self.negative ** power)
 
     def __rpow__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        raise NotImplementedError
+        return NotImplemented
 
     # INTERVAL ARITHMETIC: INTEGERS ONLY
 
@@ -1434,7 +1434,7 @@ class MultiInterval:
             raise ValueError('cannot cast non-degenerate MultiInterval to int')
 
     def __repr__(self) -> str:
-        raise NotImplementedError
+        return NotImplemented
 
     def __str__(self) -> str:
         def _interval_to_str(start_tuple, end_tuple, fancy_inf=False):
