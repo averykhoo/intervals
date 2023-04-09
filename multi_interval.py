@@ -1162,6 +1162,102 @@ class MultiInterval:
         out.merge_adjacent(sort=False)
         return out
 
+    def __modulo(self,
+                 other: Union['MultiInterval', Real],
+                 right_hand_side: bool = False,
+                 inplace: bool = False
+                 ) -> 'MultiInterval':
+        # by default, do this to a copy
+        if not inplace:
+            return self.copy().__modulo(other,
+                                        right_hand_side=right_hand_side,
+                                        inplace=True)
+
+        # get other's interval list as [((start, eps), (end, eps)), ...]
+        if isinstance(other, MultiInterval):
+            _second = [(other.endpoints[idx], other.endpoints[idx + 1]) for idx in range(0, len(other.endpoints), 2)]
+        elif isinstance(other, Real):
+            _second = [((other, 0), (other, 0))]
+        else:
+            raise TypeError(other)
+
+        # clear own endpoints while reading, since we'll replace everything
+        _endpoints, self.endpoints = self.endpoints, []
+        _first = [(_endpoints[idx], _endpoints[idx + 1]) for idx in range(0, len(_endpoints), 2)]
+
+        # swap for RHS
+        if right_hand_side:
+            _first, _second = _second, _first
+
+        # only allow empty first arg, not second
+        if len(_first) == 0:
+            return MultiInterval()
+        if len(_second) == 0:
+            raise ValueError('cannot take a modulo with respect to a null set')
+
+        # union of: func(x, y) for x in first for y in second
+        for (_first_start, _first_start_epsilon), (_first_end, _first_end_epsilon) in _first:
+            for (_second_start, _second_start_epsilon), (_second_end, _second_end_epsilon) in _second:
+
+                # check for the first zero-line intersection at the bottom right corner
+                if _first_start_epsilon == 0 and _second_end_epsilon == 0:
+                    if _first_start % _second_end == 0:
+                        self.endpoints.append((0, 0))
+
+                        # find z, we might need this later
+                        z = _first_end / (1 + (_first_end // _second_end))
+
+                        # check for a zero-line intersection anywhere along the bottom edge
+                        if (_first_end // _second_end) - (_first_start // _second_end) >= 1:
+                            self.endpoints.append((_second_end, -1))
+                            # looks like
+                            # +-----+      +-----+
+                            # |     |  or  |     |
+                            # \--\--+      \-----\
+                            return self
+
+                        # check for a zero-line intersection along the right edge
+                        elif _second_start < z <= _second_end:
+                            self.endpoints.append((z, -1))
+                            # looks like
+                            # +-----+
+                            # |     \
+                            # \-----+
+                            return self
+
+                        # check for a zero-line intersection at the top right corner
+                        elif _first_end % _second_start == 0:
+                            self.endpoints.append((_second_start, -1))
+                            # looks like
+                            # +-----\
+                            # |     |
+                            # \-----+
+                            return self
+
+                        # check if the top right corner is closed
+                        elif _first_end_epsilon == 0 and _second_start_epsilon == 0:
+                            self.endpoints.append((_second_start, 0))
+                            # looks like
+                            # +-----*
+                            # |     |
+                            # \-----+
+                            return self
+
+                        # check if the top right corner is closed
+                        else:
+                            self.endpoints.append((_second_start, -1))
+                            # looks like
+                            # +-----o
+                            # |     |
+                            # \-----+
+                            return self
+
+                # check for the first zero-line intersection along the bottom edge
+
+        # we may be out of order or have overlapping intervals, so merge
+        self.merge_adjacent()
+        return self
+
     def __mod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
         # ~~other MUST be finite and cannot include zero~~  <- not true
         # process the positive and negative parts separately?
