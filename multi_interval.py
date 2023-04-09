@@ -1199,40 +1199,36 @@ class MultiInterval:
         for (_first_start, _first_start_epsilon), (_first_end, _first_end_epsilon) in _first:
             for (_second_start, _second_start_epsilon), (_second_end, _second_end_epsilon) in _second:
 
-                # check for the first zero-line intersection at the bottom right corner
+                # check for the first zero-line intersection at the bottom left corner
                 if _first_start_epsilon == 0 and _second_end_epsilon == 0:
                     if _first_start % _second_end == 0:
                         self.endpoints.append((0, 0))
 
                         # find z, we might need this later
+                        # this is the first zero-line intersection along the right edge
+                        # but excluding the bottom right corner
                         z = _first_end / (1 + (_first_end // _second_end))
+                        assert z < _second_end
 
-                        # check for a zero-line intersection anywhere along the bottom edge
+                        # check for a second zero-line intersection anywhere along the bottom edge
+                        # excluding the bottom left corner, but including the bottom right corner
                         if (_first_end // _second_end) - (_first_start // _second_end) >= 1:
                             self.endpoints.append((_second_end, -1))
                             # looks like
                             # +-----+      +-----+
                             # |     |  or  |     |
                             # \--\--+      \-----\
-                            return self
+                            break
 
                         # check for a zero-line intersection along the right edge
-                        elif _second_start < z <= _second_end:
+                        # including the top right corner
+                        elif z >= _second_start:
                             self.endpoints.append((z, -1))
                             # looks like
-                            # +-----+
-                            # |     \
-                            # \-----+
-                            return self
-
-                        # check for a zero-line intersection at the top right corner
-                        elif _first_end % _second_start == 0:
-                            self.endpoints.append((_second_start, -1))
-                            # looks like
-                            # +-----\
-                            # |     |
-                            # \-----+
-                            return self
+                            # +-----+      +-----\
+                            # |     \  or  |     |
+                            # \-----+      \-----+
+                            break
 
                         # check if the top right corner is closed
                         elif _first_end_epsilon == 0 and _second_start_epsilon == 0:
@@ -1241,18 +1237,187 @@ class MultiInterval:
                             # +-----*
                             # |     |
                             # \-----+
-                            return self
+                            break
 
-                        # check if the top right corner is closed
+                        # top-right corner is open
                         else:
                             self.endpoints.append((_second_start, -1))
                             # looks like
-                            # +-----o
+                            # +-----O
                             # |     |
                             # \-----+
-                            return self
+                            break
+
+                # check for the first two zero-line intersections along the bottom edge
+                # (this does not include the bottom left corner)
+                if (_first_end // _second_end) - (_first_start // _second_end) >= 2:
+                    self.endpoints.append((0, 0))
+                    self.endpoints.append((_second_end, -1))
+                    # looks like
+                    # +-----+      +-----+
+                    # |     |  or  |     |
+                    # +-\=\-+      +--\==\
+                    break
 
                 # check for the first zero-line intersection along the bottom edge
+                # (this does not include the bottom left corner)
+                if (_first_end // _second_end) - (_first_start // _second_end) == 1:
+                    if _first_start_epsilon == 0 and _second_end_epsilon == 0:
+                        # looks like
+                        # +-----+      +-----+
+                        # |     |  or  |     |
+                        # *==\--+      *=====\
+                        self.endpoints.append((_first_start % _second_end, 0))
+                    else:
+                        # looks like
+                        # +-----+      +-----+
+                        # |     |  or  |     |
+                        # O==\--+      O=====\
+                        self.endpoints.append((_first_start % _second_end, 1))
+                    self.endpoints.append((_second_end, -1))
+
+                    # check for second zero-line intersection along the right edge
+                    self.endpoints.append((0, 0))
+                    z = _first_end / (1 + (_first_end // _second_end))
+                    assert z < _second_end
+                    if z >= _second_start:
+                        self.endpoints.append((z, -1))
+                        # looks like
+                        # +-----+      +-----+           +-----\      +-----\ <- z
+                        # |     \  or  |     \ <- z  or  |     |  or  |     |
+                        # +--\--+      +-----\           +--\--+      +-----\
+                        break
+
+                    # check if the top right corner is closed
+                    elif _first_end_epsilon == 0 and _second_start_epsilon == 0:
+                        self.endpoints.append((_second_start, 0))
+                        # looks like
+                        # +-----*      +-----*
+                        # |     |  or  |     |
+                        # +--\--+      +-----\
+                        break
+
+                    # top-right corner is open
+                    else:
+                        self.endpoints.append((_second_start, -1))
+                        # looks like
+                        # +-----O      +-----O
+                        # |     |  or  |     |
+                        # +--\--+      +-----\
+                        break
+
+                # check for first zero-line intersection along right edge
+                # excluding bottom right corner and also excluding top right corner
+                z1 = _first_end / (1 + (_first_end // _second_end))
+                assert z1 < _second_end
+                if z1 > _second_start:
+                    if _first_start_epsilon == 0 and _second_end_epsilon == 0:
+                        # looks like
+                        # +-----+      +-----+
+                        # |     \  or  |     \ <- z1
+                        # *-----+      *-----+
+                        self.endpoints.append((_first_start % _second_end, 0))
+                    else:
+                        # looks like
+                        # +-----+      +-----+
+                        # |     \  or  |     \ <- z1
+                        # O-----+      O-----+
+                        self.endpoints.append((_first_start % _second_end, 1))
+
+                    # check if bottom right corner is in first triangle
+                    if _first_end < _second_end:
+                        self.endpoints.append((_first_end, 0))
+                    else:
+                        self.endpoints.append((z1, -1))
+
+                    # check for second zero-line intersection along the right edge
+                    self.endpoints.append((0, 0))
+                    z2 = _first_end / (2 + (_first_end // _second_end))
+                    assert z1 < _second_end
+                    if z2 >= _second_start:
+                        self.endpoints.append((z2, -1))
+                        # looks like
+                        # +-----\      +-----\ <- z2 (could also be below the corner, but it doesn't matter)
+                        # |     \  or  |     \ <- z1
+                        # +-----+      +-----+
+                        break
+
+                    # check if the top right corner is closed
+                    elif _first_end_epsilon == 0 and _second_start_epsilon == 0:
+                        self.endpoints.append((_second_start, 0))
+                        # looks like
+                        # +-----*      +-----*
+                        # |     \  or  |     \ <- z1
+                        # +-----+      +-----+
+                        break
+
+                    # top-right corner is open
+                    else:
+                        self.endpoints.append((_second_start, -1))
+                        # looks like
+                        # +-----O      +-----O
+                        # |     \  or  |     \ <- z1
+                        # +-----+      +-----+
+                        break
+
+                # check for the first zero-line intersection at the top-right corner
+                if _first_end % _second_start == 0:
+                    if _first_start_epsilon == 0 and _second_end_epsilon == 0:
+                        # looks like
+                        # +-----\
+                        # |     |
+                        # *-----+
+                        self.endpoints.append((_first_start % _second_end, 0))
+                    else:
+                        # looks like
+                        # +-----\
+                        # |     |
+                        # O-----+
+                        self.endpoints.append((_first_start % _second_end, 1))
+
+                    # check if bottom right corner is in first triangle
+                    # todo: is there an edge case if second is degenerate?
+                    if _first_end < _second_end:
+                        self.endpoints.append((_first_end, 0))
+                    else:
+                        self.endpoints.append((_second_start, -1))
+
+                # there are no zero-line intersections
+                if _first_start_epsilon == 0 and _second_end_epsilon == 0:
+                    self.endpoints.append((_first_start % _second_end, 0))
+                    if _first_end_epsilon == 0 and _second_start_epsilon == 0:
+                        self.endpoints.append((_second_start, 0))
+                        # looks like
+                        # +-----*
+                        # |     |
+                        # *-----+
+                        break
+
+                    else:
+                        self.endpoints.append((_second_start, -1))
+                        # looks like
+                        # +-----O
+                        # |     |
+                        # *-----+
+                        break
+
+                else:
+                    self.endpoints.append((_first_start % _second_end, 1))
+                    if _first_end_epsilon == 0 and _second_start_epsilon == 0:
+                        self.endpoints.append((_second_start, 0))
+                        # looks like
+                        # +-----*
+                        # |     |
+                        # O-----+
+                        break
+
+                    else:
+                        self.endpoints.append((_second_start, -1))
+                        # looks like
+                        # +-----O
+                        # |     |
+                        # O-----+
+                        break
 
         # we may be out of order or have overlapping intervals, so merge
         self.merge_adjacent()
