@@ -1163,7 +1163,7 @@ class MultiInterval:
         return out
 
     def __mod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        # other MUST be finite and cannot include zero
+        # ~~other MUST be finite and cannot include zero~~  <- not true
         # process the positive and negative parts separately?
 
         if isinstance(other, MultiInterval):
