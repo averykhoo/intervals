@@ -1167,6 +1167,11 @@ class MultiInterval:
                  right_hand_side: bool = False,
                  inplace: bool = False
                  ) -> 'MultiInterval':
+        # todo: deal with inf and zero
+        # todo: split into interval-interval modulo, interval-real, and real-interval
+        # todo: handle cases where intervals are degenerate
+        # todo: double-check the logic
+
         # by default, do this to a copy
         if not inplace:
             return self.copy().__modulo(other,
