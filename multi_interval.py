@@ -1204,6 +1204,14 @@ class MultiInterval:
         for (_first_start, _first_start_epsilon), (_first_end, _first_end_epsilon) in _first:
             for (_second_start, _second_start_epsilon), (_second_end, _second_end_epsilon) in _second:
 
+                # note: this can't be easily refactored out because of early exit optimizations
+
+                # check if bottom left corner is pseudo-closed
+                # this can almost certainly be optimized better but maybe some other day
+                if _first_start_epsilon == 0 and _second_end > _first_start:
+                    self.endpoints.append((_first_start, 0))
+                    self.endpoints.append((_first_start, 0))
+
                 # check for the first zero-line intersection at the bottom left corner
                 if _first_start_epsilon == 0 and _second_end_epsilon == 0:
                     if _first_start % _second_end == 0:
