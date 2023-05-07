@@ -54,3 +54,11 @@
   * overlapping -> complete intersection (ie. proper subset or superset)
 * finish `__mod__()`
 * allow interval modulo for `__pow__()`
+* redo illustrations with negative and positive bits
+  * use excel chart rather than conditional formatting
+  * variable min max for x and y axis
+    * with re-sampling so that zero is always a line, and then vary the min/max a bit to compensate
+  * probably 500x500 should be good enough, although maybe aim for 800x800?
+    * or use a different aspect ratio? 600x800?
+  * use better colors
+  * zoom into x axis a bit to show there are infinite lines near there
