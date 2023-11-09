@@ -1437,8 +1437,15 @@ class MultiInterval:
         return self
 
     def __mod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
-        # ~~other MUST be finite and cannot include zero~~  <- not true
+        # ~~other MUST be finite and cannot include zero~~  <- not true unless other is Real/degenerate
+        # see also https://math.stackexchange.com/a/1920391
         # process the positive and negative parts separately?
+        # negative mod temporarily not implemented while i think about what the correct answer is
+        # could be always return positive, but more likely sometimes it should return negative
+        # and if it's returning negative then it's probably not mirror-symmetric, and needs to be calculated differently
+
+        if not self.is_non_negative:
+            return NotImplemented
 
         if isinstance(other, MultiInterval):
             if 0 in other:
@@ -1448,7 +1455,8 @@ class MultiInterval:
             elif self.is_empty or other.is_empty:
                 return MultiInterval()
             elif not other.is_non_negative:
-                return self.__mod__(other.negative.mirror()).mirror().union(self.__mod__(other.positive))
+                # return self.__mod__(other.negative.mirror()).mirror().union(self.__mod__(other.positive))
+                return NotImplemented
 
             # current state: other.is_positive & self.is_finite & not(self.is_empty) & not(other.is_empty)
             return NotImplemented  # todo
@@ -1461,7 +1469,8 @@ class MultiInterval:
             elif self.is_empty:
                 return MultiInterval()
             elif other < 0:
-                return self.__mod__(-other).mirror()
+                # return self.__mod__(-other).mirror()
+                return NotImplemented
 
             # current state: (other > 0) & self.is_finite & not(self.is_empty)
             out = MultiInterval()
