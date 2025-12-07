@@ -47,7 +47,14 @@
 
 # TODO
 
-* MAYBE FIX: 1 / [-2, 2) = (-inf, -0.5], (0.5, inf) <- make sure to drop the gap (-0.5, 0.5], but maybe this should only be valid when inf can be closed, i.e. 1/0=[inf], and -1/0=[-inf] as denegerete intervals 
+* after discussion with Gemini it makes sense to extend this to affine extended reals Affinely Extended Real Numbers -- from Wolfram MathWorld https://share.google/F2fYyg6def9sVPlZh
+* this means yes we allow degen intervals at inf
+* MAYBE FIX: 1 / [-2, 2) = (-inf, -0.5], (0.5, inf) <- make sure to drop the gap (-0.5, 0.5], but maybe this should only be valid when inf can be closed, i.e. 1/0=[inf], and -1/0=[-inf] as degenerate intervals 
+* trigonometry?
+* negative zeroes are kind of a red herring so we can ignore them (ie normalize to +0)
+* Gemini says that my cardinality measure is basically a hyperreal with Size=a⋅ω+b⋅1+c⋅ϵ where Infinite numbers (ω representing rays from the origin): are Larger than any real number and Infinitesimals (ϵ representing points): are Smaller than any positive real number, but greater than 0.
+* read https://fab.cba.mit.edu/classes/S62.12/docs/Hickey_interval.pdf and maybe https://arxiv.org/pdf/1111.0167 and a couple others
+
 * create `adjoining()`
   * adjacent -> next to but not touching
   * adjoining -> touching but not intersecting
