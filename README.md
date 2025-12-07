@@ -47,6 +47,7 @@
 
 # TODO
 
+* IMPORTANT FIX: 1 / [-2, 2) = (-inf, -0.5], (0.5, inf) <- make sure to drop the gap (-0.5, 0.5]
 * create `adjoining()`
   * adjacent -> next to but not touching
   * adjoining -> touching but not intersecting
