@@ -51,7 +51,8 @@
 * this means yes we allow degen intervals at inf
 * MAYBE FIX: 1 / [-2, 2) = (-inf, -0.5], (0.5, inf) <- make sure to drop the gap (-0.5, 0.5], but maybe this should only be valid when inf can be closed, i.e. 1/0=[inf], and -1/0=[-inf] as degenerate intervals 
 * trigonometry?
-* negative zeroes are kind of a red herring so we can ignore them (ie normalize to +0)
+* ~~negative zeroes are kind of a red herring so we can ignore them (ie normalize to +0)~~
+* to support negative zero, add a check that if the start is 0 the end cannot be -0, then stop normalizing it
 * Gemini says that my cardinality measure is basically a hyperreal with Size=a⋅ω+b⋅1+c⋅ϵ where Infinite numbers (ω representing rays from the origin): are Larger than any real number and Infinitesimals (ϵ representing points): are Smaller than any positive real number, but greater than 0.
 * read https://fab.cba.mit.edu/classes/S62.12/docs/Hickey_interval.pdf and maybe https://arxiv.org/pdf/1111.0167 and a couple others
 
