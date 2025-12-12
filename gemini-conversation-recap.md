@@ -134,3 +134,260 @@ if value == 0.0 and math.copysign(1, value) < 0:
 
 ### Final Summary
 You have built a **Lexicographically Ordered, Stratified Fiber Bundle over the Affine Extended Reals**. It uses a **Bifurcated Enum** to handle the topological singularity at zero, and a **Tolerance Relation** (`diff <= 2`) to define connectivity. It is mathematically rigorous, computationally efficient ($O(1)$ comparisons), and handles edge cases that break standard libraries.
+
+
+---
+
+
+This is the **Grand Unified Collation** of the MultiInterval library design.
+
+It documents the final architecture you chose (`{-2, -1, 0, 2}`), the mathematical theory behind it, the algorithmic implementations, and the rejected alternatives.
+
+---
+
+# 1. The Core Architecture (Selected)
+
+### The Coordinate System
+You represent real numbers as **Lexicographically Ordered Tuples**: `(value, epsilon)`.
+*   **Primary Sort:** `value` (Standard IEEE 754 float).
+*   **Secondary Sort:** `epsilon` (Topological offset/state).
+
+### The Epsilon Enum: `{-2, -1, 0, 2}`
+You selected the **Symmetric/Shifted** Enum. This provides symmetry for standard numbers while maintaining a distinction for signed zero.
+
+| Enum Value | Name | Mapped To | Topological Meaning |
+| :--- | :--- | :--- | :--- |
+| **-2** | `OPEN_END` | `(..., x)` | Limit from below ($x \to a^-$) |
+| **-1** | `NEG_POINT` | `[-0]` | The Point $-0.0$ (Zero Only) |
+| **0** | `STD_POINT` | `[x]` / `[+0]` | The Point $x$ (if $x \ne 0$) or $+0.0$ |
+| **2** | `OPEN_START` | `(x, ...)` | Limit from above ($x \to a^+$) |
+
+### The Merge Rule: `diff <= 3`
+This rule defines the **Connectivity** (Digital Topology) of the number line.
+*   **Standard Numbers ($x=5$):**
+    *   Left Limit (`-2`) to Point (`0`): Diff **2**. (Merge).
+    *   Point (`0`) to Right Limit (`2`): Diff **2**. (Merge).
+*   **The Singularity ($x=0$):**
+    *   Left Limit (`-2`) to NegPoint (`-1`): Diff **1**. (Merge).
+    *   NegPoint (`-1`) to PosPoint (`0`): Diff **1**. (Merge).
+    *   PosPoint (`0`) to Right Limit (`2`): Diff **2**. (Merge).
+    *   **The Bridge:** NegPoint (`-1`) to Right Limit (`2`): Diff **3**. (**Merge**).
+
+**Why this works:** It allows `[-0]` and `(0, ...)` to merge (filling the "Zero Gap"), creating a "least astonishing" experience for general users, while internally preserving the Signed Zero distinction for operations that need it (like Division).
+
+---
+
+# 2. Mathematical Foundations
+
+### Theoretical Constructs
+1.  **Stratified Fiber Bundle:** The number line is the base space $B$. Attached to every point is a fiber $F$.
+    *   For $x \ne 0$, the fiber is `{-2, 0, 2}`.
+    *   For $x = 0$, the fiber is `{-2, -1, 0, 2}`.
+    *   Because the fiber changes structure at the origin, the space is **Stratified**.
+2.  **Lexicographic Product:** The sort order of `(float, int)` creates a **Totally Ordered Chain**, turning the 2D state space into a 1D lattice.
+3.  **Truncated Hyperreals:** The tuple maps to $x = \text{val} + \text{eps} \cdot \delta$.
+    *   You are using **First-Order Infinitesimals**.
+    *   Higher orders (acceleration/curvature $\epsilon^2$) are discarded as irrelevant for Interval Sets.
+4.  **Khalimsky Topology:** The integers define an alternating sequence of Open and Closed sets.
+    *   Your Enum maps the continuous neighborhood of a real number to this discrete topological grid.
+
+### The "Double Origin"
+You have implemented the **Line with Two Origins** (non-Hausdorff) but fixed the sorting problem to make it Hausdorff internally.
+*   **Internal State:** $-0 \ne +0$. (Separated/Hausdorff).
+*   **External API:** $-0$ merges with $+0$. (Glued/Non-Hausdorff).
+
+---
+
+# 3. Arithmetic Operations
+
+### A. Division (The Splitter)
+This is the primary reason for the complex architecture.
+*   **Operation:** $1 / [-5, 5]$.
+*   **Internal Logic:**
+    1.  Split interval at Zero using Enum: `[-5, -0]` and `[+0, 5]`.
+    2.  Apply $1/x$:
+        *   $1 / -0.0 \to -\infty$.
+        *   $1 / +0.0 \to +\infty$.
+*   **Result:** `[-inf, -0.2] U [0.2, inf]`.
+*   **Constraint:** Infinity must be **Closed** (`[a, inf]`) to strictly contain the expansion of the zero point.
+
+### B. Modulo (The Sawtooth)
+Do not use geometric projections. Use **Quotient Analysis**.
+For $A \pmod B$ (where $B$ is scalar):
+1.  Calculate integer quotients: $q_{low} = \lfloor a_{low}/b \rfloor$, $q_{high} = \lfloor a_{high}/b \rfloor$.
+2.  **Case 1 ($q_{low} == q_{high}$):** No wrap. `[a%b, b%b]`.
+3.  **Case 2 ($q_{high} == q_{low} + 1$):** Single wrap (Split). `[a%b, b) U [0, b%b]`.
+4.  **Case 3 ($q_{high} > q_{low} + 1$):** Full coverage. `[0, b)`.
+*   *Note:* This handles negative inputs automatically via `math.floor`.
+
+### C. Multiplication involving Infinity
+*   **Problem:** $0 \times \infty$.
+*   **Pure Math:** Undefined.
+*   **Pragmatic Interval:** `[-inf, inf]`. (Indeterminate form).
+*   **Standard Numbers:** `0 * 5 = 0`.
+*   **Logic:** If inputs are `[0, 0]` and `[inf, inf]`, return Full Line. If inputs are `[0, 5]` (approaching 0) and `[inf]`, you *can* technically claim `[0, inf]`, but `[-inf, inf]` is safer if the origin of the zero is unknown.
+
+---
+
+# 4. Implementation Details
+
+### Parsing & Empty Sets
+*   **Input `(1, 1)`:** This represents $\{ x \in \mathbb{R} \mid 1 < x < 1 \}$.
+    *   **Action:** Normalize to **Empty Set**. Do not raise Error.
+*   **Input `[2, 1]`:** This is a contradiction.
+    *   **Action:** Raise **ValueError**.
+
+### Signed Zero Detection
+Python treats `0.0 == -0.0` as True.
+*   **Detection:** Use `math.copysign(1, x)`.
+*   **Normalization:** Do **not** normalize `-0.0` to `0.0` in your constructor. Store the value as `0.0` (for simple math) but set the `epsilon` Enum to `NEG_POINT` (`-1`).
+
+### Output Representations
+*   **`__str__`:** Use math notation: `"[1, 2)"`.
+*   **`__repr__`:** Use constructor string: `"MultiInterval('[1, 2)')"`.
+*   **Avoid:** Decomposed lists `[[1], (1, 2)]`. They imply false discontinuity.
+
+---
+
+# 5. Rejected Alternatives (The Graveyard)
+
+### Option: `{-1, 0, 1}` (Simple)
+*   *Structure:* Limit, Point, Limit.
+*   *Why Rejected:* Cannot distinguish `-0` from `+0` topologically without checking `if val == 0`. Leaky abstraction.
+
+### Option: `{-2, -1, 1, 2}` (The Dualist/Strict)
+*   *Structure:* No center. Negative Limit/Point, Positive Point/Limit.
+*   *Why Rejected:*
+    *   **Asymmetry:** For standard numbers ($x=5$), "Left Limit" is distance 3 away, "Right Limit" is distance 1 away.
+    *   **Strictness:** It forces `[-0]` and `(0...` to remain disjoint (Distance 3, Merge Rule 1 or 2). While useful for solvers, it is "Astonishing" for general users doing standard math.
+
+### Option: Complex Numbers (2D Tuples)
+*   *Structure:* `(Real_Dir, Imag_Phase)`.
+*   *Why Rejected:* Python cannot sort Complex numbers. Requires custom comparators, killing performance. The Enum is a flattened "Projection" of this 2D structure anyway.
+
+### Option: Higher Order Hyperreals ($\epsilon^2$)
+*   *Structure:* `(val, slope, curvature)`.
+*   *Why Rejected:* Overkill. Interval sets only care about boundaries (Order 1), not grazing/curvature (Order 2).
+
+---
+
+# 6. Final Summary of Your System
+
+You have constructed a library based on the **Affine Extended Reals** with a **Stratified Topology** at the origin.
+
+1.  **User View:** A standard set of intervals. `[-0]` and `[0]` behave "normally" and merge with neighbors.
+2.  **Internal View:** A high-precision topological ribbon. `-0` is strictly less than `+0`.
+3.  **Bridge:** The Enum `{-2, -1, 0, 2}` and Merge Rule `diff <= 3` act as the "Gluing Map" that collapses the internal high-resolution singularity into a user-friendly continuous line.
+
+It is theoretically sound, performant ($O(1)$ ops), and handles the edge cases of limits and division robustly.
+
+
+---
+
+
+To create a robust, "Pythonic" warning system for your library, you should define a custom Warning class that inherits from `RuntimeWarning`.
+
+This allows your users to distinguish between "Standard Python Warnings" and "Your Library's Mathematical Edge Cases."
+
+Here is the implementation strategy.
+
+### 1. Define the Custom Warning
+Define this at the top of your module or in a dedicated `exceptions.py` file. Inheriting from `RuntimeWarning` signals that this is a mathematical issue that occurred during execution, not a syntax or deprecation issue.
+
+```python
+import warnings
+
+class IntervalIndeterminateWarning(RuntimeWarning):
+    """
+    Warns when an operation results in a total loss of precision 
+    (e.g., 0/0 -> [-inf, inf] or 0 * inf -> [-inf, inf]).
+    """
+    pass
+```
+
+### 2. Emit the Warning (With the correct Stack Level)
+When you detect the $0/0$ or $0 \times \infty$ case, emit the warning.
+
+**Crucial Detail:** Use `stacklevel=2`.
+*   **Default (`stacklevel=1`):** The warning points to **your library code** (the line where you typed `warnings.warn`). This is useless to the user.
+*   **Correct (`stacklevel=2`):** The warning points to **the user's code** that called your division method.
+
+```python
+# Inside MultiInterval class
+def __truediv__(self, other):
+    # ... logic to determine if it is 0/0 ...
+    is_indeterminate = (self.is_zero and other.is_zero) 
+
+    if is_indeterminate:
+        warnings.warn(
+            "Indeterminate form 0/0 encountered. Returning [-inf, inf].",
+            category=IntervalIndeterminateWarning,
+            stacklevel=2
+        )
+        return MultiInterval.full_line() # Your [-inf, inf] constructor
+    
+    # ... rest of division logic ...
+```
+
+### 3. How the User Controls Behavior
+
+Because you used a custom class, the user now has full granular control using Python's standard `warnings` filter.
+
+#### A. Default Behavior (The "Helpful" Log)
+The code runs, calculates `[-inf, inf]`, but prints a message to stderr so the user knows *why* their bounds exploded.
+```python
+x = MultiInterval(0)
+y = x / x
+# Output to console: 
+# UserWarning: Indeterminate form 0/0 encountered...
+# Result: [-inf, inf]
+```
+
+#### B. The "Strict" Mode (Crash on 0/0)
+If a user is writing a critical solver and wants to forbid indeterminate forms, they can turn your specific warning into an Exception.
+
+```python
+import warnings
+from your_library import IntervalIndeterminateWarning
+
+# Turn ONLY your warning into an error
+warnings.simplefilter("error", IntervalIndeterminateWarning)
+
+try:
+    y = x / x
+except IntervalIndeterminateWarning:
+    print("Caught the 0/0 calculation!")
+    # Handle the crash
+```
+
+#### C. The "Production" Mode (Silence)
+If the user knows this will happen and doesn't care (e.g., they are intersecting the result later anyway), they can silence it.
+
+```python
+# Ignore specific warning
+warnings.simplefilter("ignore", IntervalIndeterminateWarning)
+
+y = x / x # No print, no crash. Just returns [-inf, inf]
+```
+
+### 4. Advanced: Context Manager for Temporary Strictness
+This is the cleanest way to handle the "Solver vs. General Math" dichotomy we discussed. You can be strict only within a specific block of code.
+
+```python
+import warnings
+
+# Temporarily crash on 0/0
+with warnings.catch_warnings():
+    warnings.simplefilter("error", IntervalIndeterminateWarning)
+    
+    # Mathematical critical section
+    perform_sensitive_calculation()
+
+# Back to normal (non-crashing) behavior here
+perform_loose_calculation()
+```
+
+### Summary
+1.  **Class:** `class IntervalIndeterminateWarning(RuntimeWarning): pass`
+2.  **Usage:** `warnings.warn("msg", IntervalIndeterminateWarning, stacklevel=2)`
+3.  **Benefit:** This satisfies the **Containment Principle** (returning full set) while satisfying the **Debugging Requirement** (alerting the user), without forcing you to add messy `strict=True` flags to every method signature.
