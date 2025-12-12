@@ -1,8 +1,14 @@
+import bisect
 import heapq
 import itertools
+import math
 import random
 import timeit
 from enum import IntEnum
+
+# check negative zero behavior just to be sure
+assert -0.0 == 0
+assert math.copysign(1, -0.0) == -1
 
 
 # --- 1. Toplogical Definitions (From our discussion) ---
@@ -202,15 +208,9 @@ Process finished with exit code 0
 
 """
 
-import timeit
-import random
-import heapq
-import itertools
-import bisect
-from enum import IntEnum
-
 
 # --- 1. Topology & optimized Sweep ---
+
 
 class Eps(IntEnum):
     OPEN_END = -2
@@ -343,7 +343,7 @@ def run_incremental_sort(base_list, new_items):
 
 # --- 4. Runner ---
 
-def benchmark():
+def benchmark2():
     N_ITEMS = 50000
     N_NEW = 100  # Number of items to insert incrementally
 
@@ -377,7 +377,7 @@ def benchmark():
 
 
 if __name__ == "__main__":
-    benchmark()
+    benchmark2()
 
 r"""
 C:\Python313\python.exe C:\Users\avery\PycharmProjects\intervals\compare.py 
