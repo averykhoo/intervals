@@ -17,3 +17,19 @@
     * `[-inf, -0)/0 == (0, inf]/-0 == -inf`
     * `0/0 == -0/-0 == inf * 0 == -inf * -0 == [0, inf]` (raises `IndeterminateResultWarning`)
     * `-0/0 == 0/-0 == -inf * 0 == inf * -0 == [-inf, -0]`(raises `IndeterminateResultWarning`)
+
+maybe this enum:
+
+* -3 open end neg zero
+* -2 open end
+* -1 closed neg zero
+* 0 closed
+* 1 open start neg zero
+* 2 open start
+
+or a simplified version that might be more intuitive, but introduces a weird symmetry break at `[-0]&(-0,...)` that cannot exist and can never merge:
+
+* -2 open end
+* -1 closed neg zero
+* 0 closed
+* 2 open start
