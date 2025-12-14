@@ -18,7 +18,7 @@
     * `0/0 == -0/-0 == inf * 0 == -inf * -0 == [0, inf]` (raises `IndeterminateResultWarning`)
     * `-0/0 == 0/-0 == -inf * 0 == inf * -0 == [-inf, -0]`(raises `IndeterminateResultWarning`)
 
-maybe this enum:
+maybe this enum, but this introduces a `(-0, ...)` that just feels wrong:
 
 * -3 open end neg zero
 * -2 open end
