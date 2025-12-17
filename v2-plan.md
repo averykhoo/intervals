@@ -27,9 +27,15 @@ maybe this enum, but this introduces a `(-0, ...)` that just feels wrong:
 * 1 open start neg zero
 * 2 open start
 
-or a simplified version that might be more intuitive, but this introduces a weird symmetry break at `[-0]&(-0,...)` that cannot exist and can never merge, and `(...,-0)&[0]` that merges but introduces a spurious `-0`, so taking the reciprocal now produces a `-inf` that should not have been there:
+or a simplified version that might be more intuitive, but this introduces a weird symmetry break at 
+`[-0]|(-0,...)` that cannot exist and can never merge, and `(...,-0)|[0]` that merges but introduces a 
+spurious `-0`, so taking the reciprocal now produces a `-inf` that should not have been there:
 
 * -2 open end
 * -1 closed neg zero
 * 0 closed
 * 2 open start
+
+## update
+
+found that there's an ieee spec that does something similar
