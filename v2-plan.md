@@ -1,7 +1,12 @@
 # `MultiInterval` v2 plan
 
-* the range will be the affine extended real numbers along with negative zero, i.e.:
+* the range will be the affine extended real numbers, meaning support for ±inf along with negative zero, i.e.:
   `[-inf] + (-inf, 0) + [-0, 0] + (0, inf) + [inf]`
+* divide by zero is supported, and there will be warnings for indeterminism
+* newton's method solver as a test
+* generalized function applicator as long as its continuous and differentiable
+* forward mode autodiff
+* 
 
 ## negative zero
 
