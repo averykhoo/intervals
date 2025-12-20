@@ -391,3 +391,13 @@ perform_loose_calculation()
 1.  **Class:** `class IntervalIndeterminateWarning(RuntimeWarning): pass`
 2.  **Usage:** `warnings.warn("msg", IntervalIndeterminateWarning, stacklevel=2)`
 3.  **Benefit:** This satisfies the **Containment Principle** (returning full set) while satisfying the **Debugging Requirement** (alerting the user), without forcing you to add messy `strict=True` flags to every method signature.
+
+
+---
+
+* (wrapped) gmpy for math, which supports round up or down, and will be used to keep interval math accurate - alternatively just plus or minus an ulp an a dummy class, or use decimal which also supports rounding but is slower (and still doesn't support trig)
+* turns out all the other interval libraries don't support multi interval math and just stretch a single interval over the whole thing
+* and they also don't really support mod
+* consider using the itl test vectors from IntervalArithmetic.jl
+* 
+
