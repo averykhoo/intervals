@@ -7,6 +7,7 @@
 * generalized function applicator as long as its continuous and differentiable
 * forward mode autodiff
 * numpy compat via https://data-apis.org/array-api/latest/ or `__array_ufunc__` or https://numpy.org/doc/stable/user/basics.interoperability.html
+* consider ieee 1788 compatible decorations, although multi intervals actually support a bit more so not sure if it matters
 
 ## negative zero
 
