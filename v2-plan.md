@@ -6,7 +6,7 @@
 * newton's method solver as a test
 * generalized function applicator as long as its continuous and differentiable
 * forward mode autodiff
-* 
+* numpy compat via https://data-apis.org/array-api/latest/ or `__array_ufunc__` or https://numpy.org/doc/stable/user/basics.interoperability.html
 
 ## negative zero
 
