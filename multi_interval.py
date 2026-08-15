@@ -27,6 +27,90 @@ CONSISTENCY_CHECK = True
 INFINITY_IS_NOT_FINITE = True  # don't allow ±inf to be contained inside intervals
 
 
+def _intervals_intersect(lo_1: Real, lo_1_closed: bool, hi_1: Real, hi_1_closed: bool,
+                         lo_2: Real, lo_2_closed: bool, hi_2: Real, hi_2_closed: bool
+                         ) -> bool:
+    """
+    do two intervals share at least one point, respecting open/closed endpoints
+    written on plain numbers rather than MultiInterval to keep it allocation-free,
+    since it runs inside the modulo attainment loop
+    """
+    if lo_1 > lo_2:
+        lo, lo_closed = lo_1, lo_1_closed
+    elif lo_2 > lo_1:
+        lo, lo_closed = lo_2, lo_2_closed
+    else:
+        lo, lo_closed = lo_1, lo_1_closed and lo_2_closed
+
+    if hi_1 < hi_2:
+        hi, hi_closed = hi_1, hi_1_closed
+    elif hi_2 < hi_1:
+        hi, hi_closed = hi_2, hi_2_closed
+    else:
+        hi, hi_closed = hi_1, hi_1_closed and hi_2_closed
+
+    return lo < hi or (lo == hi and lo_closed and hi_closed)
+
+
+def _mod_attained(value: Real,
+                  a_pieces: List[Tuple[Real, bool, Real, bool]],
+                  b_pieces: List[Tuple[Real, bool, Real, bool]]
+                  ) -> bool:
+    """
+    exact test: is `value` attained as `x % y` for some x in A, y in B?
+
+    A and B are given as lists of (lo, lo_closed, hi, hi_closed), and must be
+    non-negative / strictly positive respectively.
+
+    this decides openness for interval modulo.  propagating epsilons through the
+    geometric case tree cannot do it: a value may be attained strictly inside the
+    rectangle while every contributing edge is open there.
+
+    x % y == value requires value = x - k*y for some integer k >= 0, with 0 <= value < y.
+    so we need some y in (B intersect (value, inf)) with value + k*y in A.
+
+    note this must be tested against the FULL operands, not one sub-rectangle at a
+    time -- a value that is open in one A-piece x B-piece product can be closed via a
+    witness in another.
+    """
+    if value < 0:
+        return False
+
+    for a_lo, a_lo_closed, a_hi, a_hi_closed in a_pieces:
+        if a_hi < value:
+            continue
+
+        for b_lo, b_lo_closed, b_hi, b_hi_closed in b_pieces:
+            # a residue is strictly less than its divisor, so we need y > value
+            if b_hi <= value:
+                continue
+            if b_lo > value:
+                y_lo, y_lo_closed = b_lo, b_lo_closed
+            else:
+                y_lo, y_lo_closed = value, False
+            if not (y_lo < b_hi or (y_lo == b_hi and y_lo_closed and b_hi_closed)):
+                continue
+
+            # k == 0: the value must itself lie in this piece of A
+            if a_lo < value < a_hi:
+                return True
+            if (value == a_lo and a_lo_closed) or (value == a_hi and a_hi_closed):
+                return True
+
+            # k >= 1: need y in the clipped B piece with value + k*y inside this A piece,
+            # i.e. y within [(a_lo - value) / k, (a_hi - value) / k].  y_lo > 0 always
+            # (B is strictly positive), and the bound terminates because A is finite.
+            k = 1
+            while (a_hi - value) / k >= y_lo:
+                if _intervals_intersect(y_lo, y_lo_closed, b_hi, b_hi_closed,
+                                        (a_lo - value) / k, a_lo_closed,
+                                        (a_hi - value) / k, a_hi_closed):
+                    return True
+                k += 1
+
+    return False
+
+
 class MultiInterval:
     """
     represents zero or more non-overlapping intervals
@@ -1167,10 +1251,34 @@ class MultiInterval:
                  right_hand_side: bool = False,
                  inplace: bool = False
                  ) -> 'MultiInterval':
+        # the geometry here was right all along -- the sweep down the far edge in y and up
+        # the far edge in x is exactly the proven reduction, and z / z2 match the derivation.
+        # what was wrong was mechanical.  fixed based on the claude-fable derivation in
+        # references/modulo-derivations/claude-fable/ (two independent proofs plus a
+        # validated reference implementation):
+        #
+        #   1. axis conflation, 10 sites: appended the divisor coordinate `_second_start`
+        #      (y0) where the output value `_first_end % _second_start` (x1 % y0) belongs,
+        #      so eg [1,2] mod [3,4] gave [1,3] instead of [1,2].  note the append at the
+        #      end of the top-right-corner branch is NOT one of these: there y0 == z
+        #      exactly, so the raw coordinate is already the right answer.
+        #   2. `break` -> `continue`, 15 sites: break left the inner loop over the divisor's
+        #      pieces, and since every branch broke, only other's first sub-interval was
+        #      ever processed.
+        #   3. two appends hardcoded a closed epsilon instead of using _first_end_epsilon.
+        #   4. a zero line grazing the top right corner (x1, y0) contributes 0, which was
+        #      never emitted -- this made [3,7.9] mod [7.9,12.6] unsound (7.9 % 7.9 == 0).
+        #   5. that same branch was the only one with no exit, so it fell through into the
+        #      "no zero-line intersections" block and emitted an inverted (start > end)
+        #      pair.  merge_adjacent sorts pairs, so it cannot repair that.
+        #
+        # openness is no longer propagated through the case tree at all; see the closure
+        # pass at the end of this method for why that could never have worked.
+        #
         # todo: deal with inf and zero
         # todo: split into interval-interval modulo, interval-real, and real-interval
-        # todo: handle cases where intervals are degenerate
-        # todo: double-check the logic
+        # todo: negative operands -- the four quadrants are provably NOT all equivalent,
+        #       only {Q1,Q3} and {Q2,Q4} are, so Q2 needs its own primitives
 
         # by default, do this to a copy
         if not inplace:
@@ -1199,6 +1307,17 @@ class MultiInterval:
             return MultiInterval()
         if len(_second) == 0:
             raise ValueError('cannot take a modulo with respect to a null set')
+
+        # openness is NOT propagated through the case tree below -- that is provably
+        # insufficient, because a value can be attained strictly inside the rectangle
+        # while both contributing edges are open there.  instead the geometry runs on
+        # the CLOSED HULL (which gets the interval locations exactly right), and every
+        # surviving endpoint is then tested for attainment.  see
+        # references/modulo-derivations/claude-fable/v3-modulo-design-notes.md
+        _a_pieces = [(_s[0], _s[1] == 0, _e[0], _e[1] == 0) for _s, _e in _first]
+        _b_pieces = [(_s[0], _s[1] == 0, _e[0], _e[1] == 0) for _s, _e in _second]
+        _first = [((_s[0], 0), (_e[0], 0)) for _s, _e in _first]
+        _second = [((_s[0], 0), (_e[0], 0)) for _s, _e in _second]
 
         # union of: func(x, y) for x in first for y in second
         for (_first_start, _first_start_epsilon), (_first_end, _first_end_epsilon) in _first:
@@ -1231,7 +1350,7 @@ class MultiInterval:
                             # +-----+      +-----+
                             # |     |  or  |     |
                             # \--\--+      \-----\
-                            break
+                            continue
 
                         # check for a zero-line intersection along the right edge
                         # including the top right corner
@@ -1241,25 +1360,25 @@ class MultiInterval:
                             # +-----+      +-----\
                             # |     \  or  |     |
                             # \-----+      \-----+
-                            break
+                            continue
 
                         # check if the top right corner is closed
                         elif _first_end_epsilon == 0 and _second_start_epsilon == 0:
-                            self.endpoints.append((_second_start, 0))
+                            self.endpoints.append((_first_end % _second_start, 0))
                             # looks like
                             # +-----*
                             # |     |
                             # \-----+
-                            break
+                            continue
 
                         # top-right corner is open
                         else:
-                            self.endpoints.append((_second_start, -1))
+                            self.endpoints.append((_first_end % _second_start, -1))
                             # looks like
                             # +-----O
                             # |     |
                             # \-----+
-                            break
+                            continue
 
                 # check for the first two zero-line intersections along the bottom edge
                 # (this does not include the bottom left corner)
@@ -1270,7 +1389,7 @@ class MultiInterval:
                     # +-----+      +-----+
                     # |     |  or  |     |
                     # +-\=\-+      +--\==\
-                    break
+                    continue
 
                 # check for the first zero-line intersection along the bottom edge
                 # (this does not include the bottom left corner)
@@ -1299,25 +1418,25 @@ class MultiInterval:
                         # +-----+      +-----+           +-----\      +-----\ <- z
                         # |     \  or  |     \ <- z  or  |     |  or  |     |
                         # +--\--+      +-----\           +--\--+      +-----\
-                        break
+                        continue
 
                     # check if the top right corner is closed
                     elif _first_end_epsilon == 0 and _second_start_epsilon == 0:
-                        self.endpoints.append((_second_start, 0))
+                        self.endpoints.append((_first_end % _second_start, 0))
                         # looks like
                         # +-----*      +-----*
                         # |     |  or  |     |
                         # +--\--+      +-----\
-                        break
+                        continue
 
                     # top-right corner is open
                     else:
-                        self.endpoints.append((_second_start, -1))
+                        self.endpoints.append((_first_end % _second_start, -1))
                         # looks like
                         # +-----O      +-----O
                         # |     |  or  |     |
                         # +--\--+      +-----\
-                        break
+                        continue
 
                 # check for first zero-line intersection along right edge
                 # excluding bottom right corner and also excluding top right corner
@@ -1339,7 +1458,7 @@ class MultiInterval:
 
                     # check if bottom right corner is in first triangle
                     if _first_end < _second_end:
-                        self.endpoints.append((_first_end, 0))
+                        self.endpoints.append((_first_end, _first_end_epsilon))
                     else:
                         self.endpoints.append((z1, -1))
 
@@ -1353,28 +1472,31 @@ class MultiInterval:
                         # +-----\      +-----\ <- z2 (could also be below the corner, but it doesn't matter)
                         # |     \  or  |     \ <- z1
                         # +-----+      +-----+
-                        break
+                        continue
 
                     # check if the top right corner is closed
                     elif _first_end_epsilon == 0 and _second_start_epsilon == 0:
-                        self.endpoints.append((_second_start, 0))
+                        self.endpoints.append((_first_end % _second_start, 0))
                         # looks like
                         # +-----*      +-----*
                         # |     \  or  |     \ <- z1
                         # +-----+      +-----+
-                        break
+                        continue
 
                     # top-right corner is open
                     else:
-                        self.endpoints.append((_second_start, -1))
+                        self.endpoints.append((_first_end % _second_start, -1))
                         # looks like
                         # +-----O      +-----O
                         # |     \  or  |     \ <- z1
                         # +-----+      +-----+
-                        break
+                        continue
 
                 # check for the first zero-line intersection at the top-right corner
                 if _first_end % _second_start == 0:
+                    # the zero line grazes the top right corner, so 0 is attained there
+                    self.endpoints.append((0, 0))
+                    self.endpoints.append((0, 0))
                     if _first_start_epsilon == 0 and _second_end_epsilon == 0:
                         # looks like
                         # +-----\
@@ -1391,49 +1513,70 @@ class MultiInterval:
                     # check if bottom right corner is in first triangle
                     # todo: is there an edge case if second is degenerate?
                     if _first_end < _second_end:
-                        self.endpoints.append((_first_end, 0))
+                        self.endpoints.append((_first_end, _first_end_epsilon))
                     else:
                         self.endpoints.append((_second_start, -1))
+                    continue
 
                 # there are no zero-line intersections
                 if _first_start_epsilon == 0 and _second_end_epsilon == 0:
                     self.endpoints.append((_first_start % _second_end, 0))
                     if _first_end_epsilon == 0 and _second_start_epsilon == 0:
-                        self.endpoints.append((_second_start, 0))
+                        self.endpoints.append((_first_end % _second_start, 0))
                         # looks like
                         # +-----*
                         # |     |
                         # *-----+
-                        break
+                        continue
 
                     else:
-                        self.endpoints.append((_second_start, -1))
+                        self.endpoints.append((_first_end % _second_start, -1))
                         # looks like
                         # +-----O
                         # |     |
                         # *-----+
-                        break
+                        continue
 
                 else:
                     self.endpoints.append((_first_start % _second_end, 1))
                     if _first_end_epsilon == 0 and _second_start_epsilon == 0:
-                        self.endpoints.append((_second_start, 0))
+                        self.endpoints.append((_first_end % _second_start, 0))
                         # looks like
                         # +-----*
                         # |     |
                         # O-----+
-                        break
+                        continue
 
                     else:
-                        self.endpoints.append((_second_start, -1))
+                        self.endpoints.append((_first_end % _second_start, -1))
                         # looks like
                         # +-----O
                         # |     |
                         # O-----+
-                        break
+                        continue
+
+        # every epsilon emitted above is provisional -- force closed so that merging
+        # yields the closed hull (genuine gaps survive, since they are separated by a
+        # positive distance), then decide each endpoint by attainment
+        self.endpoints = [(_loc, 0) for _loc, _ in self.endpoints]
 
         # we may be out of order or have overlapping intervals, so merge
         self.merge_adjacent()
+
+        _endpoints, self.endpoints = self.endpoints, []
+        for idx in range(0, len(_endpoints), 2):
+            _start, _end = _endpoints[idx][0], _endpoints[idx + 1][0]
+            _start_closed = _mod_attained(_start, _a_pieces, _b_pieces)
+            _end_closed = _mod_attained(_end, _a_pieces, _b_pieces)
+
+            # a degenerate piece whose only value turns out to be unattainable is a
+            # phantom (e.g. the {0} from a zero line grazing an excluded corner)
+            if _start == _end and not (_start_closed and _end_closed):
+                continue
+
+            self.endpoints.append((_start, 0 if _start_closed else 1))
+            self.endpoints.append((_end, 0 if _end_closed else -1))
+
         return self
 
     def __mod__(self, other: Union['MultiInterval', Real]) -> 'MultiInterval':
@@ -1459,7 +1602,15 @@ class MultiInterval:
                 return NotImplemented
 
             # current state: other.is_positive & self.is_finite & not(self.is_empty) & not(other.is_empty)
-            return NotImplemented  # todo
+            # the geometric sweep is only derived for the strictly positive quadrant.
+            # zero is excluded on both sides: a zero-crossing operand has to be split
+            # into sign-pure sub-rectangles first, and negatives need their own
+            # primitives (the quadrants are provably not all equivalent -- see
+            # references/modulo-derivations/claude-fable/proof-sign-symmetries-quadrants.md)
+            if self.is_positive and other.is_positive:
+                return self.__modulo(other)
+
+            return NotImplemented  # todo: zero-crossing and negative operands
 
         elif isinstance(other, Real):
             if float(other) == 0:
