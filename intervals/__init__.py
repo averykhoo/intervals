@@ -10,6 +10,8 @@ from intervals.errors import IntervalWarning
 from intervals.kernel import Builder
 from intervals.kernel import Size
 from intervals.multi_interval import MultiInterval
+from intervals.relations import Allen
+from intervals.relations import TruthSet
 
 EMPTY = MultiInterval()
 REALS = MultiInterval(-_math.inf, _math.inf)  # the affine extended reals, both infinities included
@@ -20,6 +22,8 @@ __all__ = [
     'REALS',
     'Size',
     'Builder',
+    'TruthSet',
+    'Allen',
     'Cut',
     'Side',
     'IntervalWarning',

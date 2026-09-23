@@ -15,6 +15,7 @@ from typing import Tuple
 
 from intervals import fmt
 from intervals import kernel
+from intervals import relations
 from intervals.cuts import Value
 from intervals.cuts import above
 from intervals.cuts import as_end
@@ -23,6 +24,8 @@ from intervals.cuts import below
 from intervals.cuts import normalize_value
 from intervals.kernel import Cuts
 from intervals.kernel import Size
+from intervals.relations import Allen
+from intervals.relations import TruthSet
 
 
 class MultiInterval:
@@ -185,6 +188,52 @@ class MultiInterval:
         start = -math.inf if item.start is None else item.start
         stop = math.inf if item.stop is None else item.stop
         return self._wrap(kernel.intersection(self._cuts, kernel.normalize([kernel.piece(start, stop)])))
+
+    # POINTWISE COMPARISONS (a TruthSet; see intervals.relations)
+
+    def __lt__(self, other):
+        other = self._coerce(other)
+        return NotImplemented if other is NotImplemented else relations.lt(self._cuts, other._cuts)
+
+    def __le__(self, other):
+        other = self._coerce(other)
+        return NotImplemented if other is NotImplemented else relations.le(self._cuts, other._cuts)
+
+    def __gt__(self, other):
+        other = self._coerce(other)
+        return NotImplemented if other is NotImplemented else relations.gt(self._cuts, other._cuts)
+
+    def __ge__(self, other):
+        other = self._coerce(other)
+        return NotImplemented if other is NotImplemented else relations.ge(self._cuts, other._cuts)
+
+    def eq_pointwise(self, other) -> TruthSet:
+        """`{T, F}` for any non-degenerate `A.eq_pointwise(A)`; `==` is structural"""
+        return relations.eq_pointwise(self._cuts, self._coerce_or_raise(other)._cuts)
+
+    # SET-LEVEL RELATIONS (bool, decided on cuts)
+
+    def before(self, other) -> bool:
+        return relations.before(self._cuts, self._coerce_or_raise(other)._cuts)
+
+    def after(self, other) -> bool:
+        return relations.after(self._cuts, self._coerce_or_raise(other)._cuts)
+
+    def adjoins(self, other) -> bool:
+        return relations.adjoins(self._cuts, self._coerce_or_raise(other)._cuts)
+
+    def overlaps(self, other) -> bool:
+        return relations.overlaps(self._cuts, self._coerce_or_raise(other)._cuts)
+
+    def contains(self, other) -> bool:
+        return relations.contains(self._cuts, self._coerce_or_raise(other)._cuts)
+
+    def within(self, other) -> bool:
+        return relations.within(self._cuts, self._coerce_or_raise(other)._cuts)
+
+    def allen(self, other) -> Allen:
+        """allen's relation between two contiguous MultiIntervals (ValueError otherwise)"""
+        return relations.allen(self._cuts, self._coerce_or_raise(other)._cuts)
 
     # EQUALITY, HASHING, CONTAINER PROTOCOL
 

@@ -115,6 +115,11 @@ every new property test (flip one comparison, watch red, restore).
   `{T}` and `[1,2] < [2,3]` is `{T,F}`; `before([1,2), [2,3])` is True and `before([1,2], [2,3])`
   is False; `before(A, B) == (A < B).certainly` for non-empty operands; the 13 Allen cases plus
   the two cut-refined ones
+* done 2026-09-23. choices made while building: `bool()` of an ambiguous or empty `TruthSet`
+  raises `ValueError` (numpy's choice); `adjoins` is symmetric (either end meets the other's
+  start); an empty operand is `before`/`after`/`adjoins` nothing; the modal variants are
+  `certainly_`/`possibly_` × `before`/`after`/`equal`. the comparison oracle samples two points
+  per gap between endpoint values, which is exactly enough to realise `<`, `==` and `>`
 
 ### M6 `applicator.py` + `ops.py` (3 days) — needs D1, D2, D3, D7
 * `OpDescriptor(fn, monotone=(dir_x, dir_y) | None, split_points=(...), attained=None,
