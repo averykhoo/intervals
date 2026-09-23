@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intervals"
+version = "2.0.0.dev0"
+description = "Multi-intervals over the affine extended reals, with open/closed endpoints"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+test = ["pytest", "hypothesis"]
+
+[tool.setuptools]
+packages = ["intervals"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# "." puts both the v1 modules at the root and the v2 `intervals/` package on sys.path
+pythonpath = ["."]
+# the library's own warnings are errors inside the suite; a test that provokes one on purpose
+# opts out with a filterwarnings mark or pins it with pytest.warns
+filterwarnings = ["error::intervals.errors.IntervalWarning"]
