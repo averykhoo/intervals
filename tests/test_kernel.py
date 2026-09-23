@@ -1,0 +1,250 @@
+import math
+
+import pytest
+from hypothesis import given
+from hypothesis import strategies as st
+
+from intervals.cuts import above
+from intervals.cuts import below
+from intervals.kernel import EMPTY
+from intervals.kernel import REALS
+from intervals.kernel import Builder
+from intervals.kernel import Size
+from intervals.kernel import complement
+from intervals.kernel import contains_point
+from intervals.kernel import difference
+from intervals.kernel import hull
+from intervals.kernel import intersection
+from intervals.kernel import is_subset
+from intervals.kernel import is_valid
+from intervals.kernel import normalize
+from intervals.kernel import overlap_count
+from intervals.kernel import piece
+from intervals.kernel import pieces
+from intervals.kernel import size
+from intervals.kernel import symmetric_difference
+from intervals.kernel import union
+from tests.strategies import cut_tuples
+from tests.strategies import exact_cut_tuples
+from tests.strategies import finite_cut_tuples
+from tests.strategies import piece_pairs
+from tests.strategies import probe_points
+
+inf = math.inf
+
+
+def mi(*specs):
+    """test shorthand: each spec is `(lo, hi, lo_closed, hi_closed)` or a bare point"""
+    return normalize(piece(s, s) if not isinstance(s, tuple) else piece(*s) for s in specs)
+
+
+def naive_contains(cuts, x):
+    """membership read straight off the pieces, independent of the bisect in the kernel"""
+    return any((lo < x or (lo == x and lo_closed)) and (x < hi or (x == hi and hi_closed))
+               for lo, lo_closed, hi, hi_closed in pieces(cuts))
+
+
+def assert_matches(result, predicate, *operands):
+    assert is_valid(result)
+    for x in probe_points(result, *operands):
+        assert naive_contains(result, x) == predicate(x), x
+
+
+# NORMALIZATION
+
+@given(st.lists(piece_pairs(), max_size=6))
+def test_normalize_is_valid_and_covers_the_same_points(pairs_):
+    result = normalize(pairs_)
+    assert_matches(result, lambda x: any(naive_contains(p, x) for p in pairs_ if p[0] < p[1]),
+                   *[p for p in pairs_ if p[0] < p[1]])
+
+
+@given(cut_tuples(), st.randoms(use_true_random=False))
+def test_normalize_is_canonical(cuts, rnd):
+    # re-express the same set as split, duplicated and shuffled pieces
+    parts = []
+    for lo, lo_closed, hi, hi_closed in pieces(cuts):
+        if math.isfinite(lo) and math.isfinite(hi) and lo < hi:
+            mid = (lo + hi) / 2
+            parts += [piece(lo, mid, lo_closed, False), piece(mid, hi, True, hi_closed)]
+        else:
+            parts.append(piece(lo, hi, lo_closed, hi_closed))
+    parts += rnd.sample(parts, len(parts) // 2)
+    rnd.shuffle(parts)
+    assert normalize(parts) == cuts
+
+
+@pytest.mark.parametrize('pieces_, expected', [
+    # equal cuts tile: [1,2) | [2,3] = [1,3]
+    ([(1, 2, True, False), (2, 3)], mi((1, 3))),
+    # [1,2] | (2,3] = [1,3]
+    ([(1, 2), (2, 3, False, True)], mi((1, 3))),
+    # [1,2) | (2,3]: the point 2 is missing
+    ([(1, 2, True, False), (2, 3, False, True)], (below(1), below(2), above(2), above(3))),
+    # empty pieces drop out
+    ([(1, 1, True, False), (1, 1, False, False)], EMPTY),
+    ([(-inf, inf)], REALS),
+])
+def test_normalize_table(pieces_, expected):
+    assert normalize(piece(*p) for p in pieces_) == expected
+
+
+def test_reversed_values_are_an_error():
+    with pytest.raises(ValueError):
+        piece(2, 1)
+
+
+# SET ALGEBRA
+
+@given(cut_tuples(), cut_tuples())
+def test_union(a, b):
+    assert_matches(union(a, b), lambda x: naive_contains(a, x) or naive_contains(b, x), a, b)
+
+
+@given(cut_tuples(), cut_tuples())
+def test_intersection(a, b):
+    assert_matches(intersection(a, b), lambda x: naive_contains(a, x) and naive_contains(b, x), a, b)
+
+
+@given(cut_tuples(), cut_tuples())
+def test_difference(a, b):
+    assert_matches(difference(a, b), lambda x: naive_contains(a, x) and not naive_contains(b, x), a, b)
+
+
+@given(cut_tuples(), cut_tuples(), cut_tuples())
+def test_symmetric_difference(a, b, c):
+    assert_matches(symmetric_difference(a, b, c),
+                   lambda x: (naive_contains(a, x) + naive_contains(b, x) + naive_contains(c, x)) % 2 == 1,
+                   a, b, c)
+
+
+@given(cut_tuples())
+def test_complement(a):
+    assert_matches(complement(a), lambda x: not naive_contains(a, x), a)
+
+
+@given(st.lists(cut_tuples(), min_size=1, max_size=4), st.integers(1, 4))
+def test_overlap_count(operands, n):
+    assert_matches(overlap_count(operands, n),
+                   lambda x: sum(naive_contains(c, x) for c in operands) >= n, *operands)
+
+
+@given(cut_tuples(), cut_tuples())
+def test_is_subset(a, b):
+    expected = all(naive_contains(b, x) for x in probe_points(a, b) if naive_contains(a, x))
+    assert is_subset(a, b) == expected
+
+
+@given(cut_tuples(), st.one_of(st.sampled_from([-inf, -1, 0, 0.5, 1, inf]), st.fractions(-3, 3)))
+def test_contains_point(a, x):
+    assert contains_point(a, x) == naive_contains(a, x)
+
+
+@given(cut_tuples())
+def test_complement_is_an_involution(a):
+    assert complement(complement(a)) == a
+
+
+@given(cut_tuples(), cut_tuples())
+def test_de_morgan(a, b):
+    assert complement(union(a, b)) == intersection(complement(a), complement(b))
+    assert complement(intersection(a, b)) == union(complement(a), complement(b))
+
+
+@given(cut_tuples())
+def test_excluded_middle(a):
+    assert union(a, complement(a)) == REALS
+    assert intersection(a, complement(a)) == EMPTY
+    assert union(a, a) == intersection(a, a) == a
+
+
+@given(cut_tuples(), cut_tuples(), cut_tuples())
+def test_commutative_and_associative(a, b, c):
+    assert union(a, b) == union(b, a)
+    assert intersection(a, b) == intersection(b, a)
+    assert union(union(a, b), c) == union(a, union(b, c)) == union(a, b, c)
+    assert intersection(intersection(a, b), c) == intersection(a, intersection(b, c)) == intersection(a, b, c)
+    assert difference(a, b) == intersection(a, complement(b))
+
+
+def test_complement_table():
+    assert complement(EMPTY) == REALS
+    assert complement(REALS) == EMPTY
+    # (-inf, inf) leaves both infinities
+    assert complement(mi((-inf, inf, False, False))) == mi(-inf, inf)
+    assert complement(mi((1, 2))) == mi((-inf, 1, True, False), (2, inf, False, True))
+
+
+def test_hull():
+    assert hull(EMPTY) == EMPTY
+    assert hull(mi((1, 2, False, True), 5)) == mi((1, 5, False, True))
+
+
+def test_builder():
+    built = Builder().add_piece(3, 4).add_point(1).add(mi((0, 1, True, False))).add_piece(4, 5, False, False).build()
+    assert built == mi((0, 1), (3, 5, True, False))
+
+
+# SIZE
+
+@pytest.mark.parametrize('cuts, expected', [
+    (mi(1), Size(0, 0, 1)),
+    (mi((1, 2, True, False)), Size(0, 1, 0)),
+    (mi((1, 2)), Size(0, 1, 1)),
+    (mi((1, 2, False, False)), Size(0, 1, -1)),
+    (mi((1, inf, False, True)), Size(1, -1, 0)),
+    (mi((1, inf, True, False)), Size(1, -1, 0)),
+    (mi((-inf, 1)), Size(1, 1, 1)),
+    (mi((-inf, -1)), Size(1, -1, 1)),
+    (REALS, Size(2, 0, 1)),
+    (mi((-inf, inf, False, False)), Size(2, 0, -1)),
+    (mi(inf), Size(0, 0, 1)),
+    (EMPTY, Size(0, 0, 0)),
+])
+def test_size_table(cuts, expected):
+    assert size(cuts) == expected
+
+
+def test_size_tiling_table():
+    assert size(mi(1)) + size(mi((1, 2, False, False))) + size(mi(2)) == size(mi((1, 2)))
+    assert size(mi((0, 1, True, False))) + size(mi((1, 2, True, False))) == size(mi((0, 2, True, False)))
+    assert size(mi((0, inf, True, False))) + size(mi(inf)) == size(mi((0, inf)))
+    assert size(mi((-inf, 0, True, False))) + size(mi((0, inf))) == size(REALS)
+
+
+@given(exact_cut_tuples, exact_cut_tuples)
+def test_size_is_additive_on_disjoint_sets(a, b):
+    b = difference(b, a)
+    assert size(a) + size(b) == size(union(a, b))
+
+
+def test_size_is_lex_ordered():
+    assert size(mi((0, inf, True, False))) > size(mi((0, 10 ** 9)))
+    assert size(mi((0, 1))) > size(mi((0, 1, True, False))) > size(mi((0, 1, False, False)))
+
+
+# DIFFERENTIAL AGAINST V1 (trusted for set operations on finite inputs)
+
+def to_v1(cuts):
+    import multi_interval as v1
+    out = v1.MultiInterval()
+    for lo, lo_closed, hi, hi_closed in pieces(cuts):
+        out = out.union(v1.MultiInterval(lo, hi, start_closed=lo_closed, end_closed=hi_closed))
+    return out
+
+
+def from_v1(v1_interval):
+    it = iter(v1_interval.endpoints)
+    return normalize(piece(lo, hi, lo_eps == 0, hi_eps == 0) for (lo, lo_eps), (hi, hi_eps) in zip(it, it))
+
+
+@pytest.mark.parametrize('ours, theirs', [
+    (union, 'union'),
+    (intersection, 'intersection'),
+    (difference, 'difference'),
+    (symmetric_difference, 'symmetric_difference'),
+])
+@given(a=finite_cut_tuples, b=finite_cut_tuples)
+def test_matches_v1(ours, theirs, a, b):
+    assert from_v1(to_v1(a)) == a  # the conversion itself round-trips
+    assert ours(a, b) == from_v1(getattr(to_v1(a), theirs)(to_v1(b)))
