@@ -1,27 +1,26 @@
 # `MultiInterval` v2 implementation plan (sketch, 2026-09-23)
 
 companion to `v2-plan.md`. that file says *what*; this one says *in what order*, with an exit
-criterion per milestone. review findings that need an owner decision are in section 0 — resolve
-them in `v2-plan.md`'s "current design" before the milestone in each row's `blocks` column.
+criterion per milestone. review findings that needed an owner decision are in section 0; all are settled or deferred as
+of 2026-09-23 and written into `v2-plan.md`'s "current design".
 
-## 0. decisions to settle first (from the 2026-09-23 review)
+## 0. decisions (from the 2026-09-23 review; all settled or deferred 2026-09-23)
 
 | # | question | recommended default | blocks |
 |---|---|---|---|
-| D1 | closure at infinity: `1/(-1, 0)` is written as `[-inf, -1)`, but the involution claim and `1/[1, inf)` = `(0, 1]` both need the flag to *propagate*: `(-inf, -1)`. state the rule as "±inf are ordinary points; an infinite endpoint is closed iff attained; a pole at a **closed** zero endpoint attains ±inf by the piece's sign". drop the "closure over limits" wording | propagate flags; `1/(-1,0)` = `(-inf,-1)` | M6 |
-| D2 | indeterminate corners: `[-inf,-1] * [0]` is written as the entire line, but `1/[-1,0]` already uses the sharp limit-along-the-box rule. the same rule for mul: at an indeterminate corner `(±inf, 0)` the corner contributes `0` if the infinite factor's interval is non-degenerate, and the signed infinity if the zero factor's interval is non-degenerate. so `[-inf]*[0,1]` = `[-inf]`, `[-inf,-1]*[0]` = `[0]`, `[-inf,-1]*[0,1]` = `[-inf,0]`, `[1,inf]/[1,inf]` = `[0,inf]`, all matching 1788 up to closure at inf. general form: an indeterminate corner contributes the limit along each non-degenerate edge that meets it, so for sub at `(inf, inf)` it contributes `-inf` if the minuend is non-degenerate and `+inf` if the subtrahend is (`[inf]-[1,inf]` = `[inf]`, `[1,inf]-[inf]` = `[-inf]`, `[1,inf]-[1,inf]` = entire, as 1788); add at `(inf, -inf)` likewise. a box that *is* the indeterminate point returns `∅` + warning (D7). through the itf1788 adapter's input rule (1788 unbounded → open at inf) the infinite corner is never in the box, so D2 does not change conformance — it only affects user-typed literal `[-inf, …]` bounds | sharp rule | M6 |
-| D3 | `int / int` that is not integral: Fraction (exact, per "never rounded") or float (what users expect)? | Fraction; `fmt` prints `1/3`; float only if an operand is float | M6 |
-| D4 | infinities for the time layer: v1 stores float unix seconds (loses sub-µs, dodges the question). v2 options: (a) Fraction seconds in the numeric kernel, thin wrapper; (b) native datetime cuts + two sentinel objects that compare below/above everything | (a) — reuses every kernel test unchanged | M8 |
-| D5 | modulo scope for v2.0: the v3 work covers A ≥ 0, B > 0 only; Q2 primitive and zero-crossing operands are underived (design notes §4) | ship Q1 via v3, raise `NotImplementedError` elsewhere, Q2 is its own milestone | M7 |
+| D1 | **decided: recommended default.** closure at infinity: `1/(-1, 0)` is written as `[-inf, -1)`, but the involution claim and `1/[1, inf)` = `(0, 1]` both need the flag to *propagate*: `(-inf, -1)`. state the rule as "±inf are ordinary points; an infinite endpoint is closed iff attained; a pole at a **closed** zero endpoint attains ±inf by the piece's sign". drop the "closure over limits" wording | propagate flags; `1/(-1,0)` = `(-inf,-1)` | M6 |
+| D2 | **decided: recommended default.** indeterminate corners: `[-inf,-1] * [0]` is written as the entire line, but `1/[-1,0]` already uses the sharp limit-along-the-box rule. the same rule for mul: at an indeterminate corner `(±inf, 0)` the corner contributes `0` if the infinite factor's interval is non-degenerate, and the signed infinity if the zero factor's interval is non-degenerate. so `[-inf]*[0,1]` = `[-inf]`, `[-inf,-1]*[0]` = `[0]`, `[-inf,-1]*[0,1]` = `[-inf,0]`, `[1,inf]/[1,inf]` = `[0,inf]`, all matching 1788 up to closure at inf. general form: an indeterminate corner contributes the limit along each non-degenerate edge that meets it, so for sub at `(inf, inf)` it contributes `-inf` if the minuend is non-degenerate and `+inf` if the subtrahend is (`[inf]-[1,inf]` = `[inf]`, `[1,inf]-[inf]` = `[-inf]`, `[1,inf]-[1,inf]` = entire, as 1788); add at `(inf, -inf)` likewise. a box that *is* the indeterminate point returns `∅` + warning (D7). through the itf1788 adapter's input rule (1788 unbounded → open at inf) the infinite corner is never in the box, so D2 does not change conformance — it only affects user-typed literal `[-inf, …]` bounds | sharp rule | M6 |
+| D3 | **decided: recommended default**, plus integral Fractions normalize to int in `Cut`. `int / int` that is not integral: Fraction (exact, per "never rounded") or float (what users expect)? | Fraction; `fmt` prints `1/3`; float only if an operand is float | M6 |
+| D4 | **deferred**: the time layer is not being rebuilt now; v1's stays (see M8, M10). infinities for the time layer: v1 stores float unix seconds (loses sub-µs, dodges the question). v2 options: (a) Fraction seconds in the numeric kernel, thin wrapper; (b) native datetime cuts + two sentinel objects that compare below/above everything | (a) — reuses every kernel test unchanged, when M8 happens | M8 (deferred) |
+| D5 | **decided: every sign combination before release**, as its own milestone (M7b); the recommended Q1-only v2.0 is rejected. modulo scope for v2.0: the v3 work covers A ≥ 0, B > 0 only; Q2 primitive and zero-crossing operands are underived (design notes §4) | full modulo, M7a then M7b | release |
 | D6 | constructor default for an infinite bound: `MI(1, inf)` = `[1, inf]` (literal) or `[1, inf)` (1788 reading)? **settled (v2-plan.md current design): literal** — `[a, inf]` and `[a, inf)` are different sets and "a user-typed `[1, inf]` is taken literally". D2 removes the blow-up footgun that made this look open | literal | — |
-| D7 | **decided 2026-09-23 by owner**: a box that *is* an indeterminate point (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`, `[0]/[0]`) returns `∅` + `IndeterminateResultWarning` (was `[-inf] ∪ [inf]` / entire). isotonicity forces it: `[0]` is inside `[-1,0]` and `[0,1]`, so `1/[0] ⊆ [-inf,-1] ∩ [1,inf] = ∅`; `[0]*[inf] ⊆ [0]*[5,inf] ∩ [0,1]*[inf]` = `∅` and `[inf]-[inf] ⊆ [inf]-[1,inf] ∩ [1,inf]-[inf]` = `∅` under D2 (under the current entire-line rule `∅` is allowed, not forced). solvers need isotone ops; matches 1788's empty. cost: `1/(1/[inf])` = `∅`; `1/x` round-trips only on sets with no degenerate piece at `0`, `inf`, `-inf`; the "later" direction tag stays the recovery path. separately, `f(A ∪ B) == f(A) ∪ f(B)` fails for reciprocal with any `1/[0]` (`A=[-1,0)`, `B=[0]`, with D1's flag propagation), so that law is only `⊇` for reciprocal/div | `∅` + warning | M6 |
+| D7 | **decided 2026-09-23 by owner**: a box that *is* an indeterminate point (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`, `[0]/[0]`) returns `∅` + `IndeterminateResultWarning` (was `[-inf] ∪ [inf]` / entire). isotonicity forces it: `[0]` is inside `[-1,0]` and `[0,1]`, so `1/[0] ⊆ [-inf,-1] ∩ [1,inf] = ∅`; `[0]*[inf] ⊆ [0]*[5,inf] ∩ [0,1]*[inf]` = `∅` and `[inf]-[inf] ⊆ [inf]-[1,inf] ∩ [1,inf]-[inf]` = `∅` under D2. solvers need isotone ops; matches 1788's empty. cost: `1/(1/[inf])` = `∅`; `1/x` round-trips only on sets with no degenerate piece at `0`, `inf`, `-inf`; the "later" direction tag stays the recovery path. separately, `f(A ∪ B) == f(A) ∪ f(B)` fails for reciprocal with any `1/[0]` (`A=[-1,0)`, `B=[0]`), so that law is only `⊇` for reciprocal/div | `∅` + warning | M6 |
 
-smaller gaps to write into "current design" while there (no decision needed, just state them):
-`Size` needs `__add__` for the tiling tests (the "never computed with" line is too strong);
-`TruthSet.certainly` on `{}` is vacuously True and `.possibly` False (say so); `nan` in a
-constructor is a `ValueError`; `x[a:b]` restricts to `[a, b]` closed (v1 behaviour) or say
-otherwise; the import-time `'ignore'` filter is global mutable state — document that `pytest -W`
-and `simplefilter('error')` override it; check itf1788's licence before vendoring its `.itl` files.
+smaller gaps, accepted and written into "current design" 2026-09-23: `Size` has componentwise
+`+`; `TruthSet.certainly`/`.possibly` on `{}` are True/False; `nan` in a constructor is a
+`ValueError`; `x[a:b]` restricts to closed `[a, b]`; the import-time `'ignore'` filters are
+process-global and overridden by `pytest -W` / `simplefilter`; itf1788 licence check before
+vendoring.
 
 ## 1. environment and gate
 
@@ -44,12 +43,12 @@ each milestone = one branch or one commit series, green gate at the end, sabotag
 every new property test (flip one comparison, watch red, restore).
 
 ### M1 `errors.py` + `cuts.py` (½ day)
-* `Side(IntEnum)`, `Cut(NamedTuple)` with `-0.0 → 0.0` in `__new__`, `below(v)`, `above(v)`,
+* `Side(IntEnum)`, `Cut(NamedTuple)` with `-0.0 → 0.0`, integral `Fraction → int` and `nan → ValueError` in `__new__`, `below(v)`, `above(v)`,
   `mirror(cut)`, `as_start(cut) -> (value, closed)`, `as_end(cut)`, `start_cut(value, closed)`,
   `end_cut(value, closed)`
 * the four warning classes and the filter install
 * tests: ordering table from the plan, mirror is an involution, `[a,b]` round-trips through
-  `start_cut/as_start`, `Cut(-0.0, x) == Cut(0.0, x)` and prints `0.0`
+  `start_cut/as_start`, `Cut(-0.0, x) == Cut(0.0, x)` and prints `0.0`; `type(Cut(Fraction(6, 3), x).value) is int`
 
 ### M2 `kernel.py` (2 days) — the risky one
 * `normalize(pairs) -> cuts`: sort, sweep, merge iff `next.start <= cur.end`, drop `start >= end`
@@ -99,6 +98,8 @@ every new property test (flip one comparison, watch red, restore).
   `(lo, lo_closed, hi, hi_closed)` treated closed → closure: corner-flag rule when monotone,
   else `desc.attained(v, A, B)` on the full operands → union → normalize. `apply_unary` the same
 * indeterminate corner policy per D2, warnings per plan; empty propagation + warning
+* exact division (D3): int/Fraction operands divide as Fraction; infinite corners are evaluated
+  by the applicator, not by python (`Fraction(1) / inf` is `0.0`), so `1/[inf]` is `[0]` exactly
 * ops: `add sub neg mul reciprocal div abs pos`, `pow` with int exponents only (fractional and
   negative-base cases stay `NotImplemented`, as v1); `exp log` via `apply_unary` if cheap, else
   defer to `functions.py`
@@ -109,11 +110,13 @@ every new property test (flip one comparison, watch red, restore).
   and only `⊇` for reciprocal/div (counterexample `A=[-1,0)`, `B=[0]` under D1, see `v2-plan.md` testing);
   `1/(1/A) == A` for every A with no degenerate piece at `0`, `inf` or `-inf`; the plan's worked
   examples as a table (`1/[-1,0]`, `1/[-1,1]`, `1/[1,inf]`, `1/[1,inf)`, `[0,1]*(2,3)` = `[0,3)`,
-  `1/[0]` = `∅` and warns); the D2 table once decided
+  `1/[0]` = `∅` and warns, `[1]/[3]` = `[1/3]` as Fraction, `type` of `([6]/[3]).inf` is int);
+  the D2 table (`[-inf,-1]*[0]` = `[0]`, `[-inf]*[0,1]` = `[-inf]`, `[-inf,-1]*[0,1]` = `[-inf,0]`,
+  `[1,inf]/[1,inf]` = `[0,inf]`, `[1,inf]-[1,inf]` = entire, `[inf]-[inf]` = `∅`)
 * sabotage: the isotonicity property must go red if `1/[0]` is set back to `[-inf] ∪ [inf]` (the
   hypothesis strategy has to generate degenerate `[0]` inside `[-1,0]` / `[0,1]` often enough)
 
-### M7 `modulo.py` (2 days) — needs D5
+### M7a `modulo.py`, Q1 port (2 days)
 * port `modulo_v3_prototype.py` (P1 scalar mod, P2 scalar-mod-interval, far-edge union,
   attainment closure) onto `(lo, lo_closed, hi, hi_closed)` pieces; multi-piece operands test
   attainment against the full operands
@@ -122,8 +125,18 @@ every new property test (flip one comparison, watch red, restore).
 * pass the generating `(edge, k)` into the attainment test (design notes §3c cost) or cap `k`
 * tests: prototype's 112-case corner suite and 4000-case fuzz, verbatim; degenerate operands
   table from design notes §3c; differential vs v1 `A % scalar` (trusted); `[1,2) // 1 == [1]`
+* other sign combinations raise `NotImplementedError` until M7b; not a releasable state
 
-### M8 `time_interval.py` (1½ days) — needs D4
+### M7b modulo, every sign combination (one full session; blocks release)
+* derive the Q2 primitive pair (dividend < 0, divisor > 0) in closed form (design notes §2 Thm B,
+  §4 next steps), with a proof note next to the existing ones in `references/modulo-derivations/`
+* Q3/Q4 from Q1/Q2 by the antipodal identity; operands crossing zero split into sign-pure pieces via
+  the descriptor's split points; a divisor touching zero drops 0 with `DomainClippedWarning`
+* tests: extend the prototype's corner suite and fuzz to all four quadrants and zero-crossing
+  operands; attainment oracle on exact operands; python's `%` sign convention (result takes the
+  divisor's sign) as the scalar reference
+
+### M8 `time_interval.py` (1½ days) — deferred (D4); not part of this plan's schedule
 * `DateTimeInterval`, `TimeDeltaInterval` as thin wrappers over a numeric `MultiInterval` of
   exact seconds (D4a), with the v1 cross-type arithmetic table; keep the end-of-day snapping for
   `date` inputs (document it); fill v1's gaps (`__repr__`, slicing on both, item methods dropped
@@ -139,16 +152,16 @@ every new property test (flip one comparison, watch red, restore).
   reason from the plan's list. `1/[0]` is not a divergence row (both give empty, D7)
 
 ### M10 retire v1 (½ day)
-* delete `interval.py`, `multi_interval.py`, `time_interval.py`, `compare.py`; keep
-  `references/`; README rewritten around the package; `v2-plan.md` "current design" updated for
+* delete `interval.py` and `compare.py`; keep `references/`. v1 `time_interval.py` and v1
+  `multi_interval.py` (its backend) stay until M8 is done, marked legacy in the README; README rewritten around the package; `v2-plan.md` "current design" updated for
   every decision changed during the build (D1–D7 outcomes), dated
 
 ## 3. order and parallelism
 
-M1 → M2 → M3 → M4 → M5 → M6 → {M7, M8, M9} → M10. M4 depends on M3 (the class's `parse`, `__str__`
-and `__repr__` come from `fmt`); M7, M8, M9 are independent after M6. total ≈ 13–14 working days
-(the per-milestone sum, 13½). the first shippable point is after M5
-(set algebra, formatting, comparisons); arithmetic lands at M6.
+M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10; M8 deferred. M4 depends on M3 (the class's
+`parse`, `__str__` and `__repr__` come from `fmt`); M7a and M9 are independent after M6. total ≈ 12
+working days (the per-milestone sum without M8) plus the M7b session. the first internally usable
+point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6; release needs M7b.
 
 ## 4. v1 → v2 surface map (for the M10 README and for not forgetting anything)
 

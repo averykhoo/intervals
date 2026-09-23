@@ -12,10 +12,18 @@ superseded it.
   normalized to `0` at construction and the sign bit is never consulted (as v1 already does)
 * `[inf]` and `[-inf]` are legal degenerate intervals; `[a, inf]` and `[a, inf)` are different sets
 * number types: int and Fraction (exact, never rounded), float (endpoint arithmetic goes through the
-  rounding hook, identity by default — see arithmetic), datetime/timedelta in the time layer
-* meaning of an arithmetic result: the closure over attainable values *and their limits* (Hickey's
-  cset flavour). `1/(-1, 0)` = `[-inf, -1)`: -inf is a limit, so it is in, and closed (open: D1 in
-  v2-implementation-plan.md)
+  rounding hook, identity by default — see arithmetic). datetime/timedelta: the time layer is
+  deferred and v1's `time_interval.py` stays until it is rebuilt (D4)
+    * `int / int` that is not integral gives a Fraction; float only if an operand is float. a
+      Fraction with denominator 1 is normalized to int in the Cut constructor, next to the `-0.0`
+      normalization (they already compare and hash equal; this keeps types and printing clean)
+    * python leaks floats at infinity (`Fraction(1) / inf` is `0.0`), so the applicator evaluates
+      infinite corners itself and returns exact values (`1/[inf]` = `[0]`, not `[0.0]`)
+    * `nan` in a constructor is a `ValueError`
+* meaning of an arithmetic result: the set of values attained, with ±inf as ordinary points. an
+  infinite endpoint is closed iff it is attained; open/closed flags propagate through infinity like
+  anywhere else. `1/(-1, 0)` = `(-inf, -1)`: -inf is approached, not attained. a pole at a *closed*
+  zero endpoint attains the infinity of its piece's sign (next bullet)
 * **direction comes from the set, never from a sign bit.** reciprocal splits at zero into sign-pure
   pieces (needed for monotonicity anyway); a zero endpoint of a negative piece maps to `-inf`, of a
   positive piece to `+inf`. a degenerate `[0]` has no direction: `1/[0]` = `∅` and emits
@@ -27,16 +35,24 @@ superseded it.
   such a piece is lost: `1/[0]` = `∅`, so `1/(1/[inf])` = `∅`, and `[0] ∪ [1, 2]` → `[1/2, 1]` →
   `[1, 2]`. the sharp answer needs one bit of memory on a degenerate zero (Kahan's argument for the
   sign bit) and is deferred — see "later"
-* the price of infinity as a point: `[-inf, -1] * [0]` is the entire line, because the point
-  `(-inf, 0)` is in the box and `-inf * 0` is indeterminate; 1788 gives `[0]` because it never attains
-  infinity. this is the dependency problem at infinity, not a bug. so only actual limits close an
-  infinity, and a user-typed `[1, inf]` is taken literally (open: D2 in v2-implementation-plan.md)
+* indeterminate corners (`±inf · 0`, `inf - inf`, `±inf / ±inf`) of a box that is not itself the
+  indeterminate point take the limit along the box — the rule reciprocal already uses at zero. the
+  corner contributes the limit along each non-degenerate edge that meets it:
+    * mul at `(±inf, 0)`: `0` if the infinite factor's interval is non-degenerate, the signed
+      infinity if the zero factor's interval is
+    * sub at `(inf, inf)`: `-inf` if the minuend is non-degenerate, `+inf` if the subtrahend is; add
+      at `(inf, -inf)` likewise; division is multiplication by the reciprocal
+    * `[-inf, -1] * [0]` = `[0]`, `[-inf] * [0, 1]` = `[-inf]`, `[-inf, -1] * [0, 1]` = `[-inf, 0]`,
+      `[1, inf] / [1, inf]` = `[0, inf]`, `[1, inf] - [1, inf]` = entire: 1788's answers up to
+      closure at infinity
+    * a user-typed `[1, inf]` is taken literally
 * indeterminate forms: a box that *is* the indeterminate point (`1/[0]`, `[0] * [inf]`,
   `[inf] - [inf]`, `[0] / [0]`) returns `∅` and emits `IndeterminateResultWarning`. inclusion
   isotonicity (`A ⊆ B ⇒ f(A) ⊆ f(B)`) forces it: `[0]` is inside both `[-1, 0]` and `[0, 1]`, so
-  `1/[0] ⊆ [-inf, -1] ∩ [1, inf] = ∅`; likewise `[0] * [inf] ⊆ [0] * [5, inf] ∩ [0, 1] * [inf]`,
-  empty under D2's sharp corner rule. solvers (bisection, forward-backward contraction) need
-  isotone ops, and `1/[0]` = `∅` is also 1788's answer
+  `1/[0] ⊆ [-inf, -1] ∩ [1, inf] = ∅`; likewise `[0] * [inf] ⊆ [0] * [5, inf] ∩ [0, 1] * [inf]` and
+  `[inf] - [inf] ⊆ [inf] - [1, inf] ∩ [1, inf] - [inf]`, both empty under the corner rule. solvers
+  (bisection, forward-backward contraction) need isotone ops, and `1/[0]` = `∅` is also 1788's
+  answer
 
 ### representation: cuts
 
@@ -75,10 +91,12 @@ superseded it.
 
 * union / intersection / difference / complement / membership / subset are kernel functions over
   cut tuples. `in` = scalar membership, with a documented subset alias for interval arguments;
-  `__getitem__` slicing = restriction; `__bool__` = non-empty (set precedent)
+  `__getitem__` slicing = restriction to the closed `[a, b]` (v1 behaviour); `__bool__` = non-empty
+  (set precedent)
 * `size` — was `cardinality` in v1 and `measure` in the 2026-08 plan; neither fits (Lebesgue measure
-  ignores endpoints and rays). a lex-ordered named tuple `Size(rays, length, points)` that is only
-  ever compared, never computed with. the ω·rays + length + ε·points gloss is the right intuition
+  ignores endpoints and rays). a lex-ordered named tuple `Size(rays, length, points)`, compared and
+  added componentwise (the tiling invariants need `+`), nothing else. the ω·rays + length +
+  ε·points gloss is the right intuition
     * **half-open baseline**: a half-open piece has exactly its length; a closed endpoint adds half a
       point, an open one removes half. so `[1]` = 1 point, `[1,2)` = `1`, `[1,2]` = `1 + 1pt`,
       `(1,2)` = `1 - 1pt`, and `[1] + (1,2) + [2] == [1,2]`. tiling forces this convention:
@@ -100,7 +118,9 @@ superseded it.
   `a op b` over all `a ∈ A, b ∈ B`, so one of `{}`, `{T}`, `{F}`, `{T, F}`. `__bool__` is True/False on
   the singletons and **raises** on `{T, F}` (ambiguous) and on `{}` (an empty operand attains no truth
   value — set theory, not a convention; `∅ < B` is not vacuously TRUE). `.certainly` and `.possibly`
-  are plain bools for callers who do not want try/except
+  are plain bools for callers who do not want try/except. on `{}` they answer "every attained value
+  is T" and "some attained value is T": `.certainly` is vacuously True, `.possibly` False; only
+  `__bool__` refuses
 * `==` and `__hash__` are structural set equality; `!=` is its complement. pointwise equality is a
   named method and is `{T, F}` for any non-degenerate `a == a` (document it; it surprises everyone)
 * two consequences to document, both correct: **no trichotomy** (`a < b` FALSE and `a == b` False does
@@ -129,10 +149,15 @@ superseded it.
     4. union the piece results, normalize
 * op descriptor: monotonicity directions (2-corner fast path for add/sub for free), split points,
   flat-spot / attainment predicate, rounded-eval pair
-* division: split the denominator at zero, direction rule as above. `A / ∅ = ∅`
+* division: split the denominator at zero, direction rule as above. `A / ∅ = ∅`. exact operands
+  divide as Fraction (see number types)
 * floordiv: enumerate integer points below a size cap, else hull + warning — never silently drop
   openness (v1's `[1,2) // 1` = `[1,2]` is wrong; should be `[1]`)
-* modulo: the v3 far-edge algorithm, `references/modulo-derivations/claude-fable/`
+* modulo: the v3 far-edge algorithm, `references/modulo-derivations/claude-fable/`, for every sign
+  combination before release. Q1 (dividend ≥ 0, divisor > 0) is proven; Q3/Q4 follow from Q1/Q2 by
+  the antipodal identity; Q2 needs its own primitive derivation (design notes §2, Thm B); operands
+  crossing zero split into sign-pure pieces; a divisor touching zero drops 0 with
+  `DomainClippedWarning`
 * **rounding**: the hook exists from day one in the descriptor (retrofitting touches every op twice)
   but is **identity by default**. int and Fraction are exact and never rounded. outward
   `math.nextafter` (later gmpy2/mpfr as tight mode) is enabled by a subclass or factory, never by a
@@ -146,7 +171,10 @@ superseded it.
 * empty operands propagate: `A + ∅ = ∅`, `A / ∅ = ∅`, etc. this is set theory (the image of an empty
   set), and 1788 and the other libraries agree. emit `EmptySetPropagationWarning` with a default
   `'ignore'` filter installed at import; solver code opts in with
-  `warnings.simplefilter('error', EmptySetPropagationWarning)` as a tripwire
+  `warnings.simplefilter('error', EmptySetPropagationWarning)` as a tripwire (not in a contractor
+  loop, where `∅` is the normal "no solution here" answer). the import-time `'ignore'` filters are
+  process-global state: `pytest -W`, a `filterwarnings` ini entry and a later `simplefilter` all
+  override them, since later filters win
 * `DomainClippedWarning`, same pattern, wherever an op drops input points (`sqrt([-1, 4])`, `log`,
   modulo by a divisor touching zero). this is the cheap stand-in for 1788 decorations
 * `IndeterminateResultWarning` as in "domain and semantics"
@@ -166,7 +194,7 @@ superseded it.
     * residual divergence table: degenerate infinities, domain-clipped functions, decoration
       expectations. (`1/[0]` is not a row: both give empty)
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
-  community test framework and its `itl` vector DSL
+  community test framework and its `itl` vector DSL. check its licence before vendoring `.itl` files
 * decorations (`com/dac/def/trv/ill`) are **not in the core**. they answer "was f defined and
   continuous on the whole input", which the result set cannot (`sqrt([-1,4])` = `[0,2]` either way),
   and only solver existence proofs need that. when the solver comes, a decorated wrapper type; until
@@ -189,7 +217,7 @@ imports only point downward.
         fmt.py             format and parse cut tuples; regexes compiled at module level
         multi_interval.py  the class: immutable cut tuple; _coerce (numbers and intervals only —
                            strings go through an explicit parse()); one-line dunders
-        time_interval.py   the same kernel over datetime/timedelta values
+        time_interval.py   the same kernel over datetime/timedelta values (deferred, D4)
         __init__.py        public API, constants (EMPTY, REALS, ...)
     tests/
         oracles.py         sampling + attainment oracles, promoted out of modulo_v3_prototype
@@ -214,8 +242,7 @@ imports only point downward.
     * `f(A ∪ B) == f(A) ∪ f(B)` only for ops without split points on finite operands (add, sub, neg,
       abs, mul). for reciprocal/div only `f(A ∪ B) ⊇ f(A) ∪ f(B)` (i.e. isotonicity): under the
       direction-from-the-piece rule equality fails with *any* value of `1/[0]`. counterexample
-      `A = [-1, 0)`, `B = [0]`: `1/(A ∪ B)` = `[-inf, -1]`, but `1/A ∪ 1/B` = `(-inf, -1]` (with
-      D1's flag propagation; under the current "closure over limits" wording `1/A` is closed at -inf)
+      `A = [-1, 0)`, `B = [0]`: `1/(A ∪ B)` = `[-inf, -1]`, but `1/A ∪ 1/B` = `(-inf, -1]`
     * `1/(1/A) == A` for every A with no degenerate piece at `0`, `inf` or `-inf`
 * sabotage each check once (flip one merge comparison) and watch it go red before trusting it
 * itf1788 conformance through the adapter above
@@ -232,7 +259,26 @@ imports only point downward.
 
 ## decision log
 
+### 2026-09-23 revision: D1–D6 settled
+
+owner decisions on the review's open list (v2-implementation-plan.md section 0).
+
+* **D1, closure at infinity**: flags propagate; an infinite endpoint is closed iff attained.
+  "closure over attainable values and their limits" is gone: it made `1/(-1, 0)` = `[-inf, -1)`,
+  which contradicted both `1/[1, inf)` = `(0, 1]` and the involution (`1/(1/(-1, 0))` came back
+  `(-1, 0]`)
+* **D2, indeterminate corners**: limit along the box, as reciprocal already did at zero. replaces
+  "`[-inf, -1] * [0]` is the entire line". this is what forces D7's `∅` for `[0] * [inf]` and
+  `[inf] - [inf]`; under the entire-line rule `∅` was allowed but not forced
+* **D3**: exact division as Fraction, integral Fractions normalized to int
+* **D4**: time layer deferred; v1's `time_interval.py` (and v1 `multi_interval.py` under it) stay
+* **D5**: modulo for every sign combination is required before release, as its own milestone; not
+  shipped Q1-only
+* **D6**: `[a, inf]` literal — already the design, recorded as settled
+
 ### 2026-09-23 revision: degenerate indeterminate boxes return ∅
+
+> **amended same day**: D1 and D2 were decided after this entry; see the entry above.
 
 owner decision (D7 in v2-implementation-plan.md). a box that *is* an indeterminate point — `1/[0]`,
 `[0] * [inf]`, `[inf] - [inf]`, `[0] / [0]` — returns `∅` and emits `IndeterminateResultWarning`,
@@ -399,7 +445,7 @@ model the UX on how python/IEEE already treat -0.0 (equal, same hash, sign prese
 #### division semantics vs ieee 1788 (they are not wrong, just different)
 
 > **amended**: direction comes from the set, not a sign bit; `1/[0]` = `[-inf] ∪ [inf]`.
-> **superseded 2026-09-23**: `1/[0]` = `∅` + warning (see the 2026-09-23 entry).
+> **superseded 2026-09-23**: `1/[0]` = `∅` + warning, and results are attained values with flags propagating through infinity, not a closure over limits (see the 2026-09-23 entries).
 
 * ours: closure over attainable values/limits (cset-flavored, cf. hickey/van emden paper in README todo) -> zero denominators contribute their limit infinities, signed zeros pick the branch
 * 1788: division is the *inverse relation of multiplication* over the reals ({z : x = z·y}); y=0 contributes no z because z·0=1 has no solution -> `1/[-5,0] = [-inf,-0.2]` with decoration dropped to `trv` (partiality is recorded, not ignored). solvers get the split result via `mulRevToPair` (two-interval extended division)
