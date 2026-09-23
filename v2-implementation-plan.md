@@ -11,7 +11,7 @@ of 2026-09-23 and written into `v2-plan.md`'s "current design".
 | D1 | **decided: recommended default.** closure at infinity: `1/(-1, 0)` is written as `[-inf, -1)`, but the involution claim and `1/[1, inf)` = `(0, 1]` both need the flag to *propagate*: `(-inf, -1)`. state the rule as "±inf are ordinary points; an infinite endpoint is closed iff attained; a pole at a **closed** zero endpoint attains ±inf by the piece's sign". drop the "closure over limits" wording | propagate flags; `1/(-1,0)` = `(-inf,-1)` | M6 |
 | D2 | **decided: recommended default.** indeterminate corners: `[-inf,-1] * [0]` is written as the entire line, but `1/[-1,0]` already uses the sharp limit-along-the-box rule. the same rule for mul: at an indeterminate corner `(±inf, 0)` the corner contributes `0` if the infinite factor's interval is non-degenerate, and the signed infinity if the zero factor's interval is non-degenerate. so `[-inf]*[0,1]` = `[-inf]`, `[-inf,-1]*[0]` = `[0]`, `[-inf,-1]*[0,1]` = `[-inf,0]`, `[1,inf]/[1,inf]` = `[0,inf]`, all matching 1788 up to closure at inf. general form: an indeterminate corner contributes the limit along each non-degenerate edge that meets it, so for sub at `(inf, inf)` it contributes `-inf` if the minuend is non-degenerate and `+inf` if the subtrahend is (`[inf]-[1,inf]` = `[inf]`, `[1,inf]-[inf]` = `[-inf]`, `[1,inf]-[1,inf]` = entire, as 1788); add at `(inf, -inf)` likewise. a box that *is* the indeterminate point returns `∅` + warning (D7). through the itf1788 adapter's input rule (1788 unbounded → open at inf) the infinite corner is never in the box, so D2 does not change conformance — it only affects user-typed literal `[-inf, …]` bounds | sharp rule | M6 |
 | D3 | **decided: recommended default**, plus integral Fractions normalize to int in `Cut`. `int / int` that is not integral: Fraction (exact, per "never rounded") or float (what users expect)? | Fraction; `fmt` prints `1/3`; float only if an operand is float | M6 |
-| D4 | **deferred**: the time layer is not being rebuilt now; v1's stays (see M8, M10). infinities for the time layer: v1 stores float unix seconds (loses sub-µs, dodges the question). v2 options: (a) Fraction seconds in the numeric kernel, thin wrapper; (b) native datetime cuts + two sentinel objects that compare below/above everything | (a) — reuses every kernel test unchanged, when M8 happens | M8 (deferred) |
+| D4 | **deferred**: the time layer is not being rebuilt now; v1's is archived with the rest of v1 at M10 and comes back in M8 on top of the v2 class (see M8, M10). infinities for the time layer: v1 stores float unix seconds (loses sub-µs, dodges the question). v2 options: (a) Fraction seconds in the numeric kernel, thin wrapper; (b) native datetime cuts + two sentinel objects that compare below/above everything | (a) — reuses every kernel test unchanged, when M8 happens | M8 (deferred) |
 | D5 | **decided: every sign combination before release**, as its own milestone (M7b); the recommended Q1-only v2.0 is rejected. modulo scope for v2.0: the v3 work covers A ≥ 0, B > 0 only; Q2 primitive and zero-crossing operands are underived (design notes §4) | full modulo, M7a then M7b | release |
 | D6 | constructor default for an infinite bound: `MI(1, inf)` = `[1, inf]` (literal) or `[1, inf)` (1788 reading)? **settled (v2-plan.md current design): literal** — `[a, inf]` and `[a, inf)` are different sets and "a user-typed `[1, inf]` is taken literally". D2 removes the blow-up footgun that made this look open | literal | — |
 | D7 | **decided 2026-09-23 by owner**: a box that *is* an indeterminate point (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`, `[0]/[0]`) returns `∅` + `IndeterminateResultWarning` (was `[-inf] ∪ [inf]` / entire). isotonicity forces it: `[0]` is inside `[-1,0]` and `[0,1]`, so `1/[0] ⊆ [-inf,-1] ∩ [1,inf] = ∅`; `[0]*[inf] ⊆ [0]*[5,inf] ∩ [0,1]*[inf]` = `∅` and `[inf]-[inf] ⊆ [inf]-[1,inf] ∩ [1,inf]-[inf]` = `∅` under D2. solvers need isotone ops; matches 1788's empty. cost: `1/(1/[inf])` = `∅`; `1/x` round-trips only on sets with no degenerate piece at `0`, `inf`, `-inf`; the "later" direction tag stays the recovery path. separately, `f(A ∪ B) == f(A) ∪ f(B)` fails for reciprocal with any `1/[0]` (`A=[-1,0)`, `B=[0]`), so that law is only `⊇` for reciprocal/div | `∅` + warning | M6 |
@@ -33,9 +33,10 @@ vendoring.
   relying on `python -m` putting cwd on `sys.path`, and a
   `filterwarnings` entry turning the library's own warnings into errors inside the suite once
   the warning classes exist). no CI in this repo today; do not add one in these branches
-* v1 files stay in place, untouched, until M10: they are the differential oracle for set ops
-  and for `A % scalar`. the package is `intervals/`, so `import multi_interval` (v1) and
-  `from intervals import MultiInterval` (v2) coexist
+* v1 files stay in place, untouched, until M10, then move to `archive/v1/`. **no v1 file is ever
+  deleted by this plan**: the archive is the reference until v2 works. v1 is the differential
+  oracle for set ops and for `A % scalar`. the package is `intervals/`, so `import multi_interval`
+  (v1) and `from intervals import MultiInterval` (v2) coexist, before and after the move
 
 ## 2. milestones
 
@@ -137,6 +138,8 @@ every new property test (flip one comparison, watch red, restore).
   divisor's sign) as the scalar reference
 
 ### M8 `time_interval.py` (1½ days) — deferred (D4); not part of this plan's schedule
+* starts from `archive/v1/time_interval.py`, ported onto the v2 class with whatever tweaks that
+  needs; the archived copy stays until the port works
 * `DateTimeInterval`, `TimeDeltaInterval` as thin wrappers over a numeric `MultiInterval` of
   exact seconds (D4a), with the v1 cross-type arithmetic table; keep the end-of-day snapping for
   `date` inputs (document it); fill v1's gaps (`__repr__`, slicing on both, item methods dropped
@@ -151,10 +154,17 @@ every new property test (flip one comparison, watch red, restore).
 * exit: every vector either matches through the adapter or is in the divergence table with a
   reason from the plan's list. `1/[0]` is not a divergence row (both give empty, D7)
 
-### M10 retire v1 (½ day)
-* delete `interval.py` and `compare.py`; keep `references/`. v1 `time_interval.py` and v1
-  `multi_interval.py` (its backend) stay until M8 is done, marked legacy in the README; README rewritten around the package; `v2-plan.md` "current design" updated for
-  every decision changed during the build (D1–D7 outcomes), dated
+### M10 archive v1 (½ day)
+* `git mv` `interval.py`, `multi_interval.py`, `time_interval.py` and `compare.py` into
+  `archive/v1/`, unchanged: nothing is deleted. v1 `time_interval.py` imports v1
+  `multi_interval.py`, so they move together and stay runnable side by side
+* add `archive/v1` to pytest's `pythonpath` so the differential tests against v1 keep running
+* README rewritten around the package, with a short note that `archive/v1/` is the old
+  implementation kept as reference; keep `references/`
+* `v2-plan.md` "current design" updated for every decision changed during the build (D1–D7
+  outcomes), dated
+* the archive goes only by owner decision, once v2 works (release, and M8 if the time layer is
+  wanted)
 
 ## 3. order and parallelism
 
@@ -164,6 +174,8 @@ working days (the per-milestone sum without M8) plus the M7b session. the first 
 point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6; release needs M7b.
 
 ## 4. v1 → v2 surface map (for the M10 README and for not forgetting anything)
+
+"gone" below means gone from v2's API; the v1 code itself is archived at M10, not deleted.
 
 | v1 | v2 |
 |---|---|
@@ -177,4 +189,4 @@ point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6
 | `__floordiv__` floors endpoints | `floor ∘ div`, enumerating |
 | `apply_monotonic_{unary,binary}_function` | `applicator.apply_{unary,binary}(descriptor, ...)` |
 | `INFINITY_IS_NOT_FINITE`, `CONSISTENCY_CHECK` | deleted; `if __debug__` check in the class |
-| `interval.py` (`Interval`, `MultipleInterval`) | deleted; `tests/oracles.py` |
+| `interval.py` (`Interval`, `MultipleInterval`) | archived in `archive/v1/`; `tests/oracles.py` does its job |

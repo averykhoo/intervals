@@ -13,7 +13,8 @@ superseded it.
 * `[inf]` and `[-inf]` are legal degenerate intervals; `[a, inf]` and `[a, inf)` are different sets
 * number types: int and Fraction (exact, never rounded), float (endpoint arithmetic goes through the
   rounding hook, identity by default — see arithmetic). datetime/timedelta: the time layer is
-  deferred and v1's `time_interval.py` stays until it is rebuilt (D4)
+  deferred; v1's `time_interval.py` is archived with the rest of v1 and returns once it runs on
+  the v2 class (D4)
     * `int / int` that is not integral gives a Fraction; float only if an operand is float. a
       Fraction with denominator 1 is normalized to int in the Cut constructor, next to the `-0.0`
       normalization (they already compare and hash equal; this keeps types and printing clean)
@@ -230,7 +231,9 @@ imports only point downward.
 * `_consistency_check` under `if __debug__:` (v1 runs an O(n) scan at the top of nearly every public
   method; that is the real hot cost). correctness lives in the tests
 * immutability retires the `inplace=` dual API. `interval.py` (the alternative debug implementation)
-  is retired; the sampling oracle does that job better
+  is not ported; the sampling oracle does that job better
+* v1 is **archived, never deleted**: all v1 modules move unchanged to `archive/v1/` once v2 is in
+  place, and stay as the reference until v2 works
 
 ### testing
 
@@ -275,6 +278,9 @@ owner decisions on the review's open list (v2-implementation-plan.md section 0).
 * **D5**: modulo for every sign combination is required before release, as its own milestone; not
   shipped Q1-only
 * **D6**: `[a, inf]` literal — already the design, recorded as settled
+* **v1 files** (owner, later the same day): archived to `archive/v1/`, never deleted, until v2
+  works. this includes `time_interval.py`, which returns on top of the v2 class; the D4 bullet's
+  "stay" means "stay in the archive"
 
 ### 2026-09-23 revision: degenerate indeterminate boxes return ∅
 
