@@ -4,7 +4,7 @@ two parts. **current design** is normative: if the code and that section disagre
 bug. the **decision log** below it is history, kept verbatim, with a marker wherever a later decision
 superseded it.
 
-## current design (2026-09-22)
+## current design (2026-09-23)
 
 ### domain and semantics
 
@@ -14,23 +14,29 @@ superseded it.
 * number types: int and Fraction (exact, never rounded), float (endpoint arithmetic goes through the
   rounding hook, identity by default — see arithmetic), datetime/timedelta in the time layer
 * meaning of an arithmetic result: the closure over attainable values *and their limits* (Hickey's
-  cset flavour). `1/(-1, 0)` = `[-inf, -1)`: -inf is a limit, so it is in, and closed
+  cset flavour). `1/(-1, 0)` = `[-inf, -1)`: -inf is a limit, so it is in, and closed (open: D1 in
+  v2-implementation-plan.md)
 * **direction comes from the set, never from a sign bit.** reciprocal splits at zero into sign-pure
   pieces (needed for monotonicity anyway); a zero endpoint of a negative piece maps to `-inf`, of a
-  positive piece to `+inf`. a degenerate `[0]` has no direction and maps to `[-inf] ∪ [inf]`
+  positive piece to `+inf`. a degenerate `[0]` has no direction: `1/[0]` = `∅` and emits
+  `IndeterminateResultWarning` (isotonicity forces it, see "indeterminate forms")
     * `1/[-1, 0]` = `[-inf, -1]` — same as Hickey and as ieee 1788, no signed zero needed
     * `1/[-1, 1]` = `[-inf, -1] ∪ [1, inf]`
     * `1/[1, inf]` = `[0, 1]`, `1/[1, inf)` = `(0, 1]`: closedness at infinity and at zero correspond
-* consequence: `1/x` is an involution on every interval except one with a *lone* degenerate infinity
-  piece: `1/(1/[inf])` = `1/[0]` = `[-inf] ∪ [inf]`. sound, not sharp, symmetric at both infinities.
-  the sharp answer needs one bit of memory on a degenerate zero (Kahan's argument for the sign bit)
-  and is deferred — see "later"
+* consequence: `1/x` is an involution only on sets with no degenerate piece at `0`, `inf` or `-inf`.
+  such a piece is lost: `1/[0]` = `∅`, so `1/(1/[inf])` = `∅`, and `[0] ∪ [1, 2]` → `[1/2, 1]` →
+  `[1, 2]`. the sharp answer needs one bit of memory on a degenerate zero (Kahan's argument for the
+  sign bit) and is deferred — see "later"
 * the price of infinity as a point: `[-inf, -1] * [0]` is the entire line, because the point
   `(-inf, 0)` is in the box and `-inf * 0` is indeterminate; 1788 gives `[0]` because it never attains
   infinity. this is the dependency problem at infinity, not a bug. so only actual limits close an
-  infinity, and a user-typed `[1, inf]` is taken literally
-* indeterminate forms (`0 * inf`, `0/0`, `inf - inf`, `1/[0]`) return the sound closure (the entire
-  line, or both infinities) and emit `IndeterminateResultWarning`
+  infinity, and a user-typed `[1, inf]` is taken literally (open: D2 in v2-implementation-plan.md)
+* indeterminate forms: a box that *is* the indeterminate point (`1/[0]`, `[0] * [inf]`,
+  `[inf] - [inf]`, `[0] / [0]`) returns `∅` and emits `IndeterminateResultWarning`. inclusion
+  isotonicity (`A ⊆ B ⇒ f(A) ⊆ f(B)`) forces it: `[0]` is inside both `[-1, 0]` and `[0, 1]`, so
+  `1/[0] ⊆ [-inf, -1] ∩ [1, inf] = ∅`; likewise `[0] * [inf] ⊆ [0] * [5, inf] ∩ [0, 1] * [inf]`,
+  empty under D2's sharp corner rule. solvers (bisection, forward-backward contraction) need
+  isotone ops, and `1/[0]` = `∅` is also 1788's answer
 
 ### representation: cuts
 
@@ -83,8 +89,10 @@ superseded it.
       may be negative: `(1, inf]` = `Size(1, -1, 0)`
     * v1 bug, do not port: `multi_interval.py::cardinality` adds `inf - start` for a ray piece and
       then negates it, so `(1, inf]` comes out `(1, -inf, 0)` against its own docstring. the ray branch
-      must contribute the finite endpoint only. (read from the code, not executed — this repo has no
-      environment)
+      must contribute the finite endpoint only. (executed 2026-09-23 in the `intervals` conda env:
+      with the default `INFINITY_IS_NOT_FINITE = True`, constructing `(1, inf]` raises `ValueError`;
+      with the flag off `(1, inf]` and `[1, inf)` give `(1, -inf, 0)` and `[-inf, 1]` gives
+      `(1, -inf, 2)`)
 
 ### comparisons
 
@@ -155,8 +163,8 @@ superseded it.
       infinity. without this every vector touching infinity mismatches
     * **output rule**: closed-hull our result before comparing; absorbs multi-interval vs connected
       (`[1,2]/[-1,1]`: 1788 entire, ours `[-inf,-1] ∪ [1,inf]`, hull = entire → match)
-    * residual divergence table: `1/[0]` (1788 empty, ours both infinities), degenerate infinities,
-      domain-clipped functions, decoration expectations
+    * residual divergence table: degenerate infinities, domain-clipped functions, decoration
+      expectations. (`1/[0]` is not a row: both give empty)
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
   community test framework and its `itl` vector DSL
 * decorations (`com/dac/def/trv/ill`) are **not in the core**. they answer "was f defined and
@@ -200,9 +208,15 @@ imports only point downward.
 
 * soundness fuzz for every op: `op(x, y) ∈ op(A, B)` for sampled `x ∈ A, y ∈ B`
 * attainment checks for closure, on int/Fraction operands only
-* algebraic properties that pin the cut encoding cheaply: `~~A == A`, De Morgan,
-  `A ⊆ B ⇒ f(A) ⊆ f(B)`, `f(A ∪ B) == f(A) ∪ f(B)`, `1/(1/A) == A` for every A without a lone
-  degenerate infinity piece, the size tiling invariants
+* algebraic properties that pin the cut encoding cheaply: `~~A == A`, De Morgan, the size tiling
+  invariants, and for arithmetic:
+    * isotonicity for every op: `A ⊆ B ⇒ f(A) ⊆ f(B)`
+    * `f(A ∪ B) == f(A) ∪ f(B)` only for ops without split points on finite operands (add, sub, neg,
+      abs, mul). for reciprocal/div only `f(A ∪ B) ⊇ f(A) ∪ f(B)` (i.e. isotonicity): under the
+      direction-from-the-piece rule equality fails with *any* value of `1/[0]`. counterexample
+      `A = [-1, 0)`, `B = [0]`: `1/(A ∪ B)` = `[-inf, -1]`, but `1/A ∪ 1/B` = `(-inf, -1]` (with
+      D1's flag propagation; under the current "closure over limits" wording `1/A` is closed at -inf)
+    * `1/(1/A) == A` for every A with no degenerate piece at `0`, `inf` or `-inf`
 * sabotage each check once (flip one merge comparison) and watch it go red before trusting it
 * itf1788 conformance through the adapter above
 
@@ -217,6 +231,25 @@ imports only point downward.
   a test, numpy compat (array API / `__array_ufunc__`), tight rounding via gmpy2/mpfr
 
 ## decision log
+
+### 2026-09-23 revision: degenerate indeterminate boxes return ∅
+
+owner decision (D7 in v2-implementation-plan.md). a box that *is* an indeterminate point — `1/[0]`,
+`[0] * [inf]`, `[inf] - [inf]`, `[0] / [0]` — returns `∅` and emits `IndeterminateResultWarning`,
+where the 2026-09-22 design gave `[-inf] ∪ [inf]` or the entire line.
+
+**why.** inclusion isotonicity (`A ⊆ B ⇒ f(A) ⊆ f(B)`) forces it: `[0]` is inside both `[-1, 0]` and
+`[0, 1]`, so `1/[0] ⊆ [-inf, -1] ∩ [1, inf] = ∅`; `[0] * [inf] ⊆ [0] * [5, inf] ∩ [0, 1] * [inf]`,
+empty under the sharp corner rule. solvers (bisection, forward-backward contraction) need isotone
+ops; it matches 1788's empty and removes the `1/[0]` row from the itf1788 divergence table.
+
+**cost.** `1/(1/[inf])` = `∅`, and `1/x` round-trips only for sets with no degenerate piece at `0`,
+`inf` or `-inf` (`[0] ∪ [1, 2]` → `[1/2, 1]` → `[1, 2]`). the direction tag under "later" stays the
+recovery path.
+
+**separately.** `f(A ∪ B) == f(A) ∪ f(B)` is false for reciprocal under the direction-from-the-piece
+rule with *any* value of `1/[0]`: `A = [-1, 0)`, `B = [0]` gives `1/(A ∪ B)` = `[-inf, -1]` but
+`1/A ∪ 1/B` = `(-inf, -1]` (with D1's flag propagation). that law is only `⊇` for reciprocal/div.
 
 ### 2026-09-22 revision: signed zero dropped
 
@@ -235,9 +268,14 @@ in the order it also cost real correctness: `[-1, 0]` necessarily contains `-0`,
 phantom `+inf` under "signs pick the branch"; `(-0.0, 1)` contained `0.0`; ints cannot spell `-0`;
 `[-0]`, `[+0]` and `[-0, 0]` were `==` and hash-equal yet gave different reciprocals.
 
+> **superseded 2026-09-23**: `1/[0]` is now `∅`, so `1/(1/[inf])` = `∅` and the involution also
+> fails at a degenerate zero piece. see the 2026-09-23 entry.
+
 **what is lost.** `1/(1/[inf])` is `[-inf] ∪ [inf]` instead of `[inf]` — Kahan's involution argument,
 the one real case for the sign bit. it breaks at both infinities symmetrically and nowhere else, and
 is recoverable later as metadata (see "later").
+
+> **superseded 2026-09-23**: "now" column, rows `1/[0]` and `[0] * [inf]` — both are `∅` + warn
 
 | case          | pure math      | ieee 754 scalar | python         | ieee 1788                     | cset (Hickey)         | 2026-08 plan         | now                     |
 |---------------|----------------|-----------------|----------------|-------------------------------|-----------------------|----------------------|-------------------------|
@@ -361,6 +399,7 @@ model the UX on how python/IEEE already treat -0.0 (equal, same hash, sign prese
 #### division semantics vs ieee 1788 (they are not wrong, just different)
 
 > **amended**: direction comes from the set, not a sign bit; `1/[0]` = `[-inf] ∪ [inf]`.
+> **superseded 2026-09-23**: `1/[0]` = `∅` + warning (see the 2026-09-23 entry).
 
 * ours: closure over attainable values/limits (cset-flavored, cf. hickey/van emden paper in README todo) -> zero denominators contribute their limit infinities, signed zeros pick the branch
 * 1788: division is the *inverse relation of multiplication* over the reals ({z : x = z·y}); y=0 contributes no z because z·0=1 has no solution -> `1/[-5,0] = [-inf,-0.2]` with decoration dropped to `trv` (partiality is recorded, not ignored). solvers get the split result via `mulRevToPair` (two-interval extended division)
