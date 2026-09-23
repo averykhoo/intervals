@@ -1,10 +1,10 @@
 # `MultiInterval` v2 implementation plan (sketch, 2026-09-23)
 
 companion to `v2-plan.md`. that file says *what*; this one says *in what order*, with an exit
-criterion per milestone. review findings that needed an owner decision are in section 0; all are settled or deferred as
-of 2026-09-23 and written into `v2-plan.md`'s "current design".
+criterion per milestone. review findings that needed an owner decision are in section 0; D1–D7 are settled or deferred as
+of 2026-09-23 and written into `v2-plan.md`'s "current design"; D8 has a recommended default awaiting the owner.
 
-## 0. decisions (from the 2026-09-23 review; all settled or deferred 2026-09-23)
+## 0. decisions (from the 2026-09-23 reviews; D1–D7 settled or deferred, D8 awaiting owner)
 
 | # | question | recommended default | blocks |
 |---|---|---|---|
@@ -15,6 +15,13 @@ of 2026-09-23 and written into `v2-plan.md`'s "current design".
 | D5 | **decided: every sign combination before release**, as its own milestone (M7b); the recommended Q1-only v2.0 is rejected. modulo scope for v2.0: the v3 work covers A ≥ 0, B > 0 only; Q2 primitive and zero-crossing operands are underived (design notes §4) | full modulo, M7a then M7b | release |
 | D6 | constructor default for an infinite bound: `MI(1, inf)` = `[1, inf]` (literal) or `[1, inf)` (1788 reading)? **settled (v2-plan.md current design): literal** — `[a, inf]` and `[a, inf)` are different sets and "a user-typed `[1, inf]` is taken literally". D2 removes the blow-up footgun that made this look open | literal | — |
 | D7 | **decided 2026-09-23 by owner**: a box that *is* an indeterminate point (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`, `[0]/[0]`) returns `∅` + `IndeterminateResultWarning` (was `[-inf] ∪ [inf]` / entire). isotonicity forces it: `[0]` is inside `[-1,0]` and `[0,1]`, so `1/[0] ⊆ [-inf,-1] ∩ [1,inf] = ∅`; `[0]*[inf] ⊆ [0]*[5,inf] ∩ [0,1]*[inf]` = `∅` and `[inf]-[inf] ⊆ [inf]-[1,inf] ∩ [1,inf]-[inf]` = `∅` under D2. solvers need isotone ops; matches 1788's empty. cost: `1/(1/[inf])` = `∅`; `1/x` round-trips only on sets with no degenerate piece at `0`, `inf`, `-inf`; the "later" direction tag stays the recovery path. separately, `f(A ∪ B) == f(A) ∪ f(B)` fails for reciprocal with any `1/[0]` (`A=[-1,0)`, `B=[0]`), so that law is only `⊇` for reciprocal/div | `∅` + warning | M6 |
+| D8 | **recommended default, not yet confirmed by owner.** modulo with infinite operands: python gives `inf % 3` = `nan`, `3 % inf` = `3`, `-3 % inf` = `inf`. a dividend of ±inf attains nothing, so it is dropped with `DomainClippedWarning`; a finite dividend mod an infinite divisor follows python's scalar result (also the limit along the box) | clip / follow python | M7b |
+
+implementability review (2026-09-23, second pass), written into "current design" and the
+milestones below: infinite result endpoints always go through attainment (the corner-flag rule is
+wrong at ±inf); mul splits at zero; ±inf is exact; `-` is arithmetic, set difference is a method;
+`==` does not coerce; relations return bool; import-time filters `append=True`; itf1788 hulls the
+expected value too; `Cut` normalizes in a subclass because `typing.NamedTuple` refuses `__new__`.
 
 smaller gaps, accepted and written into "current design" 2026-09-23: `Size` has componentwise
 `+`; `TruthSet.certainly`/`.possibly` on `{}` are True/False; `nan` in a constructor is a
@@ -44,10 +51,12 @@ each milestone = one branch or one commit series, green gate at the end, sabotag
 every new property test (flip one comparison, watch red, restore).
 
 ### M1 `errors.py` + `cuts.py` (½ day)
-* `Side(IntEnum)`, `Cut(NamedTuple)` with `-0.0 → 0.0`, integral `Fraction → int` and `nan → ValueError` in `__new__`, `below(v)`, `above(v)`,
+* `Side(IntEnum)`, `Cut` with `-0.0 → 0.0`, integral `Fraction → int` and `nan → ValueError` in `__new__`
+  (`typing.NamedTuple` refuses a `__new__` override, so `Cut` subclasses a `_CutBase(NamedTuple)`
+  with `__slots__ = ()` and normalizes there), `below(v)`, `above(v)`,
   `mirror(cut)`, `as_start(cut) -> (value, closed)`, `as_end(cut)`, `start_cut(value, closed)`,
   `end_cut(value, closed)`
-* the four warning classes and the filter install
+* the four warning classes and the filter install (`append=True`, so earlier user filters win)
 * tests: ordering table from the plan, mirror is an involution, `[a,b]` round-trips through
   `start_cut/as_start`, `Cut(-0.0, x) == Cut(0.0, x)` and prints `0.0`; `type(Cut(Fraction(6, 3), x).value) is int`
 
@@ -72,15 +81,19 @@ every new property test (flip one comparison, watch red, restore).
 * frozen, `__slots__ = ('_cuts',)`; `MultiInterval(start=None, end=None, *, start_closed=True,
   end_closed=True)`, `from_cuts`, `from_pieces`, `parse` (explicit; strings are not coerced)
 * `_coerce(other)`: Real → degenerate, MultiInterval → itself, else `NotImplemented`
-* dunders: `| & - ^ ~`, `__contains__` (scalar, subset alias), `__getitem__` (slice = restriction),
-  `__bool__`, `__eq__/__hash__` structural, `__iter__` over pieces, `__len__` = piece count,
+* dunders: `| & ^ ~` for set algebra, `union intersection difference symmetric_difference
+  complement` as methods (`-` is left for M6's arithmetic subtraction, as in v1),
+  `__contains__` (scalar, subset alias), `__getitem__` (slice = restriction),
+  `__bool__`, `__eq__/__hash__` structural (`NotImplemented` for non-MultiInterval, no coercion),
+  `__iter__` over pieces, `__len__` = piece count,
   `__repr__` (fixes v1), `__str__`
 * properties ported from v1: `is_empty is_contiguous is_degenerate is_finite is_integral
   is_positive is_negative is_non_negative is_non_positive finite positive negative inf sup
   inf_closed sup_closed degenerate_points hull pieces size`
 * dropped from v1 (immutability): `add clear discard pop remove update *_update merge_adjacent
   abs/invert/mirror (mutating forms) expand(inplace=) copy`; `expand(d)` returns a new value
-* tests: mostly delegation; `hash`/`==` consistency under hypothesis; `sorted()` uses `sort_key`
+* tests: mostly delegation; `hash`/`==` consistency under hypothesis; `MI(5) != 5`;
+  `sorted()` uses `sort_key`
 
 ### M5 `relations.py` (1 day)
 * `TruthSet` (four states, `__bool__` raises on `{}` and `{T,F}`, `.certainly`, `.possibly`)
@@ -89,23 +102,32 @@ every new property test (flip one comparison, watch red, restore).
   `{}` if either operand is empty), then verified by sampling
 * `equals_pointwise`, `before after adjoins disjoint overlaps contains within`, `certainly_*` /
   `possibly_*`, `allen(a, b)` on contiguous operands (raise otherwise), `sort_key`
-* tests: oracle = enumerate sampled pairs, compare the attained truth set; `[1,2) before [2,3]`
-  is `{T}` and `[1,2] before [2,3]` is `{T,F}`; the 13 Allen cases plus the two cut-refined ones
+* relations return `bool`; only `lt le gt ge` return a `TruthSet`
+* tests: oracle = enumerate sampled pairs, compare the attained truth set; `[1,2) < [2,3]` is
+  `{T}` and `[1,2] < [2,3]` is `{T,F}`; `before([1,2), [2,3])` is True and `before([1,2], [2,3])`
+  is False; `before(A, B) == (A < B).certainly` for non-empty operands; the 13 Allen cases plus
+  the two cut-refined ones
 
 ### M6 `applicator.py` + `ops.py` (3 days) — needs D1, D2, D3, D7
 * `OpDescriptor(fn, monotone=(dir_x, dir_y) | None, split_points=(...), attained=None,
   rounded=(fn_down, fn_up) | None)`
-* `apply_binary(desc, A, B)`: split at descriptor points → for each piece pair, corners on
-  `(lo, lo_closed, hi, hi_closed)` treated closed → closure: corner-flag rule when monotone,
-  else `desc.attained(v, A, B)` on the full operands → union → normalize. `apply_unary` the same
+* `apply_binary(desc, A, B)`: split at descriptor points (zero for reciprocal, div **and mul**)
+  → for each piece pair, corners on `(lo, lo_closed, hi, hi_closed)` treated closed → closure:
+  corner-flag rule only for a finite result endpoint of an op injective in each argument there;
+  every infinite result endpoint and every flat spot goes through `desc.attained(v, A, B)` on the
+  full operands → union → normalize. `apply_unary` the same
+* ±inf is exact: never rounded, does not make an interval float, attainment at ±inf decided
+  symbolically
+* `div` evaluates `a / b` at the corners directly (not `a * (1/b)`, which rounds twice on floats)
 * indeterminate corner policy per D2, warnings per plan; empty propagation + warning
 * exact division (D3): int/Fraction operands divide as Fraction; infinite corners are evaluated
   by the applicator, not by python (`Fraction(1) / inf` is `0.0`), so `1/[inf]` is `[0]` exactly
 * ops: `add sub neg mul reciprocal div abs pos`, `pow` with int exponents only (fractional and
   negative-base cases stay `NotImplemented`, as v1); `exp log` via `apply_unary` if cheap, else
   defer to `functions.py`
-* `tests/oracles.py`: `sample(A, n)` respecting open/closed, `attained_oracle(op, v, A, B)` for
-  int/Fraction operands (promoted from `modulo_v3_prototype.attained`)
+* `tests/oracles.py`: `sample(A, n)` respecting open/closed and drawing a closed ±inf endpoint
+  with positive probability, `attained_oracle(op, v, A, B)` for int/Fraction operands with ±inf
+  handled symbolically (promoted from `modulo_v3_prototype.attained`)
 * tests: soundness fuzz per op; attainment per endpoint on exact operands; isotonicity
   `A ⊆ B ⇒ f(A) ⊆ f(B)` for every op; `f(A ∪ B) == f(A) ∪ f(B)` for add, sub, neg, abs, mul only,
   and only `⊇` for reciprocal/div (counterexample `A=[-1,0)`, `B=[0]` under D1, see `v2-plan.md` testing);
@@ -113,9 +135,16 @@ every new property test (flip one comparison, watch red, restore).
   examples as a table (`1/[-1,0]`, `1/[-1,1]`, `1/[1,inf]`, `1/[1,inf)`, `[0,1]*(2,3)` = `[0,3)`,
   `1/[0]` = `∅` and warns, `[1]/[3]` = `[1/3]` as Fraction, `type` of `([6]/[3]).inf` is int);
   the D2 table (`[-inf,-1]*[0]` = `[0]`, `[-inf]*[0,1]` = `[-inf]`, `[-inf,-1]*[0,1]` = `[-inf,0]`,
-  `[1,inf]/[1,inf]` = `[0,inf]`, `[1,inf]-[1,inf]` = entire, `[inf]-[inf]` = `∅`)
+  `[1,inf]/[1,inf]` = `[0,inf]`, `[1,inf]-[1,inf]` = entire, `[inf]-[inf]` = `∅`); the
+  infinity-closure table (`[inf] + (1,2)` = `[inf]`, `[1,inf] + [0,1)` = `[1,inf]`,
+  `[inf] * (1,2)` = `[inf]`, `(1,inf] + [0]` = `(1,inf]`); interior sharpness on exact operands
+  (every sampled point of the result is attained; `[-1,1] * [inf]` = `[-inf] ∪ [inf]`)
+* property tests that generate indeterminate or empty cases on purpose carry a
+  `filterwarnings('ignore::...')` mark; each warning is pinned by its own `pytest.warns` test
 * sabotage: the isotonicity property must go red if `1/[0]` is set back to `[-inf] ∪ [inf]` (the
-  hypothesis strategy has to generate degenerate `[0]` inside `[-1,0]` / `[0,1]` often enough)
+  hypothesis strategy has to generate degenerate `[0]` inside `[-1,0]` / `[0,1]` often enough);
+  soundness must go red if infinite endpoints are given back to the corner-flag rule;
+  interior sharpness must go red if mul's zero split is removed
 
 ### M7a `modulo.py`, Q1 port (2 days)
 * port `modulo_v3_prototype.py` (P1 scalar mod, P2 scalar-mod-interval, far-edge union,
@@ -124,7 +153,9 @@ every new property test (flip one comparison, watch red, restore).
 * `floordiv = floor ∘ div` with `floor` as an enumerating unary op under a size cap, hull +
   warning above it; `divmod` from the two; `rmod` by symmetry of the entry point
 * pass the generating `(edge, k)` into the attainment test (design notes §3c cost) or cap `k`
-* tests: prototype's 112-case corner suite and 4000-case fuzz, verbatim; degenerate operands
+* tests: prototype's 112-case corner suite verbatim (its literals are exact binary floats); its
+  4000-case fuzz with the same seed and ranges but operands as `Fraction(str(x))`, since
+  attainment is checked on exact types only; degenerate operands
   table from design notes §3c; differential vs v1 `A % scalar` (trusted); `[1,2) // 1 == [1]`
 * other sign combinations raise `NotImplementedError` until M7b; not a releasable state
 
@@ -133,6 +164,7 @@ every new property test (flip one comparison, watch red, restore).
   §4 next steps), with a proof note next to the existing ones in `references/modulo-derivations/`
 * Q3/Q4 from Q1/Q2 by the antipodal identity; operands crossing zero split into sign-pure pieces via
   the descriptor's split points; a divisor touching zero drops 0 with `DomainClippedWarning`
+* infinite operands per D8 (confirm with owner first)
 * tests: extend the prototype's corner suite and fuzz to all four quadrants and zero-crossing
   operands; attainment oracle on exact operands; python's `%` sign convention (result takes the
   divisor's sign) as the scalar reference
@@ -149,7 +181,8 @@ every new property test (flip one comparison, watch red, restore).
 ### M9 `tests/itf1788/` (1½ days)
 * vendor a subset of `.itl` files (licence check first), a parser for the used subset (`add`,
   `sub`, `mul`, `div`, `recip`, `neg`, `abs`, set ops, `sqr`/`pow` if implemented), input rule
-  (1788 unbounded → open at inf), output rule (closed hull), divergence table as a dict of
+  (1788 unbounded → open at inf), output rule (closed hull of **both** ours and the expected
+  value), divergence table as a dict of
   `(op, inputs) -> reason`
 * exit: every vector either matches through the adapter or is in the divergence table with a
   reason from the plan's list. `1/[0]` is not a divergence row (both give empty, D7)
@@ -184,6 +217,8 @@ point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6
 | `merge_adjacent(distance=)`, `expand(d, inplace=)` | `expand(d)` pure; no distance rule anywhere (cuts make it exact) |
 | `cardinality -> (half_rays, length, half_points)` | `size -> Size(rays, length, points)` |
 | `overlapping(or_adjacent=)`, `overlaps` | `relations.overlaps/adjoins`, `A & B` for the overlap itself |
+| no set operators (`\|` between two MultiIntervals raises); `~` = complement; `-` = subtraction | `\| & ^ ~` set algebra; `difference()` named; `-` still subtraction |
+| `__eq__` coerces scalars, unhashable | structural, no coercion, hashable |
 | `__lt__` etc. comparing endpoint lists | pointwise `TruthSet`; `sort_key` for the old structural order |
 | `reciprocal` → whole line at zero | split at zero, direction from the sign of the piece |
 | `__floordiv__` floors endpoints | `floor ∘ div`, enumerating |

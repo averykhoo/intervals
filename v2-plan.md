@@ -20,6 +20,9 @@ superseded it.
       normalization (they already compare and hash equal; this keeps types and printing clean)
     * python leaks floats at infinity (`Fraction(1) / inf` is `0.0`), so the applicator evaluates
       infinite corners itself and returns exact values (`1/[inf]` = `[0]`, not `[0.0]`)
+    * **±inf is exact whatever its python type.** `math.inf` is a float, but it is never rounded,
+      it does not make an interval "float" (an interval is float iff a *finite* endpoint is), and
+      attainment at ±inf is decided symbolically, never by float arithmetic
     * `nan` in a constructor is a `ValueError`
 * meaning of an arithmetic result: the set of values attained, with ±inf as ordinary points. an
   infinite endpoint is closed iff it is attained; open/closed flags propagate through infinity like
@@ -124,13 +127,20 @@ superseded it.
   `__bool__` refuses
 * `==` and `__hash__` are structural set equality; `!=` is its complement. pointwise equality is a
   named method and is `{T, F}` for any non-degenerate `a == a` (document it; it surprises everyone)
+* `==` does **not** coerce: against anything that is not a MultiInterval it returns
+  `NotImplemented`, so `MI(5) == 5` is False. coercing would make `MI(5) == 5` True while
+  `hash(MI(5)) != hash(5)`, which breaks dicts and sets
 * two consequences to document, both correct: **no trichotomy** (`a < b` FALSE and `a == b` False does
   not make `a > b` TRUE), and **`a <= b` is not `a < b or a == b`** (pointwise vs structural)
 * `sort_key` = the cut tuple, for structural ordering; `sorted()` raising on ambiguous intervals is a
   feature
 * relations are defined **on cuts, not on values**: `before` = `A.end <= B.start`, `adjoins` =
   `A.end == B.start`, plus disjoint / overlaps / contains / within / equals and certainly_/possibly_
-  variants. (`sup A < inf B` is wrong for `[1,2)` before `[2,3]`)
+  variants. (`sup A < inf B` is wrong for `[1,2)` before `[2,3]`). relations return plain
+  `bool` — they are set-level facts; only the pointwise `< <= > >=` return a `TruthSet`. so
+  `before([1,2), [2,3])` is True and `before([1,2], [2,3])` is False, while `[1,2) < [2,3]` is
+  `{T}` and `[1,2] < [2,3]` is `{T, F}`. for non-empty operands `before(A, B)` is exactly
+  `(A < B).certainly`
 * `allen(a, b)` on contiguous pieces only (raise otherwise). cuts make it finer than classical Allen:
   tiling-without-sharing (`[1,2) meets [2,3]`) vs sharing one point (`[1,2] ∩ [2,3] = {2}`)
 
@@ -139,17 +149,34 @@ superseded it.
 * one generic applicator, **shape-then-attainment** — the modulo v3 lesson. v1's epsilon propagation
   is unsound, not just inelegant: `[0,1] * (2,3)` gives `(0,3)` but 0 is attained by `0 * 2.5`; true
   result `[0,3)`
-    1. split at the domain points the op descriptor names (zero for reciprocal/division, sign-pure
-       quadrants for modulo)
+    1. split at the domain points the op descriptor names (zero for reciprocal/division **and
+       mul**, sign-pure quadrants for modulo). a piece containing 0 splits into `[lo, 0]` and
+       `[0, hi]` with the zero in both halves (keeping its flag); a degenerate `[0]` stays one piece
     2. locations first, all endpoints treated closed: corner min/max, correct for
-       coordinatewise-monotone and bilinear ops
-    3. closure per endpoint separately: strictly-monotone ops use the corner-flag rule (closed iff
-       both operand endpoints closed — provably fine, zero cost); flat-spot ops (mul at 0, pow,
-       min/max-like) use the op's attainment predicate, tested against the **full** multi-interval
-       operands, not per piece pair
+       coordinatewise-monotone and bilinear ops **on a box whose discontinuities are corners**.
+       on the extended reals mul is discontinuous at `(0, ±inf)` (`0·inf` is indeterminate while
+       its neighbours are `±inf` and `0`), which is why mul splits at zero: after the split, ±inf
+       and 0 are always piece endpoints, so every discontinuity is a corner and D2's
+       limit-along-the-box rule applies. without it `[-1, 1] * [inf]` hulls to `[-inf, inf]`, but
+       the attained set is `[-inf] ∪ [inf]`. add/sub need no split: their discontinuity
+       `(inf, -inf)` is always a corner already
+    3. closure per endpoint separately. the corner-flag rule (closed iff both operand endpoints
+       closed — zero cost) is valid only for a **finite** result endpoint of an op that is
+       injective in each argument there. every other endpoint uses the op's attainment predicate,
+       tested against the **full** multi-interval operands, not per piece pair:
+        * **every infinite result endpoint.** add/sub/mul are flat at ±inf (`inf + y = inf` for
+          every finite `y`), so the corner-flag rule is wrong there: `[inf] + (1, 2)` would give
+          `(inf, inf)` = `∅` instead of `[inf]`, and `[1, inf] + [0, 1)` would give `[1, inf)`
+          instead of `[1, inf]`. the rule: an infinite result endpoint is attained iff a closed
+          infinite operand endpoint combines with some non-indeterminate partner, or a pole at a
+          closed zero produces it (reciprocal)
+        * flat spots at finite values: mul at 0, pow, min/max-like
     4. union the piece results, normalize
 * op descriptor: monotonicity directions (2-corner fast path for add/sub for free), split points,
   flat-spot / attainment predicate, rounded-eval pair
+* **division is computed as its own op** (`a / b` at the corners), not as `a * (1/b)`: the
+  reciprocal identity defines the semantics (splits, poles, D2 corners), but evaluating through it
+  would round twice on floats
 * division: split the denominator at zero, direction rule as above. `A / ∅ = ∅`. exact operands
   divide as Fraction (see number types)
 * floordiv: enumerate integer points below a size cap, else hull + warning — never silently drop
@@ -159,12 +186,17 @@ superseded it.
   the antipodal identity; Q2 needs its own primitive derivation (design notes §2, Thm B); operands
   crossing zero split into sign-pure pieces; a divisor touching zero drops 0 with
   `DomainClippedWarning`
+    * infinite operands (D8): a dividend of ±inf has no value (python gives `nan`) and is dropped
+      with `DomainClippedWarning`; a finite dividend mod a divisor of ±inf follows python's scalar
+      result, which is also the limit along the box (`3 % [inf]` = `[3]`, `-3 % [inf]` = `[inf]`,
+      `0 % [inf]` = `[0]`)
 * **rounding**: the hook exists from day one in the descriptor (retrofitting touches every op twice)
   but is **identity by default**. int and Fraction are exact and never rounded. outward
   `math.nextafter` (later gmpy2/mpfr as tight mode) is enabled by a subclass or factory, never by a
   flag or context manager: wrapper types add meanings, flags change what existing objects mean. once
   an endpoint is rounded it is attained by nothing, so the open/closed flag on a rounded float
-  endpoint is conservative, not a promise; attainment tests run on exact types only. libm is not
+  endpoint is conservative, not a promise; attainment tests run on exact types only (±inf counts
+  as exact, see number types). libm is not
   correctly rounded, so ±1 ulp around trig is pragmatic, not rigorous — document
 
 ### empties and warnings
@@ -174,8 +206,12 @@ superseded it.
   `'ignore'` filter installed at import; solver code opts in with
   `warnings.simplefilter('error', EmptySetPropagationWarning)` as a tripwire (not in a contractor
   loop, where `∅` is the normal "no solution here" answer). the import-time `'ignore'` filters are
-  process-global state: `pytest -W`, a `filterwarnings` ini entry and a later `simplefilter` all
-  override them, since later filters win
+  process-global state, installed with `append=True` so they sit at the *end* of the filter list:
+  a filter the user installed before importing the library still wins, as do `pytest -W`, a
+  `filterwarnings` ini entry and a later `simplefilter`
+* the test suite turns the library's warnings into errors, so a property test that generates
+  indeterminate or empty cases on purpose (isotonicity over degenerate `[0]`) opts out with a
+  `filterwarnings` mark; the warning itself is pinned by its own `pytest.warns` test
 * `DomainClippedWarning`, same pattern, wherever an op drops input points (`sqrt([-1, 4])`, `log`,
   modulo by a divisor touching zero). this is the cheap stand-in for 1788 decorations
 * `IndeterminateResultWarning` as in "domain and semantics"
@@ -190,8 +226,10 @@ superseded it.
   conformance adapter in the test suite over itf1788 vectors:
     * **input rule**: a 1788 unbounded bound maps to our open-at-inf, because 1788 never attains
       infinity. without this every vector touching infinity mismatches
-    * **output rule**: closed-hull our result before comparing; absorbs multi-interval vs connected
-      (`[1,2]/[-1,1]`: 1788 entire, ours `[-inf,-1] ∪ [1,inf]`, hull = entire → match)
+    * **output rule**: closed-hull **both** our result and the expected value before comparing
+      (the input rule would otherwise read 1788's unbounded expected bound as open at inf, while
+      our hulled result is closed there); absorbs multi-interval vs connected (`[1,2]/[-1,1]`:
+      1788 entire, ours `[-inf,-1] ∪ [1,inf]`, hull = entire → match)
     * residual divergence table: degenerate infinities, domain-clipped functions, decoration
       expectations. (`1/[0]` is not a row: both give empty)
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
@@ -217,7 +255,10 @@ imports only point downward.
         modulo.py          v3 far-edge mod / divmod / floordiv
         fmt.py             format and parse cut tuples; regexes compiled at module level
         multi_interval.py  the class: immutable cut tuple; _coerce (numbers and intervals only —
-                           strings go through an explicit parse()); one-line dunders
+                           strings go through an explicit parse()); one-line dunders. arithmetic
+                           owns `+ - * / // % **` and unary `- + abs`; set algebra is `| & ^ ~`
+                           plus named methods (`difference` has no operator, because `-` is
+                           arithmetic subtraction, as in v1)
         time_interval.py   the same kernel over datetime/timedelta values (deferred, D4)
         __init__.py        public API, constants (EMPTY, REALS, ...)
     tests/
@@ -247,6 +288,12 @@ imports only point downward.
       direction-from-the-piece rule equality fails with *any* value of `1/[0]`. counterexample
       `A = [-1, 0)`, `B = [0]`: `1/(A ∪ B)` = `[-inf, -1]`, but `1/A ∪ 1/B` = `(-inf, -1]`
     * `1/(1/A) == A` for every A with no degenerate piece at `0`, `inf` or `-inf`
+* the sampler must draw a closed ±inf endpoint with positive probability, and the attainment
+  oracle must decide ±inf symbolically; otherwise the infinite-endpoint closure rule is untested
+* **interior sharpness**, not just endpoints: soundness fuzz passes on any superset, and endpoint
+  attainment checks cannot see a spurious interior point. so check that every gap of the true
+  result is a gap of ours — on exact operands, sample points of `op(A, B)` and confirm each is
+  attained (pins e.g. `[-1, 1] * [inf]` = `[-inf] ∪ [inf]`, not `[-inf, inf]`)
 * sabotage each check once (flip one merge comparison) and watch it go red before trusting it
 * itf1788 conformance through the adapter above
 
@@ -261,6 +308,35 @@ imports only point downward.
   a test, numpy compat (array API / `__array_ufunc__`), tight rounding via gmpy2/mpfr
 
 ## decision log
+
+### 2026-09-23 revision: implementability review
+
+a review of whether the plan could be built as written. the design stands; these holes would have
+been built in, two of them past the planned tests. all are written into "current design".
+
+* **corner-flag rule at infinity** (unsound): add/sub/mul are flat at ±inf, so "closed iff both
+  corners closed" excluded attained infinities — `[inf] + (1, 2)` came out `∅`, `[1, inf] + [0, 1)`
+  came out `[1, inf)`. infinite result endpoints now always go through the attainment predicate.
+  the planned attainment tests ran "on int/Fraction only", and `inf` is a float, so they would not
+  have seen it
+* **mul splits at zero** (not sharp): `[-1, 1] * [inf]` hulled to `[-inf, inf]` although only
+  `[-inf] ∪ [inf]` is attained. sound, so the fuzz passed, and endpoint checks cannot see an
+  interior point. an interior-sharpness test is added
+* **±inf is exact** whatever its python type, so the exact/float split and the rounding hook
+  have a rule for it
+* **`-` is arithmetic subtraction** (as v1, `multi_interval.py:1188`); set difference is a named
+  method. the 2026-08 dunder list had given `-` to both
+* **`==` does not coerce** scalars (hash contract)
+* **relations return bool**; only pointwise comparisons return a `TruthSet`
+* **warnings**: import-time filters use `append=True`; property tests that hit indeterminate cases
+  opt out of the suite's warnings-as-errors
+* **modulo with infinite operands** (D8): clip an infinite dividend, follow python for an infinite
+  divisor
+* **itf1788 output rule** hulls the expected value too
+* **division** computed directly, not as `a * (1/b)` (double rounding on floats)
+* implementation detail, in the implementation plan: `typing.NamedTuple` refuses a `__new__`
+  override (`AttributeError: Cannot overwrite NamedTuple attribute __new__`, executed 2026-09-23 on
+  python 3.13.15), so `Cut` normalizes in a subclass of the named tuple
 
 ### 2026-09-23 revision: D1–D6 settled
 
