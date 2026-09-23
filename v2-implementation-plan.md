@@ -75,7 +75,9 @@ every new property test (flip one comparison, watch red, restore).
 ### M3 `fmt.py` (½ day)
 * `format(cuts)`: v1 grammar (`{}`, bare piece, `{ A , B }`, `[x]`, `inf`); Fraction as `p/q`
 * `parse(str)`: v1's three regexes at module level, plus `∪`/`|`/`,` as separators
-* tests: round-trip under hypothesis; every v1 doctest string
+* tests: round-trip under hypothesis; the example strings in v1's parser comments (v1 has no doctests;
+  checked 2026-09-23). done 2026-09-23: the parser is strict (leftover text is a ValueError) and
+  keeps v1's juxtaposition `[1,2)[3,4)`; floats print by `repr` so they round-trip
 
 ### M4 `multi_interval.py` — the class (1 day)
 * frozen, `__slots__ = ('_cuts',)`; `MultiInterval(start=None, end=None, *, start_closed=True,

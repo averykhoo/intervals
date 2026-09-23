@@ -15,7 +15,8 @@ test = ["pytest", "hypothesis"]
 packages = ["intervals"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "intervals"]
+addopts = "--doctest-modules"
 # "." puts both the v1 modules at the root and the v2 `intervals/` package on sys.path
 pythonpath = ["."]
 # the library's own warnings are errors inside the suite; a test that provokes one on purpose
