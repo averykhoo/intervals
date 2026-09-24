@@ -308,6 +308,27 @@ every new property test (flip one comparison, watch red, restore).
   `(op, inputs) -> reason`
 * exit: every vector either matches through the adapter or is in the divergence table with a
   reason from the plan's list. `1/[0]` is not a divergence row (both give empty, D7)
+* done 2026-09-24. `tests/itf1788/`: `libieeep1788_tests_elem.itl` and `libieeep1788_tests_set.itl`
+  vendored unmodified from nehmeier/ITF1788 at `e0e0d7e` (Apache 2.0; `LICENSE`, `NOTICE` and a
+  provenance `README.md` beside them), `itl.py` (parser; only used ops are parsed, anything
+  unrecognised in one raises) and `test_itf1788.py` (adapter, one test per vector). the used subset
+  is `pos neg abs add sub mul div recip sqr pown floor intersection convexHull`, 847 vectors
+  (decorated ones included, decorations dropped). all 847 match; the divergence table is empty
+  (measured 2026-09-24). choices made while building:
+    * a third rule, **precision**: literals are read as their nearest double (as the C++ tests the
+      files came from; `pown [13.1, 13.1] 2` expects a one-ulp result that an outward reading of 13.1
+      cannot give), held as exact Fractions, and our exact result is rounded outward to doubles.
+      so each vector is an exact soundness-and-sharpness check, not a tolerance
+    * the library's warnings are ignored inside a vector; they are pinned elsewhere
+    * sabotage, 2026-09-24: rounding to nearest instead of outward turned 97 vectors red, a flipped
+      reciprocal pole 10, a flipped div pole 99, abs without its zero split 7, a wrong `sub`
+      monotonicity 14; a parser dropping `_com` vectors turned the line-count check red, and a
+      divergence row on a matching vector failed as stale. **two changes stayed green**: closing
+      the infinite input bounds (the input rule is unobservable through a closed hull under D2, so
+      it is pinned by `test_input_rule` alone) and mul without its zero split (interior sharpness,
+      which a hull cannot see; `tests/test_ops_properties.py::test_interior_sharpness` goes red on that change)
+    * not covered: the bool, num, overlap and reverse-op files (not in the plan's subset), and
+      1788 ops not implemented (`sqrt`, `exp`, trig, `fma`, `ceil`, `trunc`, `sign`, `min`/`max`, ...)
 
 ### M10 archive v1 (½ day)
 * `git mv` `interval.py`, `multi_interval.py`, `time_interval.py` and `compare.py` into

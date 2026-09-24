@@ -242,7 +242,13 @@ superseded it.
   everywhere — a flag would be `INFINITY_IS_NOT_FINITE` ×10 and multiply the test matrix). instead a
   conformance adapter in the test suite over itf1788 vectors:
     * **input rule**: a 1788 unbounded bound maps to our open-at-inf, because 1788 never attains
-      infinity. without this every vector touching infinity mismatches
+      infinity. *measured 2026-09-24 (M9): the ops built so far do not depend on it* — reading
+      unbounded bounds as closed at inf turns 0 of the 847 vectors red, because D2's corner rule
+      gives the same closed hull either way. it stays as the faithful reading, pinned by its own test
+    * **precision rule** (added at M9): operands are the literals' nearest doubles held exactly,
+      and our exact result is rounded outward to doubles before comparing, so a vector checks
+      soundness and sharpness against 1788's tightest enclosure. the float path (round to nearest)
+      is not what the vectors test
     * **output rule**: closed-hull **both** our result and the expected value before comparing
       (the input rule would otherwise read 1788's unbounded expected bound as open at inf, while
       our hulled result is closed there); absorbs multi-interval vs connected (`[1,2]/[-1,1]`:
