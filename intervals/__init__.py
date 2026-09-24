@@ -5,6 +5,7 @@ from intervals.cuts import Cut
 from intervals.cuts import Side
 from intervals.errors import DomainClippedWarning
 from intervals.errors import EmptySetPropagationWarning
+from intervals.errors import HullWarning
 from intervals.errors import IndeterminateResultWarning
 from intervals.errors import IntervalWarning
 from intervals.kernel import Builder
@@ -30,4 +31,5 @@ __all__ = [
     'EmptySetPropagationWarning',
     'DomainClippedWarning',
     'IndeterminateResultWarning',
+    'HullWarning',
 ]

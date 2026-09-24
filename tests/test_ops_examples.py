@@ -597,11 +597,12 @@ def test_empty_operand_propagates_with_one_warning(thunk):
     pytest.param(lambda a: a ** a, id='MI ** MI'),
     pytest.param(lambda a: a ** True, id='MI ** True'),
     pytest.param(lambda a: 2 ** a, id='2 ** MI'),
-    pytest.param(lambda a: a // 2, id='MI // 2'),
-    pytest.param(lambda a: 2 // a, id='2 // MI'),
-    pytest.param(lambda a: a % 2, id='MI % 2'),
-    pytest.param(lambda a: 2 % a, id='2 % MI'),
-    pytest.param(lambda a: divmod(a, 2), id='divmod(MI, 2)'),
+    # M7 defines `// % divmod` for numbers and MultiIntervals (tests/test_modulo.py); anything else refuses
+    pytest.param(lambda a: a // 'x', id='MI // str'),
+    pytest.param(lambda a: a % None, id='MI % None'),
+    pytest.param(lambda a: [1] % a, id='list % MI'),
+    pytest.param(lambda a: divmod(a, 'x'), id='divmod(MI, str)'),
+    pytest.param(lambda a: divmod(True, a), id='divmod(bool, MI)'),
 ])
 def test_type_errors(thunk):
     with pytest.raises(TypeError):

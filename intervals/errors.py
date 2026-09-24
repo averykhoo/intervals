@@ -27,5 +27,12 @@ class IndeterminateResultWarning(IntervalWarning):
     """the operand box is an indeterminate point, e.g. `1/[0]` or `[0] * [inf]`; the result is empty"""
 
 
+class HullWarning(IntervalWarning):
+    """
+    the exact result has too many pieces to list (`floor([0, 1e6])`, or infinitely many, as in
+    `floor([0, inf))`), so its hull was returned: a superset, with no pieces missing
+    """
+
+
 warnings.filterwarnings('ignore', category=EmptySetPropagationWarning, append=True)
 warnings.filterwarnings('ignore', category=DomainClippedWarning, append=True)

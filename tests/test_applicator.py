@@ -380,15 +380,16 @@ def test_non_numbers_are_refused(other):
             op()
 
 
-def test_m6_leaves_modulo_and_floordiv_undefined():
-    for name in ('__floordiv__', '__mod__', '__divmod__', '__rpow__'):
-        assert not hasattr(MultiInterval, name)
+def test_rpow_undefined():
+    # `// % divmod` arrived in M7 (tests/test_modulo.py); `2 ** A` is still refused
+    assert not hasattr(MultiInterval, '__rpow__')
 
 
 def test_package_exports_unchanged():
-    # M6 adds no public names: the ops and the applicator stay in their submodules
+    # the ops, the applicator and modulo stay in their submodules; M7 adds only HullWarning
     assert set(intervals.__all__) == {
         'MultiInterval', 'EMPTY', 'REALS', 'Size', 'Builder', 'TruthSet', 'Allen', 'Cut', 'Side',
-        'IntervalWarning', 'EmptySetPropagationWarning', 'DomainClippedWarning', 'IndeterminateResultWarning'}
-    for name in ('add', 'mul', 'OpDescriptor', 'apply_binary'):
+        'IntervalWarning', 'EmptySetPropagationWarning', 'DomainClippedWarning', 'IndeterminateResultWarning',
+        'HullWarning'}
+    for name in ('add', 'mul', 'OpDescriptor', 'apply_binary', 'mod', 'floordiv', 'floor'):
         assert not hasattr(intervals, name), name

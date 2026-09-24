@@ -15,7 +15,7 @@ of 2026-09-23 and written into `v2-plan.md`'s "current design"; D8 has a recomme
 | D5 | **decided: every sign combination before release**, as its own milestone (M7b); the recommended Q1-only v2.0 is rejected. modulo scope for v2.0: the v3 work covers A ≥ 0, B > 0 only; Q2 primitive and zero-crossing operands are underived (design notes §4) | full modulo, M7a then M7b | release |
 | D6 | constructor default for an infinite bound: `MI(1, inf)` = `[1, inf]` (literal) or `[1, inf)` (1788 reading)? **settled (v2-plan.md current design): literal** — `[a, inf]` and `[a, inf)` are different sets and "a user-typed `[1, inf]` is taken literally". D2 removes the blow-up footgun that made this look open | literal | — |
 | D7 | **decided 2026-09-23 by owner**: a box that *is* an indeterminate point (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`, `[0]/[0]`) returns `∅` + `IndeterminateResultWarning` (was `[-inf] ∪ [inf]` / entire). isotonicity forces it: `[0]` is inside `[-1,0]` and `[0,1]`, so `1/[0] ⊆ [-inf,-1] ∩ [1,inf] = ∅`; `[0]*[inf] ⊆ [0]*[5,inf] ∩ [0,1]*[inf]` = `∅` and `[inf]-[inf] ⊆ [inf]-[1,inf] ∩ [1,inf]-[inf]` = `∅` under D2. solvers need isotone ops; matches 1788's empty. cost: `1/(1/[inf])` = `∅`; `1/x` round-trips only on sets with no degenerate piece at `0`, `inf`, `-inf`; the "later" direction tag stays the recovery path. separately, `f(A ∪ B) == f(A) ∪ f(B)` fails for reciprocal with any `1/[0]` (`A=[-1,0)`, `B=[0]`), so that law is only `⊇` for reciprocal/div | `∅` + warning | M6 |
-| D8 | **recommended default, not yet confirmed by owner.** modulo with infinite operands: python gives `inf % 3` = `nan`, `3 % inf` = `3`, `-3 % inf` = `inf`. a dividend of ±inf attains nothing, so it is dropped with `DomainClippedWarning`; a finite dividend mod an infinite divisor follows python's scalar result (also the limit along the box) | clip / follow python | M7b |
+| D8 | **recommended default, not yet confirmed by owner; implemented as that default in M7 (2026-09-24), reversible locally (see M7b).** modulo with infinite operands: python gives `inf % 3` = `nan`, `3 % inf` = `3`, `-3 % inf` = `inf`. a dividend of ±inf attains nothing, so it is dropped with `DomainClippedWarning`; a finite dividend mod an infinite divisor follows python's scalar result (also the limit along the box) | clip / follow python | M7b |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
 milestones below: infinite result endpoints always go through attainment (the corner-flag rule is
@@ -219,6 +219,7 @@ every new property test (flip one comparison, watch red, restore).
   attainment is checked on exact types only; degenerate operands
   table from design notes §3c; differential vs v1 `A % scalar` (trusted); `[1,2) // 1 == [1]`
 * other sign combinations raise `NotImplementedError` until M7b; not a releasable state
+* done 2026-09-24, together with M7b in one session, so no Q1-only state was ever committed
 
 ### M7b modulo, every sign combination (one full session; blocks release)
 * derive the Q2 primitive pair (dividend < 0, divisor > 0) in closed form (design notes §2 Thm B,
@@ -229,6 +230,59 @@ every new property test (flip one comparison, watch red, restore).
 * tests: extend the prototype's corner suite and fuzz to all four quadrants and zero-crossing
   operands; attainment oracle on exact operands; python's `%` sign convention (result takes the
   divisor's sign) as the scalar reference
+* done 2026-09-24 (M7a and M7b together): `intervals/modulo.py` (`mod floor floordiv divmod_`), the class's
+  `% // divmod` with their reflected forms and `floor()`, `HullWarning`, and `tests/test_modulo.py`.
+  choices made while building:
+    * **D8 is implemented as its recommended default, still unconfirmed by the owner**: `±inf mod y` is
+      dropped and `x mod ±inf` follows python. it is isolated in `modulo._box` (the `[inf]` branch) and
+      `modulo._attained` (the `has_inf` lines), so reversing it is local
+    * one path for every quadrant: a negative divisor goes through the antipodal identity, and the
+      Q2 left edge is `_scalar_mod_interval_negative` (closed form in its docstring; the proof is in
+      `references/modulo-derivations/claude-fable/proof-all-quadrants.md`)
+    * attainment is exact and O(1) (`_attained`, `_holds_multiple`): only the two extreme quotients
+      need an exact check, any quotient strictly between them meets the interior. it covers k >= 1 and
+      k <= -1 in one test, so it is quadrant-agnostic. this replaces the prototype's O(x1/y0) k loop
+      (`[10**12, 10**12 + 1] % [1, 3/2]` is timed in the tests)
+    * ends are decided per located piece, before the union. the prototype decided them after merging,
+      which could hide an unattained value where two pieces touch; its own fuzz checked soundness and
+      closure but not the interior, so it could not have seen that
+    * attainment is decided per box, not against the full operands (design notes §3b): the union of
+      per-box attained sets is the attained set of the union, so the result is the same
+    * finite values are computed as Fractions and a float operand rounds the result once (the M6
+      mixed-pair rule). for a mixed Fraction/float pair that differs from python, which rounds the
+      Fraction first
+    * `floor` enumerates up to `FLOOR_ENUMERATION_CAP = 1000` integers per call, then hulls with a
+      `HullWarning`, which is new and shown by default (precision was lost). `floordiv = floor ∘ div`
+      inherits div's poles (`[1] // [0, 1]` holds inf, where `mod` drops the 0) and gives `[-5] // [inf]`
+      = `[0]` where python's `-5 // inf` is -1.0. `divmod` is a pair of sets, one warning for an empty operand
+    * **v1 is not sharp for `A % scalar`**: an open end at a multiple of m gives it a 0 nothing attains
+      (`[0.25, 0.5) % 0.5` is `{ [0] , [0.25, 0.5) }`). on the quarter grid 0..10 with m in {1/4, 1/2,
+      3/4, 5/4, 7/4}, 302 of 16605 boxes differed, all of them that 0, and ours matched the oracle
+      every time (measured 2026-09-24). the differential test therefore checks ours ⊆ v1 and v1 − ours
+      ⊆ {0}, and `test_v1_phantom_zero` pins the defect
+    * nine expected values first written by hand for the example tables were wrong, all in Q2/Q4, an
+      unbounded divisor or a clipped zero (`[-6, -3] mod [4, 5]` is `[0, 5)`, `[2, 3] mod [1, inf)`
+      has a gap `[3/2, 2)`). each was re-derived by hand and checked against the oracle before it was
+      changed; the table comments carry the derivations
+  evidence (2026-09-24): the gate was 1603 passed in 87 s.
+    * the derivation was checked and extended to every sign by a Claude (Fable) subagent:
+      `references/modulo-derivations/claude-fable/proof-all-quadrants.md`, with its executable form
+      `modulo_allquadrants_prototype.py`. that audit found the prototype's merge-before-closure hole
+      independently; its harness reported 0 failures of every kind on 89,700 grid pairs and 6000
+      fuzz cases, and its `--quick` mode was rerun here with 0 failures
+    * `python -m tests.exhaustive_modulo` (every single-piece pair over `{-inf, -3, -2, -3/2, -1,
+      -1/2, 0, 1/2, 1, 3/2, 2, 3, inf}`, all flags): 105,625 boxes, 0 mismatches against the
+      brute-force oracle in `tests/oracles.py`, 1002 s
+    * the Fable prototype and `intervals/modulo.py` were written independently; they agree on all
+      105,625 of those pairs
+    * sabotage, each run against `tests/test_modulo.py`: skipping the exact check at the two extreme
+      quotients, dropping the Q2 left edge, keeping unattained degenerate pieces, reading every
+      operand end as closed in the attainment test, not splitting the dividend at 0, and treating a
+      negative divisor as positive all went red. with only the property tests selected, each
+      property (soundness, closure, interior sharpness, isotonicity, union, antipodal, periodicity)
+      went red under at least one of them. breaking floor's open-integer-end rule turned
+      `test_floor_sound_and_sharp` red, and rounding the low end of a float result inward turned
+      `test_sound_float` red
 
 ### M8 `time_interval.py` (1½ days) — deferred (D4); not part of this plan's schedule
 * starts from `archive/v1/time_interval.py`, ported onto the v2 class with whatever tweaks that

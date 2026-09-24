@@ -19,7 +19,7 @@ def _run(code: str) -> subprocess.CompletedProcess:
 
 def test_hierarchy():
     for cls in (errors.EmptySetPropagationWarning, errors.DomainClippedWarning,
-                errors.IndeterminateResultWarning):
+                errors.IndeterminateResultWarning, errors.HullWarning):
         assert issubclass(cls, errors.IntervalWarning)
     assert issubclass(errors.IntervalWarning, UserWarning)
 
@@ -36,11 +36,13 @@ def test_default_filters():
         'warnings.warn("empty", e.EmptySetPropagationWarning)\n'
         'warnings.warn("clipped", e.DomainClippedWarning)\n'
         'warnings.warn("indeterminate", e.IndeterminateResultWarning)\n'
+        'warnings.warn("hull", e.HullWarning)\n'
     )
     assert result.returncode == 0, result.stderr
     assert 'EmptySetPropagationWarning' not in result.stderr
     assert 'DomainClippedWarning' not in result.stderr
     assert 'IndeterminateResultWarning' in result.stderr
+    assert 'HullWarning' in result.stderr  # a hull loses precision, so it is shown by default
 
 
 def test_filter_installed_before_import_wins():

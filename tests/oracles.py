@@ -16,6 +16,9 @@ the table, for x in A and y in B, with +-inf as ordinary points:
     reciprocal(A) = div([1], A);  neg, pos, abs pointwise
     pow   n >= 1: x ** n, (+-inf) ** n by parity; n == 0: [1] for a non-empty A;
           n < 0: reciprocal(pow(A, -n)), the pole direction read from the image pow(A, -n)
+    mod   python's floor-mod x - y * floor(x / y), the result taking the divisor's sign. +-inf mod y
+          and x mod 0 have no value; finite x mod inf is x for x >= 0 and inf for x < 0, and
+          x mod -inf is x for x <= 0 and -inf for x > 0 (D8, python's own values)
 
 an indeterminate pair contributes nothing. `attained` decides exactly whether a value is produced
 by some defined pair: finite floats are read as the Fraction they denote, +-inf symbolically.
@@ -37,6 +40,8 @@ from intervals.kernel import pieces
 INF = math.inf
 OPS = ('add', 'sub', 'mul', 'div', 'reciprocal', 'neg', 'pos', 'abs', 'pow')
 BINARY = ('add', 'sub', 'mul', 'div')
+# mod is not in OPS: the M6 property tests iterate OPS over `intervals.ops`, mod has its own module
+MOD_OPS = ('mod',)
 UNARY = ('reciprocal', 'neg', 'pos', 'abs')
 ONE: Cuts = normalize([piece(1, 1)])
 
@@ -120,6 +125,8 @@ def pointwise(op: str, x, y=None, a: Optional[Cuts] = None, b: Optional[Cuts] = 
         return [abs(x)]
     if op == 'pow':
         return _pow(x, y, a)
+    if op == 'mod':
+        return _mod(x, y)
     raise ValueError(f'unknown op {op!r}')
 
 
@@ -159,6 +166,19 @@ def _div(x, y, b) -> list:
     if _inf(x):
         return [_sign(x) * _sign(y) * INF]
     return [_quotient(x, y)]
+
+
+def _mod(x, y) -> list:
+    if _inf(x) or y == 0:
+        return []
+    if y == INF:
+        return [x if x >= 0 else INF]
+    if y == -INF:
+        return [x if x <= 0 else -INF]
+    if isinstance(x, float) or isinstance(y, float):
+        return [normalize_value(x % y)]
+    x, y = Fraction(x), Fraction(y)
+    return [normalize_value(x - y * math.floor(x / y))]
 
 
 def _check_exponent(n):
@@ -404,6 +424,71 @@ def _witness_div(v, a: _Set, b: _Set):
     return None
 
 
+def _witness_mod(v, a: _Set, b: _Set):
+    """
+    brute force, independent of intervals.modulo: the quotients k = floor(x / y) are enumerated, not
+    solved for. x mod y == v with y > 0 iff 0 <= v < y and x = v + k * y for an integer k (mirrored for
+    y < 0), so for each piece of B beyond v this looks for a k with x in A
+    """
+    if v == INF:
+        return _both(a, FIN_NEG, b, PINF)
+    if v == -INF:
+        return _both(a, FIN_POS, b, NINF)
+    if v >= 0 and b.pos_inf and contains_point(a.cuts, v):
+        return v, INF
+    if v <= 0 and b.neg_inf and contains_point(a.cuts, v):
+        return v, -INF
+    for j in b.finite:
+        for half, beyond in ((FIN_POS, (v, False, INF, False)), (FIN_NEG, (-INF, False, v, False))):
+            if (v < 0 and half is FIN_POS) or (v > 0 and half is FIN_NEG):
+                continue
+            jv = _meet(_meet(j, half), beyond)
+            if not _nonempty(jv):
+                continue
+            for i in a.finite:
+                found = _witness_mod_k(v, i, jv)
+                if found is not None:
+                    return found
+    return None
+
+
+def _witness_mod_k(v, i: RealInterval, jv: RealInterval):
+    """x in i and y in jv (one sign, every |y| > |v|) with x = v + k * y for an integer k"""
+    lo, lc, hi, hc = i
+    if _nonempty(_meet(i, (v, True, v, True))):
+        return v, _point(jv)
+    s = 1 if jv[2] > 0 else -1
+    near = jv[0] if s > 0 else -jv[2]  # inf |y|
+    far = jv[2] if s > 0 else -jv[0]  # sup |y|
+    if near == 0:
+        # jv touches 0, so v == 0 and any nonzero x of i is a multiple of some small enough y
+        for half in (FIN_POS, FIN_NEG):
+            m = _meet(i, half)
+            if _nonempty(m):
+                x = _point(m)
+                n = 1 if _inf(far) else math.floor(abs(x) / far) + 1
+                return x, normalize_value(Fraction(x) / (_sign(x) * s * n))
+        return None
+    if _inf(lo) or _inf(hi):
+        # an unbounded piece holds v + k * y for every |k| large enough, of the right sign
+        y = _point(jv)
+        end, d = (lo, 1) if _inf(hi) else (hi, -1)
+        start = 0 if _inf(end) else abs(Fraction(end) - v) / abs(y)
+        k = d * s * (math.ceil(start) + 1)
+        return normalize_value(v + k * y), y
+    bound = math.ceil(max(abs(Fraction(lo) - v), abs(Fraction(hi) - v)) / near) + 1
+    for k in range(-bound, bound + 1):
+        if k == 0:
+            continue
+        ends = [((Fraction(lo) - v) / k, lc), ((Fraction(hi) - v) / k, hc)]
+        (p, pc), (q, qc) = sorted(ends, key=lambda e: e[0])
+        m = _meet((p, pc, q, qc), jv)
+        if _nonempty(m):
+            y = _point(m)
+            return normalize_value(v + k * y), y
+    return None
+
+
 def witness(op: str, v, a: Cuts, b: Optional[Cuts] = None) -> Optional[tuple]:
     """
     an exact pair `(x, y)` (or `(x,)` for a unary op) of operand points that produces v, or None.
@@ -411,6 +496,15 @@ def witness(op: str, v, a: Cuts, b: Optional[Cuts] = None) -> Optional[tuple]:
     """
     v = _exact(v)
     sa = _decompose(a)
+    if op == 'mod':
+        found = _witness_mod(v, sa, _decompose(b))
+        if found is not None:
+            # self-check: the witness is a defined pair of the operands that produces v
+            x, y = found
+            assert contains_point(a, x) or contains_point(sa.cuts, x), (v, found)
+            assert contains_point(b, y) or contains_point(_exact_cuts(b), y), (v, found)
+            assert _mod(x, y) == [v], (v, found, _mod(x, y))
+        return found
     if op in BINARY:
         sb = _decompose(b)
         if op == 'add':
@@ -442,9 +536,9 @@ def attained(op: str, v, a: Cuts, b=None) -> bool:
     >>> attained('mul', 0, normalize([piece(math.inf, math.inf)]), normalize([piece(0, 1, False)]))
     False
     """
-    if op not in OPS:
+    if op not in OPS + MOD_OPS:
         raise ValueError(f'unknown op {op!r}')
-    if not a or (op in BINARY and not b):
+    if not a or (op in BINARY + MOD_OPS and not b):
         return False
     if op == 'pow':
         _check_exponent(b)
@@ -518,4 +612,4 @@ def _near(end, other, direction: int, rng):
     return end + (other - end) / 2 ** (k + 1)
 
 
-__all__ = ['OPS', 'BINARY', 'UNARY', 'ONE', 'pointwise', 'attained', 'witness', 'power_image', 'sample']
+__all__ = ['OPS', 'BINARY', 'UNARY', 'MOD_OPS', 'ONE', 'pointwise', 'attained', 'witness', 'power_image', 'sample']

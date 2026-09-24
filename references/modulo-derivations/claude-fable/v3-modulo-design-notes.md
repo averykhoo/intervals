@@ -223,6 +223,13 @@ here as the regression target for whoever implements section 4:
 
 ## 4. Remaining work
 
+> **2026-09-24:** done. `proof-all-quadrants.md` audits §2–§3b (they hold, except that
+> `modulo_v3_prototype.py` merges the located pieces before deciding their ends, which hides a
+> one-point hole such as `(2, 2.5) mod (1, 1.5)`, §1.2a there) and derives every sign combination,
+> the O(1) attainment test and the infinite operands. `modulo_allquadrants_prototype.py` is its
+> executable form; the library implementation is `intervals/modulo.py`. The list below is kept as
+> it was.
+
 - Derive the Q2 primitive pair (negative dividend, positive divisor) in closed form; then
   Q3/Q4 = antipodal mirror. Zero-crossing operands: split A and B at 0 (≤4 sign-pure
   sub-rectangles, still O(1)), decide semantics for `x mod 0` (slide 12 suggests 0 rather

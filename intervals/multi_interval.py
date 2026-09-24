@@ -16,6 +16,7 @@ from typing import Tuple
 
 from intervals import fmt
 from intervals import kernel
+from intervals import modulo
 from intervals import ops
 from intervals import relations
 from intervals.cuts import Value
@@ -257,6 +258,56 @@ class MultiInterval:
         MultiInterval.parse('(0, 1]')
         """
         return self._wrap(ops.reciprocal(self._cuts))
+
+    def __mod__(self, other):
+        """
+        python's floor-mod over every pair (see intervals.modulo)
+
+        >>> MultiInterval.parse('[3, 7]') % MultiInterval.parse('[-5, -2]')
+        MultiInterval.parse('(-5, 0]')
+        >>> -7 % MultiInterval(2, 5)  # just below y = 7/2, -7 mod y = 2y - 7 nears 7/2
+        MultiInterval.parse('[0, 7/2)')
+        """
+        return self._binary(other, modulo.mod)
+
+    def __rmod__(self, other):
+        return self._binary(other, modulo.mod, reflected=True)
+
+    def __floordiv__(self, other):
+        """
+        `floor(self / other)`, listing the integers it holds (a hull and a HullWarning past
+        `modulo.FLOOR_ENUMERATION_CAP` of them)
+
+        >>> MultiInterval(1, 2, end_closed=False) // 1
+        MultiInterval.parse('[1]')
+        """
+        return self._binary(other, modulo.floordiv)
+
+    def __rfloordiv__(self, other):
+        return self._binary(other, modulo.floordiv, reflected=True)
+
+    def __divmod__(self, other):
+        """`(self // other, self % other)`: two sets, not a set of pairs"""
+        other = self._coerce(other)
+        if other is NotImplemented:
+            return NotImplemented
+        q, r = modulo.divmod_(self._cuts, other._cuts)
+        return self._wrap(q), self._wrap(r)
+
+    def __rdivmod__(self, other):
+        other = self._coerce(other)
+        if other is NotImplemented:
+            return NotImplemented
+        return divmod(other, self)
+
+    def floor(self) -> 'MultiInterval':
+        """
+        the integers `floor(x)` for x in self
+
+        >>> MultiInterval.parse('[-1/2, 2)').floor()
+        MultiInterval.parse('{ [-1] , [0] , [1] }')
+        """
+        return self._wrap(modulo.floor(self._cuts))
 
     # POINTWISE COMPARISONS (a TruthSet; see intervals.relations)
 
