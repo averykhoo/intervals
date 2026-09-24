@@ -48,6 +48,13 @@ exact_cut_tuples = cut_tuples(values=st.one_of(
 ))
 
 
+def midpoint(a, b):
+    """a point strictly between a < b: the float midpoint of two adjacent doubles rounds onto one
+    of them, so fall back to the exact one"""
+    m = (a + b) / 2
+    return m if a < m < b else (Fraction(a) + Fraction(b)) / 2
+
+
 def probe_points(*cut_tuples_):
     """
     points on which two cut tuples agree iff they are the same set: every endpoint value, a
@@ -57,7 +64,7 @@ def probe_points(*cut_tuples_):
     probes = [-math.inf, math.inf, *finite]
     if finite:
         probes += [finite[0] - 1, finite[-1] + 1]
-        probes += [(a + b) / 2 for a, b in zip(finite, finite[1:])]
+        probes += [midpoint(a, b) for a, b in zip(finite, finite[1:])]
     else:
         probes.append(0)
     return probes

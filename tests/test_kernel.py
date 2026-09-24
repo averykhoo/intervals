@@ -1,6 +1,7 @@
 import math
 
 import pytest
+from hypothesis import example
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -130,6 +131,8 @@ def test_overlap_count(operands, n):
 
 
 @given(cut_tuples(), cut_tuples())
+# adjacent doubles: the gap between them has no float midpoint, found by the suite 2026-09-25
+@example(a=mi((-20.0, -2, False, False)), b=mi((-19.999999999999996, -2, True, False)))
 def test_is_subset(a, b):
     expected = all(naive_contains(b, x) for x in probe_points(a, b) if naive_contains(a, x))
     assert is_subset(a, b) == expected
