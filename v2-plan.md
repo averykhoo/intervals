@@ -186,7 +186,7 @@ superseded it.
   the antipodal identity; Q2 needs its own primitive derivation (design notes §2, Thm B); operands
   crossing zero split into sign-pure pieces; a divisor touching zero drops 0 with
   `DomainClippedWarning`
-    * infinite operands (D8): a dividend of ±inf has no value (python gives `nan`) and is dropped
+    * infinite operands (D8, owner-confirmed 2026-09-24): a dividend of ±inf has no value (python gives `nan`) and is dropped
       with `DomainClippedWarning`; a finite dividend mod a divisor of ±inf follows python's scalar
       result, which is also the limit along the box (`3 % [inf]` = `[3]`, `-3 % [inf]` = `[inf]`,
       `0 % [inf]` = `[0]`)

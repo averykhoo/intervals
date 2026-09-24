@@ -2,9 +2,9 @@
 
 companion to `v2-plan.md`. that file says *what*; this one says *in what order*, with an exit
 criterion per milestone. review findings that needed an owner decision are in section 0; D1–D7 are settled or deferred as
-of 2026-09-23 and written into `v2-plan.md`'s "current design"; D8 has a recommended default awaiting the owner.
+of 2026-09-23 and written into `v2-plan.md`'s "current design"; D8 was settled 2026-09-24.
 
-## 0. decisions (from the 2026-09-23 reviews; D1–D7 settled or deferred, D8 awaiting owner)
+## 0. decisions (from the 2026-09-23 reviews; D1–D8 settled or deferred)
 
 | # | question | recommended default | blocks |
 |---|---|---|---|
@@ -15,7 +15,7 @@ of 2026-09-23 and written into `v2-plan.md`'s "current design"; D8 has a recomme
 | D5 | **decided: every sign combination before release**, as its own milestone (M7b); the recommended Q1-only v2.0 is rejected. modulo scope for v2.0: the v3 work covers A ≥ 0, B > 0 only; Q2 primitive and zero-crossing operands are underived (design notes §4) | full modulo, M7a then M7b | release |
 | D6 | constructor default for an infinite bound: `MI(1, inf)` = `[1, inf]` (literal) or `[1, inf)` (1788 reading)? **settled (v2-plan.md current design): literal** — `[a, inf]` and `[a, inf)` are different sets and "a user-typed `[1, inf]` is taken literally". D2 removes the blow-up footgun that made this look open | literal | — |
 | D7 | **decided 2026-09-23 by owner**: a box that *is* an indeterminate point (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`, `[0]/[0]`) returns `∅` + `IndeterminateResultWarning` (was `[-inf] ∪ [inf]` / entire). isotonicity forces it: `[0]` is inside `[-1,0]` and `[0,1]`, so `1/[0] ⊆ [-inf,-1] ∩ [1,inf] = ∅`; `[0]*[inf] ⊆ [0]*[5,inf] ∩ [0,1]*[inf]` = `∅` and `[inf]-[inf] ⊆ [inf]-[1,inf] ∩ [1,inf]-[inf]` = `∅` under D2. solvers need isotone ops; matches 1788's empty. cost: `1/(1/[inf])` = `∅`; `1/x` round-trips only on sets with no degenerate piece at `0`, `inf`, `-inf`; the "later" direction tag stays the recovery path. separately, `f(A ∪ B) == f(A) ∪ f(B)` fails for reciprocal with any `1/[0]` (`A=[-1,0)`, `B=[0]`), so that law is only `⊇` for reciprocal/div | `∅` + warning | M6 |
-| D8 | **recommended default, not yet confirmed by owner; implemented as that default in M7 (2026-09-24), reversible locally (see M7b).** modulo with infinite operands: python gives `inf % 3` = `nan`, `3 % inf` = `3`, `-3 % inf` = `inf`. a dividend of ±inf attains nothing, so it is dropped with `DomainClippedWarning`; a finite dividend mod an infinite divisor follows python's scalar result (also the limit along the box) | clip / follow python | M7b |
+| D8 | **decided 2026-09-24 by owner: recommended default**, implemented in M7. modulo with infinite operands: python gives `inf % 3` = `nan`, `3 % inf` = `3`, `-3 % inf` = `inf`. a dividend of ±inf attains nothing, so it is dropped with `DomainClippedWarning`; a finite dividend mod an infinite divisor follows python's scalar result (also the limit along the box) | clip / follow python | M7b |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
 milestones below: infinite result endpoints always go through attainment (the corner-flag rule is
@@ -233,8 +233,8 @@ every new property test (flip one comparison, watch red, restore).
 * done 2026-09-24 (M7a and M7b together): `intervals/modulo.py` (`mod floor floordiv divmod_`), the class's
   `% // divmod` with their reflected forms and `floor()`, `HullWarning`, and `tests/test_modulo.py`.
   choices made while building:
-    * **D8 is implemented as its recommended default, still unconfirmed by the owner**: `±inf mod y` is
-      dropped and `x mod ±inf` follows python. it is isolated in `modulo._box` (the `[inf]` branch) and
+    * **D8 is implemented as its recommended default, confirmed by the owner the same day**: `±inf mod y`
+      is dropped and `x mod ±inf` follows python. it is isolated in `modulo._box` (the `[inf]` branch) and
       `modulo._attained` (the `has_inf` lines), so reversing it is local
     * one path for every quadrant: a negative divisor goes through the antipodal identity, and the
       Q2 left edge is `_scalar_mod_interval_negative` (closed form in its docstring; the proof is in
