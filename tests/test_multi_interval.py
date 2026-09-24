@@ -126,9 +126,9 @@ def test_scalars_coerce_in_set_operations():
 
 
 def test_minus_is_not_set_difference():
-    # `-` belongs to arithmetic (M6); it must never silently mean set difference
-    with pytest.raises(TypeError):
-        P('[1, 2]') - P('[1]')  # not defined until M6
+    # `-` is arithmetic (M6); it must never silently mean set difference
+    assert P('[1, 2]') - P('[1]') == P('[0, 1]')
+    assert P('[1, 2]').difference(P('[1]')) == P('(1, 2]')
     with pytest.raises(TypeError):
         P('[1, 2]') | 'x'
     with pytest.raises(TypeError):

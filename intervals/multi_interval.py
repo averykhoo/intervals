@@ -7,6 +7,7 @@ not coerce scalars: `MultiInterval(5) == 5` is False, because `hash(MultiInterva
 `hash(5)` for every such pair.
 """
 import math
+from numbers import Integral
 from numbers import Real
 from typing import Iterable
 from typing import Iterator
@@ -15,6 +16,7 @@ from typing import Tuple
 
 from intervals import fmt
 from intervals import kernel
+from intervals import ops
 from intervals import relations
 from intervals.cuts import Value
 from intervals.cuts import above
@@ -188,6 +190,70 @@ class MultiInterval:
         start = -math.inf if item.start is None else item.start
         stop = math.inf if item.stop is None else item.stop
         return self._wrap(kernel.intersection(self._cuts, kernel.normalize([kernel.piece(start, stop)])))
+
+    # ARITHMETIC (the set of values attained; see intervals.ops)
+
+    def _binary(self, other, op, reflected=False):
+        other = self._coerce(other)
+        if other is NotImplemented:
+            return NotImplemented
+        a, b = (other._cuts, self._cuts) if reflected else (self._cuts, other._cuts)
+        return self._wrap(op(a, b))
+
+    def __add__(self, other):
+        return self._binary(other, ops.add)
+
+    def __radd__(self, other):
+        return self._binary(other, ops.add, reflected=True)
+
+    def __sub__(self, other):
+        """arithmetic subtraction; set difference is `difference()`"""
+        return self._binary(other, ops.sub)
+
+    def __rsub__(self, other):
+        return self._binary(other, ops.sub, reflected=True)
+
+    def __mul__(self, other):
+        return self._binary(other, ops.mul)
+
+    def __rmul__(self, other):
+        return self._binary(other, ops.mul, reflected=True)
+
+    def __truediv__(self, other):
+        """
+        >>> 1 / MultiInterval.parse('[-1, 1]')
+        MultiInterval.parse('{ [-inf, -1] , [1, inf] }')
+        >>> MultiInterval(1) / 3
+        MultiInterval.parse('[1/3]')
+        """
+        return self._binary(other, ops.div)
+
+    def __rtruediv__(self, other):
+        return self._binary(other, ops.div, reflected=True)
+
+    def __neg__(self) -> 'MultiInterval':
+        return self._wrap(ops.neg(self._cuts))
+
+    def __pos__(self) -> 'MultiInterval':
+        return self._wrap(ops.pos(self._cuts))
+
+    def __abs__(self) -> 'MultiInterval':
+        return self._wrap(ops.absolute(self._cuts))
+
+    def __pow__(self, exponent, modulo=None):
+        """int exponents only (not bool); `A ** -n` is `(A ** n).reciprocal()`"""
+        if modulo is not None or isinstance(exponent, bool) or not isinstance(exponent, Integral):
+            return NotImplemented
+        return self._wrap(ops.power(self._cuts, exponent))
+
+    def reciprocal(self) -> 'MultiInterval':
+        """
+        `1 / self`; the sign of an infinity comes from the side of zero a piece lies on
+
+        >>> MultiInterval.parse('[1, inf)').reciprocal()
+        MultiInterval.parse('(0, 1]')
+        """
+        return self._wrap(ops.reciprocal(self._cuts))
 
     # POINTWISE COMPARISONS (a TruthSet; see intervals.relations)
 
