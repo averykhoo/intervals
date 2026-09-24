@@ -182,7 +182,7 @@ every new property test (flip one comparison, watch red, restore).
     * **plan claim corrected by the tests**: `1/(1/A) == A` also needs A not to be unbounded at both
       ends while holding exactly one of ±inf (`A = (-inf, inf]`: `1/A` = `[-inf, inf]`, which maps to
       itself). `tests/test_ops_properties.py::test_reciprocal_involution` pins the exact condition;
-      the "testing" section of `v2-plan.md` still states the old claim, pending owner review
+      the "testing" section of `v2-plan.md` was corrected 2026-09-24 after owner review
   evidence (2026-09-24): the gate was 940 passed in 72 s. every sabotage was
   run in a separate worktree with hypothesis seeds default, 1 and 2, and all of them went red. the
   plan's three:
@@ -252,9 +252,16 @@ every new property test (flip one comparison, watch red, restore).
       mixed-pair rule). for a mixed Fraction/float pair that differs from python, which rounds the
       Fraction first
     * `floor` enumerates up to `FLOOR_ENUMERATION_CAP = 1000` integers per call, then hulls with a
-      `HullWarning`, which is new and shown by default (precision was lost). `floordiv = floor ∘ div`
-      inherits div's poles (`[1] // [0, 1]` holds inf, where `mod` drops the 0) and gives `[-5] // [inf]`
-      = `[0]` where python's `-5 // inf` is -1.0. `divmod` is a pair of sets, one warning for an empty operand
+      `HullWarning`, which is new and shown by default (precision was lost). `floordiv` is `floor ∘ div`
+      over the finite divisors, so it inherits div's poles (`[1] // [0, 1]` holds inf, where `mod` drops
+      the 0). `divmod` is a pair of sets, one warning for an empty operand
+    * **follow-up the same day (owner decision)**: at an infinite divisor `//` takes the limit, as python:
+      `[-5] // [inf]` = `[-1]`, not `floor(div)`'s `[0]`. the oddity and the reasons are in `v2-plan.md`
+      (arithmetic, floordiv) and the `modulo` docstring; the one rule behind it and D8 is "a pair's value
+      at an infinite operand is its limit". the python comparison table added for it found a float bug
+      that predated it: `floor(div)` floored the *rounded* quotient, so `[1] // [0.001]` gave `[1000.0]`
+      where the true value is 999; the quotient is now exact and only the integers are made float.
+      reverting that turns `test_scalar_floordiv_matches_python` and `test_floordiv_sound_float` red
     * **v1 is not sharp for `A % scalar`**: an open end at a multiple of m gives it a 0 nothing attains
       (`[0.25, 0.5) % 0.5` is `{ [0] , [0.25, 0.5) }`). on the quarter grid 0..10 with m in {1/4, 1/2,
       3/4, 5/4, 7/4}, 302 of 16605 boxes differed, all of them that 0, and ours matched the oracle
@@ -339,7 +346,7 @@ point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6
 | `contiguous_intervals`, `infimum`/`supremum`(`_is_closed`) | `pieces` / iteration, `inf`/`sup`(`_closed`) |
 | `__lt__` etc. comparing endpoint lists | pointwise `TruthSet`; `sort_key` for the old structural order |
 | `reciprocal` → whole line at zero | split at zero, direction from the sign of the piece |
-| `__floordiv__` floors endpoints | `floor ∘ div`, enumerating |
+| `__floordiv__` floors endpoints | `floor ∘ div` (exact quotient), enumerating; the limit at an infinite divisor |
 | `apply_monotonic_{unary,binary}_function` | `applicator.apply_{unary,binary}(descriptor, ...)` |
 | `INFINITY_IS_NOT_FINITE`, `CONSISTENCY_CHECK` | deleted; `if __debug__` check in the class |
 | `interval.py` (`Interval`, `MultipleInterval`) | archived in `archive/v1/`; `tests/oracles.py` does its job |

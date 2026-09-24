@@ -10,6 +10,10 @@ floor-mod, so a result has the divisor's sign. every endpoint is closed iff atta
 * a finite `x mod inf` is x for x >= 0 and inf for x < 0; `x mod -inf` is x for x <= 0 and -inf for
   x > 0. these are python's values, and the limits along the box (`-3 mod y = y - 3` for y >= 3)
 
+one rule is behind both, and behind `//` below: at an infinite operand, a pair's value is the limit of
+the values of its finite neighbours, and a pair with no limit has no value (`inf mod y` oscillates).
+python agrees except where its float arithmetic gives nan for a limit that exists (`inf // 3`).
+
 the algorithm is the far-edge one derived in `references/modulo-derivations/claude-fable/`:
 
 1. split the dividend at 0 (0 in both halves) and drop 0 from the divisor, so every box of one
@@ -28,9 +32,18 @@ finite values are computed exactly (a float as the Fraction it denotes). a float
 result float, rounded once at the end, and a rounded end's flag is conservative, not a promise.
 
 `floor` enumerates the integers a set holds, up to `FLOOR_ENUMERATION_CAP` of them; above that, or
-for an unbounded piece, it returns their hull with a `HullWarning`. `floordiv` is `floor(div(A, B))`,
-so it follows `div` at a zero divisor (`[1] // [0, 1]` holds inf) and at an infinite one
-(`[-5] // [inf]` is `[0]`, where python's `-5 // inf` is -1.0).
+for an unbounded piece, it returns their hull with a `HullWarning`.
+
+`floordiv` is `floor(div(A, B))` over the finite divisors, so it follows `div` at a zero divisor
+(`[1] // [0, 1]` holds inf) and gives `inf // 3` = inf where python gives nan. an infinite divisor
+takes the limit instead, as python does: `x // inf` is -1 for x < 0 and 0 for x >= 0, `x // -inf` is -1
+for x > 0 and 0 for x <= 0. **so `//` is not `floor(div)` at an infinite divisor**: `-5 / inf` is 0, a
+point with no side, and `floor([-5] / [inf])` is `[0]`, while `[-5] // [inf]` is `[-1]`, the limit of
+`floor(-5 / y)` = -1 as y grows. the limit is what keeps the infinite point continuous with its
+neighbours (`[-5] // [1, inf]` = `[-5] // [1, inf)`, where floor(div) would add a stray 0) and keeps
+`divmod(-5, inf)` = `(-1, inf)`, both parts limits of the same finite pairs. it is the `1/[0]` story
+again: the direction a value was approached from is lost at a degenerate point, here the 0 of
+`-5 / inf`. `x = q * y + r` itself cannot hold at y = inf (`-1 * inf + inf` has no value).
 `divmod` is the pair of the two sets, which does not remember which quotient went with which remainder.
 
 >>> from intervals.fmt import format_cuts, parse
@@ -58,6 +71,7 @@ from intervals.cuts import Value
 from intervals.errors import DomainClippedWarning
 from intervals.errors import EmptySetPropagationWarning
 from intervals.errors import HullWarning
+from intervals.errors import IndeterminateResultWarning
 from intervals.kernel import Cuts
 
 INF = math.inf
@@ -326,13 +340,65 @@ def _typed(n, as_float: bool):
 
 def floordiv(a: Cuts, b: Cuts) -> Cuts:
     """
-    `floor(div(a, b))`
+    `floor(div(a, b))` over the finite divisors; an infinite divisor gives the limit (module docstring)
 
     >>> from intervals.fmt import format_cuts, parse
     >>> format_cuts(floordiv(parse('[1, 2)'), parse('[1]')))
     '[1]'
+    >>> format_cuts(floordiv(parse('[-5, 5]'), parse('[inf]')))  # floor(div) would give [0]
+    '{ [-1] , [0] }'
     """
-    return floor(ops.div(a, b))
+    if not a or not b:
+        warn(EmptySetPropagationWarning, 'floordiv: an operand is empty, so the result is empty')
+        return kernel.EMPTY
+    # the quotient is taken exactly and only the integers are made float: a rounded quotient can
+    # cross an integer, and the floor turns that ulp into a whole unit (`1 // 0.001` is 999, but the
+    # float `1 / 0.001` is 1000.0)
+    as_float = _has_finite_float(a) or _has_finite_float(b)
+    a, b = _exact_cuts(a), _exact_cuts(b)
+    parts = []
+    finite_divisor = kernel.intersection(b, _FINITE)
+    if finite_divisor:
+        parts.append(floor(ops.div(a, finite_divisor)))
+    finite_dividend = kernel.intersection(a, _FINITE)
+    for y in (-INF, INF):
+        if kernel.contains_point(b, y):
+            parts.append(_floordiv_by_infinity(finite_dividend, y))
+    if _isolated_infinities(a) and _isolated_infinities(b):
+        # the box `[±inf] // [±inf]` has no value, as in div
+        warn(IndeterminateResultWarning, 'floordiv(±inf, ±inf) has no value at any point (an indeterminate '
+                                         'form), so that part contributes nothing')
+    out = kernel.union(*parts) if parts else kernel.EMPTY
+    return _float_cuts(out) if as_float else out
+
+
+def _floordiv_by_infinity(finite_dividend: Cuts, y) -> Cuts:
+    """the limit of floor(x / t) as t -> y = ±inf: 0 where x has y's sign or is 0, -1 where it has the other"""
+    same = kernel.piece(0, INF, True, False) if y > 0 else kernel.piece(-INF, 0, False, True)
+    other = kernel.piece(-INF, 0, False, False) if y > 0 else kernel.piece(0, INF, False, False)
+    return kernel.normalize(kernel.piece(n, n) for side, n in ((same, 0), (other, -1))
+                            if kernel.intersection(finite_dividend, side))
+
+
+def _has_finite_float(cuts: Cuts) -> bool:
+    return any(isinstance(cut.value, float) and not is_infinite(cut.value) for cut in cuts)
+
+
+def _exact_cuts(cuts: Cuts) -> Cuts:
+    return kernel.normalize(kernel.piece(_exact_value(lo), _exact_value(hi), lc, hc)
+                            for lo, lc, hi, hc in kernel.pieces(cuts))
+
+
+def _float_cuts(cuts: Cuts) -> Cuts:
+    out = []
+    for p in kernel.pieces(cuts):
+        lo, lo_closed, hi, hi_closed = _to_float(p)
+        out.append(kernel.piece(lo, hi, lo_closed, hi_closed))
+    return kernel.normalize(out)
+
+
+def _isolated_infinities(cuts: Cuts) -> bool:
+    return any(lo == hi and is_infinite(lo) for lo, _, hi, _ in kernel.pieces(cuts))
 
 
 def divmod_(a: Cuts, b: Cuts) -> Tuple[Cuts, Cuts]:

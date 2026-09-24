@@ -478,8 +478,8 @@ def _one_sided_at_infinity(cuts):
 @example(a=parse('{ (-inf, -1] , [1, inf] }'))
 def test_reciprocal_involution(a):
     """
-    the plan's `1/(1/A) == A` (no degenerate piece at 0, inf or -inf) is one precondition short, so
-    this pins the exact round trip: A itself, plus the missing infinity when A is unbounded at both
+    the plan's first `1/(1/A) == A` (no degenerate piece at 0, inf or -inf) was one precondition short
+    (v2-plan.md corrected 2026-09-24), so this pins the exact round trip: A itself, plus the missing infinity when A is unbounded at both
     ends but holds exactly one of +-inf (see test_reciprocal_round_trip_gains_the_other_infinity)
     """
     back = a

@@ -23,9 +23,11 @@ from hypothesis import strategies as st
 
 from intervals import MultiInterval
 from intervals import modulo
+from intervals import ops
 from intervals.errors import DomainClippedWarning
 from intervals.errors import EmptySetPropagationWarning
 from intervals.errors import HullWarning
+from intervals.errors import IndeterminateResultWarning
 from intervals.fmt import format_cuts
 from intervals.fmt import parse
 from intervals.kernel import EMPTY
@@ -539,10 +541,81 @@ def test_floor_sound_and_sharp(a, rng):
     ('[-7]', '[2]', '[-4]'),
     ('[7, 9]', '[2, 3]', '{ [2] , [3] , [4] }'),
     ('[1]', '[3]', '[0]'),
-    ('[-5]', '[inf]', '[0]'),  # floor(div): -5 / inf is 0 here, python's -5 // inf is -1.0
+    ('[-5]', '[inf]', '[-1]'),  # the limit, as python; floor(div) would give 0
+    ('[-5, 5]', '[-inf]', '{ [-1] , [0] }'),
+    ('[inf]', '[3]', '[inf]'),  # python: nan
 ])
 def test_floordiv(a, b, expected):
     assert format_cuts(modulo.floordiv(parse(a), parse(b))) == expected
+
+
+def _python_floordiv(x, y):
+    """
+    python's `x // y`, with the library's number rules: exact pairs stay exact, a mixed Fraction/float
+    pair is computed exactly and rounded once, an infinity never makes the result float, and an
+    infinite dividend over a finite divisor is the limit, a signed infinity (python: nan)
+    """
+    if math.isinf(x):
+        return x if y > 0 else -x
+    if math.isinf(y):
+        q = -1 if (x > 0 and y < 0) or (x < 0 and y > 0) else 0
+        return float(q) if isinstance(x, float) else q
+    q = math.floor(Fraction(x) / Fraction(y))
+    return float(q) if isinstance(x, float) or isinstance(y, float) else q
+
+
+@pytest.mark.parametrize('x', scalars)
+@pytest.mark.parametrize('y', [v for v in scalars if v != 0])
+def test_scalar_floordiv_matches_python(x, y):
+    if math.isinf(x) and math.isinf(y):
+        with pytest.warns(IndeterminateResultWarning):
+            assert modulo.floordiv(one(x, True, x, True), one(y, True, y, True)) == EMPTY
+        return
+    if not (math.isinf(x) or isinstance(x, Fraction) or isinstance(y, Fraction)):
+        assert _python_floordiv(x, y) == x // y  # the reference is python's own value where it has one
+    expected = _python_floordiv(x, y)
+    result = modulo.floordiv(one(x, True, x, True), one(y, True, y, True))
+    assert show(result) == [(expected, True, expected, True)], (x, y, expected, show(result))
+    assert type(show(result)[0][0]) is type(show(one(expected, True, expected, True))[0][0])
+
+
+@settings(max_examples=150, deadline=None)
+@given(a=cut_tuples(max_pieces=2), b=cut_tuples(max_pieces=2), rng=st.randoms(use_true_random=False))
+@example(a=parse('[1]'), b=one(0.001, True, 0.001, True), rng=random.Random(0))  # float 1 / 0.001 is 1000.0
+@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::intervals.errors.HullWarning')
+def test_floordiv_sound_float(a, b, rng):
+    """the floor of the EXACT quotient of every sampled pair is in the result (as a float if rounded)"""
+    result = _closed(modulo.floordiv(a, b))
+    for x in sample(a, 6, rng):
+        for y in sample(b, 6, rng):
+            if y == 0 or (math.isinf(x) and math.isinf(y)):
+                continue  # a pole (div's rule) and an indeterminate pair
+            exact = _python_floordiv(*(Fraction(v) if isinstance(v, float) and math.isfinite(v) else v
+                                       for v in (x, y)))
+            assert contains_point(result, exact) or contains_point(result, float(exact)), (x, y, exact, show(result))
+
+
+def test_floordiv_is_not_floor_div_at_an_infinite_divisor():
+    """the documented oddity: -5 / inf is 0, a point with no side, so floor(div) loses the limit's -1"""
+    a, b = parse('[-5]'), parse('[inf]')
+    assert modulo.floor(ops.div(a, b)) == parse('[0]')
+    assert modulo.floordiv(a, b) == parse('[-1]')
+    # the limit keeps the infinite point continuous with its finite neighbours
+    assert modulo.floordiv(a, parse('[1, inf]')) == modulo.floordiv(a, parse('[1, inf)'))
+    assert format_cuts(modulo.floordiv(a, parse('[1, inf]'))) == '{ [-5] , [-4] , [-3] , [-2] , [-1] }'
+    # and divmod's two parts are limits of the same finite pairs, as in python
+    assert divmod(P('[-5]'), INF) == (P('[-1]'), P('[inf]'))
+    assert divmod(-5, INF) == (-1.0, INF)
+
+
+def test_floordiv_indeterminate_only_for_an_isolated_infinity_pair():
+    with pytest.warns(IndeterminateResultWarning):
+        assert modulo.floordiv(parse('{ [1] , [inf] }'), parse('[inf]')) == parse('[0]')
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        # the box [inf] // [5, inf] has values (inf // 5), so nothing warns
+        assert modulo.floordiv(parse('[inf]'), parse('[5, inf]')) == parse('[inf]')
 
 
 def test_floordiv_at_a_zero_divisor_follows_div():

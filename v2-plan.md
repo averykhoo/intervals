@@ -35,7 +35,9 @@ superseded it.
     * `1/[-1, 0]` = `[-inf, -1]` — same as Hickey and as ieee 1788, no signed zero needed
     * `1/[-1, 1]` = `[-inf, -1] ∪ [1, inf]`
     * `1/[1, inf]` = `[0, 1]`, `1/[1, inf)` = `(0, 1]`: closedness at infinity and at zero correspond
-* consequence: `1/x` is an involution only on sets with no degenerate piece at `0`, `inf` or `-inf`.
+* consequence: `1/x` is an involution only on sets with no degenerate piece at `0`, `inf` or `-inf`,
+  and not unbounded at both ends while holding exactly one of ±inf (the second condition added
+  2026-09-24, found by the M6 tests: `1/(-inf, inf]` = `[-inf, inf]`, which maps to itself).
   such a piece is lost: `1/[0]` = `∅`, so `1/(1/[inf])` = `∅`, and `[0] ∪ [1, 2]` → `[1/2, 1]` →
   `[1, 2]`. the sharp answer needs one bit of memory on a degenerate zero (Kahan's argument for the
   sign bit) and is deferred — see "later"
@@ -181,6 +183,21 @@ superseded it.
   divide as Fraction (see number types)
 * floordiv: enumerate integer points below a size cap, else hull + warning — never silently drop
   openness (v1's `[1,2) // 1` = `[1,2]` is wrong; should be `[1]`)
+    * `floor(A / B)` over the finite divisors, with the quotient taken exactly and only the integers
+      made float: a rounded quotient can cross an integer and the floor turns that ulp into a whole
+      unit (`1 // 0.001` is 999; the float `1 / 0.001` is 1000.0)
+    * **at an infinite divisor `//` is the limit, not `floor(div)`** (owner decision 2026-09-24, as
+      python): `x // inf` is -1 for x < 0 and 0 for x >= 0, mirrored for -inf. the mathematical
+      oddity: `-5 / inf` is 0, a point with no side, so `floor([-5] / [inf])` = `[0]` while
+      `[-5] // [inf]` = `[-1]` = the limit of `floor(-5 / y)`. the limit keeps the infinite point
+      continuous with its neighbours (`[-5] // [1, inf]` = `[-5] // [1, inf)`; floor(div) would add a
+      stray 0) and makes `divmod(-5, inf)` = `(-1, inf)`, both parts limits of the same finite pairs.
+      `x = q * y + r` cannot hold at y = inf either way (`-1 * inf + inf` has no value). it is the
+      `1/[0]` story again: the direction of approach is lost at a degenerate point
+    * `inf // 3` is `inf` (the limit; python gives nan); `[±inf] // [±inf]` is indeterminate
+* **infinite operands in `%` and `//` follow one rule**: a pair's value is the limit of its finite
+  neighbours' values, and a pair with no limit has none. D8 (below) and the `//` bullet above are
+  instances of it; python agrees except where its float arithmetic gives nan for a limit that exists
 * modulo: the v3 far-edge algorithm, `references/modulo-derivations/claude-fable/`, for every sign
   combination before release. Q1 (dividend ≥ 0, divisor > 0) is proven; Q3/Q4 follow from Q1/Q2 by
   the antipodal identity; Q2 needs its own primitive derivation (design notes §2, Thm B); operands
@@ -287,7 +304,10 @@ imports only point downward.
       abs, mul). for reciprocal/div only `f(A ∪ B) ⊇ f(A) ∪ f(B)` (i.e. isotonicity): under the
       direction-from-the-piece rule equality fails with *any* value of `1/[0]`. counterexample
       `A = [-1, 0)`, `B = [0]`: `1/(A ∪ B)` = `[-inf, -1]`, but `1/A ∪ 1/B` = `(-inf, -1]`
-    * `1/(1/A) == A` for every A with no degenerate piece at `0`, `inf` or `-inf`
+    * `1/(1/A) == A` for every A with no degenerate piece at `0`, `inf` or `-inf` that is not
+      unbounded at both ends while holding exactly one of ±inf. such an A gains the other infinity:
+      `1/(-inf, inf]` = `[-inf, inf]` (0 is reached from both sides), which maps to itself. corrected
+      2026-09-24; pinned by `tests/test_ops_properties.py::test_reciprocal_involution`
 * the sampler must draw a closed ±inf endpoint with positive probability, and the attainment
   oracle must decide ±inf symbolically; otherwise the infinite-endpoint closure rule is untested
 * **interior sharpness**, not just endpoints: soundness fuzz passes on any superset, and endpoint
