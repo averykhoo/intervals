@@ -41,6 +41,9 @@ class MultiInterval:
     """
     __slots__ = ('_cuts',)
     _cuts: Cuts
+    # numpy's opt-out, so `np.float64(2) * A` runs the reflected dunders instead of treating A as
+    # a sequence (this is not the deferred numpy compat)
+    __array_ufunc__ = None
 
     # CONSTRUCTION
 
@@ -241,7 +244,7 @@ class MultiInterval:
         return self._wrap(ops.absolute(self._cuts))
 
     def __pow__(self, exponent, modulo=None):
-        """int exponents only (not bool); `A ** -n` is `(A ** n).reciprocal()`"""
+        """int exponents only (not bool); on exact operands `A ** -n` is `(A ** n).reciprocal()`"""
         if modulo is not None or isinstance(exponent, bool) or not isinstance(exponent, Integral):
             return NotImplemented
         return self._wrap(ops.power(self._cuts, exponent))

@@ -11,7 +11,7 @@ every endpoint, finite or infinite, is closed iff attained. pointwise:
   on (both, if it crosses zero; nothing for a degenerate `[0]`), and `0 / 0` has no value
 * `reciprocal(A)` is `div([1], A)`; `neg`, `pos`, `abs` are pointwise
 * `power(A, n)` for an int n: `x ** n` for `n >= 1`, `[1]` for `n == 0` and `reciprocal(power(A, -n))`
-  below that (evaluated as `1 / x ** -n` in one step, which is the same set)
+  below that (evaluated as `1 / x ** -n` in one step, which is the same set on exact operands)
 
 a box of the operands with no defined point at all (`[0] * [inf]`, `[inf] - [inf]`, `[0] / [0]`,
 `1 / [0]`) contributes nothing and the call emits one `IndeterminateResultWarning`; an empty operand
@@ -36,6 +36,7 @@ symbolically here, so an infinite operand never makes a result float.
 '[1/3]'
 """
 import math
+import operator
 from fractions import Fraction
 from functools import lru_cache
 from numbers import Integral
@@ -61,7 +62,7 @@ def _add(x, y):
         return None if is_infinite(y) and y != x else x
     if is_infinite(y):
         return y
-    return x + y
+    return _finite(operator.add, x, y)
 
 
 def _sub(x, y):
@@ -72,7 +73,7 @@ def _mul(x, y):
     if is_infinite(x) or is_infinite(y):
         s = sign(x) * sign(y)
         return signed_inf(s) if s else None
-    return x * y
+    return _finite(operator.mul, x, y)
 
 
 def _div(x, y):
@@ -85,8 +86,24 @@ def _div(x, y):
     if is_infinite(x):
         return signed_inf(sign(x) * sign(y))
     if isinstance(x, float) or isinstance(y, float):
-        return x / y
+        return _finite(operator.truediv, x, y)
     return Fraction(x) / y
+
+
+def _finite(op, x, y):
+    """
+    `op(x, y)` for finite x and y. python turns the exact one of a mixed pair into a float first,
+    which overflows (`10**400 + 0.5`), makes a nonzero divisor 0.0 (`1.0 / Fraction(1, 10**400)`)
+    or silently flushes it to zero (`Fraction(1, 10**400) * 1e300` would be 0.0), so a mixed pair
+    is computed exactly and rounded once, to the signed infinity if it overflows
+    """
+    if isinstance(x, float) == isinstance(y, float):
+        return op(x, y)
+    exact = op(Fraction(x), Fraction(y))
+    try:
+        return float(exact)
+    except OverflowError:
+        return signed_inf(sign(exact))
 
 
 def _div_pole(args, dirs):

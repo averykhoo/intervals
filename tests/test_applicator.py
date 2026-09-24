@@ -4,6 +4,7 @@ and the arithmetic dunders on the class. worked-example tables and the laws live
 test_ops_examples.py and test_ops_properties.py
 """
 import math
+import sys
 import warnings
 from fractions import Fraction
 
@@ -11,8 +12,8 @@ import pytest
 from hypothesis import given
 from hypothesis import settings
 
+import intervals
 from intervals import MultiInterval
-from intervals import applicator
 from intervals import kernel
 from intervals import ops
 from intervals.applicator import OpDescriptor
@@ -293,6 +294,14 @@ def test_rounding_hook_only_on_finite_float_corners():
     assert calls == [(1.5, 1), (1.5, 1)]
 
 
+def test_rounding_hook_on_a_mixed_corner_beyond_float_range():
+    # fn runs before the hook; neither may raise on an exact operand that has no float
+    outward = ops.ADD._replace(rounded=(lambda x, y: math.nextafter(ops._add(x, y), -inf),
+                                        lambda x, y: math.nextafter(ops._add(x, y), inf)))
+    result = apply_binary(outward, MultiInterval(10 ** 400).cuts, parse('[0.5]'))
+    assert result == kernel.normalize([kernel.piece(sys.float_info.max, inf, False, True)])
+
+
 def test_rounding_hook_unary():
     outward = ops.NEG._replace(rounded=(lambda x: math.nextafter(-x, -inf), lambda x: math.nextafter(-x, inf)))
     result = apply_unary(outward, parse('[1, 2.0]'))
@@ -325,6 +334,20 @@ def test_scalars_coerce_on_both_sides():
     assert 2 / a == P('[1, 2]')
     assert Fraction(1, 2) * a == P('[1/2, 1]')
     assert a * 0.5 == P('[0.5, 1.0]')
+
+
+def test_numpy_scalars_run_the_reflected_dunders():
+    np = pytest.importorskip('numpy')
+    a = P('[1, 2]')
+    assert np.float64(0.5) * a == P('[0.5, 1.0]')
+    assert np.int64(3) - a == P('[1, 2]')
+    assert np.float64(1) / a == P('[0.5, 1.0]')
+    assert (np.float64(0.5) < a) == (0.5 < a)
+    with pytest.raises(TypeError):
+        _ = a ** np.float64(2)  # int exponents only
+    for thunk in (lambda: a + np.bool_(True), lambda: np.bool_(True) + a):
+        with pytest.raises(TypeError):  # bool is refused, as in _coerce
+            thunk()
 
 
 def test_minus_is_arithmetic_not_set_difference():
@@ -363,5 +386,9 @@ def test_m6_leaves_modulo_and_floordiv_undefined():
 
 
 def test_package_exports_unchanged():
-    assert applicator.OpDescriptor is OpDescriptor
-    assert isinstance(ops.MUL, OpDescriptor) and ops.MUL.split_points == (0,)
+    # M6 adds no public names: the ops and the applicator stay in their submodules
+    assert set(intervals.__all__) == {
+        'MultiInterval', 'EMPTY', 'REALS', 'Size', 'Builder', 'TruthSet', 'Allen', 'Cut', 'Side',
+        'IntervalWarning', 'EmptySetPropagationWarning', 'DomainClippedWarning', 'IndeterminateResultWarning'}
+    for name in ('add', 'mul', 'OpDescriptor', 'apply_binary'):
+        assert not hasattr(intervals, name), name

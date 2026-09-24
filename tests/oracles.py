@@ -22,7 +22,7 @@ by some defined pair: finite floats are read as the Fraction they denote, +-inf 
 """
 import math
 from fractions import Fraction
-from typing import List
+from functools import lru_cache
 from typing import NamedTuple
 from typing import Optional
 from typing import Tuple
@@ -276,11 +276,13 @@ def _scaled_reciprocal(v, j: RealInterval, positive: bool) -> RealInterval:
 class _Set(NamedTuple):
     """an exact operand, split into its finite real pieces and its infinite points"""
     cuts: Cuts
-    finite: List[RealInterval]
+    finite: Tuple[RealInterval, ...]
     neg_inf: bool
     pos_inf: bool
 
 
+# the same operands are decomposed over and over; the cached _Set is shared, so it is all tuples
+@lru_cache(maxsize=4096)
 def _decompose(cuts: Cuts) -> _Set:
     cuts = _exact_cuts(cuts)
     finite, neg_inf, pos_inf = [], False, False
@@ -290,7 +292,7 @@ def _decompose(cuts: Cuts) -> _Set:
         real = _real(lo, lc, hi, hc)
         if _nonempty(real):
             finite.append(real)
-    return _Set(cuts, finite, neg_inf, pos_inf)
+    return _Set(cuts, tuple(finite), neg_inf, pos_inf)
 
 
 # extended ranges (lo, lo_closed, hi, hi_closed) that the case analysis asks for

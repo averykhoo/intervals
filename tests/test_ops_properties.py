@@ -104,6 +104,16 @@ iso_operands = st.one_of(
 
 exponents = st.integers(-3, 3)
 
+# the soundness and sharpness tests check nothing on an empty operand (emptiness has its own test), and
+# exact_operands drawn as those tests draw it gave an empty a or b in 162 of 300 binary examples
+# (measured 2026-09-24, 60 examples x 5 seeds)
+nonempty_operands = exact_sets(min_pieces=1).filter(bool)
+
+# pow and reciprocal: ends among -inf, -1, 0, 1, inf with random closure, so an open end at 0 (where
+# `(0, 1] ** -1 = [1, inf)` must not attain inf) is common, and exponents are mostly negative
+pole_operands = st.lists(special_pieces(), min_size=1, max_size=2).map(normalize).filter(bool)
+negative_biased_exponents = st.one_of(st.integers(-3, -1), exponents)
+
 
 # DISPATCH
 
@@ -126,6 +136,15 @@ def second(op, operands):
     if op in BINARY:
         return operands
     return st.none()
+
+
+def sharp_operands(op):
+    """the (a, b) strategies for the sharpness tests: non-empty, and pole-heavy for pow and reciprocal"""
+    if op == 'pow':
+        return st.one_of(nonempty_operands, pole_operands), negative_biased_exponents
+    if op == 'reciprocal':
+        return st.one_of(nonempty_operands, pole_operands), st.none()
+    return nonempty_operands, second(op, nonempty_operands)
 
 
 def oracle_b(op, b):
@@ -191,8 +210,8 @@ def probes(op, a, b, result):
 @settings(max_examples=60, deadline=None)
 @given(data=st.data(), rng=st.randoms(use_true_random=False))
 def test_sound_exact(op, data, rng):
-    a = data.draw(exact_operands, label='a')
-    b = data.draw(second(op, exact_operands), label='b')
+    a = data.draw(nonempty_operands, label='a')
+    b = data.draw(second(op, nonempty_operands), label='b')
     result = apply(op, a, b)
     for x, y in sampled_pairs(op, a, b, rng):
         for v in values_of(op, x, y, a, b):
@@ -300,8 +319,9 @@ def test_identity_rounding_collapse(op, a, b, pair, value):
 @settings(max_examples=60, deadline=None)
 @given(data=st.data())
 def test_endpoints_closed_iff_attained(op, data):
-    a = data.draw(exact_operands, label='a')
-    b = data.draw(second(op, exact_operands), label='b')
+    a_strategy, b_strategy = sharp_operands(op)
+    a = data.draw(a_strategy, label='a')
+    b = data.draw(b_strategy, label='b')
     result = apply(op, a, b)
     for lo, lo_closed, hi, hi_closed in pieces(result):
         assert lo_closed == attained(op, lo, a, oracle_b(op, b)), ('lo', lo, show(result))
@@ -317,8 +337,9 @@ def test_interior_sharpness(op, data, rng):
     a point in every gap between them, and sampled points of the result (`[-1, 1] * [inf]` must not
     come out as `[-inf, inf]`)
     """
-    a = data.draw(exact_operands, label='a')
-    b = data.draw(second(op, exact_operands), label='b')
+    a_strategy, b_strategy = sharp_operands(op)
+    a = data.draw(a_strategy, label='a')
+    b = data.draw(b_strategy, label='b')
     result = apply(op, a, b)
     for p in probes(op, a, b, result):
         assert contains_point(result, p) == attained(op, p, a, oracle_b(op, b)), (p, show(result))
@@ -350,7 +371,8 @@ degenerate_specials = st.sampled_from([0, INF, -INF]).map(lambda v: (normalize([
 # (A, B) with A ⊆ B. the two shapes isotonicity is there to pin, `1/[0] ⊆ 1/[-1, 0]` and
 # `[0] * [inf] ⊆ [0, 1] * [inf]`, need a neighbourhood on one side and often a bare `[+-inf]` on the
 # other; a sabotage that sets 1/[0] back to `[-inf] ∪ [inf]` goes red within ~15 examples, and
-# `[0] * [inf] = [0]` within ~60 (.scratch run 2026-09-24; see the M6 property report)
+# `[0] * [inf] = [0]` within ~60 (measured 2026-09-24, 150 examples x 5 seeds: the 1/[0] shape in 12-18%
+# of examples, [0]*[±inf] 1-5 per 150; the explicit iso_examples make both sabotages deterministic)
 subset_pairs = st.one_of(cut_out(), neighbourhoods(), neighbourhoods(), degenerate_specials, degenerate_specials)
 
 iso_examples = [

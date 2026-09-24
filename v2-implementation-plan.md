@@ -158,6 +158,54 @@ every new property test (flip one comparison, watch red, restore).
   hypothesis strategy has to generate degenerate `[0]` inside `[-1,0]` / `[0,1]` often enough);
   soundness must go red if infinite endpoints are given back to the corner-flag rule;
   interior sharpness must go red if mul's zero split is removed
+* done 2026-09-24, in one session. the whole semantics reduces to one rule: the result is the set of
+  values the *defined* pairs attain (`0*±inf`, `inf-inf`, `±inf/±inf`, `0/0` have none), every
+  endpoint closed iff attained, and `x/0` gives ±inf with the sign of x times the side of zero the
+  divisor's piece extends to. D2's corner limits and D7's `∅` both follow from it. choices made while
+  building:
+    * closure is a face rule, decided per split box (same union as deciding against the full operands):
+      an extreme is attained at an all-closed corner or along a flat edge whose fixed coordinate is a
+      closed end. `OpDescriptor` gained a `pole(args, dirs)` field for `x/0`; `fn` returns None where
+      the op has no value. ops are `neg pos absolute reciprocal power add sub mul div` over cut tuples
+    * for `+ - * /` the D2 edge-limit block in `evaluate_box` is redundant for values (the far corner
+      of the edge already gives it); it only makes an exact `0` win over `0.0` in
+      `[0] * [2.5, inf]`. kept as the documented rule for later ops
+    * negative powers are one step, `1 / x**|n|`, not `reciprocal(power(A, |n|))`: the same set on
+      exact operands, but a float `x**|n|` underflowing to 0 would lose the pole's sign
+    * a mixed exact/float pair is computed exactly and rounded once (`Fraction(1, 10**400) * 1e300`
+      would otherwise be 0.0); a float piece that rounding squeezes to one point keeps it, closed
+      (`[1] + (0, 1e-300)` = `[1]`, not `∅`); poles never reach the rounding hook
+    * `A ** Fraction(2)` works (python's `Fraction.__rpow__` makes it `A ** 2`); `A ** Fraction(1, 2)`
+      is a TypeError. `__array_ufunc__ = None` so numpy scalars on the left reach the reflected dunders
+    * one `EmptySetPropagationWarning` / `IndeterminateResultWarning` per call, attributed to the first
+      frame outside the package
+    * **plan claim corrected by the tests**: `1/(1/A) == A` also needs A not to be unbounded at both
+      ends while holding exactly one of ±inf (`A = (-inf, inf]`: `1/A` = `[-inf, inf]`, which maps to
+      itself). `tests/test_ops_properties.py::test_reciprocal_involution` pins the exact condition;
+      the "testing" section of `v2-plan.md` still states the old claim, pending owner review
+  evidence (2026-09-24): the gate was 940 passed in 72 s. every sabotage was
+  run in a separate worktree with hypothesis seeds default, 1 and 2, and all of them went red. the
+  plan's three:
+    * `1/[0]` set to `[-inf] ∪ [inf]` turned `test_isotone[div, reciprocal, pow]` red on 3/3 seeds,
+      even with the pinned `@example`s disabled
+    * infinite endpoints given back to the corner-flag rule were caught by the infinity-closure
+      tables on every run, and by soundness or attainment on every seed. soundness *alone* went red
+      on 2 of 3 seeds
+    * removing mul's zero split turned `test_interior_sharpness[mul]` red on 3/3 seeds
+  the others:
+    * the pole sign taken from a sign bit
+    * attainment checked at corners only
+    * no `IndeterminateResultWarning`
+    * float instead of Fraction for exact division
+    * `finite/inf` returning `0.0`
+    * the lo == hi collapse rule removed
+    * the negative-power open-pole rule broken, which is now red on 5/5 seeds
+    * an oracle bug in `attained('mul', 0, ...)`
+
+  an exhaustive differential against `tests/oracles.py` covered every 1- and 2-piece operand over
+  the exact grid `{-inf, -2, -1, -1/2, 0, 1/2, 1, 2, inf}` with all open/closed combinations: about
+  230k binary and 32k unary checks, plus 179k on the same grid as floats, all with 0 mismatches.
+  the harness was not kept
 
 ### M7a `modulo.py`, Q1 port (2 days)
 * port `modulo_v3_prototype.py` (P1 scalar mod, P2 scalar-mod-interval, far-edge union,

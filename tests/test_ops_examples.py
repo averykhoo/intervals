@@ -336,6 +336,9 @@ POWER = [
     ('[-inf]', -2, '[0]'),
     ('[-inf, inf]', -2, '[0, inf]'),
     ('(-inf, inf)', -2, '(0, inf]'),
+    # n == -3: odd, so the pole's direction is the side of A; an open end at 0 does not attain it
+    ('(-1, 0)', -3, '(-inf, -1)'),
+    ('[-1, 0]', -3, '[-inf, -1]'),
 ]
 
 
@@ -420,6 +423,39 @@ def test_float_endpoints_use_plain_float_arithmetic():
     assert quiet(lambda: P('[0.1]') + P('[0.2]')) == MultiInterval(0.1 + 0.2)
     assert quiet(lambda: P('[0.1]') * P('[3]')) == MultiInterval(0.1 * 3)
     assert quiet(lambda: P('[1]') / P('[3.0]')) == MultiInterval(1 / 3.0)
+
+
+BIG, TINY = 10 ** 400, Fraction(1, 10 ** 400)  # beyond float range, and below it but nonzero
+
+
+@pytest.mark.parametrize('thunk, expected', [
+    # python converts the exact operand to float first, which overflows or makes a divisor 0.0;
+    # the value is computed exactly and rounded once instead
+    pytest.param(lambda: MultiInterval(BIG) + 0.5, MultiInterval(math.inf), id='big + 0.5'),
+    pytest.param(lambda: MultiInterval(Fraction(BIG, 3)) + 0.5, MultiInterval(math.inf), id='big/3 + 0.5'),
+    pytest.param(lambda: 0.5 - MultiInterval(BIG), MultiInterval(-math.inf), id='0.5 - big'),
+    pytest.param(lambda: MultiInterval(-BIG) * 0.5, MultiInterval(-math.inf), id='-big * 0.5'),
+    pytest.param(lambda: MultiInterval(BIG) * 1e-300, MultiInterval(float(BIG * Fraction(1e-300))),
+                 id='big * 1e-300 is finite'),
+    pytest.param(lambda: MultiInterval(BIG) / 0.5, MultiInterval(math.inf), id='big / 0.5'),
+    pytest.param(lambda: 0.5 / MultiInterval(BIG), MultiInterval(0.0), id='0.5 / big underflows'),
+    pytest.param(lambda: 1.0 / MultiInterval(TINY), MultiInterval(math.inf), id='1.0 / tiny'),
+    pytest.param(lambda: -1.0 / MultiInterval(TINY), MultiInterval(-math.inf), id='-1.0 / tiny'),
+    pytest.param(lambda: MultiInterval(1.0, 2.0) / MultiInterval(TINY, 1), P('[1.0, inf]'),
+                 id='[1.0, 2.0] / [tiny, 1]'),
+    pytest.param(lambda: MultiInterval(-1.0, 2.0) / MultiInterval(TINY, 1), P('[-inf, inf]'),
+                 id='[-1.0, 2.0] / [tiny, 1]'),
+    # no exception here: python would silently flush the tiny exact operand to 0.0
+    pytest.param(lambda: MultiInterval(TINY) * 1e300, MultiInterval(float(TINY * Fraction(1e300))),
+                 id='tiny * 1e300 is not 0'),
+    pytest.param(lambda: MultiInterval(TINY) / 1e-300, MultiInterval(float(TINY / Fraction(1e-300))),
+                 id='tiny / 1e-300 is not 0'),
+    pytest.param(lambda: MultiInterval(TINY) + 1e-320, MultiInterval(1e-320), id='tiny + subnormal'),
+])
+def test_mixed_exact_and_float_beyond_float_range(thunk, expected):
+    result = quiet(thunk)
+    assert result == expected, str(result)
+    assert all(type(cut.value) is float for cut in result.cuts)
 
 
 # SCALAR COERCION, BOTH SIDES
