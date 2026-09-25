@@ -304,7 +304,10 @@ def fma(a: Cuts, b: Cuts, c: Cuts, outward: bool = False) -> Cuts:
     if not a or not b or not c:
         warn(EmptySetPropagationWarning, 'fma: an operand is empty, so the result is empty')
         return kernel.EMPTY
-    result = add(mul(exact_cuts(a), exact_cuts(b)), exact_cuts(c))
+    product = mul(exact_cuts(a), exact_cuts(b))
+    if not product:  # an indeterminate product, which mul has warned about
+        return kernel.EMPTY
+    result = add(product, exact_cuts(c))
     if any(has_finite_float(x) for x in (a, b, c)):
         return float_cuts(result, outward)
     return result

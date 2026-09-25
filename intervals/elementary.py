@@ -461,18 +461,23 @@ def _exact_log(x: Fraction, b: Fraction) -> Optional[int]:
     """the int k with b**k == x, if there is one (b > 0, b != 1, x > 0)"""
     if x == 1:
         return 0
+    # b**k in lowest terms is num(b)**k / den(b)**k (or its inverse), and one of those is >= 2, so an
+    # exact k is no longer than x's numerator or denominator in bits
+    bound = max(x.numerator.bit_length(), x.denominator.bit_length()) + 1
     p = _START_PRECISION
     while True:
         try:
             lo, hi = _fractions(_div(_log_rational(x, p), _log_rational(b, p), p), p)
-            break
         except _Retry:
             p *= 2
-    # b**k in lowest terms is num(b)**k / den(b)**k (or its inverse), and one of those is >= 2, so an
-    # exact k is no longer than x's numerator or denominator in bits
-    bound = max(x.numerator.bit_length(), x.denominator.bit_length()) + 1
-    for k in range(math.floor(lo) - 1, math.ceil(hi) + 2):
-        if abs(k) <= bound and b ** k == x:
+            continue
+        if lo > bound or hi < -bound:
+            return None
+        if hi - lo < 2:
+            break
+        p *= 2
+    for k in range(math.floor(lo), math.ceil(hi) + 1):
+        if b ** k == x:
             return k
     return None
 

@@ -192,3 +192,39 @@ def test_fuzz_catches_a_hook_that_does_not_round():
     expected = {'add', 'sub', 'mul', 'div', 'reciprocal'}
     failures, _ = _fuzz(0, 'none', boxes=4 * BOXES, until=expected)
     assert set(failures) >= expected
+
+
+# THE PRODUCTION DESCRIPTORS (ops.OUTWARD, what OutwardMultiInterval uses)
+
+def _production(op, b):
+    if op == 'pow':
+        return ops._power_descriptor(b, True)
+    return ops.OUTWARD.get(op) or UNARY[op]  # neg and abs are exact on floats
+
+
+@pytest.mark.parametrize('seed', [0, 1])
+def test_production_outward_descriptors_sound_on_extreme_floats(seed):
+    rng = random.Random(1000 + seed)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        for _ in range(BOXES // 2):
+            floats_only = rng.random() < 0.5
+            op = rng.choice(list(BINARY) + list(UNARY) + ['pow'])
+            a = _cuts(rng, floats_only)
+            b = _cuts(rng, floats_only) if op in BINARY else rng.choice(EXPONENTS) if op == 'pow' else None
+            bad = _unsound(op, _production(op, b), a, b, rng)
+            assert bad is None, (op, list(pieces(a)), b if op == 'pow' else b and list(pieces(b)), bad)
+
+
+def test_production_hook_matches_the_reference_hook():
+    """the production hook and this suite's `_round` compute the same doubles"""
+    rng = random.Random(5)
+    for op, desc in list(ops.OUTWARD.items()) + [('pow3', ops._power_descriptor(3, True)),
+                                                 ('pow-2', ops._power_descriptor(-2, True))]:
+        base = ops._power_descriptor(int(op[3:])) if op.startswith('pow') else BINARY.get(op) or UNARY[op]
+        for _ in range(300):
+            args = tuple(_value(rng, True) for _ in range(1 if op.startswith('pow') or op == 'reciprocal' else 2))
+            if any(math.isinf(x) for x in args) or (op in ('div', 'reciprocal', 'pow-2') and args[-1] == 0):
+                continue
+            for direction, hook in ((-1, desc.rounded[0]), (1, desc.rounded[1])):
+                assert hook(*args) == _round(base.fn, direction)(*args), (op, args, direction)
