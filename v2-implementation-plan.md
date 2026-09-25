@@ -2,9 +2,11 @@
 
 companion to `v2-plan.md`. that file says *what*; this one says *in what order*, with an exit
 criterion per milestone. review findings that needed an owner decision are in section 0; D1–D7 are settled or deferred as
-of 2026-09-23 and written into `v2-plan.md`'s "current design"; D8 was settled 2026-09-24.
+of 2026-09-23 and written into `v2-plan.md`'s "current design"; D8 was settled 2026-09-24. D9–D17
+were settled 2026-09-25 for M13 and M14, which are not built yet: they go into "current design" as
+each is built, and until then they are in `v2-plan.md`'s decision log.
 
-## 0. decisions (from the 2026-09-23 reviews; D1–D8 settled or deferred)
+## 0. decisions (D1–D8 from the 2026-09-23 reviews; D9–D17 for M13 and M14, 2026-09-25)
 
 | # | question | recommended default | blocks |
 |---|---|---|---|
@@ -16,6 +18,15 @@ of 2026-09-23 and written into `v2-plan.md`'s "current design"; D8 was settled 2
 | D6 | constructor default for an infinite bound: `MI(1, inf)` = `[1, inf]` (literal) or `[1, inf)` (1788 reading)? **settled (v2-plan.md current design): literal** — `[a, inf]` and `[a, inf)` are different sets and "a user-typed `[1, inf]` is taken literally". D2 removes the blow-up footgun that made this look open | literal | — |
 | D7 | **decided 2026-09-23 by owner**: a box that *is* an indeterminate point (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`, `[0]/[0]`) returns `∅` + `IndeterminateResultWarning` (was `[-inf] ∪ [inf]` / entire). isotonicity forces it: `[0]` is inside `[-1,0]` and `[0,1]`, so `1/[0] ⊆ [-inf,-1] ∩ [1,inf] = ∅`; `[0]*[inf] ⊆ [0]*[5,inf] ∩ [0,1]*[inf]` = `∅` and `[inf]-[inf] ⊆ [inf]-[1,inf] ∩ [1,inf]-[inf]` = `∅` under D2. solvers need isotone ops; matches 1788's empty. cost: `1/(1/[inf])` = `∅`; `1/x` round-trips only on sets with no degenerate piece at `0`, `inf`, `-inf`; the "later" direction tag stays the recovery path. separately, `f(A ∪ B) == f(A) ∪ f(B)` fails for reciprocal with any `1/[0]` (`A=[-1,0)`, `B=[0]`), so that law is only `⊇` for reciprocal/div | `∅` + warning | M6 |
 | D8 | **decided 2026-09-24 by owner: recommended default**, implemented in M7. modulo with infinite operands: python gives `inf % 3` = `nan`, `3 % inf` = `3`, `-3 % inf` = `inf`. a dividend of ±inf attains nothing, so it is dropped with `DomainClippedWarning`; a finite dividend mod an infinite divisor follows python's scalar result (also the limit along the box) | clip / follow python | M7b |
+| D9 | **decided 2026-09-25 by owner: recommended default.** 1788's numeric ops on a multi-interval. `mid`, `rad`, `wid` (and `midRad`) are **of the hull**: a midpoint outside the set (`mid([0,1] ∪ [9,10])` = 5) is still a valid bisection point, a per-piece form would return a tuple, and `size.length` already gives the width without the gaps. `mag` and `mig` are **of the set**, as `sup` and `inf` of `{abs(x) : x ∈ A}`: `mig([-3,-2] ∪ [2,3])` = 2, where the hull would give 0; on a connected set the two readings agree. unbounded operands follow 1788 (`mid` of entire is 0, of a half-bounded set ±max float; `rad` and `wid` are inf); the empty set raises `ValueError`, as `.inf` does today, and the adapter maps it to 1788's `NaN` | hull for mid/rad/wid, set for mag/mig | M13b |
+| D10 | **decided 2026-09-25 by owner: recommended default.** names for 1788's interval orders, since `<` and `<=` are pointwise and return a `TruthSet` (`MI(1,3) < MI(2,4)` is `BOTH`): `A.weakly_less(B)` for `less` (both of A's ends ≤ B's; 1788's own wording, "weakly less than"), `A.strictly_less(B)` for `strictLess`. `interior` is not a method: a new property `B.interior` (the set with every end opened, a set operation in its own right) and the existing `A.within(B.interior)` | `weakly_less`, `strictly_less`, `.interior` | M13c |
+| D11 | **decided 2026-09-25 by owner: recommended default.** power. an `int` exponent, or a float with an integral value, is `pown` as today, like python's scalars (`(-3.0) ** 2.0` = 9.0; `MI(-3,1) ** 2.0` = `[0, 9]`). a non-integral float or a `MultiInterval` exponent is 1788's `pow`: domain `x > 0`, plus `x = 0` where `y > 0` (`0 ** y` = 0); negative bases are dropped with `DomainClippedWarning`. so `MI(-3,1) ** MI(2)` = `[0, 1]`, not `[0, 9]`: an interval exponent means `pow`, never `pown`. `b ** A` for a scalar base is `MultiInterval(b) ** A` through `__rpow__`. exact where the value is rational, as `log` is. 3-argument `pow(A, n, m)` is dropped (not 1788; v1 had it on integers only) | pown for integral, else 1788 pow; 3-arg dropped | M13d |
+| D12 | **decided 2026-09-25 by owner: recommended default.** a reverse op whose answer has infinitely many or very many pieces (`sinRev`, `cosRev`, `tanRev` and their `*Bin` forms over an unbounded or wide `x`): the exact pieces up to the step functions' cap of 1000, past it their hull with a `HullWarning`, the rule `steps.py` already follows. a bounded `x` gets the exact union (`sinRev([0.5, 1], [0, 20])` has 4 pieces), which 1788 cannot give. ends are irrational, so each is its tightest float enclosure, open | exact to 1000 pieces, else hull + warning | M13e |
+| D13 | **decided 2026-09-25 by owner: recommended default.** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
+| D14 | **decided 2026-09-25 by owner: recommended default.** the independent oracle for the elementary functions is **`python-flint`** (Arb: every result is a ball proven to contain the true value), a test-only dependency in the `[test]` extra, installed into the `intervals` env and in CI. `mpmath` was the alternative (pure python, but its values carry no proven bound). python-flint 0.9.0 has Windows wheels for 3.10 and later (abi3), 3.13 and 3.14 included (checked on PyPI 2026-09-25) | python-flint | M14 |
+| D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library | vendor unmodified, with the licence files | M13a |
+| D16 | **decided 2026-09-25 by owner: recommended default.** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. still open, for M13g: whether 1788's signals (`UndefinedOperation`, `PossiblyUndefinedOperation`, `IntvlPartOfNaI`) become `IntervalWarning` subclasses or exceptions | wrapper type; signals open | M13g |
+| D17 | **decided 2026-09-25 by owner**: M13 does **not** block the 2.0.0 release, and there is no hurry to release either ("I have zero users and this is a yak shaving pet project"). M13 only adds methods and a type and gives a meaning to exponents that raise `TypeError` today, so nothing that works now changes | release whenever; not blocked | — |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
 milestones below: infinite result endpoints always go through attainment (the corner-flag rule is
@@ -393,7 +404,7 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
 **(b)** ready to build, **(c)** housekeeping. items become milestones when picked up
 * **release** (a, then c): merge `v2` into `master` (`v2` pushed 2026-09-25), `version =
   "2.0.0"` in `pyproject.toml`, tag. D5's blocker (M7b) is met. CI exists since 2026-09-25 and
-  is green on `v2` (section 1)
+  is green on `v2` (section 1). owner 2026-09-25 (D17): no hurry, and M13 does not block it
 * **M8, the time layer** (a: whether and when; 1½ days): see M8. D4 is still open, (a) recommended
 * **functions**, **rounding functions**, **the other 1788 ops** and **outward float rounding**, the
   four (b) items: built at M12 (below), done 2026-09-25
@@ -402,14 +413,16 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
 * **power beyond int exponents** (a: scope; owner 2026-09-25: build 1788's `pow`, as M13d): `A ** 0.5`, `A ** B`, `2 ** A` are TypeError today
   (`intervals/multi_interval.py::MultiInterval.__pow__`); v1 took an interval exponent on a
   positive base. 3-argument `pow(A, n, m)` (v1: integers only; old README "allow interval modulo
-  for `__pow__()`")
-* **the 1788 ops still missing** (a: whether to add them): `less`, `strictLess`, `interior` (weak
+  for `__pow__()`"). settled by D11: integral exponents stay pown, others are 1788 pow, and
+  3-argument `pow` is dropped
+* **the 1788 ops still missing** (a: whether to add them; settled, see below): `less`, `strictLess`, `interior` (weak
   and strict interval orders, not v2's pointwise comparisons) and `mid`, `rad`, `wid`, `mag`, `mig`
   (for a multi-interval, of the hull or per piece?). their vectors are counted and skipped in
   `tests/itf1788/test_itf1788.py::SKIPPED`; `isNaI` has no counterpart. owner 2026-09-25: add
-  every one, as M13b, M13c and M13g
+  every one, as M13b, M13c and M13g (D9, D10, D16)
 * **solver stack** (a; `v2-plan.md` "later (not in v2.0)"): the direction tag on a degenerate zero
-  piece (only if a solver needs `1/(1/[inf])` back), a decorated type (com/dac/def/trv/ill) and an
+  piece (only if a solver needs `1/(1/[inf])` back), a decorated type (com/dac/def/trv/ill; brought
+  forward to M13g by D16) and an
   optional thin `ieee1788.py`, forward-mode autodiff, Newton's method as a test (b: the functions
   exist since M12), numpy interop (array API vs `__array_ufunc__`; today `__array_ufunc__ = None`), the
   optional per-piece Allen matrix
@@ -501,103 +514,177 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
 ### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25)
 
 owner request 2026-09-25: "implement all these ops and get all these tests vendored and passing".
-this settles M11's "whether to add them" for every 1788 op; the (a) tags left below are on *how*,
-not whether. sub-tasks M13a to M13h; M13a goes first, the rest are independent of each other
-* **the full set**: the vendored files are 7 of the 12 at nehmeier/ITF1788 `e0e0d7e` (that repo's
-  HEAD). the maintained fork, **oheim/ITF1788 at `b6ee1e24d209c289f99a68ddc357839935799eae`**
-  (2018-09-22), has 19 files: nehmeier's 12 (renamed `libieeep1788_*.itl`, the `_tests` dropped),
-  plus `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` (vectors converted from those libraries' suites),
-  `ieee1788-constructors.itl`, `ieee1788-exceptions.itl`, `libieeep1788_class.itl` and
-  `libieeep1788_reduction.itl`. its versions of the 7 vendored files are a superset in bare
-  intervals: they fix decorations (`acos [entire]_def` becomes `_dac`), decorate bare `[empty]`s
-  and add `[nai]`, `NaN` and empty cases
-* **measured 2026-09-25**, the fork's 19 files downloaded to a temp dir and run through this repo's
-  unchanged adapter (`tests/itf1788/test_itf1788.py::run`, `::run_outward`), ops as in `OPS`:
-    * **already passing, only needing vendoring**: `fi_lib` 687/687 (outward 687/687), `mpfi`
-      980/980 (900/900), `c-xsc` 126/126 (85/85), `atan2` and `libieeep1788_set` all
-    * failing: 40 `[nai]` operands (bool, elem; no counterpart), 4 `isMember NaN ...` (the parser
-      reads `NaN` as a word; the library itself answers `nan in A` false, as 1788 does), and
-      `atanh [1.0,1.0]_def = [empty]_trv`, the known atanh row under a different key, because
-      `DIVERGENCES` is keyed on the text with decorations
-    * **4764 statements of 57 ops not implemented**, grouped into the sub-tasks below
-* **M13a vendoring and the adapter** (b; licence settled by owner 2026-09-25: the recommendation
-  below, as written). the three library-derived files are
-  **LGPL-2.1-or-later** (Inria / Karlsruhe / Wuppertal, converted by O. Heimlich), the two
-  `ieee1788-*` files carry an all-permissive notice, the rest Apache 2.0; this repo has no licence
-  of its own. recommended: vendor all 19 unmodified into `tests/itf1788/`, replacing nehmeier's 7
-  (one source, one pin), with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER`; the wheel ships
-  only `intervals/`, so no test file is distributed with the library. then in the adapter: key
-  `DIVERGENCES` on the text with decorations stripped; parse `NaN`, quoted strings
-  (`b-textToInterval "[1, 2]"`), `signal <Name>` clauses, and two-interval results
-  (`mulRevToPair ... = [empty] [empty]`); every op's `NaI` input either maps (M13g) or is a
-  divergence row. exit: the 1793 vectors above in the gate, 0 unknown failures, the new files in
-  `test_parser_drops_nothing` and `test_every_file_is_used`
-* **M13b numeric ops** (a: of the hull or per piece; hull recommended, since 1788's answer is the
-  hull's and a per-piece form can be a separate method): `mid` 36, `rad` 19, `wid` 27, `mag` 27,
-  `mig` 33, `midRad` 25 statements. `mid` and `rad` round to nearest and outward as 1788 specifies
-* **M13c interval orders** (a: names, since `<` and `<=` are already pointwise and return a
-  `TruthSet`): `less` 88, `strictLess` 32, `interior` 64. for a multi-interval `less` is on the
-  hull's ends, `interior` is `A ⊆ int(B)` and generalises as it is
-* **M13d power and the rest of the elementary functions**, all correctly rounded in pure python
-  like `intervals/elementary.py`: `pow` (real exponent, domain `x > 0`, or `x = 0` with `y > 0`)
-  1431; `expm1` 38, `logp1` 37, `cbrt` 10, `rootn` 3, `hypot` 17, `csc` 109, `sec` 109, `cot` 49,
-  `acot` 30, `coth` 46, `acoth` 30, `csch` 16, `sech` 14. (a) what `A ** 0.5`, `A ** B` and `2 ** A`
-  mean (M11 "power beyond int exponents"; `**` with an int is `pown` today), and 3-argument `pow`
-* **M13e reverse ops** (a: signatures; `sqr_rev(c, x=REALS)` recommended, the `*Bin` vectors being
-  the two-argument form): `powRev1` 429, `powRev2` 375, `mulRevToPair` 347, `pownRev` 285,
-  `mulRev` 182, `mulRevTen` 10, `sqrRev` 20, `absRev` 18, `sinRev` 12, `cosRev` 12, `tanRev` 10,
-  `coshRev` 10, and the `*Bin` forms (`pownRevBin` 73, `cosRevBin` 42, `sinRevBin` 40,
-  `absRevBin` 38, `sqrRevBin` 22, `tanRevBin` 20, `coshRevBin` 10). a multi-interval holds
-  `mulRevToPair`'s two pieces as one value, so the adapter compares the pair as a union.
-  `sinRev`/`cosRev`/`tanRev` return infinitely many pieces over an unbounded `x`: (a) the hull
-  with a `HullWarning`, as the step functions do past 1000 values
-* **M13f cancellation**: `cancelPlus` 116, `cancelMinus` 126. (a) meaning on a multi-interval;
-  1788 defines it for connected operands only
-* **M13g decorations, NaI, constructors and signals** (settled by owner 2026-09-25: a separate
-  decorated wrapper type, the M11 solver stack's, built now rather than with the solver. the core
-  class stays undecorated, so `v2-plan.md` "ieee 1788" still holds): `b-textToInterval` 91, `d-textToInterval` 91,
-  `b-numsToInterval` 10, `d-numsToInterval` 9, `setDec` 22, `newDec` 13, `intervalPart` 15,
-  `decorationPart` 6, `isNaI` 16, the 40 `[nai]` operands of implemented ops, and a decoration
-  check on every decorated vector, which the adapter drops today. `ieee1788-exceptions.itl` expects
-  signals (`UndefinedOperation`, `PossiblyUndefinedOperation`, `IntvlPartOfNaI`): (a) map them to
-  `IntervalWarning` subclasses or exceptions
-* **M13h reductions**: `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`, `dot_nearest`, 1 each.
-  correctly rounded sums of float vectors (exact through `Fraction`), point ops, not interval ops
-* every sub-task: its ops' vectors pass in both passes (plain and outward) or are divergence rows
-  with a reason from the plan's categories; a new category needs an owner decision and a line in
-  `v2-plan.md` "ieee 1788"; its ops get the M14 properties the day they land; sabotage per
-  section 2
-* exit for M13: **no statement of the 19 files is skipped.** `SKIPPED` is empty and a test asserts
-  it, so a file that gains an op cannot quietly add skips. `v2-plan.md` "ieee 1788" and the README
-  counts re-measured, dated. (a) whether M13 blocks the 2.0.0 release
+this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how;
+the one question still open is D16's signals, for M13g. sub-tasks M13a to M13h: **M13a goes
+first**, the rest are independent of each other. the release is not waiting on any of it (D17)
+
+**the source.** the vendored files today are 7 of the 12 at nehmeier/ITF1788 `e0e0d7e` (that
+repo's HEAD). the maintained fork, **oheim/ITF1788 at `b6ee1e24d209c289f99a68ddc357839935799eae`**
+(2018-09-22), has 19 `.itl` files under `itl/`: nehmeier's 12 renamed (`libieeep1788_tests_elem.itl`
+is `libieeep1788_elem.itl`, and so on), plus `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` (vectors
+converted from those libraries' own suites), `ieee1788-constructors.itl`, `ieee1788-exceptions.itl`,
+`libieeep1788_class.itl` and `libieeep1788_reduction.itl`. raw files are at
+`https://raw.githubusercontent.com/oheim/ITF1788/b6ee1e24d209c289f99a68ddc357839935799eae/itl/<name>.itl`,
+and `LICENSE`, `NOTICE`, `COPYING.LESSER` at the repo root. the fork's versions of the 7 vendored
+files are a superset in bare intervals: they correct decorations (`acos [entire]_def` becomes
+`_dac`), decorate bare `[empty]`s, and add `[nai]`, `NaN` and empty cases. statement counts, fork
+minus nehmeier (distinct texts): elem 3817 vs 3804, bool 392 vs 354, num 183 vs 122, rec_bool 137 vs
+114, overlap 77 vs 76, set 20 vs 19, atan2 38 vs 38; 9490 distinct statements over all 19 files
+
+**measured 2026-09-25**, the fork's 19 files downloaded to a temp dir (not kept) and run through
+this repo's unchanged adapter (`tests/itf1788/test_itf1788.py::run`, `::run_outward`), ops as in
+`OPS`:
+* **already passing, only needing vendoring**: `fi_lib` 687/687 (outward 687/687), `mpfi` 980/980
+  (900/900), `c-xsc` 126/126 (85/85), `atan2` and `libieeep1788_set` all. 1793 plain runs in all
+* failing: 40 `[nai]` operands (bool, elem; M13g), 4 `isMember NaN ...` (the parser reads `NaN` as
+  a word; the library itself answers `float('nan') in A` false, as 1788 does), and
+  `atanh [1.0,1.0]_def = [empty]_trv`, the known atanh row under a different key, because
+  `DIVERGENCES` is keyed on the text with its decorations
+* **4764 statements of 57 ops not implemented**, all assigned to a sub-task below
+
+**M13a vendoring and the adapter.** no new op; lands the 1793 passing vectors
+* vendor per D15: all 19 files, unmodified, from the pinned commit into `tests/itf1788/`, replacing
+  nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER`. verify each file's git blob
+  hash against the fork's tree at the pin (`git hash-object` against the GitHub trees API), as M9 did.
+  rewrite `tests/itf1788/README.md` for the new source, the licences per file and the hash check
+* parser (`tests/itf1788/itl.py`): `NaN` as a number literal; quoted strings (`b-textToInterval
+  "[1, 2]"`); a trailing `signal <Name>` clause (kept on the vector, checked from M13g on);
+  two-value results (`mulRevToPair ... = [empty] [empty]`, `midRad ... = 0.0 infinity`)
+* adapter (`tests/itf1788/test_itf1788.py`): `FILES` lists the 19 new names; `DIVERGENCES` keyed
+  on the statement text with decorations stripped, so the atanh row above and the fork's
+  re-decorated copies of today's 18 rows keep their keys; a `[nai]` operand, until M13g, is a
+  divergence row under "decoration expectations" (a residual category the plan already has)
+* exit: every vector of an op in `OPS` matches or is a row, 0 unknown failures, the 1793 in the
+  gate, `test_parser_drops_nothing` and `test_every_file_is_used` covering the new files, sabotage
+  per section 2 (a parser that drops quoted-string statements, a divergence key that keeps its
+  decorations)
+
+**M13b numeric ops** (D9). `mid` 36, `rad` 19, `wid` 27, `mag` 27, `mig` 33, `midRad` 25
+statements
+* methods `mid()`, `rad()`, `wid()`, `mag()`, `mig()`, `mid_rad()`. `mid`, `rad`, `wid` of the
+  hull; `mag`, `mig` of the set (`sup` and `inf` of the absolute values). exact operands give exact
+  values; float results round as 1788 specifies (`mid` to nearest, `rad` and `wid` up) and the
+  adapter's number rule compares them
+* unbounded: `mid` of entire is 0, of a half-bounded set ±max float; `rad` and `wid` are inf.
+  empty raises `ValueError`, like `.inf`; the adapter maps that to `NaN`
+
+**M13c interval orders** (D10). `less` 88, `strictLess` 32, `interior` 64
+* `A.weakly_less(B)`: `inf A ≤ inf B` and `sup A ≤ sup B`; `A.strictly_less(B)`: both strict,
+  except that equal infinite ends count, as in 1788. on the ends, so the hull's, for a multi-interval
+* `B.interior`: a property, the set with every end opened (the topological interior); `interior`
+  in the vectors is `A.within(B.interior)`. 1788's unbounded ends arrive open at inf through the
+  input rule, which is what makes `interior [1, infinity] [0, infinity]` true
+
+**M13d power and the rest of the elementary functions** (D11). every value correctly rounded in
+pure python, in `intervals/elementary.py` at one point and `intervals/functions.py` over sets, as at
+M12; each checked against the D14 oracle (M14)
+* `pow` 1431: `__pow__` as D11 (integral exponent → pown as today; non-integral float or
+  `MultiInterval` exponent → 1788 pow, negative bases dropped with `DomainClippedWarning`,
+  `0 ** y` = 0 for `y > 0`), `__rpow__` for a scalar base, exact where the value is rational.
+  3-argument `pow` stays a `TypeError` (dropped, D11)
+* `expm1` 38, `logp1` 37 (method `log1p`, python's name), `cbrt` 10, `rootn` 3 (`rootn(n)`),
+  `hypot` 17 (`hypot(B)`), `csc` 109, `sec` 109, `cot` 49, `acot` 30, `coth` 46, `acoth` 30, `csch` 16,
+  `sech` 14. python's name where python has one, 1788's otherwise. the poles of csc, sec, cot,
+  coth, csch split a piece as tan's do; `acoth`'s domain is `|x| ≥ 1` with the M12 rule for a
+  domain's end (the one-sided limit, so ±inf at ±1: expect degenerate-infinity rows like atanh's)
+
+**M13e reverse ops** (D12). 1955 statements
+* a new module `intervals/reverse.py`, the functions exported from `intervals`, each taking the
+  constraint first and the domain `x` last, defaulting to the whole line: `sqr_rev(c, x=REALS)`,
+  `abs_rev(c, x=REALS)`, `pown_rev(c, n, x=REALS)`, `sin_rev`, `cos_rev`, `tan_rev`, `cosh_rev`
+  (all `(c, x=REALS)`), `mul_rev(b, c, x=REALS)`, `pow_rev1(b, c, x=REALS)` (the bases x with
+  `x ** y ∈ c` for some `y ∈ b`), `pow_rev2(a, c, y=REALS)` (the exponents). the `*Bin` vectors are
+  the two-argument call and `mulRevTen` is `mul_rev` with `x` given
+* each result is `{x ∈ X : f(x) ∈ C}` (for the binary ones, `∃` over the other operand) as an exact
+  multi-interval: `mulRevToPair`'s two intervals are one value here, compared by the adapter as a
+  union (our closed pieces against the pair's). ends that are irrational are tightest float
+  enclosures, open
+* periodic answers per D12: exact pieces up to 1000, past that their hull with `HullWarning`
+
+**M13f cancellation** (D13). `cancelPlus` 116, `cancelMinus` 126
+* `A.cancel_minus(B)`: the largest `X` with `B + X ⊆ A` (the Minkowski difference);
+  `A.cancel_plus(B)` is `A.cancel_minus(-B)`. for connected operands with `wid A ≥ wid B` it is
+  `[a1 - b1, a2 - b2]`, 1788's answer
+* where 1788 returns entire as "no answer" (A narrower than B, an unbounded operand) ours is a real
+  set, often `∅`: those rows get the new residual category **"cancellation as a Minkowski
+  difference"**, added to `REASONS` and to `v2-plan.md` "ieee 1788" when this lands
+
+**M13g decorations, NaI, constructors and signals** (D16). 273 statements, plus the 40 `[nai]`
+operands of implemented ops and a decoration check on every decorated vector
+* a decorated wrapper type around a `MultiInterval` (name chosen when built, recorded in the
+  decision log): a decoration per 1788 (com/dac/def/trv/ill), propagated through every op the core
+  has, and NaI as the `ill` value. the core class stays undecorated
+* 1788 text and number constructors: `b-textToInterval` 91 and `b-numsToInterval` 10 give a bare
+  `MultiInterval` (1788's input rule: an infinite end is open), `d-textToInterval` 91 and
+  `d-numsToInterval` 9 the wrapper. a parser for 1788's text syntax, separate from
+  `MultiInterval.parse`, whose syntax is ours. `setDec` 22, `newDec` 13, `intervalPart` 15,
+  `decorationPart` 6, `isNaI` 16 on the wrapper
+* the adapter stops dropping decorations: a decorated vector runs through the wrapper and its
+  expected decoration is checked
+* **open, ask the owner before building**: 1788's signals (`UndefinedOperation`,
+  `PossiblyUndefinedOperation`, `IntvlPartOfNaI`, from `ieee1788-exceptions.itl` and the
+  constructors' `signal` clauses): `IntervalWarning` subclasses or exceptions
+
+**M13h reductions**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`, `dot_nearest`, 1 each
+* `intervals/reductions.py`: `sum_`, `sum_abs`, `sum_sqr`, `dot` over sequences of numbers, the
+  exact value through `Fraction` then rounded once, to nearest by default. point ops, not interval
+  ops, so no M14 properties beyond a random differential against `Fraction` arithmetic
+
+**every sub-task**
+* its ops' vectors pass in both passes (plain and, if interval-valued, outward) or are divergence
+  rows with a reason from `REASONS`; a new category needs an owner decision (D13's is the only one
+  approved so far) and a line in `v2-plan.md` "ieee 1788"
+* its ops get the M14 properties the day they land, sabotage per section 2
+* the D rows it implements move into `v2-plan.md` "current design", the README's feature list and
+  the `ieee 1788` counts are re-measured and dated, and this section records what was built, as
+  M12's does
+
+**exit for M13: no statement of the 19 files is skipped.** `SKIPPED` is empty and a test asserts
+it, so a file that gains an op cannot quietly add skips
+
+**suggested sessions** (a guide, not a rule; each ends with a green gate and a commit): (1) M13a
+with M14's fuzz job and oracle; (2) M13b, M13c, M13f and M13h, the small ones; (3) M13d; (4) M13e;
+(5) M13g, starting with the signals question
 
 ### M14 fuzzing (open, added 2026-09-25)
 
 owner request 2026-09-25: "it would be great if we had fuzzing eg hypothesis". hypothesis is
 already in the gate: 81 `@given` tests across 13 files (counted 2026-09-25), 30 to 300 examples
-each. the gaps are depth, independence and breadth:
-* **no run explores new inputs in CI.** GitHub Actions loads hypothesis's `ci` profile, which is
-  derandomized: every CI run replays the same examples, so new inputs are only ever tried by a
-  local gate run. add a `fuzz` profile (randomized, `max_examples` about 100 times the gate's, no
-  deadline) and a CI job on a schedule and `workflow_dispatch`, **not** in the gate and not on every
-  push. cache the example database between runs, upload it with the log on a failure, and pin each
-  failure found as an `@example` in the gate test that found it. (b)
-* **an independent oracle for the functions.** `tests/test_elementary.py` checks the 19 functions
-  against `decimal` (and taylor series in decimal for the trig functions) on 60 random points each.
-  add a hypothesis-driven differential against an arbitrary-precision library that shares no code
-  with ours: the true value (a ball at about 200 bits) inside our enclosure, and each end of ours
-  within one ulp outside it (sharpness). (a) the test-only dependency: `mpmath` (pure python) or
-  `python-flint` (arb, rigorous balls; recommended for the rigour)
+each. the gaps are depth, independence and breadth. M14 does not wait for M13; its first two items
+land with M13a so that every later M13 op arrives with them
+* **a fuzz job, because no run explores new inputs in CI.** GitHub Actions loads hypothesis's `ci`
+  profile, which is derandomized: every CI run replays the same examples, so new inputs are only
+  ever tried by a local gate run
+    * register a `fuzz` profile in a new `tests/conftest.py`: randomized, `max_examples` about 100
+      times the gate's (a multiplier over each test's own `@settings`, or `settings(max_examples=...)`
+      in the profile with the per-test caps lifted; decide when built), no deadline, selected by
+      `HYPOTHESIS_PROFILE=fuzz`. section 1's "the suite needs no conftest" is updated when it lands
+    * a separate workflow, `.github/workflows/fuzz.yml`, on a weekly `schedule` and
+      `workflow_dispatch`, **not** on push and not in the gate. it caches `.hypothesis/` (the
+      example database) between runs with `actions/cache`, and on a failure uploads the database and
+      the log as an artifact
+    * each failure found is pinned as an `@example` on the gate test that found it
+* **an independent oracle for the functions** (D14: `python-flint`). today
+  `tests/test_elementary.py` checks the 19 functions against `decimal` (correctly rounded for exp,
+  ln, log10, sqrt) and taylor series written in this repo for the trig functions, on 60 random
+  points each, so trig has no independent check
+    * install `python-flint` into the `intervals` env and add it to the `[test]` extra in
+      `pyproject.toml` (CI installs `.[test]`, so it follows)
+    * a new `tests/test_oracle_flint.py`: hypothesis draws a float or exact point, arb evaluates
+      the function at about 200 bits as a ball proven to contain the true value, and the test
+      asserts the ball is inside our enclosure (soundness) and each end of ours is within one ulp
+      outside the ball (sharpness). every function M12 built and every function M13d adds
 * **breadth where fuzz is thin**: `tests/test_outward.py` has 1 `@given`, `tests/test_steps.py` 3,
   `tests/test_fmt.py` 1 (the parse/format round trip), `tests/test_applicator.py` 1.
   `tests/test_extreme_floats.py` covers add, sub, mul, div, reciprocal, neg, abs and pow only:
-  extend it to the functions, `minimum`/`maximum`/`fma`, `%` and `//`, and the outward class
+  extend it to the functions, `minimum`/`maximum`/`fma`, `%` and `//`, and `OutwardMultiInterval`
 * **every M13 op as it lands**: soundness (`f(x) ∈ f(A)` at sampled `x ∈ A`, exact and float, under
   identity and outward rounding), isotonicity, interior sharpness, and for a reverse op its defining
   property (`x ∈ rev(C, X)` iff `x ∈ X` and `f(x) ∈ C`, at sampled points), with the op's itf1788
-  vectors as `@example`s
-* exit: the fuzz job exists and has run green once, its example count and time recorded here with a
-  date; every new property sabotaged once and seen red (section 2)
+  vectors as `@example`s. `cancel_minus`: `B + X ⊆ A`, and no sampled point outside `X` fits
+* exit: the fuzz workflow exists and has run green once (a `workflow_dispatch` run is enough), its
+  example count and time recorded here with a date; the flint oracle in the gate; every new
+  property sabotaged once and seen red (section 2)
 
 ## 3. order and parallelism
 
@@ -634,6 +721,6 @@ point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6
 | `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; comes back at M8 |
 | `exp()`, `log(base)` | `exp()`, `log(base=None)`, and the rest of `functions.py` (M12) |
 | `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | the same dunders, returning the set of values attained (`steps.py`, M12) |
-| `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | open (M11): int exponents only |
+| `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | int exponents only; interval and real exponents planned as 1788 `pow` (M13d, D11); `pow(A, n, m)` dropped (D11) |
 | `<<`, `>>` | open (M11): port or record as gone |
 | `random_multi_interval` | open (M11): the tests use hypothesis strategies instead |
