@@ -5,7 +5,7 @@ bug. the **decision log** below it is history, kept verbatim, with a marker wher
 superseded it.
 
 ## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a,
-M13b, M13h and M14's fuzz job and oracle, 2026-09-26)
+M13b, M13c, M13h and M14's fuzz job and oracle, 2026-09-26)
 
 ### domain and semantics
 
@@ -140,6 +140,14 @@ M13b, M13h and M14's fuzz job and oracle, 2026-09-26)
       starting past max float has its start as midpoint)
     * the empty set raises `ValueError` (`the empty set has no midpoint`, and so on), as `inf` and
       `sup` do; 1788 answers `NaN`, and the itf1788 adapter reads the error as that `NaN`
+* **interior** (D10, built at M13c 2026-09-26; `intervals/kernel.py::interior`): the property
+  `A.interior`, a set operation in its own right, is every end opened, the infinite ones too: the
+  interior in the topology of the reals. a degenerate piece drops out (`[2]` → `∅`), and so does a
+  closed end at ±inf, a point with no neighbourhood of reals (`[5, inf]` → `(5, inf)`, `[inf]` →
+  `∅`, `[-inf, inf]` → `(-inf, inf)`); pieces stay apart (`[0, 1) | (1, 2]` → `(0, 1) | (1, 2)`).
+  1788's `interior(A, B)` is `A.within(B.interior)`, so `∅` is inside every interior and the
+  itf1788 input rule, which opens an unbounded end, is what makes `interior [1, infinity]
+  [0, infinity]` true
 
 ### comparisons
 
@@ -170,6 +178,15 @@ M13b, M13h and M14's fuzz job and oracle, 2026-09-26)
   `(A < B).certainly`
 * `allen(a, b)` on contiguous pieces only (raise otherwise). cuts make it finer than classical Allen:
   tiling-without-sharing (`[1,2) meets [2,3]`) vs sharing one point (`[1,2] ∩ [2,3] = {2}`)
+* **interval orders** (D10, built at M13c 2026-09-26; `intervals/relations.py::weakly_less`,
+  `::strictly_less`): 1788's `less` and `strictLess` are the methods `A.weakly_less(B)` (`inf A ≤
+  inf B` and `sup A ≤ sup B`) and `A.strictly_less(B)` (both strict, except that two starts at
+  -inf and two ends at +inf count, as 1788 writes it, so `(-inf, inf)` is strictly less than
+  itself). they return bool and are **on the ends** as values, so a multi-interval's are its
+  hull's and open or closed does not matter; `<` and `<=` stay pointwise (`MI(1,3) < MI(2,4)` is
+  `BOTH`, while `MI(1,3).strictly_less(MI(2,4))` is True). a start at +inf or an end at -inf is a
+  point there (`[inf]`, `[-inf]`) and is not strictly less than itself. two empty sets are weakly
+  and strictly less than each other, an empty and a non-empty set neither, as in 1788
 
 ### arithmetic
 
@@ -377,17 +394,18 @@ M13b, M13h and M14's fuzz job and oracle, 2026-09-26)
     * residual divergence table: degenerate infinities, domain-clipped functions, decoration
       expectations, and (added at M12) cut-based relations. (`1/[0]` is not a row: both give
       empty.) keyed on the statement with its decorations stripped
-      (`tests/itf1788/test_itf1788.py::key`) since M13a. measured 2026-09-26 (M13b), the current
-      count: 19 files, 9542 statements; 4949 vectors of 64 ops (every op in `OPS` has vectors),
+      (`tests/itf1788/test_itf1788.py::key`) since M13a. measured 2026-09-26 (M13c), the current
+      count: 19 files, 9542 statements; 5133 vectors of 67 ops (every op in `OPS` has vectors),
       4120 of them interval-valued and run twice, the 167 numeric ones run twice more with float
-      operands (9403 vector test items); 55 keys and 0 unknown failures: 10 degenerate
-      infinities (11 vectors), 5 cut-based relations (7 vectors) and 40 decoration expectations,
-      the `[nai]` operands of implemented ops, generated in code (40 vectors, 6 outward items and
-      12 float items). counted and skipped: 4593 statements of 47 ops not implemented yet (the
+      operands (9587 vector test items); 67 keys and 0 unknown failures: 10 degenerate
+      infinities (11 vectors), 5 cut-based relations (7 vectors) and 52 decoration expectations,
+      the `[nai]` operands of implemented ops, generated in code (52 vectors, 6 outward items and
+      12 float items). counted and skipped: 4409 statements of 44 ops not implemented yet (the
       largest `pow` 1431, the reverse ops, `cancelMinus`/`cancelPlus`, `csc`, `sec`, the text
       constructors), each assigned to an M13 sub-task. history: at M13a (2026-09-26) 4767 vectors
       of 54 ops, 4775 statements of 57 ops skipped; M13h added the 15 reduction vectors (4782 of 58,
-      4760 of 53 skipped, 49 keys); M13b the 167 numeric ones. as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
+      4760 of 53 skipped, 49 keys); M13b the 167 numeric ones (4949 of 64, 4593 of 47 skipped, 55
+      keys); M13c the 184 of `less`, `strictLess`, `interior`. as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
       interval-valued and run twice; 18 rows (`tests/itf1788/test_itf1788.py::DIVERGENCES`): 11
       degenerate infinities (`log`/`log2`/`log10` of an operand meeting the domain only at 0, `atanh`
       of one meeting it only at ±1) and 7 cut-based relations (`overlap [1,2] [2,3]` is `meets` in
@@ -417,9 +435,10 @@ imports only point downward.
         errors.py          warning and exception classes
         cuts.py            Side, Cut, below()/above(), mirror, -0.0 normalization
         kernel.py          normalize sweep; union/intersection/complement/difference; membership;
-                           size; Builder (collect, sort once, sweep)
+                           interior (M13c); size; Builder (collect, sort once, sweep)
         fmt.py             format and parse cut tuples; regexes compiled at module level
-        relations.py       TruthSet, pointwise compare, relation predicates, allen()
+        relations.py       TruthSet, pointwise compare, relation predicates, allen(),
+                           the interval orders weakly_less strictly_less (M13c)
         rounding.py        rounding an exact value to a double: nearest, down, up
         applicator.py      op descriptor, corner evaluation, closure pass, rounding hook
         ops.py             neg pos absolute reciprocal add sub mul div, power (int exponents),
@@ -448,7 +467,8 @@ imports only point downward.
         test_<module>.py   (ops split into test_ops_examples.py and test_ops_properties.py;
                            test_minmax_fma.py and test_outward.py for the rest of M12;
                            test_oracle_flint.py, the arb oracle for the functions, M14;
-                           test_reductions.py, M13h; test_numeric.py, M13b)
+                           test_reductions.py, M13h; test_numeric.py, M13b;
+                           test_orders.py, the orders and the interior, M13c)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
@@ -522,6 +542,13 @@ imports only point downward.
   `mid ± rad`, `abs(x - y) <= wid`); isotonicity; the hull against the set; both classes equal. the
   itf1788 vectors can see no hull/set difference (each is one interval), so D9's set reading of
   `mig` is held by these properties alone
+* the interval orders and the interior (M13c, 2026-09-26; `tests/test_orders.py`): both orders
+  against 1788's quantified definitions, decided by brute force on a grid over 1788's reading of
+  the hulls; on the ends (the hull and closed hull change nothing); soundness at sampled points;
+  the interior against its definition at probe points and its laws (open, inside the set,
+  idempotent, isotone, distributes over `&`), and `A.within(B.interior)` against a grid
+  neighbourhood oracle. no vector can see the interior of a multi-interval or of a closed end at
+  inf, so those are held by these properties alone
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
   every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 100) times its
   own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
@@ -541,6 +568,27 @@ imports only point downward.
   gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one)
 
 ## decision log
+
+### 2026-09-26 revision: M13c, the interval orders and the interior, built
+
+built and measured 2026-09-26; details in v2-implementation-plan.md (M13c). D10 moved into "current
+design" (comparisons, set operations and size, testing). the choices D10 and the plan left open,
+each the most conservative reading, are now current design too:
+* **"equal infinite ends count" exactly as 1788 writes it**: two starts at -inf, two ends at +inf.
+  a start at +inf or an end at -inf (`[inf]`, `[-inf]`, points 1788 has no interval for) is not
+  strictly less than itself; the looser "any equal infinite ends" would make `[inf]` strictly less
+  than `[inf]`
+* **`.interior` is the interior in the reals**: the infinite ends are opened too, so a closed end
+  at ±inf drops out (`[5, inf]` → `(5, inf)`, `[inf]` → `∅`, `[-inf, inf]` → `(-inf, inf)`), the
+  plan's "every end opened". the extended reals' interior would keep `(5, inf]`. degenerate
+  pieces drop out; the class is kept (`OutwardMultiInterval`)
+* **open or closed ends do not matter to the orders** (they are on the ends as values, the hull's),
+  so `[0, 2]` is weakly but not strictly less than `[0, 2)`; the orders coerce a number to a
+  point and raise `TypeError` on anything else, as `within` does
+* **empty sets follow the vectors**: two empty sets are weakly and strictly less than each other,
+  an empty and a non-empty one neither; `∅.within(B.interior)` is True
+* the 184 vectors match with no rule and no listed row (12 generated `[nai]` rows); itf1788 now
+  5133 vectors of 67 ops, 4409 statements of 44 ops skipped
 
 ### 2026-09-26 revision: M13b, the numeric functions, built
 

@@ -193,6 +193,19 @@ def hull(cuts: Cuts) -> Cuts:
     return (cuts[0], cuts[-1]) if cuts else EMPTY
 
 
+def interior(cuts: Cuts) -> Cuts:
+    """
+    every end opened, the infinite ones too: the interior in the topology of the reals. a
+    degenerate piece drops out, and so does a closed end at ±inf, a point with no neighbourhood of
+    reals. pieces stay apart, since a normalized tuple has a missing point between any two
+
+    >>> interior(normalize([piece(0, 1), piece(2, 2), piece(3, math.inf)]))
+    (Cut(0, ABOVE), Cut(1, BELOW), Cut(3, ABOVE), Cut(inf, BELOW))
+    """
+    return tuple(cut for start, end in pairs(cuts) if start.value < end.value
+                 for cut in (above(start.value), below(end.value)))
+
+
 # SIZE
 
 class Size(NamedTuple):

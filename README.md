@@ -19,6 +19,10 @@ MultiInterval.parse('{ [0, 1) , (2, 3] }')
 { [0] , [1] , [2] }
 >>> print(MI(1, 3) < MI(2, 4))     # comparisons are pointwise
 BOTH
+>>> MI(1, 3).strictly_less(MI(2, 4))   # 1788's interval order, on the ends
+True
+>>> print(MI(0, 1).interior)           # every end opened
+(0, 1)
 >>> x.size
 Size(rays=0, length=2, points=0)
 >>> y = MI(-3, -2) | MI(2, 3)
@@ -45,10 +49,12 @@ Size(rays=0, length=2, points=0)
   hook (identity by default). `-inf` and `inf` are ordinary points, so `[1, inf]` and `[1, inf)` are
   different sets, and `[inf]` is a legal degenerate interval
 * **set algebra**: `| & ^ ~`, `difference()`, `issubset()`, `in`, slicing `x[a:b]` (restricts to
-  `[a, b]`), `hull`, `expand()`, `size` (rays, length, isolated points, ordered lexicographically)
+  `[a, b]`), `hull`, `interior` (every end opened), `expand()`, `size` (rays, length, isolated
+  points, ordered lexicographically)
 * **relations**: `< <= > >=` and `eq_pointwise()` return a `TruthSet` (`TRUE`, `FALSE`, `BOTH`,
   empty); `before after adjoins overlaps contains within` return bool; `allen()` gives the Allen
-  relation. `==` is structural and `MultiInterval` is hashable and immutable
+  relation; `weakly_less()` and `strictly_less()` are 1788's interval orders, on the ends (the
+  hull's), and return bool. `==` is structural and `MultiInterval` is hashable and immutable
 * **arithmetic**: `+ - * /`, `reciprocal()`, `abs`, `**` with int exponents, `%`, `//`, `divmod`,
   `minimum()`, `maximum()`, `fma()`, for every sign combination including zero-crossing and
   infinite operands. a result is
@@ -74,10 +80,10 @@ Size(rays=0, length=2, points=0)
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)
-* **ieee 1788**: not a runtime mode. the test suite runs 4949 vectors of 64 ops from all 19 files
+* **ieee 1788**: not a runtime mode. the test suite runs 5133 vectors of 67 ops from all 19 files
   of the ITF1788 suite through an adapter, the 4120 interval-valued ones a second time through
   `OutwardMultiInterval`, the 167 numeric ones twice more with float operands, and all of them
-  match except 55 listed divergences where the semantics
+  match except 67 listed divergences where the semantics
   differ on purpose or the vector needs decorations (`tests/itf1788/`, measured 2026-09-26). the
   statements of ops not built yet (`pow` with a real exponent, reverse ops, cancellation, ...) are
   counted and skipped

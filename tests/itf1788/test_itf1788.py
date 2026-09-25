@@ -117,6 +117,11 @@ OPS = {
     'isMember': lambda x, a: x in a,
     'isSingleton': lambda a: a.is_degenerate and a.is_contiguous,
     'isCommonInterval': lambda a: bool(a) and a.is_finite,
+    # the interval orders, on the ends; 1788's interior(A, B) is A inside B's interior (the input
+    # rule opens an unbounded end, so `interior [1, infinity] [0, infinity]` holds)
+    'less': lambda a, b: a.weakly_less(b),
+    'strictLess': lambda a, b: a.strictly_less(b),
+    'interior': lambda a, b: a.within(b.interior),
     # numbers: 1788 gives +infinity for the infimum of the empty set, -infinity for its supremum
     'inf': lambda a: a.inf if a else math.inf,
     'sup': lambda a: a.sup if a else -math.inf,

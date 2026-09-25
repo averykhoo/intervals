@@ -515,6 +515,38 @@ class MultiInterval:
         """allen's relation between two contiguous MultiIntervals (ValueError otherwise)"""
         return relations.allen(self._cuts, self._coerce_or_raise(other)._cuts)
 
+    # INTERVAL ORDERS (bool, on the ends; ieee 1788's less and strictLess)
+
+    def weakly_less(self, other) -> bool:
+        """
+        `inf <= other.inf` and `sup <= other.sup`: 1788's `less`, on the ends, so the hull's. two
+        empty sets are weakly less than each other, an empty and a non-empty one are not. `<=` is
+        pointwise and says something else
+
+        >>> A, B = MultiInterval(1, 3), MultiInterval(2, 4)
+        >>> A.weakly_less(B), B.weakly_less(A), A <= B
+        (True, False, BOTH)
+        >>> MultiInterval.parse('[0, 1] | [5, 6]').weakly_less(MultiInterval(2, 6))
+        True
+        >>> MultiInterval().weakly_less(MultiInterval()), MultiInterval().weakly_less(A)
+        (True, False)
+        """
+        return relations.weakly_less(self._cuts, self._coerce_or_raise(other)._cuts)
+
+    def strictly_less(self, other) -> bool:
+        """
+        `inf < other.inf` and `sup < other.sup`: 1788's `strictLess`, on the ends, so the hull's.
+        as in 1788, two starts at -inf and two ends at inf count as less, so `(-inf, inf)` is
+        strictly less than itself; open or closed does not matter. empty sets as `weakly_less`
+
+        >>> A = MultiInterval(1, 3)
+        >>> A.strictly_less(MultiInterval(2, 4)), A.strictly_less(MultiInterval(1, 4)), A.strictly_less(A)
+        (True, False, False)
+        >>> MultiInterval.parse('(-inf, 1]').strictly_less(MultiInterval.parse('(-inf, 2)'))
+        True
+        """
+        return relations.strictly_less(self._cuts, self._coerce_or_raise(other)._cuts)
+
     # EQUALITY, HASHING, CONTAINER PROTOCOL
 
     def __eq__(self, other):
@@ -661,6 +693,21 @@ class MultiInterval:
         if not self._cuts:
             return self
         return self._wrap((below(self._cuts[0].value), above(self._cuts[-1].value)))
+
+    @property
+    def interior(self) -> 'MultiInterval':
+        """
+        every end opened, the infinite ones too: the interior in the topology of the reals. a
+        degenerate piece drops out, and so does a closed end at ±inf, a point with no neighbourhood
+        of reals. 1788's `interior(A, B)` is `A.within(B.interior)`
+
+        >>> MultiInterval.parse('[0, 1] | [2] | [3, inf]').interior
+        MultiInterval.parse('{ (0, 1) , (3, inf) }')
+        >>> B = MultiInterval(0, 4)
+        >>> MultiInterval(1, 2).within(B.interior), B.within(B.interior), MultiInterval(math.inf).interior
+        (True, False, MultiInterval.parse('{}'))
+        """
+        return self._wrap(kernel.interior(self._cuts))
 
     @property
     def size(self) -> Size:

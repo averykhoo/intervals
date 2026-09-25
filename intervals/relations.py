@@ -8,7 +8,11 @@ not `a < b or a == b` (pointwise vs structural).
 the relations (`before`, `adjoins`, `overlaps`, ...) are set-level facts and return plain bool.
 they are defined on cuts, not values: `before` is `A.end <= B.start`, so `[1, 2)` is before
 `[2, 3]` while `[1, 2]` is not. for non-empty operands `before(A, B) == lt(A, B).certainly`.
+
+the interval orders `weakly_less` and `strictly_less` (ieee 1788's `less` and `strictLess`) compare
+the ends, the infima and the suprema, so for a multi-interval they are its hull's; they return bool.
 """
+import math
 from enum import Enum
 from typing import FrozenSet
 
@@ -176,6 +180,37 @@ def certainly_equal(a: Cuts, b: Cuts) -> bool:
 
 def possibly_equal(a: Cuts, b: Cuts) -> bool:
     return eq_pointwise(a, b).possibly
+
+
+# INTERVAL ORDERS (ieee 1788's less and strictLess: bool, on the ends)
+
+def _ends(a: Cuts, b: Cuts):
+    """`(inf A, sup A, inf B, sup B)` as values, so the hull's; open or closed does not matter"""
+    return a[0].value, a[-1].value, b[0].value, b[-1].value
+
+
+def weakly_less(a: Cuts, b: Cuts) -> bool:
+    """
+    `inf A <= inf B` and `sup A <= sup B`. two empty sets are ordered, an empty and a non-empty
+    set are not (1788's `less`: every point of each has a point of the other on the right side)
+    """
+    if not a or not b:
+        return not a and not b
+    lo_a, hi_a, lo_b, hi_b = _ends(a, b)
+    return lo_a <= lo_b and hi_a <= hi_b
+
+
+def strictly_less(a: Cuts, b: Cuts) -> bool:
+    """
+    `inf A < inf B` and `sup A < sup B`, where two starts at -inf and two ends at inf also count,
+    as in 1788's `strictLess` (so `(-inf, inf)` is strictly less than itself). a start at inf or an
+    end at -inf is a point there, and is not strictly less than itself. empty sets as `weakly_less`
+    """
+    if not a or not b:
+        return not a and not b
+    lo_a, hi_a, lo_b, hi_b = _ends(a, b)
+    return ((lo_a < lo_b or lo_a == lo_b == -math.inf)
+            and (hi_a < hi_b or hi_a == hi_b == math.inf))
 
 
 # ALLEN
