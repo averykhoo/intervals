@@ -445,7 +445,8 @@ imports only point downward.
   metadata that `==` and hash ignore, created only by limits (`1/[±inf]`, `exp([-inf])`), consumed
   only by branch-at-zero functions. never a position in the order — that is what the signed-zero seam
   was
-* a decorated wrapper type, with the solver
+* a decorated wrapper type, with the solver. owner 2026-09-25: brought forward to
+  `v2-implementation-plan.md` M13g, for the itf1788 decoration vectors; the core stays undecorated
 * forward-mode autodiff, newton's method as a test, numpy compat (array API / `__array_ufunc__`),
   gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one)
 

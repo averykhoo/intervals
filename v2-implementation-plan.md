@@ -520,7 +520,8 @@ not whether. sub-tasks M13a to M13h; M13a goes first, the rest are independent o
       `atanh [1.0,1.0]_def = [empty]_trv`, the known atanh row under a different key, because
       `DIVERGENCES` is keyed on the text with decorations
     * **4764 statements of 57 ops not implemented**, grouped into the sub-tasks below
-* **M13a vendoring and the adapter** (a: licence, then b). the three library-derived files are
+* **M13a vendoring and the adapter** (b; licence settled by owner 2026-09-25: the recommendation
+  below, as written). the three library-derived files are
   **LGPL-2.1-or-later** (Inria / Karlsruhe / Wuppertal, converted by O. Heimlich), the two
   `ieee1788-*` files carry an all-permissive notice, the rest Apache 2.0; this repo has no licence
   of its own. recommended: vendor all 19 unmodified into `tests/itf1788/`, replacing nehmeier's 7
@@ -552,9 +553,9 @@ not whether. sub-tasks M13a to M13h; M13a goes first, the rest are independent o
   with a `HullWarning`, as the step functions do past 1000 values
 * **M13f cancellation**: `cancelPlus` 116, `cancelMinus` 126. (a) meaning on a multi-interval;
   1788 defines it for connected operands only
-* **M13g decorations, NaI, constructors and signals** (a: this reverses `v2-plan.md` "ieee 1788":
-  "decorations are not in the core"; the M11 solver stack's decorated wrapper type is the
-  recommended home, not the core class): `b-textToInterval` 91, `d-textToInterval` 91,
+* **M13g decorations, NaI, constructors and signals** (settled by owner 2026-09-25: a separate
+  decorated wrapper type, the M11 solver stack's, built now rather than with the solver. the core
+  class stays undecorated, so `v2-plan.md` "ieee 1788" still holds): `b-textToInterval` 91, `d-textToInterval` 91,
   `b-numsToInterval` 10, `d-numsToInterval` 9, `setDec` 22, `newDec` 13, `intervalPart` 15,
   `decorationPart` 6, `isNaI` 16, the 40 `[nai]` operands of implemented ops, and a decoration
   check on every decorated vector, which the adapter drops today. `ieee1788-exceptions.itl` expects
