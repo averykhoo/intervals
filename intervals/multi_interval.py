@@ -459,6 +459,15 @@ class MultiInterval:
         """`atanh(±1)` = ±inf"""
         return self._function('atanh')
 
+    def atan2(self, x) -> 'MultiInterval':
+        """
+        the angles `atan2(y, x)` for y in self, in [-pi, pi]; `atan2(0, x < 0)` is pi, as there is no -0
+
+        >>> MultiInterval(1).atan2(MultiInterval(0, math.inf))
+        MultiInterval.parse('[0, 1.5707963267948968)')
+        """
+        return self._wrap(functions.atan2(self._cuts, self._coerce_or_raise(x)._cuts, outward=self._outward))
+
     # POINTWISE COMPARISONS (a TruthSet; see intervals.relations)
 
     def __lt__(self, other):

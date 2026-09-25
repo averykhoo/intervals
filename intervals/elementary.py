@@ -574,6 +574,27 @@ def _round_outside(where: str, direction: int) -> float:
     }[where][direction]
 
 
+# ANGLES, FOR ATAN2
+
+def rounded_angle(q, m: int, direction: int) -> float:
+    """
+    `atan(q) + m * pi/2` rounded to a double, for an exact q and an int m: every value of atan2 is one
+    (`atan2(y, x)` = atan(y/x) + {0, pi, -pi} by quadrant, and ±pi/2 on the axis). it is rational only
+    at q = 0, m = 0, so ziv's loop ends everywhere else
+
+    >>> rounded_angle(0, 2, DOWN), rounded_angle(-1, 0, NEAREST)
+    (3.141592653589793, -0.7853981633974483)
+    """
+    q = Fraction(q)
+    if q == 0 and m == 0:
+        return 0.0
+
+    def enclose(p):
+        lo, hi = _fractions(_add(_atan_rational(q, p), _scale(_shift(_pi(p), -1), m)), p)
+        return lo, hi
+    return _ziv(enclose, direction)
+
+
 # PI, FOR THE PERIODIC FUNCTIONS
 
 def floor_over_pi(x, offset: Fraction) -> Tuple[int, bool]:

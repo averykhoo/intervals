@@ -20,12 +20,14 @@ from intervals.elementary import exact
 from intervals.elementary import rounded
 from intervals.errors import DomainClippedWarning
 from intervals.errors import EmptySetPropagationWarning
+from intervals.errors import IndeterminateResultWarning
 from intervals.fmt import format_cuts
 from intervals.fmt import parse
 from intervals.functions import MONOTONE
 from intervals.functions import NAMES
 from intervals.functions import PERIODIC
 from intervals.functions import apply
+from intervals.functions import atan2
 from intervals.kernel import EMPTY
 from intervals.kernel import contains_point
 from intervals.kernel import intersection
@@ -368,3 +370,129 @@ def test_methods_keep_the_class():
             assert type(getattr(a, name)()) is OutwardMultiInterval, name
     assert a.exp() == MultiInterval.from_cuts(apply('exp', a.cuts, outward=True))
     assert MultiInterval(0.5, 2.0).exp() == MultiInterval.from_cuts(apply('exp', a.cuts))
+
+
+# ATAN2
+
+@pytest.mark.parametrize('y, x, expected', [
+    ('[0, 1]', '[1]', '[0, 0.7853981633974484)'),
+    ('[-1, 0]', '[-1]', '{ (-3.1415926535897936, -2.356194490192345) , (3.141592653589793, 3.1415926535897936) }'),
+    ('[-1, 0)', '[-2, -1]', '(-3.1415926535897936, -2.356194490192345)'),
+    ('[0]', '[-2, -1]', '(3.141592653589793, 3.1415926535897936)'),
+    ('[0]', '(0, inf]', '[0]'),
+    ('(0, inf]', '[0]', '(1.5707963267948966, 1.5707963267948968)'),
+    ('[1]', '[-inf, inf]', '[0, 3.1415926535897936)'),
+    ('[-inf, inf]', '[inf]', '[0]'),
+    ('[1, inf]', '[1, inf]', '[0, 1.5707963267948968)'),
+    ('[2]', '[-inf]', '(3.141592653589793, 3.1415926535897936)'),
+    ('[-2]', '[-inf]', '(-3.1415926535897936, -3.141592653589793)'),
+    ('(-inf, inf)', '(-inf, inf)', '(-3.1415926535897936, 3.1415926535897936)'),
+    ('[1.0]', '[1.0]', '[0.7853981633974483]'),
+    # 0 is attained only along the edge x = inf, where every finite y gives it
+    ('(1, 2)', '[5, inf]', '[0, 0.3805063771123649)'),
+    ('(1, 2)', '[5, inf)', '(0, 0.3805063771123649)'),
+    ('[1, inf]', '(-inf, -1]', '(1.5707963267948966, 3.1415926535897936)'),
+])
+def test_atan2_examples(y, x, expected):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', IndeterminateResultWarning)
+        assert show(atan2(parse(y), parse(x))) == expected
+
+
+@pytest.mark.parametrize('y, x, expected', [
+    ('[0]', '[0]', ''),
+    ('[inf]', '[inf]', ''),
+    ('[-inf]', '[inf]', ''),
+    # (0, 0) and (inf, -inf) have no angle; (0, -inf) is pi and (inf, 0) is pi/2
+    ('{ [0] , [inf] }', '{ [0] , [-inf] }', '{ (1.5707963267948966, 1.5707963267948968) , (3.141592653589793, 3.1415926535897936) }'),
+])
+def test_atan2_indeterminate_boxes_warn(y, x, expected):
+    with pytest.warns(IndeterminateResultWarning):
+        result = atan2(parse(y), parse(x))
+    assert (show(result) if result else '') == expected
+
+
+def test_atan2_warns_only_for_a_box_with_no_angle():
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        atan2(parse('[-1, 1]'), parse('[-1, 1]'))  # holds the origin, but other points have angles
+        atan2(parse('[1, inf]'), parse('[1, inf]'))
+
+
+def _true_angle(v, u):
+    """the angle of (u, v) as a Decimal, or 0 exactly, from the decimal oracle in test_elementary"""
+    from decimal import Decimal
+    from decimal import localcontext
+    from tests.test_elementary import _atan
+    from tests.test_elementary import _pi
+    with localcontext() as ctx:
+        ctx.prec = 60
+        pi = _pi(60)
+        if v == 0 and u > 0:
+            return 0
+        if v == 0 and u < 0:
+            return pi
+        if u == 0:
+            return pi / 2 if v > 0 else -pi / 2
+        if v in (INF, -INF):
+            return pi / 2 if v > 0 else -pi / 2
+        if u == INF:
+            return 0
+        if u == -INF:
+            return pi if v >= 0 else -pi
+        q = Fraction(v) / Fraction(u)
+        a = _atan(Decimal(q.numerator) / Decimal(q.denominator), 60)
+        return a if u > 0 else a + pi if v > 0 else a - pi
+
+
+def _holds_angle(result, value) -> bool:
+    from decimal import Decimal
+    if value == 0:
+        return contains_point(result, 0)
+    for lo, lo_closed, hi, hi_closed in pieces(result):
+        above = lo == -INF or Decimal(lo) < value
+        below = hi == INF or value < Decimal(hi)
+        if above and below:
+            return True
+    return False
+
+
+@settings(max_examples=150, deadline=None)
+@given(y=exact_cut_tuples, x=exact_cut_tuples, rng=st.randoms(use_true_random=False))
+def test_atan2_sound_on_exact_sets(y, x, rng):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        result = atan2(y, x)
+    for v in sample(y, 6, rng):
+        for u in sample(x, 6, rng):
+            if (v == 0 and u == 0) or (v in (INF, -INF) and u in (INF, -INF)):
+                continue
+            assert _holds_angle(result, _true_angle(v, u)), (show(y), show(x), v, u, show(result))
+
+
+@settings(max_examples=100, deadline=None)
+@given(y=cut_tuples(max_pieces=3), x=cut_tuples(max_pieces=3), rng=st.randoms(use_true_random=False))
+def test_atan2_outward_sound_on_floats(y, x, rng):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        result = atan2(y, x, outward=True)
+    for v in sample(y, 5, rng):
+        for u in sample(x, 5, rng):
+            if (v == 0 and u == 0) or (v in (INF, -INF) and u in (INF, -INF)):
+                continue
+            assert _holds_angle(result, _true_angle(v, u)), (show(y), show(x), v, u, show(result))
+
+
+@settings(max_examples=100, deadline=None)
+@given(a=exact_cut_tuples, b=exact_cut_tuples, x=exact_cut_tuples)
+def test_atan2_distributes_over_union(a, b, x):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        assert atan2(union(a, b), x) == union(atan2(a, x), atan2(b, x))
+        assert atan2(x, union(a, b)) == union(atan2(x, a), atan2(x, b))
+
+
+def test_atan2_method_and_class():
+    assert MultiInterval(0).atan2(MultiInterval(1, 2)) == MultiInterval(0)
+    assert type(OutwardMultiInterval(1.0).atan2(MultiInterval(1.0))) is OutwardMultiInterval
+    assert OutwardMultiInterval(1.0).atan2(1.0) == OutwardMultiInterval.parse('(0.7853981633974483, 0.7853981633974484)')

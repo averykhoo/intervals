@@ -1,5 +1,5 @@
 """
-elementary functions over cut tuples: sqrt, exp, log, trig, hyperbolic and their inverses
+elementary functions over cut tuples: sqrt, exp, log, trig, hyperbolic and their inverses, and atan2
 
 `apply(name, a)` is the set `{f(x) : x in a}`, with ±inf as ordinary points where f has a limit there
 (`exp(-inf)` = 0, `atan(inf)` = pi/2, `tanh(inf)` = 1). every endpoint is closed iff attained.
@@ -34,6 +34,7 @@ elementary functions over cut tuples: sqrt, exp, log, trig, hyperbolic and their
 """
 import math
 from fractions import Fraction
+from itertools import product
 from typing import List
 from typing import Tuple
 
@@ -45,6 +46,7 @@ from intervals.applicator import warn
 from intervals.cuts import Value
 from intervals.errors import DomainClippedWarning
 from intervals.errors import EmptySetPropagationWarning
+from intervals.errors import IndeterminateResultWarning
 from intervals.kernel import Cuts
 from intervals.rounding import DOWN
 from intervals.rounding import NEAREST
@@ -250,3 +252,163 @@ def _settled(lo, lo_closed: bool, hi, hi_closed: bool) -> Piece:
     if lo == hi:
         return lo, True, hi, True
     return lo, lo_closed, hi, hi_closed
+
+
+# ATAN2
+
+def atan2(y: Cuts, x: Cuts, outward: bool = False) -> Cuts:
+    """
+    `{atan2(v, u) : v in y, u in x}`, the angle of the point (u, v), in [-pi, pi]
+
+    pointwise, with ±inf as ordinary points where the angle has a limit: `atan2(0, u)` is 0 for u > 0
+    and pi for u < 0 (there is no -0, so the negative u axis is at pi, and points just below it are
+    near -pi), `atan2(v, 0)` is ±pi/2, `atan2(±inf, u)` is ±pi/2 for a finite u, `atan2(v, inf)` is 0
+    and `atan2(v, -inf)` is pi for v >= 0 and -pi for v < 0 (python's values, and the limits).
+    `atan2(0, 0)` and `atan2(±inf, ±inf)` have no value: a box that is one of those points gives
+    nothing and one `IndeterminateResultWarning`, and a larger box takes the limits along its edges
+    there, as the arithmetic does at `0 * inf`.
+
+    both operands split into negative, zero and positive parts, so each box lies in one open quadrant
+    or on one half-axis. there the angle is continuous and monotone in each coordinate, so its ends
+    are two corners' values, each closed iff its corner is in the box, or it is reached along an edge
+    at ±inf, where the angle is constant.
+
+    >>> from intervals.fmt import format_cuts, parse
+    >>> format_cuts(atan2(parse('[0, 1]'), parse('[1]')))
+    '[0, 0.7853981633974484)'
+    """
+    if not y or not x:
+        warn(EmptySetPropagationWarning, 'atan2: an operand is empty, so the result is empty')
+        return kernel.EMPTY
+    out, indeterminate = [], []
+    for box in product(kernel.pieces(y), kernel.pieces(x)):
+        # a box warns only if no point of it has an angle: (0, 0) or (±inf, ±inf) itself
+        found = [p for py in _sign_parts(_cuts(box[0])) for px in _sign_parts(_cuts(box[1]))
+                 for p in (_angle_box(py, px, outward),) if p is not None]
+        if not found:
+            indeterminate.append(box)
+        out.extend(found)
+    if indeterminate:
+        shown = ', '.join(fmt.format_piece(*kernel.piece(lo, hi, lo_closed, hi_closed))
+                          for lo, lo_closed, hi, hi_closed in indeterminate[0])
+        warn(IndeterminateResultWarning, f'atan2({shown}) has no value at any point, so that part contributes nothing')
+    return kernel.normalize(kernel.piece(lo, hi, lo_closed, hi_closed) for lo, lo_closed, hi, hi_closed in out)
+
+
+_NEGATIVE = kernel.normalize([kernel.piece(-INF, 0, True, False)])
+_ZERO = kernel.normalize([kernel.piece(0, 0)])
+_POSITIVE = kernel.normalize([kernel.piece(0, INF, False, True)])
+
+
+def _cuts(p: Piece) -> Cuts:
+    return kernel.normalize([kernel.piece(p[0], p[2], p[1], p[3])])
+
+
+def _sign_parts(cuts: Cuts) -> List[Piece]:
+    """each piece cut into its negative part, [0] and its positive part (the parts open at 0)"""
+    return [q for part in (_NEGATIVE, _ZERO, _POSITIVE) for q in kernel.pieces(kernel.intersection(cuts, part))]
+
+
+def _side(p: Piece) -> int:
+    return 0 if p[0] == p[2] == 0 else 1 if p[0] >= 0 else -1
+
+
+def _angle(v, u, sv: int, su: int):
+    """
+    the angle at (u, v) as `(q, m)`, meaning atan(q) + m pi/2, where a 0 end of a positive or negative
+    part is the limit from inside the part's quadrant; None at (±inf, ±inf) and (0, 0)
+    """
+    if sv == 0:
+        return None if su == 0 else (0, 0) if su > 0 else (0, 2)
+    if su == 0:
+        return 0, sv
+    if is_infinite(v):
+        return None if is_infinite(u) else (0, sv)
+    if u == INF:
+        return 0, 0
+    if u == -INF:
+        return 0, 2 * sv
+    if v == 0:
+        return (0, 0) if su > 0 else (0, 2 * sv)
+    if u == 0:
+        return 0, sv
+    return Fraction(v) / Fraction(u), 0 if su > 0 else 2 * sv
+
+
+# the corners holding the least and the greatest angle of an open quadrant, as (y end, x end) with
+# 0 for a piece's low end and 1 for its high end. the angle rises with y where x > 0 and falls where
+# x < 0, and rises with x where y < 0 and falls where y > 0
+_EXTREMES = {
+    (1, 1): ((0, 1), (1, 0)),
+    (1, -1): ((1, 1), (0, 0)),
+    (-1, -1): ((1, 0), (0, 1)),
+    (-1, 1): ((0, 0), (1, 1)),
+}
+
+
+def _stand_in(p: Piece):
+    """a finite point strictly inside a non-degenerate piece of one sign"""
+    lo, _, hi, _ = p
+    if is_infinite(lo) and is_infinite(hi):
+        return 1
+    if is_infinite(lo):
+        return hi - 1 if hi <= 0 else Fraction(hi) / 2
+    if is_infinite(hi):
+        return lo + 1 if lo >= 0 else Fraction(lo) / 2
+    return (Fraction(lo) + Fraction(hi)) / 2
+
+
+def _has_finite(p: Piece) -> bool:
+    return not (p[0] == p[2] and is_infinite(p[0]))
+
+
+def _angle_value(a) -> float:
+    """an angle's approximate value, only to order two candidates"""
+    q, m = a
+    return math.atan(float(q)) + m * math.pi / 2
+
+
+def _angle_box(py: Piece, px: Piece, outward: bool):
+    """the angles of one box (one quadrant or half-axis) as a piece; None if no point has one"""
+    sv, su = _side(py), _side(px)
+    as_float = any(is_float(v) for v in (py[0], py[2], px[0], px[2]))
+    if sv == 0 or su == 0:  # on an axis: the same angle at every point
+        a = _angle(0 if sv == 0 else py[0], 0 if su == 0 else px[0], sv, su)
+        if a is None:
+            return None
+        lo, lo_moved = _rounded_angle(a, DOWN, as_float, outward)
+        hi, hi_moved = _rounded_angle(a, UP, as_float, outward)
+        return _settled(lo, not lo_moved, hi, not hi_moved)
+    ends = []
+    for index, (y_end, x_end) in enumerate(_EXTREMES[sv, su]):
+        yv, y_closed = (py[0], py[1]) if y_end == 0 else (py[2], py[3])
+        xv, x_closed = (px[0], px[1]) if x_end == 0 else (px[2], px[3])
+        a = _angle(yv, xv, sv, su)
+        if a is not None:
+            # along an edge at ±inf the angle is constant, so a closed infinite end attains it too
+            attained = (y_closed and x_closed) or (is_infinite(yv) and y_closed and _has_finite(px)) or \
+                (is_infinite(xv) and x_closed and _has_finite(py))
+        else:  # (±inf, ±inf): the limits along the edges leaving it, each constant along its edge
+            limits = []
+            if py[0] != py[2]:
+                limits.append((_angle(_stand_in(py), xv, sv, su), x_closed))
+            if px[0] != px[2]:
+                limits.append((_angle(yv, _stand_in(px), sv, su), y_closed))
+            if not limits:
+                return None
+            pick = min if index == 0 else max
+            a, attained = pick(limits, key=lambda item: _angle_value(item[0]))
+        ends.append((a, attained))
+    (low, low_attained), (high, high_attained) = ends
+    lo, lo_moved = _rounded_angle(low, DOWN, as_float, outward)
+    hi, hi_moved = _rounded_angle(high, UP, as_float, outward)
+    return _settled(lo, low_attained and not lo_moved, hi, high_attained and not hi_moved)
+
+
+def _rounded_angle(a, want: int, as_float: bool, outward: bool) -> Tuple[Value, bool]:
+    """`(value, moved)`: the angle 0 is exact (0.0 when float); any other is rounded"""
+    q, m = a
+    if q == 0 and m == 0:
+        return (0.0 if as_float else 0), False
+    direction = (want if outward else NEAREST) if as_float else want
+    return elementary.rounded_angle(q, m, direction), direction != NEAREST

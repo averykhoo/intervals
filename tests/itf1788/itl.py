@@ -43,7 +43,7 @@ _INTEGER = re.compile(r'[-+]?[0-9]+$')
 _NUMBER_LITERAL = re.compile(rf'{_NUMBER}$')
 _WORD = re.compile(r'[A-Za-z]+$')
 _LITERAL = re.compile(r'\[[^\]]*\](?:_[a-z]+)?|[^\s\[\]]+')
-_TESTCASE = re.compile(r'testcase\s+(\w+)\s*\{(.*?)\}', re.DOTALL)
+_TESTCASE = re.compile(r'testcase\s+([\w.]+)\s*\{(.*?)\}', re.DOTALL)  # atan2.itl has 'minimal.atan2_test'
 _COMMENT = re.compile(r'/\*.*?\*/|//[^\n]*', re.DOTALL)
 
 

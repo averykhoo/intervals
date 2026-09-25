@@ -44,7 +44,8 @@ from tests.itf1788.itl import parse_file
 
 HERE = Path(__file__).parent
 FILES = ('libieeep1788_tests_elem.itl', 'libieeep1788_tests_set.itl', 'libieeep1788_tests_bool.itl',
-         'libieeep1788_tests_num.itl', 'libieeep1788_tests_overlap.itl', 'libieeep1788_tests_rec_bool.itl')
+         'libieeep1788_tests_num.itl', 'libieeep1788_tests_overlap.itl', 'libieeep1788_tests_rec_bool.itl',
+         'atan2.itl')
 
 _ENTIRE = MultiInterval.parse('(-inf, inf)')
 
@@ -78,6 +79,7 @@ OPS = {
     **{name: _function(name) for name in ('sqrt', 'exp', 'exp2', 'exp10', 'log', 'log2', 'log10', 'sin',
                                           'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh',
                                           'asinh', 'acosh', 'atanh')},
+    'atan2': lambda y, x: y.atan2(x),
     'intersection': lambda a, b: a & b,
     'convexHull': lambda a, b: (a | b).hull,
     # booleans
