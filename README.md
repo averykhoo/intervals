@@ -21,6 +21,9 @@ MultiInterval.parse('{ [0, 1) , (2, 3] }')
 BOTH
 >>> x.size
 Size(rays=0, length=2, points=0)
+>>> y = MI(-3, -2) | MI(2, 3)
+>>> y.mid(), y.wid(), y.mig()      # mid and wid of the hull, mig of the set
+(0, 6, 2)
 >>> print(MI(0, 3).sqrt())           # sqrt(3) is irrational: its enclosure's upper end, open
 [0, 1.7320508075688774)
 >>> print(MI(1, 8).log(2))           # exact where the value is rational
@@ -59,6 +62,9 @@ Size(rays=0, length=2, points=0)
 * **step functions**: `floor()`, `ceil()`, `trunc()`, `round(ndigits)`, `round_ties_away()`,
   `sign()`, and `math.floor/ceil/trunc` and `round()` on a set: the values attained, listed up to
   1000 of them, else their hull with a `HullWarning`
+* **numbers of a set** (1788's numeric functions): `mid()`, `rad()`, `wid()` and `mid_rad()` of the
+  hull, `mag()` and `mig()` of the set. exact for an exact operand; for a float one rounded as 1788
+  specifies (`mid` to nearest, `rad`, `wid` and `mag` up, `mig` down), in both classes alike
 * **reductions**: `sum_()`, `sum_abs()`, `sum_sqr()`, `dot()` over sequences of numbers (1788's
   reductions): the exact value, rounded once to a float, to nearest by default or
   `rounding='down'` / `'up'`, so the order of the operands never matters
@@ -68,9 +74,10 @@ Size(rays=0, length=2, points=0)
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)
-* **ieee 1788**: not a runtime mode. the test suite runs 4782 vectors of 58 ops from all 19 files
+* **ieee 1788**: not a runtime mode. the test suite runs 4949 vectors of 64 ops from all 19 files
   of the ITF1788 suite through an adapter, the 4120 interval-valued ones a second time through
-  `OutwardMultiInterval`, and all of them match except 49 listed divergences where the semantics
+  `OutwardMultiInterval`, the 167 numeric ones twice more with float operands, and all of them
+  match except 55 listed divergences where the semantics
   differ on purpose or the vector needs decorations (`tests/itf1788/`, measured 2026-09-26). the
   statements of ops not built yet (`pow` with a real exponent, reverse ops, cancellation, ...) are
   counted and skipped
@@ -80,8 +87,8 @@ Size(rays=0, length=2, points=0)
 * `intervals/` — the package: `cuts` (the representation), `kernel` (set algebra on cut tuples),
   `fmt` (printing and parsing), `multi_interval` (the two classes), `relations`, `applicator` and
   `ops` (arithmetic), `modulo`, `steps` (floor, ceil, round, sign), `functions` and `elementary`
-  (the elementary functions over sets, and at one point), `reductions` (sums and dot products of
-  numbers), `rounding`, `errors`
+  (the elementary functions over sets, and at one point), `numeric` (midpoint, radius, width,
+  magnitude, mignitude), `reductions` (sums and dot products of numbers), `rounding`, `errors`
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)

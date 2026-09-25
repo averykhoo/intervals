@@ -5,7 +5,7 @@ bug. the **decision log** below it is history, kept verbatim, with a marker wher
 superseded it.
 
 ## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a,
-M13h and M14's fuzz job and oracle, 2026-09-26)
+M13b, M13h and M14's fuzz job and oracle, 2026-09-26)
 
 ### domain and semantics
 
@@ -118,6 +118,28 @@ M13h and M14's fuzz job and oracle, 2026-09-26)
       with the default `INFINITY_IS_NOT_FINITE = True`, constructing `(1, inf]` raises `ValueError`;
       with the flag off `(1, inf]` and `[1, inf)` give `(1, -inf, 0)` and `[-inf, 1]` gives
       `(1, -inf, 2)`)
+* **numeric functions** (D9, built at M13b 2026-09-26; `intervals/numeric.py`): 1788's `mid`,
+  `rad`, `wid`, `mag`, `mig`, `midRad` as the methods `mid()`, `rad()`, `wid()`, `mag()`, `mig()`,
+  `mid_rad()` (the pair `(mid(), rad())`). `mid`, `rad`, `wid` are **of the hull**: a midpoint
+  outside the set (`mid([0,1] ∪ [9,10])` = 5) is still a valid bisection point, a per-piece form
+  would return a tuple, and `size.length` already gives the width without the gaps. `mag` and
+  `mig` are **of the set**, the `sup` and `inf` of `{abs(x) : x ∈ A}`: `mig([-3,-2] ∪ [2,3])` = 2,
+  where the hull would give 0; on a connected set the two agree. open and closed ends do not
+  matter (these are infima and suprema)
+    * an operand with no finite float end gives exact values (int or Fraction); one with a finite
+      float end anywhere (`rounding.has_finite_float`) gives floats, the exact value rounded once
+      as 1788 specifies: `mid` to nearest, ties to even; `rad` the smallest double `r` with
+      `[mid - r, mid + r]` holding the hull, measured from the rounded midpoint (so
+      `rad([1, 1 + 3ulp])` is `2ulp`, not the double `1.5ulp`); `wid` and `mag` up; `mig` down.
+      the direction is the function's, so `MultiInterval` and `OutwardMultiInterval` give the
+      same numbers
+    * unbounded operands follow 1788: `mid` of `(-inf, inf)` is 0, of a half-bounded hull ±max float
+      (a float even for an exact operand); `rad` and `wid` are inf. a single point, `[inf]` too, is
+      its own midpoint with radius and width 0. an exact end past max float keeps the midpoint in
+      the hull (a float operand's rounds to ±max float rather than ±inf; an exact half-bounded hull
+      starting past max float has its start as midpoint)
+    * the empty set raises `ValueError` (`the empty set has no midpoint`, and so on), as `inf` and
+      `sup` do; 1788 answers `NaN`, and the itf1788 adapter reads the error as that `NaN`
 
 ### comparisons
 
@@ -343,21 +365,29 @@ M13h and M14's fuzz job and oracle, 2026-09-26)
       our hulled result is closed there); absorbs multi-interval vs connected (`[1,2]/[-1,1]`:
       1788 entire, ours `[-inf,-1] ∪ [1,inf]`, hull = entire → match). a bool, a number or an
       overlap state is compared as it is
+    * **numeric rule** (added at M13b): `mid`, `rad`, `wid`, `mag`, `mig`, `midRad` return exact
+      numbers for the first pass's exact operands, which the adapter rounds as 1788 does (`mid` to
+      nearest, `wid`/`mag` up, `mig` down, `rad` around the rounded midpoint:
+      `tests/itf1788/test_itf1788.py::_numeric`, `::_mid_rad_1788`). a second pass
+      (`::test_vector_float`) gives them float operands in both classes and compares the library's
+      own numbers as they are. a `ValueError` (the empty set) is `NaN`
     * **reduction rule** (added at M13h): a reduction's result must already be the double 1788
       specifies (rounded to nearest) and is compared as it is; a `ValueError` from it is 1788's
       `NaN` (`tests/itf1788/test_itf1788.py::REDUCTIONS`, `::_reduce`)
     * residual divergence table: degenerate infinities, domain-clipped functions, decoration
       expectations, and (added at M12) cut-based relations. (`1/[0]` is not a row: both give
       empty.) keyed on the statement with its decorations stripped
-      (`tests/itf1788/test_itf1788.py::key`) since M13a. measured 2026-09-26 (M13h), the current
-      count: 19 files, 9542 statements; 4782 vectors of 58 ops (every op in `OPS` has vectors),
-      4120 of them interval-valued and run twice; 49 keys and 0 unknown failures: 10 degenerate
-      infinities (11 vectors), 5 cut-based relations (7 vectors) and 34 decoration expectations,
-      the `[nai]` operands of implemented ops, generated in code (34 vectors and 6 outward items).
-      counted and skipped: 4760 statements of 53 ops not implemented yet (the largest `pow` 1431,
-      the reverse ops, `cancelMinus`/`cancelPlus`, `csc`, `sec`, the text constructors), each
-      assigned to an M13 sub-task. history: at M13a (2026-09-26) 4767 vectors of 54 ops, 4775
-      statements of 57 ops skipped; M13h added the 15 reduction vectors. as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
+      (`tests/itf1788/test_itf1788.py::key`) since M13a. measured 2026-09-26 (M13b), the current
+      count: 19 files, 9542 statements; 4949 vectors of 64 ops (every op in `OPS` has vectors),
+      4120 of them interval-valued and run twice, the 167 numeric ones run twice more with float
+      operands (9403 vector test items); 55 keys and 0 unknown failures: 10 degenerate
+      infinities (11 vectors), 5 cut-based relations (7 vectors) and 40 decoration expectations,
+      the `[nai]` operands of implemented ops, generated in code (40 vectors, 6 outward items and
+      12 float items). counted and skipped: 4593 statements of 47 ops not implemented yet (the
+      largest `pow` 1431, the reverse ops, `cancelMinus`/`cancelPlus`, `csc`, `sec`, the text
+      constructors), each assigned to an M13 sub-task. history: at M13a (2026-09-26) 4767 vectors
+      of 54 ops, 4775 statements of 57 ops skipped; M13h added the 15 reduction vectors (4782 of 58,
+      4760 of 53 skipped, 49 keys); M13b the 167 numeric ones. as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
       interval-valued and run twice; 18 rows (`tests/itf1788/test_itf1788.py::DIVERGENCES`): 11
       degenerate infinities (`log`/`log2`/`log10` of an operand meeting the domain only at 0, `atanh`
       of one meeting it only at ±1) and 7 cut-based relations (`overlap [1,2] [2,3]` is `meets` in
@@ -399,6 +429,7 @@ imports only point downward.
         elementary.py      correctly rounded elementary functions at one exact point
         functions.py       the elementary functions and atan2 over cut tuples
         reductions.py      sum_ sum_abs sum_sqr dot over numbers: exact, rounded once (M13h)
+        numeric.py         mid rad wid mag mig mid_rad of a set: exact, or rounded as 1788 (M13b)
         multi_interval.py  the class and OutwardMultiInterval: immutable cut tuple; _coerce
                            (numbers and intervals only — strings go through an explicit
                            parse()); one-line dunders. arithmetic
@@ -417,7 +448,7 @@ imports only point downward.
         test_<module>.py   (ops split into test_ops_examples.py and test_ops_properties.py;
                            test_minmax_fma.py and test_outward.py for the rest of M12;
                            test_oracle_flint.py, the arb oracle for the functions, M14;
-                           test_reductions.py, M13h)
+                           test_reductions.py, M13h; test_numeric.py, M13b)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
@@ -484,6 +515,13 @@ imports only point downward.
   doubles (`::is_rounded`, not the package's rounding) in all three directions, float sums also
   against `math.fsum`, and the special values (±inf, `nan`, `0 * inf`) by rule, with the itf1788
   vectors as `@example`s
+* the numeric functions (M13b, 2026-09-26; `tests/test_numeric.py`): exact operands against the
+  definitions, `mag`/`mig` through `abs(A)`; float operands over the whole double range, each number
+  checked from the definition of rounding (`tests/test_reductions.py::is_rounded`) and `rad` as the
+  smallest covering double; soundness at sampled points (`mig <= abs(x) <= mag`, `x` within
+  `mid ± rad`, `abs(x - y) <= wid`); isotonicity; the hull against the set; both classes equal. the
+  itf1788 vectors can see no hull/set difference (each is one interval), so D9's set reading of
+  `mig` is held by these properties alone
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
   every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 100) times its
   own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
@@ -503,6 +541,26 @@ imports only point downward.
   gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one)
 
 ## decision log
+
+### 2026-09-26 revision: M13b, the numeric functions, built
+
+built and measured 2026-09-26; details in v2-implementation-plan.md (M13b). D9 moved into "current
+design" (set operations and size, ieee 1788, testing). the choices D9 and the plan left open, each
+the most conservative reading, are now current design too:
+* **methods, not properties**: `mid()`, `rad()`, `wid()`, `mag()`, `mig()`, `mid_rad()` (the plan's
+  spelling; `inf` and `sup` stay properties)
+* **"float" is the operand's kind**: any finite float end makes every number a float, rounded once;
+  otherwise int or Fraction. the one exception is D9's ±max float for a half-bounded `mid`
+* **`rad` is 1788's radius around the rounded midpoint**, not half the width rounded up, because the
+  vectors require it (`rad [1, 1 + 3ulp]` = `2ulp`); `mag` rounds up and `mig` down (exact on
+  double ends); both classes give the same numbers, the direction being the function's
+* **edge cases no source covered**: a point, `[inf]` included, is its own midpoint with radius and
+  width 0; an exact end past max float keeps the midpoint inside the hull; the empty set raises
+  `ValueError` naming the missing quantity, with no warning
+* **the adapter gained a float pass for the six ops** (`test_vector_float`, both classes, compared
+  as they are): the first pass's exact operands would never exercise the library's own rounding
+* the 167 vectors match, no divergence row beyond the 6 generated `[nai]` ones; itf1788 now 4949
+  vectors of 64 ops, 4593 statements of 47 ops skipped
 
 ### 2026-09-26 revision: M13h, the reductions, built
 

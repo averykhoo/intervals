@@ -19,7 +19,7 @@ with M13a and M14's first two items (2026-09-26) and are in "current design" now
 | D6 | constructor default for an infinite bound: `MI(1, inf)` = `[1, inf]` (literal) or `[1, inf)` (1788 reading)? **settled (v2-plan.md current design): literal** — `[a, inf]` and `[a, inf)` are different sets and "a user-typed `[1, inf]` is taken literally". D2 removes the blow-up footgun that made this look open | literal | — |
 | D7 | **decided 2026-09-23 by owner**: a box that *is* an indeterminate point (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`, `[0]/[0]`) returns `∅` + `IndeterminateResultWarning` (was `[-inf] ∪ [inf]` / entire). isotonicity forces it: `[0]` is inside `[-1,0]` and `[0,1]`, so `1/[0] ⊆ [-inf,-1] ∩ [1,inf] = ∅`; `[0]*[inf] ⊆ [0]*[5,inf] ∩ [0,1]*[inf]` = `∅` and `[inf]-[inf] ⊆ [inf]-[1,inf] ∩ [1,inf]-[inf]` = `∅` under D2. solvers need isotone ops; matches 1788's empty. cost: `1/(1/[inf])` = `∅`; `1/x` round-trips only on sets with no degenerate piece at `0`, `inf`, `-inf`; the "later" direction tag stays the recovery path. separately, `f(A ∪ B) == f(A) ∪ f(B)` fails for reciprocal with any `1/[0]` (`A=[-1,0)`, `B=[0]`), so that law is only `⊇` for reciprocal/div | `∅` + warning | M6 |
 | D8 | **decided 2026-09-24 by owner: recommended default**, implemented in M7. modulo with infinite operands: python gives `inf % 3` = `nan`, `3 % inf` = `3`, `-3 % inf` = `inf`. a dividend of ±inf attains nothing, so it is dropped with `DomainClippedWarning`; a finite dividend mod an infinite divisor follows python's scalar result (also the limit along the box) | clip / follow python | M7b |
-| D9 | **decided 2026-09-25 by owner: recommended default.** 1788's numeric ops on a multi-interval. `mid`, `rad`, `wid` (and `midRad`) are **of the hull**: a midpoint outside the set (`mid([0,1] ∪ [9,10])` = 5) is still a valid bisection point, a per-piece form would return a tuple, and `size.length` already gives the width without the gaps. `mag` and `mig` are **of the set**, as `sup` and `inf` of `{abs(x) : x ∈ A}`: `mig([-3,-2] ∪ [2,3])` = 2, where the hull would give 0; on a connected set the two readings agree. unbounded operands follow 1788 (`mid` of entire is 0, of a half-bounded set ±max float; `rad` and `wid` are inf); the empty set raises `ValueError`, as `.inf` does today, and the adapter maps it to 1788's `NaN` | hull for mid/rad/wid, set for mag/mig | M13b |
+| D9 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13b), now in `v2-plan.md` "set operations and size".** 1788's numeric ops on a multi-interval. `mid`, `rad`, `wid` (and `midRad`) are **of the hull**: a midpoint outside the set (`mid([0,1] ∪ [9,10])` = 5) is still a valid bisection point, a per-piece form would return a tuple, and `size.length` already gives the width without the gaps. `mag` and `mig` are **of the set**, as `sup` and `inf` of `{abs(x) : x ∈ A}`: `mig([-3,-2] ∪ [2,3])` = 2, where the hull would give 0; on a connected set the two readings agree. unbounded operands follow 1788 (`mid` of entire is 0, of a half-bounded set ±max float; `rad` and `wid` are inf); the empty set raises `ValueError`, as `.inf` does today, and the adapter maps it to 1788's `NaN` | hull for mid/rad/wid, set for mag/mig | M13b |
 | D10 | **decided 2026-09-25 by owner: recommended default.** names for 1788's interval orders, since `<` and `<=` are pointwise and return a `TruthSet` (`MI(1,3) < MI(2,4)` is `BOTH`): `A.weakly_less(B)` for `less` (both of A's ends ≤ B's; 1788's own wording, "weakly less than"), `A.strictly_less(B)` for `strictLess`. `interior` is not a method: a new property `B.interior` (the set with every end opened, a set operation in its own right) and the existing `A.within(B.interior)` | `weakly_less`, `strictly_less`, `.interior` | M13c |
 | D11 | **decided 2026-09-25 by owner: recommended default.** power. an `int` exponent, or a float with an integral value, is `pown` as today, like python's scalars (`(-3.0) ** 2.0` = 9.0; `MI(-3,1) ** 2.0` = `[0, 9]`). a non-integral float or a `MultiInterval` exponent is 1788's `pow`: domain `x > 0`, plus `x = 0` where `y > 0` (`0 ** y` = 0); negative bases are dropped with `DomainClippedWarning`. so `MI(-3,1) ** MI(2)` = `[0, 1]`, not `[0, 9]`: an interval exponent means `pow`, never `pown`. `b ** A` for a scalar base is `MultiInterval(b) ** A` through `__rpow__`. exact where the value is rational, as `log` is. 3-argument `pow(A, n, m)` is dropped (not 1788; v1 had it on integers only) | pown for integral, else 1788 pow; 3-arg dropped | M13d |
 | D12 | **decided 2026-09-25 by owner: recommended default.** a reverse op whose answer has infinitely many or very many pieces (`sinRev`, `cosRev`, `tanRev` and their `*Bin` forms over an unbounded or wide `x`): the exact pieces up to the step functions' cap of 1000, past it their hull with a `HullWarning`, the rule `steps.py` already follows. a bounded `x` gets the exact union (`sinRev([0.5, 1], [0, 20])` has 4 pieces), which 1788 cannot give. ends are irrational, so each is its tightest float enclosure, open | exact to 1000 pieces, else hull + warning | M13e |
@@ -517,7 +517,7 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
 * not built, and why: `pow` with a real exponent (a: scope, M11); `less`, `strictLess`, `interior`,
   `mid`, `rad`, `wid`, `mag`, `mig` (a: see M11); reverse ops (a). all now M13
 
-### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a and M13h done 2026-09-26)
+### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a, M13b and M13h done 2026-09-26)
 
 owner request 2026-09-25: "implement all these ops and get all these tests vendored and passing".
 this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how;
@@ -613,7 +613,7 @@ this repo's unchanged adapter (`tests/itf1788/test_itf1788.py::run`, `::run_outw
       `libieeep1788_overlap.itl:98`, `:119`; `test_vector_outward` at `elem:4116`); the old brace
       behaviour fails collection loudly (`ValueError: text outside a testcase`, the reduction file)
 
-**M13b numeric ops** (D9). `mid` 36, `rad` 19, `wid` 27, `mag` 27, `mig` 33, `midRad` 25
+**M13b numeric ops (done 2026-09-26)** (D9). `mid` 36, `rad` 19, `wid` 27, `mag` 27, `mig` 33, `midRad` 25
 statements
 * methods `mid()`, `rad()`, `wid()`, `mag()`, `mig()`, `mid_rad()`. `mid`, `rad`, `wid` of the
   hull; `mag`, `mig` of the set (`sup` and `inf` of the absolute values). exact operands give exact
@@ -621,6 +621,74 @@ statements
   adapter's number rule compares them
 * unbounded: `mid` of entire is 0, of a half-bounded set ±max float; `rad` and `wid` are inf.
   empty raises `ValueError`, like `.inf`; the adapter maps that to `NaN`
+* done 2026-09-26. built:
+    * `intervals/numeric.py::mid`, `::rad`, `::wid`, `::mag`, `::mig`, `::mid_rad` over cut
+      tuples, bound as the methods `MultiInterval.mid()`, `.rad()`, `.wid()`, `.mag()`, `.mig()`,
+      `.mid_rad()` (a pair). `OutwardMultiInterval` inherits them unchanged: a number is not an
+      interval, and its direction is 1788's for the function, so both classes give the same numbers
+      (pinned by `tests/test_numeric.py::test_outward_class_gives_the_same_numbers` and inside the
+      float property)
+    * **choices the plan left open** (conservative, flagged in the decision log):
+        * "a float result" means an operand with a finite float end anywhere
+          (`rounding.has_finite_float`, the package's definition of a float interval); then every
+          number is a float, the exact value rounded once. an operand without one gives int or
+          Fraction (integral Fractions as int), except `mid` of a half-bounded hull, ±max float as D9
+          says. `[inf]` and `[-inf] | [inf]` count as exact
+        * **`rad` is 1788's**: the smallest double `r` with `[mid - r, mid + r]` holding the hull,
+          measured from the *rounded* midpoint, not half the width rounded up. the vectors require it:
+          `rad [0X1P+0,0X1.0000000000003P+0] = 0X1P-51`, where half the width, `3 * 2**-53`, is a
+          double but the midpoint rounds (a tie, to even) one ulp up. `mid_rad()` is `(mid(), rad())`
+        * `mag` rounds up and `mig` down; on double ends both are exact, so the direction shows
+          only for a mixed operand (`[1/3, 0.5]`: `mig` 0.3333333333333333)
+        * a single point, `[inf]` too, is its own midpoint with radius and width 0; `mid` of
+          `(-inf, inf)` is 0 (0.0 for a float operand); `mag` and `mig` of `[inf]` are inf
+        * an exact end past max float: a float operand's rounded midpoint is kept inside the hull
+          (`MI(1.0, 3 * 2**1024).mid()` is max float, not inf), and an exact half-bounded hull that
+          starts past max float has that start as its midpoint (`MI(2**1030, inf).mid()` = `2**1030`)
+        * the empty set raises `ValueError('the empty set has no midpoint')` (radius, width,
+          magnitude, mignitude; `mid_rad` "midpoint or radius"), no warning
+    * adapter (`tests/itf1788/test_itf1788.py`): the six ops in `OPS`, and a **numeric rule**
+      (`::NUMERIC`, `::_numeric`, `::_mid_rad_1788`, `::round_nearest`): the first pass has exact
+      operands, so our exact number is rounded as 1788 rounds it (`mid` to nearest, `wid`/`mag` up,
+      `mig` down, `rad` around the rounded midpoint); a new second pass, `::test_vector_float` via
+      `::run_float`, gives the 167 vectors float operands in a `MultiInterval` and an
+      `OutwardMultiInterval` and compares the library's own numbers with no rounding by the adapter
+      (so the float path is checked the way `test_vector_outward` checks outward rounding). a
+      `ValueError` is `NaN` in both passes; `same()` compares a `midRad` pair item by item. no
+      divergence row beyond the 6 generated `[nai]` ones
+    * tests (`tests/test_numeric.py`, 26 items, 13-17 s, 2026-09-26): 5 `@given`: exact operands
+      against the definitions, `mag`/`mig` through `abs(A)` (an independent path) and soundness at
+      sampled points (`mig <= abs(x) <= mag`, `x` in `[mid - rad, mid + rad]`,
+      `abs(x - y) <= wid`); float operands over the whole double range (subnormals, ±max, exact ends
+      mixed in), each number checked from the definition of rounding on its neighbouring doubles
+      (`tests/test_reductions.py::is_rounded`), `rad` as the smallest covering double, both classes
+      equal, soundness; isotonicity on exact and on float operands; hull against set. `@example`s:
+      the rad tie above, `midRad [0X1.FFFFFFFFFFFFFP+1022, max]`, the mpfi tie
+      `mid [-0x1fffffffffffffp-53, 2.0] = 0.5`, subnormal ties, `[-max, max]`, D9's `mig`. under
+      `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=20` the file ran green in 346 s (2026-09-26)
+    * **a bug the float property found while building**: a point with an int and a float end,
+      `(Cut(0, BELOW), Cut(0.0, ABOVE))`, gave `mid` the int 0 for a float operand; now 0.0, pinned
+      as an `@example`
+* evidence, measured 2026-09-26 (census by importing the test module): 167 vectors of the six ops
+  (`libieeep1788_num` 126, `mpfi` 41), all matching in both passes except the 6 `[nai]` rows; all
+  ops: 4949 vectors of 64 ops, 4120 interval-valued, 167 numeric run twice more with floats, 9403
+  vector test items, 55 divergence keys (40 decoration expectations), 0 unknown failures; skipped
+  4593 statements of 47 ops. the gate: 12225 passed in 415 s
+* sabotage (section 2), each red, then the file restored from a copy and `cmp`-checked; targeted
+  runs (`tests/test_numeric.py`, the two modules' doctests, the num and mpfi vectors):
+  `mid` rounded up 23 red (the float property, `test_vector_float` at `num.itl:105`, `:106`,
+  `mpfi.itl:1085`, `:1088`, `:1090`; the first pass cannot see it, its operands are exact);
+  `mig` of the hull 7 (`test_examples` for D9's sets, both value properties, the `mig` doctest);
+  `rad` as half the width 19 (`test_rad_is_from_the_rounded_midpoint`, `num.itl:135`, `:148` among
+  them); `wid` to nearest 2, `mag` to nearest 1, `mig` up 2 (the float property, the mixed
+  example); the half-bounded `mid` sign flipped 29; `mig` of the empty set 0 instead of raising 8
+  (`test_empty_raises`, `num.itl:237`, `:251`, both passes); `rad` of a half-bounded hull not inf 18
+  (`test_hull_and_set` among them); `wid` of the first piece 10 and the hull ends of the first
+  piece 12 (both isotonicity properties among them); `mag` as the smaller end 63. the wiring: the
+  adapter's `rad` rounded up naively 2 (`num.itl:135`, `:148`), its `mid` rounded up 7, the float
+  pass not mapping `ValueError` to `NaN` 24. **not red, as expected**: `OPS['mig']` taking the
+  hull's `mig`, since every vector is one interval, where hull and set agree; D9's set reading is
+  held by the property tests only (the `mig`-of-the-hull sabotage above)
 
 **M13c interval orders** (D10). `less` 88, `strictLess` 32, `interior` 64
 * `A.weakly_less(B)`: `inf A ≤ inf B` and `sup A ≤ sup B`; `A.strictly_less(B)`: both strict,
@@ -879,7 +947,7 @@ land with M13a so that every later M13 op arrives with them
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
 the backlog, and M12 built its (b) items the same day. M13 (full itf1788) and M14 (fuzzing) are
 open: M13a is done (2026-09-26), then M13b to M13h in any order, each with its M14 properties
-(M13h done 2026-09-26);
+(M13b and M13h done 2026-09-26);
 M14's fuzz job and flint oracle are built (2026-09-26), the job's first green GitHub run still
 owed. M4 depends on M3 (the class's
 `parse`, `__str__` and `__repr__` come from `fmt`); M7a and M9 are independent after M6. total ≈ 12

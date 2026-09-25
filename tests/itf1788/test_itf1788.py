@@ -18,6 +18,12 @@ and lists them). the adapter's rules:
   it absorbs multi-interval vs connected (`1/[-10, 10]`: ours `[-inf, -1/10] ∪ [1/10, inf]`, 1788
   entire) and our attained infinities vs 1788's unattained ones. a boolean, a number or an overlap
   state is compared as it is
+* **numeric rule**: `mid`, `rad`, `wid`, `mag`, `mig` and `midRad` give exact numbers for the exact
+  operands of the first pass, rounded here as 1788 rounds them: `mid` to nearest, `wid` and `mag` up,
+  `mig` down, and `rad` as the smallest double `r` with `[m - r, m + r]` holding the exact
+  `[mid - rad, mid + rad]`, `m` the rounded midpoint. a second pass (`test_vector_float`) gives
+  them float operands, in a `MultiInterval` and an `OutwardMultiInterval`, and compares the
+  library's own rounding with no help from the adapter. a `ValueError` (the empty set) is `NaN`
 * **reduction rule**: the reductions (`sum_nearest` and the rest) round their own value to nearest,
   so ours must already be that double and is compared as it is; a `ValueError` from one (a `nan`
   operand, `inf + -inf`, `0 * inf`) is 1788's `NaN`
@@ -114,6 +120,13 @@ OPS = {
     # numbers: 1788 gives +infinity for the infimum of the empty set, -infinity for its supremum
     'inf': lambda a: a.inf if a else math.inf,
     'sup': lambda a: a.sup if a else -math.inf,
+    # numbers of an interval (NUMERIC): 1788's NaN for the empty set is our ValueError
+    'mid': lambda a: a.mid(),
+    'rad': lambda a: a.rad(),
+    'wid': lambda a: a.wid(),
+    'mag': lambda a: a.mag(),
+    'mig': lambda a: a.mig(),
+    'midRad': lambda a: a.mid_rad(),
     # the overlap state: our allen relation, named as in 1788
     'overlap': lambda a, b: _overlap(a, b),
     # reductions: numbers in, one double out, rounded to nearest by the op itself (REDUCTIONS)
@@ -123,6 +136,7 @@ OPS = {
     'dot_nearest': dot,
 }
 REDUCTIONS = frozenset({'sum_nearest', 'sum_abs_nearest', 'sum_sqr_nearest', 'dot_nearest'})
+NUMERIC = frozenset({'mid', 'rad', 'wid', 'mag', 'mig', 'midRad'})
 
 _OVERLAP_NAMES = {
     Allen.BEFORE: 'before', Allen.MEETS: 'meets', Allen.OVERLAPS: 'overlaps', Allen.STARTS: 'starts',
@@ -194,6 +208,7 @@ def _load():
 
 VECTORS, SKIPPED = _load()
 INTERVAL_VECTORS = tuple(v for v in VECTORS if isinstance(v.expected, Interval))
+NUMERIC_VECTORS = tuple(v for v in VECTORS if v.op in NUMERIC)
 DIVERGENCES.update({key(v): _NAI for v in VECTORS if _has_nai(v)})
 
 
@@ -230,6 +245,16 @@ def round_up(v) -> float:
     return -round_down(-v)
 
 
+def round_nearest(v) -> float:
+    """the double nearest to v, ties to even (±inf and floats stay)"""
+    if isinstance(v, float):
+        return v
+    try:
+        return float(Fraction(v))  # correctly rounded: int / int in CPython
+    except OverflowError:
+        return math.inf if v > 0 else -math.inf
+
+
 def closed_hull_of_ours(result: MultiInterval):
     """the precision and output rules on our result: `None` for empty, else `(lo, hi)` doubles"""
     if result.is_empty:
@@ -260,8 +285,52 @@ def _reduce(vector, args) -> float:
     return result
 
 
+def _mid_rad_1788(m, r):
+    """1788's (mid, rad) of the exact hull `[m - r, m + r]`: the midpoint to nearest, then the
+    smallest double radius around that midpoint"""
+    rounded = round_nearest(m)
+    if r == math.inf:
+        return rounded, math.inf
+    lo, hi = Fraction(m) - r, Fraction(m) + r
+    return rounded, round_up(max(Fraction(rounded) - lo, hi - Fraction(rounded)))
+
+
+_NUMERIC_ROUNDING = {'mid': round_nearest, 'wid': round_up, 'mag': round_up, 'mig': round_down}
+
+
+def _numeric(vector, args):
+    """the numeric rule's first pass: our exact number rounded as 1788 would, NaN for a ValueError"""
+    try:
+        result = _call(vector, args)
+    except ValueError:
+        return (math.nan, math.nan) if vector.op == 'midRad' else math.nan
+    if vector.op == 'midRad':
+        return _mid_rad_1788(*result)
+    if vector.op == 'rad':
+        return _mid_rad_1788(args[0].mid(), result)[1]
+    return _NUMERIC_ROUNDING[vector.op](result)
+
+
+def run_float(vector, cls):
+    """(ours, expected): the numeric rule's second pass, float operands, our numbers as they are"""
+    args = [to_ours(a, cls, as_float=True) for a in vector.args]
+    try:
+        result = _call(vector, args)
+    except ValueError:
+        result = (math.nan, math.nan) if vector.op == 'midRad' else math.nan
+    # rounded, so never a Fraction; an exact 0 or inf where no end is a finite float (entire)
+    assert all(isinstance(n, float) or n == 0 for n in _numbers(result)), result
+    return result, vector.expected
+
+
+def _numbers(value):
+    return value if isinstance(value, tuple) else (value,)
+
+
 def run(vector):
     """(ours, expected), both through the adapter"""
+    if vector.op in NUMERIC:
+        return _numeric(vector, [to_ours(a) for a in vector.args]), _numbers_as_floats(vector.expected)
     if vector.op in REDUCTIONS:
         return _reduce(vector, [to_ours(a) for a in vector.args]), float(vector.expected)
     result = _call(vector, [to_ours(a) for a in vector.args])
@@ -285,8 +354,15 @@ def run_outward(vector):
     return (lo, hi), expected
 
 
+def _numbers_as_floats(value):
+    return tuple(float(n) for n in value) if isinstance(value, tuple) else float(value)
+
+
 def same(ours, expected) -> bool:
-    """equality, except that NaN is NaN (1788's answer for a number of the empty set or of NaI)"""
+    """equality, except that NaN is NaN (1788's answer for a number of the empty set or of NaI);
+    a pair (midRad) item by item"""
+    if isinstance(ours, tuple) and isinstance(expected, tuple):
+        return len(ours) == len(expected) and all(same(o, e) for o, e in zip(ours, expected))
     if isinstance(ours, float) and isinstance(expected, float) and math.isnan(ours) and math.isnan(expected):
         return True
     return ours == expected
@@ -318,6 +394,12 @@ def test_vector(vector):
 @pytest.mark.parametrize('vector', INTERVAL_VECTORS, ids=[v.source for v in INTERVAL_VECTORS])
 def test_vector_outward(vector):
     check(vector, run_outward)
+
+
+@pytest.mark.parametrize('cls', [MultiInterval, OutwardMultiInterval], ids=['nearest', 'outward'])
+@pytest.mark.parametrize('vector', NUMERIC_VECTORS, ids=[v.source for v in NUMERIC_VECTORS])
+def test_vector_float(vector, cls):
+    check(vector, lambda v: run_float(v, cls))
 
 
 def test_divergence_rows():

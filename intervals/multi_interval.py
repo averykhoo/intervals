@@ -21,6 +21,7 @@ from intervals import fmt
 from intervals import functions
 from intervals import kernel
 from intervals import modulo
+from intervals import numeric
 from intervals import ops
 from intervals import relations
 from intervals import steps
@@ -673,6 +674,80 @@ class MultiInterval:
         return self._wrap(kernel.normalize(
             kernel.piece(lo - distance, hi + distance, lo_closed, hi_closed)
             for lo, lo_closed, hi, hi_closed in kernel.pieces(self._cuts)))
+
+    # NUMERIC FUNCTIONS (ieee 1788's mid, rad, wid, mag, mig, midRad; see intervals.numeric)
+
+    def mid(self) -> Value:
+        """
+        the midpoint of the hull, exact for an exact operand and rounded to nearest for a float one.
+        the midpoint of `(-inf, inf)` is 0, of a half-bounded set ±max float, as in ieee 1788;
+        ValueError when empty, like `inf`
+
+        >>> MultiInterval.parse('[0, 1] | [9, 10]').mid()  # outside the set, still a bisection point
+        5
+        >>> MultiInterval(1, 2).mid(), MultiInterval(0.1, 0.2).mid()
+        (Fraction(3, 2), 0.15000000000000002)
+        >>> MultiInterval.parse('[0, inf)').mid()
+        1.7976931348623157e+308
+        """
+        return numeric.mid(self._cuts)
+
+    def rad(self) -> Value:
+        """
+        the radius of the hull, measured from `mid()`: the smallest `r` with `[mid - r, mid + r]`
+        holding the hull, rounded up for a float operand; inf when unbounded
+
+        >>> MultiInterval(1, 2).rad(), MultiInterval.parse('[1, inf)').rad()
+        (Fraction(1, 2), inf)
+        >>> MultiInterval(1.0, 1.0000000000000007).rad()  # from the rounded midpoint 1.0000000000000004
+        4.440892098500626e-16
+        """
+        return numeric.rad(self._cuts)
+
+    def mid_rad(self) -> Tuple[Value, Value]:
+        """
+        `(mid(), rad())`: the hull is inside `[mid - rad, mid + rad]`
+
+        >>> MultiInterval.parse('[-2, 0] | [3, 4]').mid_rad()
+        (1, 3)
+        """
+        return numeric.mid_rad(self._cuts)
+
+    def wid(self) -> Value:
+        """
+        the width of the hull, `sup - inf`, rounded up for a float operand; inf when unbounded.
+        `size.length` is the length without the gaps
+
+        >>> A = MultiInterval.parse('[0, 1] | [9, 10]')
+        >>> A.wid(), A.size.length
+        (10, 2)
+        >>> MultiInterval(0.1, 0.3).wid()
+        0.19999999999999998
+        """
+        return numeric.wid(self._cuts)
+
+    def mag(self) -> Value:
+        """
+        the magnitude, `sup {abs(x) : x in self}`, rounded up for a float operand
+
+        >>> MultiInterval.parse('[-3, -2] | [2, 3)').mag()
+        3
+        """
+        return numeric.mag(self._cuts)
+
+    def mig(self) -> Value:
+        """
+        the mignitude, `inf {abs(x) : x in self}`, of the set rather than the hull, rounded down for a
+        float operand
+
+        >>> A = MultiInterval.parse('[-3, -2] | [2, 3]')
+        >>> A.mig(), A.hull.mig()
+        (2, 0)
+        >>> MultiInterval().mig()
+        Traceback (most recent call last):
+        ValueError: the empty set has no mignitude
+        """
+        return numeric.mig(self._cuts)
 
     # CONVERSIONS (single points only)
 
