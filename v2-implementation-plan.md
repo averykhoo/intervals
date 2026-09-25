@@ -39,7 +39,12 @@ vendoring.
   `pythonpath = ["."]` so the v1 modules at the root and the `intervals/` package import without
   relying on `python -m` putting cwd on `sys.path`, and a
   `filterwarnings` entry turning the library's own warnings into errors inside the suite once
-  the warning classes exist). no CI in this repo today; do not add one in these branches
+  the warning classes exist)
+* CI (added on `v2` 2026-09-25, by owner request): `.github/workflows/ci.yml` runs on every push and
+  pull request. it runs the gate on Python 3.11 to 3.14 and each exhaustive harness as its own job:
+  `tests.exhaustive_ops` exact, `--float` and `--sabotage`, and `tests.exhaustive_modulo`.
+  under GitHub Actions hypothesis loads its built-in `ci` profile (derandomized, no deadline), so
+  the suite needs no conftest
 * v1 files stay in place, untouched, until M10, then move to `archive/v1/`. **no v1 file is ever
   deleted by this plan**: the archive is the reference until v2 works. v1 is the differential
   oracle for set ops and for `A % scalar`. the package is `intervals/`, so `import multi_interval`
@@ -383,9 +388,9 @@ not a milestone with an exit criterion: the open work left after M10, from a swe
 the old README (`archive/v1/README.md`), v1's public surface and the code (no TODO, FIXME, skip or
 xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owner decision first,
 **(b)** ready to build, **(c)** housekeeping. items become milestones when picked up
-* **release** (a, then c): merge `v2` into `master` (14 commits ahead on 2026-09-25; `v2` has never
-  been pushed), `version = "2.0.0"` in `pyproject.toml`, tag. D5's blocker (M7b) is met. CI (a):
-  none today and none added in these branches (section 1); decide after the merge
+* **release** (a, then c): merge `v2` into `master` (`v2` has never been pushed), `version =
+  "2.0.0"` in `pyproject.toml`, tag. D5's blocker (M7b) is met. CI exists since 2026-09-25
+  (section 1); it has not run yet because `v2` has not been pushed
 * **M8, the time layer** (a: whether and when; 1½ days): see M8. D4 is still open, (a) recommended
 * **functions** (b): `functions.py` with `sqrt`, `exp`, `log`, trig through the applicator, with
   `DomainClippedWarning` outside the domain (`v2-plan.md` package layout and "later"); document

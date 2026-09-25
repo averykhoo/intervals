@@ -1,0 +1,56 @@
+# the gate on every supported python, and the slow exhaustive differentials that are not in the gate.
+# hypothesis loads its built-in "ci" profile under GitHub Actions (derandomized, no deadline).
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: gate (python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e ".[test]" numpy
+      - run: python -m pytest -q
+
+  exhaustive:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: exhaustive ops (exact grid)
+            args: tests.exhaustive_ops
+          - name: exhaustive ops (float grid)
+            args: tests.exhaustive_ops --float
+          - name: exhaustive ops (sabotage)
+            args: tests.exhaustive_ops --sabotage
+          - name: exhaustive modulo
+            args: tests.exhaustive_modulo
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[test]"
+      - run: python -m ${{ matrix.args }}
