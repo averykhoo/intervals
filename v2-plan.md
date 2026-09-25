@@ -4,12 +4,12 @@ two parts. **current design** is normative: if the code and that section disagre
 bug. the **decision log** below it is history, kept verbatim, with a marker wherever a later decision
 superseded it.
 
-## current design (2026-09-23)
+## current design (2026-09-23; brought up to date with the build at M10, 2026-09-25)
 
 ### domain and semantics
 
 * values: the affine extended reals `[-inf, inf]`, both infinities as points. **one zero.** `-0.0` is
-  normalized to `0` at construction and the sign bit is never consulted (as v1 already does)
+  normalized to `0.0` at construction and the sign bit is never consulted (as v1 already does)
 * `[inf]` and `[-inf]` are legal degenerate intervals; `[a, inf]` and `[a, inf)` are different sets
 * number types: int and Fraction (exact, never rounded), float (endpoint arithmetic goes through the
   rounding hook, identity by default — see arithmetic). datetime/timedelta: the time layer is
@@ -137,9 +137,11 @@ superseded it.
 * `sort_key` = the cut tuple, for structural ordering; `sorted()` raising on ambiguous intervals is a
   feature
 * relations are defined **on cuts, not on values**: `before` = `A.end <= B.start`, `adjoins` =
-  `A.end == B.start`, plus disjoint / overlaps / contains / within / equals and certainly_/possibly_
-  variants. (`sup A < inf B` is wrong for `[1,2)` before `[2,3]`). relations return plain
-  `bool` — they are set-level facts; only the pointwise `< <= > >=` return a `TruthSet`. so
+  `A.end == B.start or B.end == A.start` (symmetric), plus disjoint / overlaps / contains / within /
+  equals, and certainly_/possibly_ variants of before, after and equal. the class exposes before,
+  after, adjoins, overlaps, contains, within and allen; disjoint, equals and the modal variants
+  are functions in `relations.py`. (`sup A < inf B` is wrong for `[1,2)` before `[2,3]`).
+  relations return plain `bool` — they are set-level facts; only the pointwise `< <= > >=` return a `TruthSet`. so
   `before([1,2), [2,3])` is True and `before([1,2], [2,3])` is False, while `[1,2) < [2,3]` is
   `{T}` and `[1,2] < [2,3]` is `{T, F}`. for non-empty operands `before(A, B)` is exactly
   `(A < B).certainly`
@@ -151,9 +153,11 @@ superseded it.
 * one generic applicator, **shape-then-attainment** — the modulo v3 lesson. v1's epsilon propagation
   is unsound, not just inelegant: `[0,1] * (2,3)` gives `(0,3)` but 0 is attained by `0 * 2.5`; true
   result `[0,3)`
-    1. split at the domain points the op descriptor names (zero for reciprocal/division **and
-       mul**, sign-pure quadrants for modulo). a piece containing 0 splits into `[lo, 0]` and
-       `[0, hi]` with the zero in both halves (keeping its flag); a degenerate `[0]` stays one piece
+    1. split at the domain points the op descriptor names (zero for reciprocal, division, abs,
+       even and negative powers **and mul**). a piece with 0 strictly inside splits into `[lo, 0]`
+       and `[0, hi]` with the zero in both halves; a piece that only touches 0, and a degenerate
+       `[0]`, stay whole. modulo is not a descriptor: `modulo.py` is its own pipeline over
+       sign-pure pieces and reuses only `applicator.split_pieces`
     2. locations first, all endpoints treated closed: corner min/max, correct for
        coordinatewise-monotone and bilinear ops **on a box whose discontinuities are corners**.
        on the extended reals mul is discontinuous at `(0, ±inf)` (`0·inf` is indeterminate while
@@ -164,25 +168,35 @@ superseded it.
        `(inf, -inf)` is always a corner already
     3. closure per endpoint separately. the corner-flag rule (closed iff both operand endpoints
        closed — zero cost) is valid only for a **finite** result endpoint of an op that is
-       injective in each argument there. every other endpoint uses the op's attainment predicate,
-       tested against the **full** multi-interval operands, not per piece pair:
+       injective in each argument there. every other endpoint is decided per split box by the
+       **face rule**: attained at a corner whose operand endpoints are all closed, or along a flat
+       edge whose fixed coordinates are closed ends (`applicator.py::_attained`,
+       `modulo.py::_attained`). the union of the per-box attained sets is the same as deciding
+       against the full operands:
         * **every infinite result endpoint.** add/sub/mul are flat at ±inf (`inf + y = inf` for
           every finite `y`), so the corner-flag rule is wrong there: `[inf] + (1, 2)` would give
           `(inf, inf)` = `∅` instead of `[inf]`, and `[1, inf] + [0, 1)` would give `[1, inf)`
           instead of `[1, inf]`. the rule: an infinite result endpoint is attained iff a closed
           infinite operand endpoint combines with some non-indeterminate partner, or a pole at a
-          closed zero produces it (reciprocal)
+          closed zero produces it (reciprocal, div, negative powers). an instance of the face rule
         * flat spots at finite values: mul at 0, pow, min/max-like
     4. union the piece results, normalize
-* op descriptor: monotonicity directions (2-corner fast path for add/sub for free), split points,
-  flat-spot / attainment predicate, rounded-eval pair
+* op descriptor (`applicator.py::OpDescriptor`): name, the pointwise `fn` (None where the op has
+  no value), monotonicity directions (2-corner fast path for add/sub for free), split points,
+  `pole(args, dirs)`, an optional `attained` override of the face rule, the `rounded` pair.
+  infinite corners are evaluated by the ops' pointwise functions, which return exact values
 * **division is computed as its own op** (`a / b` at the corners), not as `a * (1/b)`: the
   reciprocal identity defines the semantics (splits, poles, D2 corners), but evaluating through it
   would round twice on floats
-* division: split the denominator at zero, direction rule as above. `A / ∅ = ∅`. exact operands
-  divide as Fraction (see number types)
+* division: split the denominator at zero, direction rule as above: for x ≠ 0, `x / 0` is the
+  infinity with the sign of x times the side of zero the divisor's piece lies on
+  (`ops.py::_div_pole`). `A / ∅ = ∅`. exact operands divide as Fraction (see number types); a mixed
+  exact/float pair is computed exactly and rounded once
 * floordiv: enumerate integer points below a size cap, else hull + warning — never silently drop
-  openness (v1's `[1,2) // 1` = `[1,2]` is wrong; should be `[1]`)
+  openness. the enumerator is `modulo.py::floor` (public as `MultiInterval.floor()`), the cap
+  `FLOOR_ENUMERATION_CAP = 1000`, the warning `HullWarning`, also for any unbounded piece. at a
+  zero divisor `//` follows div's poles (`[1] // [0, 1]` holds inf), no clipping. (v1's
+  `[1,2) // 1` = `[1,2]` is wrong; should be `[1]`)
     * `floor(A / B)` over the finite divisors, with the quotient taken exactly and only the integers
       made float: a rounded quotient can cross an integer and the floor turns that ulp into a whole
       unit (`1 // 0.001` is 999; the float `1 / 0.001` is 1000.0)
@@ -199,17 +213,23 @@ superseded it.
   neighbours' values, and a pair with no limit has none. D8 (below) and the `//` bullet above are
   instances of it; python agrees except where its float arithmetic gives nan for a limit that exists
 * modulo: the v3 far-edge algorithm, `references/modulo-derivations/claude-fable/`, for every sign
-  combination before release. Q1 (dividend ≥ 0, divisor > 0) is proven; Q3/Q4 follow from Q1/Q2 by
-  the antipodal identity; Q2 needs its own primitive derivation (design notes §2, Thm B); operands
-  crossing zero split into sign-pure pieces; a divisor touching zero drops 0 with
+  combination (built 2026-09-24, M7; proof in `proof-all-quadrants.md`). Q2's left edge is
+  `modulo.py::_scalar_mod_interval_negative`; a negative divisor goes through the antipodal identity
+  (`modulo.py::_box`); each located piece's ends are decided before the union, with exact O(1)
+  attainment (`_attained`, `_holds_multiple`); operands crossing zero split into sign-pure
+  pieces; a divisor touching zero drops 0 with
   `DomainClippedWarning`
     * infinite operands (D8, owner-confirmed 2026-09-24): a dividend of ±inf has no value (python gives `nan`) and is dropped
       with `DomainClippedWarning`; a finite dividend mod a divisor of ±inf follows python's scalar
       result, which is also the limit along the box (`3 % [inf]` = `[3]`, `-3 % [inf]` = `[inf]`,
       `0 % [inf]` = `[0]`)
 * **rounding**: the hook exists from day one in the descriptor (retrofitting touches every op twice)
-  but is **identity by default**. int and Fraction are exact and never rounded. outward
-  `math.nextafter` (later gmpy2/mpfr as tight mode) is enabled by a subclass or factory, never by a
+  but is **identity by default**. int and Fraction are exact and never rounded. `mod`, `floor` and
+  `floordiv` have no hook: they compute exactly and round to nearest once (`modulo.py::_to_float`).
+  poles never go through the hook, and a float piece that rounding squeezes to one point keeps
+  that point, closed. outward `math.nextafter` (later gmpy2/mpfr as tight mode) is to be enabled
+  by a subclass or factory (**not built as of 2026-09-25**: only the tests set `rounded`, see
+  `tests/test_ops_properties.py::outward`; M11), never by a
   flag or context manager: wrapper types add meanings, flags change what existing objects mean. once
   an endpoint is rounded it is attained by nothing, so the open/closed flag on a rounded float
   endpoint is conservative, not a promise; attainment tests run on exact types only (±inf counts
@@ -232,7 +252,14 @@ superseded it.
 * `DomainClippedWarning`, same pattern, wherever an op drops input points (`sqrt([-1, 4])`, `log`,
   modulo by a divisor touching zero). this is the cheap stand-in for 1788 decorations
 * `IndeterminateResultWarning` as in "domain and semantics"
-* exceptions only for malformed construction (`[2,1]`, bad types)
+* `HullWarning` where an exact answer is replaced by its hull (floor/floordiv over the cap or an
+  unbounded piece); shown by default, like `IndeterminateResultWarning`. all four subclass
+  `IntervalWarning`, which the suite's `filterwarnings` entry turns into errors. one warning per
+  call, attributed to the caller's frame (`applicator.py::warn`)
+* no op raises on well-typed operands: empty, indeterminate and clipped cases warn. exceptions are
+  for malformed construction (`[2,1]`, `nan`, bad types) and for questions with no answer: `bool()`
+  of `{}` or `{T, F}`, `inf`/`sup` of `∅`, `allen()` of non-contiguous operands, `float()` of a
+  non-point, `expand()` by an infinite or negative distance, a non-int exponent
 * **no ambient modes**: no zero mode (there is no signed zero), no rounding flag (a type property), no
   `config.py`, no context managers. v1's mutable global `INFINITY_IS_NOT_FINITE` is deleted
 
@@ -254,9 +281,11 @@ superseded it.
       our hulled result is closed there); absorbs multi-interval vs connected (`[1,2]/[-1,1]`:
       1788 entire, ours `[-inf,-1] ∪ [1,inf]`, hull = entire → match)
     * residual divergence table: degenerate infinities, domain-clipped functions, decoration
-      expectations. (`1/[0]` is not a row: both give empty)
+      expectations. (`1/[0]` is not a row: both give empty.) empty as of 2026-09-24: all 847
+      vectors match (`tests/itf1788/test_itf1788.py::DIVERGENCES`)
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
-  community test framework and its `itl` vector DSL. check its licence before vendoring `.itl` files
+  community test framework and its `itl` vector DSL. two `.itl` files are vendored unmodified from
+  nehmeier/ITF1788 at `e0e0d7e` (Apache 2.0; `tests/itf1788/LICENSE`, `NOTICE`)
 * decorations (`com/dac/def/trv/ill`) are **not in the core**. they answer "was f defined and
   continuous on the whole input", which the result set cannot (`sqrt([-1,4])` = `[0,2]` either way),
   and only solver existence proofs need that. when the solver comes, a decorated wrapper type; until
@@ -272,11 +301,12 @@ imports only point downward.
         cuts.py            Side, Cut, below()/above(), mirror, -0.0 normalization
         kernel.py          normalize sweep; union/intersection/complement/difference; membership;
                            size; Builder (collect, sort once, sweep)
+        fmt.py             format and parse cut tuples; regexes compiled at module level
         relations.py       TruthSet, pointwise compare, relation predicates, allen()
         applicator.py      op descriptor, corner evaluation, closure pass, rounding hook
-        ops.py             add sub mul div reciprocal (pow, functions later) as descriptors
-        modulo.py          v3 far-edge mod / divmod / floordiv
-        fmt.py             format and parse cut tuples; regexes compiled at module level
+        ops.py             neg pos absolute reciprocal add sub mul div, power (int exponents) as
+                           descriptors; functions later
+        modulo.py          v3 far-edge mod / floor / floordiv / divmod_
         multi_interval.py  the class: immutable cut tuple; _coerce (numbers and intervals only —
                            strings go through an explicit parse()); one-line dunders. arithmetic
                            owns `+ - * / // % **` and unary `- + abs`; set algebra is `| & ^ ~`
@@ -285,29 +315,40 @@ imports only point downward.
         time_interval.py   the same kernel over datetime/timedelta values (deferred, D4)
         __init__.py        public API, constants (EMPTY, REALS, ...)
     tests/
-        oracles.py         sampling + attainment oracles, promoted out of modulo_v3_prototype
-        itf1788/           vector runner, input/output rules, divergence table
-        test_<module>.py
+        oracles.py         sampling + attainment oracles, derived from the pointwise table only
+        strategies.py      hypothesis strategies and probe points shared by the test modules
+        exhaustive_modulo.py  exhaustive modulo differential, run by hand, not in the gate
+        itf1788/           vendored .itl files, itl.py parser, adapter + divergence table
+        test_<module>.py   (ops split into test_ops_examples.py and test_ops_properties.py)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
   oracle-testable with tuples, and makes the time-interval port a thin second wrapper
-* `_consistency_check` under `if __debug__:` (v1 runs an O(n) scan at the top of nearly every public
+* the consistency check is `MultiInterval._wrap` asserting `kernel.is_valid` under
+  `if __debug__:` (v1 runs an O(n) scan at the top of nearly every public
   method; that is the real hot cost). correctness lives in the tests
 * immutability retires the `inplace=` dual API. `interval.py` (the alternative debug implementation)
   is not ported; the sampling oracle does that job better
-* v1 is **archived, never deleted**: all v1 modules move unchanged to `archive/v1/` once v2 is in
-  place, and stay as the reference until v2 works
+* v1 is **archived, never deleted**: all v1 modules moved unchanged to `archive/v1/` at M10
+  (2026-09-25), with the old README, and stay as the reference until v2 works
 
 ### testing
 
-* soundness fuzz for every op: `op(x, y) ∈ op(A, B)` for sampled `x ∈ A, y ∈ B`
+* soundness fuzz for every op: `op(x, y) ∈ op(A, B)` for sampled `x ∈ A, y ∈ B`, on exact operands
+  and on floats under identity and outward rounding
+  (`tests/test_ops_properties.py::test_sound_float_identity_rounding`, `::test_sound_float_outward_rounding`)
+* v1 as a differential oracle: set operations (`tests/test_kernel.py::test_matches_v1`) and
+  `A % scalar`, where ours ⊆ v1 and v1 − ours ⊆ {0} (`tests/test_modulo.py::test_matches_v1_mod_scalar`,
+  `::test_v1_phantom_zero`)
 * attainment checks for closure, on int/Fraction operands only
 * algebraic properties that pin the cut encoding cheaply: `~~A == A`, De Morgan, the size tiling
   invariants, and for arithmetic:
     * isotonicity for every op: `A ⊆ B ⇒ f(A) ⊆ f(B)`
-    * `f(A ∪ B) == f(A) ∪ f(B)` only for ops without split points on finite operands (add, sub, neg,
-      abs, mul). for reciprocal/div only `f(A ∪ B) ⊇ f(A) ∪ f(B)` (i.e. isotonicity): under the
+    * `f(A ∪ B) == f(A) ∪ f(B)` for every op without a pole: add, sub, mul, div in its dividend, neg,
+      pos, abs, pow with n ≥ 0, and mod in both arguments (`tests/test_ops_properties.py::EQUAL_UNION`,
+      `::test_power_union`, `tests/test_modulo.py::test_distributes_over_union`). splitting at zero
+      does not break it; a pole does. for reciprocal, div's divisor and pow with n < 0 only
+      `f(A ∪ B) ⊇ f(A) ∪ f(B)` (i.e. isotonicity): under the
       direction-from-the-piece rule equality fails with *any* value of `1/[0]`. counterexample
       `A = [-1, 0)`, `B = [0]`: `1/(A ∪ B)` = `[-inf, -1]`, but `1/A ∪ 1/B` = `(-inf, -1]`
     * `1/(1/A) == A` for every A with no degenerate piece at `0`, `inf` or `-inf` that is not

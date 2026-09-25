@@ -44,6 +44,10 @@ vendoring.
   deleted by this plan**: the archive is the reference until v2 works. v1 is the differential
   oracle for set ops and for `A % scalar`. the package is `intervals/`, so `import multi_interval`
   (v1) and `from intervals import MultiInterval` (v2) coexist, before and after the move
+* since M10 (2026-09-25): v1 is in `archive/v1/`, pytest's `pythonpath` is `[".", "archive/v1"]`,
+  and `testpaths` also collects `README.md` as a doctest. v1 is imported in one place,
+  `tests/test_kernel.py::to_v1`, used by the set-op differential (`test_matches_v1`) and by the
+  `A % scalar` one (`tests/test_modulo.py::test_matches_v1_mod_scalar`)
 
 ## 2. milestones
 
@@ -207,6 +211,27 @@ every new property test (flip one comparison, watch red, restore).
   230k binary and 32k unary checks, plus 179k on the same grid as floats, all with 0 mismatches.
   the harness was not kept
 
+  recovered from the M6 review's scratch output at M10 (2026-09-25); none of the scripts were kept:
+    * **outward rounding on extreme floats**: a fuzz over subnormals (5e-324, 1e-320,
+      2.2250738585072014e-308), 1e308, `sys.float_info.max`, 1e±300, 1e154 and random `ldexp`
+      values across the exponent range, mixed with ±inf and int/Fraction, checking soundness
+      with the open/closed flags **as given** (the tracked
+      `test_sound_float_outward_rounding` closes the result first, and `tests/strategies.py` draws
+      floats from `[-20, 20]` only). 2026-09-24 at `ca667e2`: 22000 boxes, 0 unsound; a hook
+      that did not round made add, sub, mul, div and reciprocal unsound. re-run 2026-09-25 at
+      `c6cfe14`, 2 × 4000 boxes: 0 unsound, and the rounding hook never received an infinite or
+      a float-free argument. not in the gate; see M11
+    * two hand-derived tables (84 distinct cases, 58 not in `tests/test_ops_examples.py`) matched
+      the implementation and `oracles.attained` at every probe point, so the oracle and the
+      implementation do not share a blind spot there. four disagreements were the reviewers' own
+      derivation mistakes. two of those cases are now rows in `test_ops_examples.py`
+      (`(0, inf] / (0, inf]`, `[-inf, 0] - [-inf]`)
+    * findings rejected, so they are not raised again: `test_isotone[div]` is mostly trivial
+      examples (by design; the union laws give about 27 non-trivial div isotonicity cases per
+      run); `test_applicator` and `test_ops_examples` share 7 of 25 closure rows
+      (`test_ops_examples` is the independent table derived from the plan); moving
+      `applicator.warn` into `errors.py` (style)
+
 ### M7a `modulo.py`, Q1 port (2 days)
 * port `modulo_v3_prototype.py` (P1 scalar mod, P2 scalar-mod-interval, far-edge union,
   attainment closure) onto `(lo, lo_closed, hi, hi_closed)` pieces; multi-piece operands test
@@ -341,10 +366,66 @@ every new property test (flip one comparison, watch red, restore).
   outcomes), dated
 * the archive goes only by owner decision, once v2 works (release, and M8 if the time layer is
   wanted)
+* done 2026-09-25. the four v1 modules and the old README moved unchanged to `archive/v1/` (v1
+  still imports and runs from there); `pythonpath` gained `archive/v1`, and without it the v1
+  differential fails with `ModuleNotFoundError`. the new README is collected as a doctest by the
+  gate, and a wrong example in it turns the gate red. `v2-plan.md` "current design" was checked
+  line by line against the build and corrected in 20 places (the face rule for attainment, the
+  union laws, symmetric `adjoins`, modulo built for every quadrant, when exceptions are raised,
+  `HullWarning`, outward rounding not yet built, layout). the baseline gate was red before any
+  M10 change: `test_is_subset`'s oracle probed no point between two adjacent doubles, fixed in
+  `tests/strategies.py::midpoint` and pinned by an `@example`
+
+### M11 backlog: everything not yet built (listed 2026-09-25)
+not a milestone with an exit criterion: the open work left after M10, from a sweep of both plans,
+the old README (`archive/v1/README.md`), v1's public surface and the code (no TODO, FIXME, skip or
+xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owner decision first,
+**(b)** ready to build, **(c)** housekeeping. items become milestones when picked up
+* **release** (a, then c): merge `v2` into `master` (14 commits ahead on 2026-09-25; `v2` has never
+  been pushed), `version = "2.0.0"` in `pyproject.toml`, tag. D5's blocker (M7b) is met. CI (a):
+  none today and none added in these branches (section 1); decide after the merge
+* **M8, the time layer** (a: whether and when; 1½ days): see M8. D4 is still open, (a) recommended
+* **functions** (b): `functions.py` with `sqrt`, `exp`, `log`, trig through the applicator, with
+  `DomainClippedWarning` outside the domain (`v2-plan.md` package layout and "later"); document
+  libm's ±1 ulp for trig. covers v1's `exp`/`log(base)` and the old README's "trigonometry?"
+* **rounding functions** (b): `ceil`, `trunc`, `round` by the enumerate-under-a-cap pattern of
+  `intervals/modulo.py::floor`; and the python dunders. today `math.floor(A)` and `math.ceil(A)`
+  fall back to `__float__`, so they raise "not a single point" on a non-degenerate `A` and return
+  a plain int on a degenerate one; `math.trunc` and `round` raise TypeError. v1 had all four
+  (`archive/v1/multi_interval.py::MultiInterval.__floor__` and siblings, endpoint-wise, not sharp).
+  either implement them as sets or refuse all four explicitly
+* **the other 1788 ops** (b): `sign`, `min`/`max`, `fma`; with the functions and rounding functions
+  above, this is the not-implemented list at M9. then vendor more itf1788 files: bool, num and
+  overlap test ops v2 already has
+* **reverse ops** (a): `mulRevToPair` and friends, for the reverse-op itf1788 files and for a solver
+* **power beyond int exponents** (a: scope): `A ** 0.5`, `A ** B`, `2 ** A` are TypeError today
+  (`intervals/multi_interval.py::MultiInterval.__pow__`); v1 took an interval exponent on a
+  positive base. 3-argument `pow(A, n, m)` (v1: integers only; old README "allow interval modulo
+  for `__pow__()`")
+* **outward float rounding** (b): the hook exists (`intervals/applicator.py::OpDescriptor`,
+  `rounded`) but no descriptor sets it and there is no subclass or factory to switch it on
+  (`v2-plan.md` arithmetic). `tests/itf1788/test_itf1788.py` already rounds outward with
+  `math.nextafter` and can be reused. tight rounding via gmpy2/mpfr after that
+* **solver stack** (a; `v2-plan.md` "later (not in v2.0)"): the direction tag on a degenerate zero
+  piece (only if a solver needs `1/(1/[inf])` back), a decorated type (com/dac/def/trv/ill) and an
+  optional thin `ieee1788.py`, forward-mode autodiff, Newton's method as a test (b once functions
+  exist), numpy interop (array API vs `__array_ufunc__`; today `__array_ufunc__ = None`), the
+  optional per-piece Allen matrix
+* **v1 surface with no v2 row in section 4** (a: port or record as gone): `<<` / `>>`,
+  `random_multi_interval`, a public `apply()` (the applicator and `OpDescriptor` are not exported
+  from `intervals`). the rows are added to section 4 as "open (M11)"
+* **extreme floats in the gate** (b): outward-rounding soundness with the flags as given, over
+  subnormals and near-overflow magnitudes. it passed by hand at M6 and again 2026-09-25 (see
+  M6's recovered notes), but no tracked test covers it
+* **smaller** (c): the M6 exhaustive differential harness was not kept (modulo's was:
+  `tests/exhaustive_modulo.py`); the old README's reading list (arxiv 1111.0167) and its "redo the
+  modulo illustrations" item, if still wanted
+* **archive deletion** (a): `archive/v1/` goes only by owner decision, after release and M8
 
 ## 3. order and parallelism
 
-M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10; M8 deferred. M4 depends on M3 (the class's
+M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
+the backlog. M4 depends on M3 (the class's
 `parse`, `__str__` and `__repr__` come from `fmt`); M7a and M9 are independent after M6. total ≈ 12
 working days (the per-milestone sum without M8) plus the M7b session. the first internally usable
 point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6; release needs M7b.
@@ -371,3 +452,9 @@ point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6
 | `apply_monotonic_{unary,binary}_function` | `applicator.apply_{unary,binary}(descriptor, ...)` |
 | `INFINITY_IS_NOT_FINITE`, `CONSISTENCY_CHECK` | deleted; `if __debug__` check in the class |
 | `interval.py` (`Interval`, `MultipleInterval`) | archived in `archive/v1/`; `tests/oracles.py` does its job |
+| `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; comes back at M8 |
+| `exp()`, `log(base)` | open (M11): `functions.py` |
+| `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | open (M11): `floor()` exists as a set op, the dunders do not |
+| `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | open (M11): int exponents only |
+| `<<`, `>>` | open (M11): port or record as gone |
+| `random_multi_interval` | open (M11): the tests use hypothesis strategies instead |

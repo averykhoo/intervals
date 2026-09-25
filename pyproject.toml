@@ -15,10 +15,12 @@ test = ["pytest", "hypothesis"]
 packages = ["intervals"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "intervals"]
-addopts = "--doctest-modules"
-# "." puts both the v1 modules at the root and the v2 `intervals/` package on sys.path
-pythonpath = ["."]
+# README.md is collected so its examples are part of the gate
+testpaths = ["tests", "intervals", "README.md"]
+addopts = "--doctest-modules --doctest-glob=README.md"
+# "." puts the `intervals/` package on sys.path; "archive/v1" keeps v1 importable as
+# `multi_interval`, the differential oracle for set operations in tests/test_kernel.py
+pythonpath = [".", "archive/v1"]
 # the library's own warnings are errors inside the suite; a test that provokes one on purpose
 # opts out with a filterwarnings mark or pins it with pytest.warns
 filterwarnings = ["error::intervals.errors.IntervalWarning"]
