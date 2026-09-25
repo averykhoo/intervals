@@ -4,7 +4,8 @@ two parts. **current design** is normative: if the code and that section disagre
 bug. the **decision log** below it is history, kept verbatim, with a marker wherever a later decision
 superseded it.
 
-## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25)
+## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a and
+M14's fuzz job and oracle, 2026-09-26)
 
 ### domain and semantics
 
@@ -335,7 +336,15 @@ superseded it.
       overlap state is compared as it is
     * residual divergence table: degenerate infinities, domain-clipped functions, decoration
       expectations, and (added at M12) cut-based relations. (`1/[0]` is not a row: both give
-      empty.) as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
+      empty.) keyed on the statement with its decorations stripped
+      (`tests/itf1788/test_itf1788.py::key`) since M13a. measured 2026-09-26 (M13a), the current
+      count: 19 files, 9542 statements; 4767 vectors of 54 ops (every op in `OPS` has vectors),
+      4120 of them interval-valued and run twice; 49 keys and 0 unknown failures: 10 degenerate
+      infinities (11 vectors), 5 cut-based relations (7 vectors) and 34 decoration expectations,
+      the `[nai]` operands of implemented ops, generated in code (34 vectors and 6 outward items).
+      counted and skipped: 4775 statements of 57 ops not implemented yet (the largest `pow` 1431,
+      the reverse ops, `cancelMinus`/`cancelPlus`, `csc`, `sec`, the text constructors), each
+      assigned to an M13 sub-task. history: as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
       interval-valued and run twice; 18 rows (`tests/itf1788/test_itf1788.py::DIVERGENCES`): 11
       degenerate infinities (`log`/`log2`/`log10` of an operand meeting the domain only at 0, `atanh`
       of one meeting it only at ±1) and 7 cut-based relations (`overlap [1,2] [2,3]` is `meets` in
@@ -343,9 +352,14 @@ superseded it.
       exponents, open), `less`, `strictLess`, `interior`, `isNaI`, `mid`, `rad`, `wid`, `mag`, `mig`;
       the reverse-op and cancel files are not vendored
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
-  community test framework and its `itl` vector DSL. seven `.itl` files are vendored unmodified from
-  nehmeier/ITF1788 at `e0e0d7e` (Apache 2.0; `tests/itf1788/LICENSE`, `NOTICE`; the blob hashes
-  match upstream's)
+  community test framework and its `itl` vector DSL. all 19 `.itl` files of the maintained fork,
+  oheim/ITF1788 at `b6ee1e2`, are vendored unmodified with its `LICENSE`, `NOTICE` and
+  `COPYING.LESSER` (D15, M13a, 2026-09-26; they replaced the 7 from nehmeier/ITF1788 `e0e0d7e`).
+  each file keeps its own licence: Apache 2.0 for the 11 `libieeep1788_*`, LGPL-2.1-or-later for
+  `mpfi`, `fi_lib`, `c-xsc`, all-permissive for `ieee1788-constructors`, `ieee1788-exceptions`,
+  `atan2`, `abs_rev`, `pow_rev` (`tests/itf1788/README.md`). they are test data: the wheel ships
+  only `intervals/`. `git hash-object` of all 22 files equals the fork's blob at the pin (checked
+  2026-09-26), and `tests/itf1788/.gitattributes` marks them `-text` so a checkout keeps the bytes
 * decorations (`com/dac/def/trv/ill`) are **not in the core**. they answer "was f defined and
   continuous on the whole input", which the result set cannot (`sqrt([-1,4])` = `[0,2]` either way),
   and only solver existence proofs need that. when the solver comes, a decorated wrapper type; until
@@ -385,8 +399,10 @@ imports only point downward.
         exhaustive_modulo.py  exhaustive modulo differential, run by hand, not in the gate
         exhaustive_ops.py  exhaustive differential for + - * / reciprocal neg abs **, by hand
         itf1788/           vendored .itl files, itl.py parser, adapter + divergence table
+        conftest.py        the fuzz profile (M14); does nothing unless HYPOTHESIS_PROFILE is set
         test_<module>.py   (ops split into test_ops_examples.py and test_ops_properties.py;
-                           test_minmax_fma.py and test_outward.py for the rest of M12)
+                           test_minmax_fma.py and test_outward.py for the rest of M12;
+                           test_oracle_flint.py, the arb oracle for the functions, M14)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
@@ -438,6 +454,22 @@ imports only point downward.
   at several working precisions. the constant series' error bounds are pinned directly; the taylor
   loops' bounds are covered by the interval rounding's slack around them, so no sampled value shows
   one missing, and they are argued in their docstrings instead
+* an independent oracle for the functions (D14, M14, 2026-09-26): `tests/test_oracle_flint.py`
+  checks all 19 against python-flint's arb, whose every value is a ball proven to contain the true
+  one, a test-only dependency in the `[test]` extra. at a drawn float, int or Fraction point each
+  directed end must be sound and sharp (no double strictly between it and the value, i.e.
+  correctly rounded), nearest the right one of the two, a rational value exact and a closed point;
+  at set level an exact operand's irrational value is the open one-ulp piece and an outward one is
+  sharp and closed only where attained; plus fixed hard points, domain ends and limits, atan2 and
+  `elementary.rounded_angle`/`floor_over_pi`. a comparison arb cannot decide retries at more bits
+  (`test_oracle_flint.py::PRECISIONS`), then is rejected and counted (0 at default settings
+  and under fuzz ×10, 2026-09-26)
+* a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
+  every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 100) times its
+  own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
+  derandomized `ci` under GitHub Actions. `.github/workflows/fuzz.yml` runs it weekly and on
+  `workflow_dispatch`, never on push, carrying `.hypothesis/` between runs and uploading it with
+  the log on a failure
 
 ### later (not in v2.0)
 
@@ -451,6 +483,30 @@ imports only point downward.
   gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one)
 
 ## decision log
+
+### 2026-09-25 revision: M13a and M14's fuzz job and oracle built
+
+built across 2026-09-25 and 26 (measured 2026-09-26), the first session M13 suggests; the details
+and numbers are in v2-implementation-plan.md (M13a, M14). D14 and D15 moved into "current design"
+(ieee 1788, testing):
+* **vendored** all 19 files of oheim/ITF1788 at `b6ee1e2` and its three licence files, byte-exact,
+  blob hashes checked; reading every header corrected D15: five files carry the all-permissive
+  notice (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`)
+* **the parser reads every statement** (9542): a strict tokenizer, brace-counted testcases,
+  `NaN`, quoted text, `{...}` lists, `signal` clauses, two-value results. the old one ended a
+  testcase at a list's `}` and silently dropped 11 statements of `libieeep1788_reduction.itl`
+* **divergence keys drop decorations**, so the 18 old rows are 15 keys; the `[nai]` operands are
+  rows generated in code under "decoration expectations" until M13g, each failing as stale once
+  its vector matches. 4767 vectors, 49 keys, 0 unknown failures
+* **fuzzing is a multiplier, not a profile's count**: a test's own `max_examples` overrides any
+  profile, so under `HYPOTHESIS_PROFILE=fuzz` the conftest multiplies each test's own, once per
+  function; the weekly `fuzz.yml` saves the example database even on failure. its first local run
+  found `test_sound_float_identity_rounding[div]` red on mixed Fraction and float operands:
+  python rounds `Fraction(1,3) / 2.75` twice, the library once, as "arithmetic" says it should. the
+  fault was the test oracle's, which now rounds a mixed pair once (`tests/oracles.py::_once`)
+* **the flint oracle requires correct rounding**, not a tolerance: no double may lie between an end
+  and the value, decided by arb's proven comparisons, more bits when undecided; values arb cannot
+  hold near the float range are compared through their logs. it found no bug
 
 ### 2026-09-25 revision: M13 and M14 planned (not built)
 
@@ -470,8 +526,10 @@ in short:
   answers "no answer" with entire, ours is a real set, under a new residual category
   "cancellation as a Minkowski difference"
 * **D14** `python-flint` (Arb) is the independent oracle for the elementary functions, test-only
+  (built 2026-09-26; now in "current design", testing)
 * **D15** the fork's LGPL-2.1+ files (`mpfi`, `fi_lib`, `c-xsc`) are vendored unmodified as test
-  data with their licence files; the wheel ships only `intervals/`
+  data with their licence files; the wheel ships only `intervals/` (built 2026-09-26; now in
+  "current design", ieee 1788. five files are all-permissive, not the two `ieee1788-*` alone)
 * **D16** decorations, NaI and 1788's constructors in a separate decorated wrapper type, brought
   forward from "later"; the core stays undecorated. open: 1788's signals as warnings or exceptions
 * **D17** M13 does not block 2.0.0, and the release is in no hurry

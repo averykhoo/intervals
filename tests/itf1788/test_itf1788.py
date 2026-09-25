@@ -1,8 +1,9 @@
 """
 ieee 1788 conformance: itf1788 vectors through the adapter in v2-plan.md "ieee 1788"
 
-the vendored `.itl` files are unmodified copies from https://github.com/nehmeier/ITF1788 (Apache
-2.0, see LICENSE and NOTICE here; README.md pins the commit). the adapter's rules:
+the vendored `.itl` files are unmodified copies of all 19 at https://github.com/oheim/ITF1788 (the
+maintained fork of nehmeier's; each file's licence is in its header, and README.md pins the commit
+and lists them). the adapter's rules:
 
 * **input rule**: a 1788 unbounded bound is our open-at-inf, `[1, infinity]` is `[1, inf)` and
   `[entire]` is `(-inf, inf)`, because 1788 never attains infinity. a finite bound is closed
@@ -18,16 +19,23 @@ the vendored `.itl` files are unmodified copies from https://github.com/nehmeier
   entire) and our attained infinities vs 1788's unattained ones. a boolean, a number or an overlap
   state is compared as it is
 * **decorations**: dropped from inputs and expected values; only the bare interval is compared.
-  decorations are not in the core (v2-plan.md "ieee 1788"), so no vector checks one
+  decorations are not in the core (v2-plan.md "ieee 1788"), so no vector checks one, and a
+  divergence row is keyed on the statement with its decorations stripped (the fork has many
+  statements twice, `atanh [1.0,1.0]_def = [empty]_trv` beside `atanh [1.0,1.0] = [empty]`).
+  NaI has no counterpart, so a vector with a `[nai]` in it is a row until M13g, generated below
+* a `signal` clause is kept on the vector and not checked yet (M13g). `NaN` equals `NaN` here
 * the library's warnings are ignored inside a vector (`1/[0]` is `∅` + `IndeterminateResultWarning`,
   and 1788's answer is also empty); they are pinned by their own tests elsewhere
 
 every vector of an op in `OPS` either matches through the adapter or is a row of `DIVERGENCES`, whose
-reason is one of the plan's residual categories. a row that starts matching fails as stale.
+reason is one of the plan's residual categories. a row that starts matching fails as stale. the other
+ops' statements are counted in `SKIPPED`, and every statement of every file is parsed by
+`test_parser_reads_every_statement`, so the parser already reads what later ops will need.
 """
 import math
 import re
 import warnings
+from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
@@ -41,11 +49,14 @@ from intervals.errors import IntervalWarning
 from intervals.relations import Allen
 from tests.itf1788.itl import Interval
 from tests.itf1788.itl import parse_file
+from tests.itf1788.itl import strip_decorations
 
 HERE = Path(__file__).parent
-FILES = ('libieeep1788_tests_elem.itl', 'libieeep1788_tests_set.itl', 'libieeep1788_tests_bool.itl',
-         'libieeep1788_tests_num.itl', 'libieeep1788_tests_overlap.itl', 'libieeep1788_tests_rec_bool.itl',
-         'atan2.itl')
+FILES = ('libieeep1788_elem.itl', 'libieeep1788_set.itl', 'libieeep1788_bool.itl', 'libieeep1788_num.itl',
+         'libieeep1788_overlap.itl', 'libieeep1788_rec_bool.itl', 'libieeep1788_cancel.itl',
+         'libieeep1788_class.itl', 'libieeep1788_mul_rev.itl', 'libieeep1788_reduction.itl',
+         'libieeep1788_rev.itl', 'abs_rev.itl', 'pow_rev.itl', 'atan2.itl', 'c-xsc.itl', 'fi_lib.itl', 'mpfi.itl',
+         'ieee1788-constructors.itl', 'ieee1788-exceptions.itl')
 
 _ENTIRE = MultiInterval.parse('(-inf, inf)')
 
@@ -122,11 +133,14 @@ _LOG = ('degenerate infinities: the operand meets the domain [0, inf] only at 0,
         '-inf here (the limit from the one side the domain has); 1788 drops 0 from the domain')
 _ATANH = ('degenerate infinities: the operand meets the domain [-1, 1] only at an end, and atanh(±1) '
           'is ±inf here (the limit from inside); 1788 drops ±1 from the domain')
+_NAI = ('decoration expectations: NaI is not a set, so the undecorated core has no counterpart for it '
+        '(D16: it arrives with the decorated wrapper type, M13g)')
 _MEETS = ('cut-based relations: two closed intervals that share an end share that point, so they '
           'overlap (relations.Allen, on cuts); 1788 calls touching closed intervals meets or metBy')
 
-# (statement text, whitespace collapsed) -> reason. as of 2026-09-25 every row is a degenerate
-# infinity of a function at the end of its domain, or a touching pair that shares a point
+# (statement text, whitespace collapsed and decorations stripped) -> reason. as of 2026-09-25 every
+# listed row is a degenerate infinity of a function at the end of its domain, or a touching pair that
+# shares a point; the NaI rows are generated once the vectors are loaded
 DIVERGENCES = {
     'log [-infinity,0.0] = [empty]': _LOG,
     'log [-infinity,-0.0] = [empty]': _LOG,
@@ -138,15 +152,22 @@ DIVERGENCES = {
     'atanh [-infinity,-1.0] = [empty]': _ATANH,
     'atanh [-1.0,-1.0] = [empty]': _ATANH,
     'atanh [1.0,1.0] = [empty]': _ATANH,
-    'atanh [1.0,1.0]_def = [empty]': _ATANH,
     'overlap [-infinity,2.0] [2.0,3.0] = meets': _MEETS,
     'overlap [1.0,2.0] [2.0,3.0] = meets': _MEETS,
     'overlap [1.0,2.0] [2.0,infinity] = meets': _MEETS,
     'overlap [2.0,3.0] [1.0,2.0] = metBy': _MEETS,
     'overlap [2.0,3.0] [-infinity,2.0] = metBy': _MEETS,
-    'overlap [1.0,2.0]_def [2.0,3.0]_def = meets': _MEETS,
-    'overlap [2.0,3.0]_def [1.0,2.0]_trv = metBy': _MEETS,
 }
+LISTED = dict(DIVERGENCES)
+
+
+def key(vector) -> str:
+    """the divergence table's key"""
+    return strip_decorations(vector.text)
+
+
+def _has_nai(vector) -> bool:
+    return any(isinstance(v, Interval) and v.nai for v in (*vector.args, vector.expected))
 
 
 def _load():
@@ -160,16 +181,21 @@ def _load():
 
 VECTORS, SKIPPED = _load()
 INTERVAL_VECTORS = tuple(v for v in VECTORS if isinstance(v.expected, Interval))
+DIVERGENCES.update({key(v): _NAI for v in VECTORS if _has_nai(v)})
 
 
 # THE ADAPTER
+
+class NoCounterpart(ValueError):
+    """a 1788 value the core has no counterpart for (NaI)"""
+
 
 def to_ours(literal, cls=MultiInterval, as_float=False):
     """the input rule; `as_float` gives the literal's doubles as floats instead of Fractions"""
     if not isinstance(literal, Interval):
         return float(literal) if as_float and isinstance(literal, Fraction) else literal
     if literal.nai:
-        raise ValueError('NaI has no counterpart')
+        raise NoCounterpart('NaI')
     if literal.empty:
         return cls()
     lo, hi = (float(literal.lo), float(literal.hi)) if as_float else (literal.lo, literal.hi)
@@ -201,7 +227,7 @@ def closed_hull_of_ours(result: MultiInterval):
 def closed_hull_of_expected(literal: Interval):
     """the output rule on 1788's value (already doubles)"""
     if literal.nai:
-        raise ValueError('NaI has no counterpart')
+        raise NoCounterpart('NaI')
     return None if literal.empty else (float(literal.lo), float(literal.hi))
 
 
@@ -234,42 +260,71 @@ def run_outward(vector):
     return (lo, hi), expected
 
 
+def same(ours, expected) -> bool:
+    """equality, except that NaN is NaN (1788's answer for a number of the empty set or of NaI)"""
+    if isinstance(ours, float) and isinstance(expected, float) and math.isnan(ours) and math.isnan(expected):
+        return True
+    return ours == expected
+
+
+def outcome(runner, vector):
+    """(ours, expected) from `run` or `run_outward`; ours is the exception if the core has no counterpart"""
+    try:
+        return runner(vector)
+    except NoCounterpart as e:
+        return e, vector.expected
+
+
 # THE VECTORS
+
+def check(vector, runner):
+    ours, expected = outcome(runner, vector)
+    if key(vector) in DIVERGENCES:
+        assert not same(ours, expected), f'stale divergence row, it matches now: {vector.text}'
+    else:
+        assert same(ours, expected), vector.text
+
 
 @pytest.mark.parametrize('vector', VECTORS, ids=[v.source for v in VECTORS])
 def test_vector(vector):
-    ours, expected = run(vector)
-    if vector.text in DIVERGENCES:
-        assert ours != expected, f'stale divergence row, it matches now: {vector.text}'
-    else:
-        assert ours == expected, vector.text
+    check(vector, run)
 
 
 @pytest.mark.parametrize('vector', INTERVAL_VECTORS, ids=[v.source for v in INTERVAL_VECTORS])
 def test_vector_outward(vector):
-    ours, expected = run_outward(vector)
-    if vector.text in DIVERGENCES:
-        assert ours != expected, f'stale divergence row, it matches now: {vector.text}'
-    else:
-        assert ours == expected, vector.text
+    check(vector, run_outward)
 
 
 def test_divergence_rows():
-    texts = {v.text for v in VECTORS}
+    keys = {key(v) for v in VECTORS}
     for text, reason in DIVERGENCES.items():
-        assert text in texts, f'no such vector: {text}'
+        assert text in keys, f'no such vector: {text}'
         assert reason.startswith(REASONS), reason
+    # the generated NaI rows never overwrite a listed one
+    assert all(DIVERGENCES[text] is LISTED[text] for text in LISTED)
+
+
+# a statement line: an op name, its operands, ` = `, the result, `;`. no comment line in these files
+# has a ` = ` before a `;`, so this counts statements independently of the parser
+_STATEMENT_LINE = re.compile(r'^[ \t]*([A-Za-z][\w-]*)[ \t][^\n;]* = [^\n;]*;[ \t]*$', re.MULTILINE)
 
 
 @pytest.mark.parametrize('name', FILES)
 def test_parser_drops_nothing(name):
-    """an independent count: every statement line of a used op became a vector"""
-    text = (HERE / name).read_text(encoding='utf-8')
-    for op in OPS:
-        lines = re.findall(rf'^\s*{op}\s', text, re.MULTILINE)
-        parsed = [v for v in VECTORS if v.op == op and v.source.startswith(f'{name}:')]
-        assert len(parsed) == len(lines), op
+    """an independent count: every statement line of a used op became a vector, every other one a skip"""
+    lines = Counter(_STATEMENT_LINE.findall((HERE / name).read_text(encoding='utf-8')))
+    parsed = Counter(v.op for v in VECTORS if v.source.startswith(f'{name}:'))
+    assert parsed + SKIPPED[name] == lines
     assert not set(OPS) & set(SKIPPED[name])
+
+
+@pytest.mark.parametrize('name', FILES)
+def test_parser_reads_every_statement(name):
+    """every statement of every op parses, so an op added later needs no parser work"""
+    everything, skipped = parse_file(HERE / name)
+    assert not skipped
+    assert Counter(v.op for v in everything) == Counter(
+        _STATEMENT_LINE.findall((HERE / name).read_text(encoding='utf-8')))
 
 
 def test_every_op_has_vectors():
@@ -278,7 +333,10 @@ def test_every_op_has_vectors():
 
 
 def test_every_file_is_used():
-    assert {v.source.split(':')[0] for v in VECTORS} == set(FILES)
+    """every vendored file is read, and every file read has statements"""
+    assert {p.name for p in HERE.glob('*.itl')} == set(FILES) and len(FILES) == 19
+    for name in FILES:
+        assert any(v.source.startswith(f'{name}:') for v in VECTORS) or SKIPPED[name], name
 
 
 # THE ADAPTER'S OWN RULES

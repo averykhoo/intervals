@@ -65,10 +65,12 @@ Size(rays=0, length=2, points=0)
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)
-* **ieee 1788**: not a runtime mode. the test suite runs 2932 vectors of 54 ops from the ITF1788
-  suite through an adapter, the interval-valued ones a second time through `OutwardMultiInterval`,
-  and all of them match except 18 listed divergences where the semantics differ on purpose
-  (`tests/itf1788/`, measured 2026-09-25)
+* **ieee 1788**: not a runtime mode. the test suite runs 4767 vectors of 54 ops from all 19 files
+  of the ITF1788 suite through an adapter, the 4120 interval-valued ones a second time through
+  `OutwardMultiInterval`, and all of them match except 49 listed divergences where the semantics
+  differ on purpose or the vector needs decorations (`tests/itf1788/`, measured 2026-09-26). the
+  statements of ops not built yet (`pow` with a real exponent, reverse ops, cancellation, ...) are
+  counted and skipped
 
 ## layout
 
@@ -77,10 +79,11 @@ Size(rays=0, length=2, points=0)
   `ops` (arithmetic), `modulo`, `steps` (floor, ceil, round, sign), `functions` and `elementary`
   (the elementary functions over sets, and at one point), `rounding`, `errors`
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
-  against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0)
+  against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
+  all-permissive per file; see its README)
 * `v2-plan.md` — the design. its "current design" section is normative: where it and the code
   disagree, one of them is a bug
-* `v2-implementation-plan.md` — milestones, decisions D1–D8, and what is still open
+* `v2-implementation-plan.md` — milestones, decisions D1–D17, and what is still open
 * `references/` — papers and the modulo derivations
 * `archive/v1/` — the previous implementation, kept unchanged as a reference: `multi_interval.py`,
   `interval.py`, `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`), `compare.py`, and
@@ -98,5 +101,7 @@ of the v2 class later (M8 in the implementation plan).
 C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q
 ```
 
-needs `pytest` and `hypothesis` (`pip install -e .[test]`). the library's own warnings are errors
-inside the suite.
+needs `pytest`, `hypothesis` and `python-flint` (`pip install -e .[test]`). the library's own
+warnings are errors inside the suite. `HYPOTHESIS_PROFILE=fuzz` runs every hypothesis test
+randomized at `FUZZ_MULTIPLIER` (default 100) times its examples, as the weekly
+`.github/workflows/fuzz.yml` does.

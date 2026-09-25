@@ -24,6 +24,7 @@ an indeterminate pair contributes nothing. `attained` decides exactly whether a 
 by some defined pair: finite floats are read as the Fraction they denote, +-inf symbolically.
 """
 import math
+import operator
 from fractions import Fraction
 from functools import lru_cache
 from typing import NamedTuple
@@ -78,8 +79,27 @@ def _negated(cuts: Cuts) -> Cuts:
 def _quotient(x, y):
     """finite x / finite nonzero y: exact unless a float is involved"""
     if isinstance(x, float) or isinstance(y, float):
-        return x / y
+        return _once(operator.truediv, x, y)
     return normalize_value(Fraction(x) / Fraction(y))
+
+
+def _once(fn, x, y):
+    """
+    fn(x, y) on finite x, y where a float is involved, rounded once as the library rounds it: two
+    floats by python's own float op, and a mixed pair computed exactly, then rounded to nearest
+    (python would round the exact operand first, and `Fraction(1, 3) / 2.75` lands one ulp below
+    the correctly rounded quotient)
+
+    >>> Fraction(1, 3) / 2.75, _once(operator.truediv, Fraction(1, 3), 2.75)
+    (0.1212121212121212, 0.12121212121212122)
+    """
+    if isinstance(x, float) and isinstance(y, float):
+        return fn(x, y)
+    value = fn(Fraction(x), Fraction(y))
+    try:
+        return float(value)
+    except OverflowError:
+        return INF if value > 0 else -INF
 
 
 def _zero_piece(b: Optional[Cuts]) -> Tuple:
@@ -137,6 +157,8 @@ def _add(x, y) -> list:
         return [x]
     if _inf(y):
         return [y]
+    if isinstance(x, float) or isinstance(y, float):
+        return [normalize_value(_once(operator.add, x, y))]
     return [normalize_value(x + y)]
 
 
@@ -145,6 +167,8 @@ def _mul(x, y) -> list:
         if x == 0 or y == 0:
             return []
         return [_sign(x) * _sign(y) * INF]
+    if isinstance(x, float) or isinstance(y, float):
+        return [normalize_value(_once(operator.mul, x, y))]
     return [normalize_value(x * y)]
 
 

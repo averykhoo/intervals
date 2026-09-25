@@ -313,6 +313,21 @@ def test_identity_rounding_collapse(op, a, b, pair, value):
     assert contains_point(closed(apply(op, a, b)), value), show(apply(op, a, b))
 
 
+def test_mixed_pair_rounded_once():
+    """
+    found by the fuzz profile (2026-09-26), red in the oracle, not the library: python's
+    `Fraction(1, 3) / 2.75` rounds 1/3 to a float first and lands one ulp below the quotient, which
+    the library computes exactly and rounds once (v2-plan.md "arithmetic"). the oracle now does the
+    same (tests/oracles.py::_once)
+    """
+    a = normalize([piece(Fraction(1, 3), Fraction(1, 2), True, False)])
+    b = normalize([piece(-INF, 2.75)])
+    value = 0.12121212121212122
+    assert value != Fraction(1, 3) / 2.75
+    assert values_of('div', Fraction(1, 3), 2.75, a, b) == [value]
+    assert contains_point(closed(apply('div', a, b)), value), show(apply('div', a, b))
+
+
 # SHARPNESS: on exact operands the result is exactly the attained set
 
 @pytest.mark.parametrize('op', OPS)

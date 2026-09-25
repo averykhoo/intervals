@@ -1,0 +1,6 @@
+# the vendored itf1788 files stay byte-identical to upstream (LF) in the working tree too, whatever
+# core.autocrlf says, so a plain sha or git hash-object --no-filters of the file equals the pinned blob
+*.itl -text
+LICENSE -text
+NOTICE -text
+COPYING.LESSER -text

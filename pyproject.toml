@@ -9,7 +9,7 @@ description = "Multi-intervals over the affine extended reals, with open/closed 
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
-test = ["pytest", "hypothesis"]
+test = ["pytest", "hypothesis", "python-flint>=0.9"]
 
 [tool.setuptools]
 packages = ["intervals"]

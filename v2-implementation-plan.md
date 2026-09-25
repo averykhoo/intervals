@@ -3,8 +3,9 @@
 companion to `v2-plan.md`. that file says *what*; this one says *in what order*, with an exit
 criterion per milestone. review findings that needed an owner decision are in section 0; D1–D7 are settled or deferred as
 of 2026-09-23 and written into `v2-plan.md`'s "current design"; D8 was settled 2026-09-24. D9–D17
-were settled 2026-09-25 for M13 and M14, which are not built yet: they go into "current design" as
-each is built, and until then they are in `v2-plan.md`'s decision log.
+were settled 2026-09-25 for M13 and M14: they go into "current design" as each is built, and until
+then they are in `v2-plan.md`'s decision log. D14 (the flint oracle) and D15 (vendoring) were built
+with M13a and M14's first two items (2026-09-26) and are in "current design" now.
 
 ## 0. decisions (D1–D8 from the 2026-09-23 reviews; D9–D17 for M13 and M14, 2026-09-25)
 
@@ -24,7 +25,7 @@ each is built, and until then they are in `v2-plan.md`'s decision log.
 | D12 | **decided 2026-09-25 by owner: recommended default.** a reverse op whose answer has infinitely many or very many pieces (`sinRev`, `cosRev`, `tanRev` and their `*Bin` forms over an unbounded or wide `x`): the exact pieces up to the step functions' cap of 1000, past it their hull with a `HullWarning`, the rule `steps.py` already follows. a bounded `x` gets the exact union (`sinRev([0.5, 1], [0, 20])` has 4 pieces), which 1788 cannot give. ends are irrational, so each is its tightest float enclosure, open | exact to 1000 pieces, else hull + warning | M13e |
 | D13 | **decided 2026-09-25 by owner: recommended default.** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
 | D14 | **decided 2026-09-25 by owner: recommended default.** the independent oracle for the elementary functions is **`python-flint`** (Arb: every result is a ball proven to contain the true value), a test-only dependency in the `[test]` extra, installed into the `intervals` env and in CI. `mpmath` was the alternative (pure python, but its values carry no proven bound). python-flint 0.9.0 has Windows wheels for 3.10 and later (abi3), 3.13 and 3.14 included (checked on PyPI 2026-09-25) | python-flint | M14 |
-| D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library | vendor unmodified, with the licence files | M13a |
+| D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library. **corrected 2026-09-26 at M13a**, from every file's header: five files carry the all-permissive notice, not two (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`); the eleven `libieeep1788_*` are Apache 2.0 | vendor unmodified, with the licence files | M13a |
 | D16 | **decided 2026-09-25 by owner: recommended default.** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. still open, for M13g: whether 1788's signals (`UndefinedOperation`, `PossiblyUndefinedOperation`, `IntvlPartOfNaI`) become `IntervalWarning` subclasses or exceptions | wrapper type; signals open | M13g |
 | D17 | **decided 2026-09-25 by owner**: M13 does **not** block the 2.0.0 release, and there is no hurry to release either ("I have zero users and this is a yak shaving pet project"). M13 only adds methods and a type and gives a meaning to exponents that raise `TypeError` today, so nothing that works now changes | release whenever; not blocked | — |
 
@@ -44,7 +45,8 @@ vendoring.
 
 * env exists: `C:/Users/user/anaconda3/envs/intervals/python.exe`, Python 3.13.15, pytest 9.1.1,
   hypothesis 6.167.1, numpy, pandas (measured 2026-09-23; `v2-plan.md`'s size section now records the executed v1
-  reproduction)
+  reproduction); python-flint 0.9.0 since M14 (2026-09-26, D14), in the `[test]` extra as
+  `python-flint>=0.9`, so CI's `pip install -e ".[test]"` picks it up
 * gate: `C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q` from the repo root. add
   `pyproject.toml` (package metadata, `[tool.pytest.ini_options] testpaths = ["tests"]` and
   `pythonpath = ["."]` so the v1 modules at the root and the `intervals/` package import without
@@ -54,8 +56,12 @@ vendoring.
 * CI (added on `v2` 2026-09-25, by owner request): `.github/workflows/ci.yml` runs on every push and
   pull request. it runs the gate on Python 3.11 to 3.14 and each exhaustive harness as its own job:
   `tests.exhaustive_ops` exact, `--float` and `--sabotage`, and `tests.exhaustive_modulo`.
-  under GitHub Actions hypothesis loads its built-in `ci` profile (derandomized, no deadline), so
-  the suite needs no conftest. first run 2026-09-25 at `d232b78` (run 36091651163), all 8 jobs green:
+  under GitHub Actions hypothesis loads its built-in `ci` profile (derandomized, no deadline).
+  `tests/conftest.py` (M14, 2026-09-26) loads nothing unless `HYPOTHESIS_PROFILE` is set, so the
+  gate still gets hypothesis's own choice (`default` locally, `ci` under Actions); set to `fuzz` it
+  runs every hypothesis test randomized at `FUZZ_MULTIPLIER` (default 100) times its examples,
+  which `.github/workflows/fuzz.yml` does weekly and on `workflow_dispatch`, never on push (M14).
+  first run 2026-09-25 at `d232b78` (run 36091651163), all 8 jobs green:
   the gate took 71-94 s on each python, and on the runners the exhaustive jobs took 21 s
   (sabotage), 5 min (float), 6½ min (exact) and 12½ min (modulo). each harness exits nonzero on a
   failure
@@ -511,7 +517,7 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
 * not built, and why: `pow` with a real exponent (a: scope, M11); `less`, `strictLess`, `interior`,
   `mid`, `rad`, `wid`, `mag`, `mig` (a: see M11); reverse ops (a). all now M13
 
-### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25)
+### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a done 2026-09-26)
 
 owner request 2026-09-25: "implement all these ops and get all these tests vendored and passing".
 this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how;
@@ -542,7 +548,7 @@ this repo's unchanged adapter (`tests/itf1788/test_itf1788.py::run`, `::run_outw
   `DIVERGENCES` is keyed on the text with its decorations
 * **4764 statements of 57 ops not implemented**, all assigned to a sub-task below
 
-**M13a vendoring and the adapter.** no new op; lands the 1793 passing vectors
+**M13a vendoring and the adapter (done 2026-09-26).** no new op; lands the 1793 passing vectors
 * vendor per D15: all 19 files, unmodified, from the pinned commit into `tests/itf1788/`, replacing
   nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER`. verify each file's git blob
   hash against the fork's tree at the pin (`git hash-object` against the GitHub trees API), as M9 did.
@@ -558,6 +564,54 @@ this repo's unchanged adapter (`tests/itf1788/test_itf1788.py::run`, `::run_outw
   gate, `test_parser_drops_nothing` and `test_every_file_is_used` covering the new files, sabotage
   per section 2 (a parser that drops quoted-string statements, a divergence key that keeps its
   decorations)
+* done 2026-09-26, with M14's fuzz job and oracle (below). built:
+    * vendored: all 19 `.itl` files and the fork's `LICENSE`, `NOTICE`, `COPYING.LESSER` from
+      oheim/ITF1788 at `b6ee1e2`, byte-exact, replacing nehmeier's 7 (`LICENSE` and `NOTICE`
+      replaced with the fork's). `git hash-object` equals the trees-API sha for all 22 files; the
+      upstream files are pure LF, and a new `tests/itf1788/.gitattributes` marks them `-text` (in a
+      throwaway repo with `core.autocrlf=true` the blobs came out identical even without it, so
+      the attribute only keeps a Windows checkout from turning them CRLF on disk).
+      `tests/itf1788/README.md` has the source, each file's licence (from its header: Apache 2.0 for
+      the 11 `libieeep1788_*`, LGPL-2.1-or-later for `mpfi`, `fi_lib`, `c-xsc`, all-permissive for
+      five, correcting D15's two) and a hash re-check snippet (run: 22 ok)
+    * parser (`tests/itf1788/itl.py`), rewritten: a strict tokenizer (a character no token covers
+      raises, and so does text outside a testcase); a testcase ends by brace counting, not at the
+      first `}`; `NaN` is a number, quoted strings a new `itl.py::Text`, `{a, b}` lists tuples; a
+      trailing `signal <Name>` is kept in `Vector.signal`, not checked until M13g; a two-value
+      result is a plain tuple; `parse_file(path)` with no op list parses every statement
+    * **a bug the old parser had**: its testcase regex ended a block at the first `}` of a `{...}`
+      list, which in `libieeep1788_reduction.itl` silently dropped 11 statements, not even counted as
+      skipped. that is why the 4764 skipped statements measured 2026-09-25 are 4775 (and M13h's
+      reductions have more statements than "1 each")
+    * adapter (`tests/itf1788/test_itf1788.py`): `Vector.text` keeps the raw statement and the
+      divergence key is `test_itf1788.py::key`, `strip_decorations(v.text)`; the 18 old rows collapse
+      to 15 bare keys. `[nai]` rows are generated in code under "decoration expectations": an operand
+      the core has no counterpart for raises `test_itf1788.py::NoCounterpart`, which counts as not
+      matching, so each row fails as stale once M13g makes its vector match. `same()` treats NaN as
+      equal to NaN, so a row expecting `NaN` can go stale too; the 4 `isMember NaN` vectors match
+    * tests: `test_parser_drops_nothing` checks per file that parsed vectors plus skipped statements
+      equal an independent count of statement lines; the new `test_parser_reads_every_statement`
+      parses every op; `test_every_file_is_used` asserts the folder's `*.itl` files are exactly
+      `FILES`, that there are 19, and that each has statements
+* evidence, measured 2026-09-26 (`tests/itf1788`: 8939 passed in 68.1 s; the census by importing
+  the test module):
+    * 19 files, 9542 statements (9484 distinct texts; an independent line regex also counts 9542)
+    * 4767 vectors of 54 ops, every op in `OPS` with vectors; 4120 interval-valued and run twice,
+      8887 vector test items. by file: elem 2390, set 20, bool 252, num 58, overlap 77, rec_bool
+      139, atan2 38, c-xsc 126 (85 outward), fi_lib 687 (687), mpfi 980 (900); c-xsc + fi_lib +
+      mpfi = 1793
+    * 49 divergence keys, 0 unknown failures: degenerate infinities 10 keys (11 vectors, 11
+      outward items), cut-based relations 5 (7 vectors), decoration expectations, the generated
+      `[nai]` rows, 34 (34 vectors, 6 outward items; the 40 above)
+    * skipped: 4775 statements of 57 ops; the largest pow 1431, powRev1 429, powRev2 375,
+      mulRevToPair 347, pownRev 285, mulRev 182, cancelMinus 126, cancelPlus 116, csc 109, sec 109,
+      b-/d-textToInterval 91 each. `SKIPPED` is not asserted empty yet: that is M13's exit
+    * sabotage, each red, then restored and green: a parser dropping statements containing a quote
+      turned 6 red (`test_parser_drops_nothing` and `test_parser_reads_every_statement` for
+      `libieeep1788_class`, `ieee1788-constructors`, `ieee1788-exceptions`); a key keeping its
+      decorations 4 (`test_vector` at `libieeep1788_elem.itl:4116`, atanh `_def`, and
+      `libieeep1788_overlap.itl:98`, `:119`; `test_vector_outward` at `elem:4116`); the old brace
+      behaviour fails collection loudly (`ValueError: text outside a testcase`, the reduction file)
 
 **M13b numeric ops** (D9). `mid` 36, `rad` 19, `wid` 27, `mag` 27, `mig` 33, `midRad` 25
 statements
@@ -626,6 +680,8 @@ operands of implemented ops and a decoration check on every decorated vector
   constructors' `signal` clauses): `IntervalWarning` subclasses or exceptions
 
 **M13h reductions**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`, `dot_nearest`, 1 each
+as counted 2026-09-25 by the old parser, which saw only the first statement of each of the file's
+4 testcases; M13a's parser reads the 11 it dropped (2026-09-26), so recount when this is built
 * `intervals/reductions.py`: `sum_`, `sum_abs`, `sum_sqr`, `dot` over sequences of numbers, the
   exact value through `Fraction` then rounded once, to nearest by default. point ops, not interval
   ops, so no M14 properties beyond a random differential against `Fraction` arithmetic
@@ -646,11 +702,11 @@ it, so a file that gains an op cannot quietly add skips
 with M14's fuzz job and oracle; (2) M13b, M13c, M13f and M13h, the small ones; (3) M13d; (4) M13e;
 (5) M13g, starting with the signals question
 
-### M14 fuzzing (open, added 2026-09-25)
+### M14 fuzzing (open, added 2026-09-25; the fuzz job and the flint oracle built 2026-09-26)
 
 owner request 2026-09-25: "it would be great if we had fuzzing eg hypothesis". hypothesis is
-already in the gate: 81 `@given` tests across 13 files (counted 2026-09-25), 30 to 300 examples
-each. the gaps are depth, independence and breadth. M14 does not wait for M13; its first two items
+already in the gate: 81 `@given` tests across 13 files (counted 2026-09-25), 25 to 300 examples
+each (recounted 2026-09-26, below). the gaps are depth, independence and breadth. M14 does not wait for M13; its first two items
 land with M13a so that every later M13 op arrives with them
 * **a fuzz job, because no run explores new inputs in CI.** GitHub Actions loads hypothesis's `ci`
   profile, which is derandomized: every CI run replays the same examples, so new inputs are only
@@ -685,13 +741,109 @@ land with M13a so that every later M13 op arrives with them
 * exit: the fuzz workflow exists and has run green once (a `workflow_dispatch` run is enough), its
   example count and time recorded here with a date; the flint oracle in the gate; every new
   property sabotaged once and seen red (section 2)
+* **the fuzz job, built 2026-09-26** (`tests/conftest.py`, `.github/workflows/fuzz.yml`):
+    * mechanism: a test's own `@settings(max_examples=N)` overrides any profile, so a profile alone
+      cannot raise the count. the conftest registers a `fuzz` profile (randomized, no deadline,
+      `print_blob`, `too_slow` suppressed as in `ci`) and loads a profile only when
+      `HYPOTHESIS_PROFILE` is set (another name goes to `settings.load_profile`, which refuses one it
+      does not know). under `fuzz`, `conftest.py::pytest_collection_modifyitems` rewraps each
+      hypothesis test's settings with `max_examples` times `FUZZ_MULTIPLIER` (default 100),
+      `derandomize=False`, `deadline=None`, once per function: 18 tests combine `@given` with
+      `parametrize`, and per item their multiplier would be squared. with `HYPOTHESIS_PROFILE` unset
+      the conftest loads nothing and the hook returns at once
+    * counts from the decorators, 2026-09-26: at `c8d843d` 81 `@given` tests in 13 files, 48
+      pinning `max_examples` (25 to 300) and 33 on the default 100; with `tests/test_oracle_flint.py`
+      87, 54 and 33
+    * workflow: a weekly cron (Mon 03:23 UTC) and `workflow_dispatch` with a `multiplier` input, not
+      on push; Python 3.13 and `ci.yml`'s install; `permissions: contents: read`, runs never cancel
+      each other; `timeout-minutes: 350`, under the hosted runner's 360. `.hypothesis/` is restored
+      by prefix and saved under a fresh `run_id` key with `if: always()`
+      (`actions/cache/restore` + `cache/save`, since plain `actions/cache` saves only on success and
+      would drop the failing example); pytest runs through `tee fuzz.log` under `pipefail`; on
+      `failure() || cancelled()` (a timeout is a cancellation) it uploads `fuzz.log` and
+      `.hypothesis/` with `include-hidden-files: true`. checked only that the YAML parses
+    * proof the multiplier works (a throwaway probe loading the real conftest, counting calls of an
+      unpinned test, one pinned to 7 and a parametrized one pinned to 5): 100/7/5/5 with no conftest,
+      locally and with `GITHUB_ACTIONS=true`, and identical with the conftest and the variable
+      unset; fuzz ×3 300/21/15/15; fuzz ×100 10000/700/500/500 (20.7 s). `tests/test_outward.py`
+      (pins 60) under fuzz ×2 reports `max_examples=120` per parameter. sabotage, each red: the
+      multiplier dropped (100/7/5/5 under ×3), the per-function guard removed (45 per parameter,
+      ×3 squared), the fuzz profile loaded when unset (the probe passed this at first; a check of
+      the loaded profile's name made it red, locally and under `GITHUB_ACTIONS=true`)
+    * cost, local, shared 12-CPU laptop, 2026-09-26: `tests/test_ops_properties.py` 91 passed in
+      89.9 s; the same at `FUZZ_MULTIPLIER=10` 1 failed, 90 passed in 1155 s (12.8×, shrinking
+      included; slowest the failing div test, 51 s). extrapolated, the suite at ×100 is about 2.2 to
+      3.4 hours: under 350 minutes but with little room as M13 adds tests. `multiplier=10` is the
+      cheaper first `workflow_dispatch`
+    * **found on its first run, and fixed the same session (2026-09-26): a bug in the test's
+      oracle, not the library**. `tests/test_ops_properties.py::test_sound_float_identity_rounding[div]`
+      went red on a = `[1/3, 1/2)`, b = `[-inf, 2.75]`: `MI(Fraction(1,3)) / 2.75` is
+      `[0.12121212121212122]`, while python's `Fraction(1,3) / 2.75` is `0.1212121212121212`, one
+      ulp lower, because python rounds 1/3 to a float first. v2-plan.md "arithmetic" says a mixed
+      exact/float pair is computed exactly and rounded once, so the library is right. the oracle
+      now rounds a mixed add, mul or div once (`tests/oracles.py::_once`; two floats still go
+      through python's float op). the example cannot be an `@example` (the test draws through
+      `st.data()`), so it is pinned as `tests/test_ops_properties.py::test_mixed_pair_rounded_once`.
+      sabotage: `_once` rounding the operands first turned the replayed example red again
+    * the same session's baseline gate (randomized locally) found a second test-only bug:
+      `tests/test_functions.py::test_nearest_holds_the_nearest_value_of_every_float[exp10]` compared
+      a to-nearest result with the exact value where it is rational (`exp10(-1.0)` = 1/10, below
+      the double 0.1 that ends the result) instead of with the nearest double the docstring promises.
+      it now always uses `rounded(..., NEAREST)`, which rounds the rational value itself
+    * **still owed for the exit: the workflow has never run on GitHub** (nothing is pushed), so no
+      green `workflow_dispatch` run, example count or time is recorded yet
+* **the flint oracle, built 2026-09-26** (`tests/test_oracle_flint.py`, 9 test functions, 122
+  tests parametrised; python-flint 0.9.0 in the env and `python-flint>=0.9` in the `[test]` extra;
+  `intervals/` unchanged):
+    * per function, all 19 of M12, at a drawn float, int or Fraction point: soundness (DOWN ≤ value
+      ≤ UP); sharpness (no double strictly between either end and the value, so each end is the
+      correctly rounded bound, which a 1-ulp outward error already fails); NEAREST the correct one
+      of the two against the midpoint (ties to even); a rational value must come from `exact()`,
+      overlap arb's ball and be one closed point at set level, and an exact arb ball where ours says
+      irrational also fails; at set level `MultiInterval(exact x).f()` is the open one-ulp piece,
+      `OutwardMultiInterval(float).f()` a sharp enclosure closed only where attained, and
+      `MultiInterval(float).f()` the nearest double
+    * also: `log` with a drawn base and of exact powers; about 60 fixed hard points (`sin(1e22)`,
+      `sin(MAX)`, `tan` at the float pi/2, `exp` both sides of overflow and underflow, subnormals,
+      `atanh`/`acosh`/`asin` by their domain ends); domain ends and limits at ±inf (`atan(±inf)`
+      against arb's pi/2); outside the domain an empty set with `DomainClippedWarning`; `atan2` at
+      set level, exact and outward; `elementary.rounded_angle` and `elementary.floor_over_pi`. not
+      covered: `elementary.compare`, an internal helper
+    * how: a float enters arb exactly, a Fraction through `fmpq` as a ball containing it, and arb's
+      `<`/`>` hold only when every point of both balls agrees, so each comparison is proven or
+      undecided. undecided retries at 200, 1000, then 4000 bits (`test_oracle_flint.py::PRECISIONS`)
+      plus the operand's bit size, so huge arguments reduce correctly; past that the example is
+      rejected by `assume` and counted in `test_oracle_flint.py::UNDECIDED`. where arb cannot hold
+      the value (`exp(1e308)` is `[+/- inf]`, `exp(-1e308)` straddles 0, `1 - tanh(1e308)`
+      underflows), `exp`/`exp2`/`exp10`/`sinh`/`cosh` with |x| > 600 are compared through the log of
+      the value and `tanh` with x > 20 through `-log(1 - t)`, both increasing, so still exact. a
+      plain import: missing python-flint fails loudly, not as a skip
+    * measured 2026-09-26: the oracle with `tests/test_elementary.py` 337 passed in 20.59 s; the
+      oracle alone 122 passed in 10.3 to 18.8 s across runs (machine shared), 11.33 s under
+      `HYPOTHESIS_PROFILE=ci`, 148 s under fuzz ×10 with 0 failures. undecided: 0 at default settings
+      and 0 at fuzz ×10. share of drawn points with a rational value: sqrt 62.5%, exp2 47.5%, log2
+      41.5%, log10 40.5%, exp10 37.5%, acos 30%, acosh 25%, log 19%, the rest 7.5 to 10%. rejected
+      examples are filter or `assume` rejections only: atanh 20, atan2 24 (y = x = 0),
+      rounded_angle 10. no library bug found, so nothing is pinned as xfail. PyPI (0.9.0): Python ≥
+      3.10, cp310-abi3 wheels for win_amd64, manylinux x86_64 and macOS, plus cp313 and cp314,
+      covering CI's 3.11 to 3.14
+    * sabotage, each red, then restored and green: a throwaway edit of `elementary.rounded` moving
+      sin's DOWN 1 ulp inward (11 failed, "unsound") or 1 or 2 ulp outward (11 each, "not sharp"),
+      exp's UP 1 ulp inward (11, soundness) or 1 or 2 outward (10 each, sharpness), red in
+      `test_point_against_arb[fn]`, the extreme points and the matching `tests/test_elementary.py`
+      tests; monkeypatches: an irrational set-level end kept closed (75 failed), `exact('log2')` one
+      too high ("log2(16) is not the rational 5"), `rounded_angle` 1 ulp inward (atan2 and
+      rounded_angle fail on soundness), `floor_over_pi` off by one (the floor test fails)
+* still open in M14: the breadth items (`tests/test_extreme_floats.py` not yet extended) and every
+  M13 op's properties as it lands
 
 ## 3. order and parallelism
 
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
 the backlog, and M12 built its (b) items the same day. M13 (full itf1788) and M14 (fuzzing) are
-open: M13a first, then M13b to M13h in any order, each with its M14 properties; M14's CI job and
-oracle do not wait for M13. M4 depends on M3 (the class's
+open: M13a is done (2026-09-26), then M13b to M13h in any order, each with its M14 properties;
+M14's fuzz job and flint oracle are built (2026-09-26), the job's first green GitHub run still
+owed. M4 depends on M3 (the class's
 `parse`, `__str__` and `__repr__` come from `fmt`); M7a and M9 are independent after M6. total ≈ 12
 working days (the per-milestone sum without M8) plus the M7b session. the first internally usable
 point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6; release needs M7b.

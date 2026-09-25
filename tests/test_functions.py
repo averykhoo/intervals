@@ -329,8 +329,9 @@ def test_nearest_holds_the_nearest_value_of_every_float(name, a, rng):
     domain = MONOTONE[name][0] if name in MONOTONE else normalize([piece(-INF, INF, False, False)])
     for x in sample(intersection(a, domain), 12, rng):
         if isinstance(x, float) and math.isfinite(x):
-            value = exact(name, Fraction(x))
-            v = rounded(name, Fraction(x), NEAREST) if value is None else value
+            # the nearest double even where the value is rational: exp10(-1.0) is 1/10, and the
+            # result's end is the double 0.1, just above it
+            v = rounded(name, Fraction(x), NEAREST)
             assert contains_point(result, v), (name, show(a), x, v, show(result))
 
 

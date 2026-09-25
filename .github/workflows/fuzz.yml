@@ -1,0 +1,67 @@
+# weekly randomized fuzzing, not in the gate: HYPOTHESIS_PROFILE=fuzz makes tests/conftest.py run
+# every hypothesis test randomized with FUZZ_MULTIPLIER (default 100) times its gate examples.
+# the ci profile the gate gets is derandomized, so only this job tries new inputs in CI.
+# .hypothesis/ (the example database) is carried between runs, so a failing example found once is
+# replayed first by every later run until it is fixed; each one found is pinned as an @example on
+# the gate test that found it.
+name: fuzz
+
+on:
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      multiplier:
+        description: "times each test's gate max_examples"
+        default: "100"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    # measured 2026-09-26: tests/test_ops_properties.py alone took 90 s at x1 and 1155 s at x10
+    # locally, so x100 over the suite is some hours; 360 is the hosted runner's ceiling
+    timeout-minutes: 350
+    env:
+      HYPOTHESIS_PROFILE: fuzz
+      FUZZ_MULTIPLIER: ${{ inputs.multiplier || '100' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[test]" numpy
+      # a cache entry is immutable, so each run saves a fresh key and restores the newest by prefix
+      - uses: actions/cache/restore@v4
+        with:
+          path: .hypothesis
+          key: fuzz-hypothesis-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fuzz-hypothesis-
+      - name: fuzz
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q 2>&1 | tee fuzz.log
+      # saved on failure too (the plain cache action saves only on success), so a found example
+      # is in the next run's database
+      - if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .hypothesis
+          key: fuzz-hypothesis-${{ github.run_id }}-${{ github.run_attempt }}
+      # a timeout is a cancellation, not a failure, and its log may still hold a found example
+      - if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          # .hypothesis is a hidden directory, which upload-artifact skips unless told otherwise
+          include-hidden-files: true
+          path: |
+            fuzz.log
+            .hypothesis/
