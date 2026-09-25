@@ -459,6 +459,9 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
   it rounds to `inf` now, `(max float, inf)` outward
 * evidence, measured 2026-09-25 at `5d584c1`:
     * the gate: 7979 passed in 206 s (2817 before M12)
+    * `python -m tests.exhaustive_modulo` after `modulo.py` began rounding through
+      `rounding.round_piece` and delegating floor to `steps.py`: 105625 boxes, 0 with a mismatch
+      (1289 s, sharing the machine with a gate run)
     * itf1788: 2932 vectors of 54 ops from 7 files (847 before), 2438 interval-valued run twice. 18
       divergence rows, all anticipated by the plan's categories: 11 degenerate infinities (log,
       log2, log10 of an operand meeting the domain only at 0; atanh of one meeting it only at ±1)
