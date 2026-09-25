@@ -188,6 +188,10 @@ def outward(desc: OpDescriptor) -> OpDescriptor:
     exact too, so attainment is decided on exact values: an end that rounding moved is open
     """
     def exact(*args):
+        # an infinite corner is exact already (the pointwise functions treat ±inf symbolically), and
+        # evaluating it on the floats keeps a float operand's result float (`2.5 / inf` is 0.0)
+        if any(is_infinite(x) for x in args):
+            return desc.fn(*args)
         return desc.fn(*(Fraction(x) if is_float(x) else x for x in args))
 
     def rounding(direction):

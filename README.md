@@ -21,6 +21,18 @@ MultiInterval.parse('{ [0, 1) , (2, 3] }')
 BOTH
 >>> x.size
 Size(rays=0, length=2, points=0)
+>>> print(MI(0, 3).sqrt())           # sqrt(3) is irrational: its enclosure's upper end, open
+[0, 1.7320508075688774)
+>>> print(MI(1, 8).log(2))           # exact where the value is rational
+[0, 3]
+>>> print(MI(1, 2).tan())            # a pole inside the piece: both sides, both infinities
+{ [-inf, -2.185039863261519) , (1.557407724654902, inf] }
+>>> import math
+>>> print(math.floor(MI(-1.5, 1.5)))
+{ [-2.0] , [-1.0] , [0.0] , [1.0] }
+>>> from intervals import OutwardMultiInterval as OMI
+>>> print(OMI(0.1) + 0.2)            # outward rounding: the exact sum is strictly between
+(0.3, 0.30000000000000004)
 
 ```
 
@@ -35,21 +47,35 @@ Size(rays=0, length=2, points=0)
   empty); `before after adjoins overlaps contains within` return bool; `allen()` gives the Allen
   relation. `==` is structural and `MultiInterval` is hashable and immutable
 * **arithmetic**: `+ - * /`, `reciprocal()`, `abs`, `**` with int exponents, `%`, `//`, `divmod`,
-  `floor()`, for every sign combination including zero-crossing and infinite operands. a result is
+  `minimum()`, `maximum()`, `fma()`, for every sign combination including zero-crossing and
+  infinite operands. a result is
   the set of values attained: an infinite endpoint is closed iff it is attained, a pole at a closed
   zero attains the infinity of its piece's sign, and a box that *is* an indeterminate point
   (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`) is empty with an `IndeterminateResultWarning`
+* **functions**: `sqrt`, `exp`, `exp2`, `exp10`, `log` (any base), `log2`, `log10`, `sin`, `cos`,
+  `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, as
+  methods. values are correctly rounded by a pure-python evaluator (no libm), so they are the same on
+  every platform; an irrational value of an exact operand is its tightest float enclosure
+* **step functions**: `floor()`, `ceil()`, `trunc()`, `round(ndigits)`, `round_ties_away()`,
+  `sign()`, and `math.floor/ceil/trunc` and `round()` on a set: the values attained, listed up to
+  1000 of them, else their hull with a `HullWarning`
+* **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
+  outward to the tightest float enclosure of the exact result, and an end that rounding moved is
+  open. mixing the two gives an `OutwardMultiInterval`
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)
-* **ieee 1788**: not a runtime mode. the test suite runs 847 vectors from the ITF1788 suite through an
-  adapter and all of them match (`tests/itf1788/`, measured 2026-09-24)
+* **ieee 1788**: not a runtime mode. the test suite runs 2932 vectors of 54 ops from the ITF1788
+  suite through an adapter, the interval-valued ones a second time through `OutwardMultiInterval`,
+  and all of them match except 18 listed divergences where the semantics differ on purpose
+  (`tests/itf1788/`, measured 2026-09-25)
 
 ## layout
 
 * `intervals/` — the package: `cuts` (the representation), `kernel` (set algebra on cut tuples),
-  `fmt` (printing and parsing), `multi_interval` (the class), `relations`, `applicator` and `ops`
-  (arithmetic), `modulo`, `errors`
+  `fmt` (printing and parsing), `multi_interval` (the two classes), `relations`, `applicator` and
+  `ops` (arithmetic), `modulo`, `steps` (floor, ceil, round, sign), `functions` and `elementary`
+  (the elementary functions over sets, and at one point), `rounding`, `errors`
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0)
 * `v2-plan.md` — the design. its "current design" section is normative: where it and the code

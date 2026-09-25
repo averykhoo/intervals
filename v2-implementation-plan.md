@@ -395,31 +395,21 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
   "2.0.0"` in `pyproject.toml`, tag. D5's blocker (M7b) is met. CI exists since 2026-09-25 and
   is green on `v2` (section 1)
 * **M8, the time layer** (a: whether and when; 1½ days): see M8. D4 is still open, (a) recommended
-* **functions** (b): `functions.py` with `sqrt`, `exp`, `log`, trig through the applicator, with
-  `DomainClippedWarning` outside the domain (`v2-plan.md` package layout and "later"); document
-  libm's ±1 ulp for trig. covers v1's `exp`/`log(base)` and the old README's "trigonometry?"
-* **rounding functions** (b): `ceil`, `trunc`, `round` by the enumerate-under-a-cap pattern of
-  `intervals/modulo.py::floor`; and the python dunders. today `math.floor(A)` and `math.ceil(A)`
-  fall back to `__float__`, so they raise "not a single point" on a non-degenerate `A` and return
-  a plain int on a degenerate one; `math.trunc` and `round` raise TypeError. v1 had all four
-  (`archive/v1/multi_interval.py::MultiInterval.__floor__` and siblings, endpoint-wise, not sharp).
-  either implement them as sets or refuse all four explicitly
-* **the other 1788 ops** (b): `sign`, `min`/`max`, `fma`; with the functions and rounding functions
-  above, this is the not-implemented list at M9. then vendor more itf1788 files: bool, num and
-  overlap test ops v2 already has
+* **functions**, **rounding functions**, **the other 1788 ops** and **outward float rounding**, the
+  four (b) items: built at M12 (below), done 2026-09-25
 * **reverse ops** (a): `mulRevToPair` and friends, for the reverse-op itf1788 files and for a solver
 * **power beyond int exponents** (a: scope): `A ** 0.5`, `A ** B`, `2 ** A` are TypeError today
   (`intervals/multi_interval.py::MultiInterval.__pow__`); v1 took an interval exponent on a
   positive base. 3-argument `pow(A, n, m)` (v1: integers only; old README "allow interval modulo
   for `__pow__()`")
-* **outward float rounding** (b): the hook exists (`intervals/applicator.py::OpDescriptor`,
-  `rounded`) but no descriptor sets it and there is no subclass or factory to switch it on
-  (`v2-plan.md` arithmetic). `tests/itf1788/test_itf1788.py` already rounds outward with
-  `math.nextafter` and can be reused. tight rounding via gmpy2/mpfr after that
+* **the 1788 ops still missing** (a: whether to add them): `less`, `strictLess`, `interior` (weak
+  and strict interval orders, not v2's pointwise comparisons) and `mid`, `rad`, `wid`, `mag`, `mig`
+  (for a multi-interval, of the hull or per piece?). their vectors are counted and skipped in
+  `tests/itf1788/test_itf1788.py::SKIPPED`; `isNaI` has no counterpart
 * **solver stack** (a; `v2-plan.md` "later (not in v2.0)"): the direction tag on a degenerate zero
   piece (only if a solver needs `1/(1/[inf])` back), a decorated type (com/dac/def/trv/ill) and an
-  optional thin `ieee1788.py`, forward-mode autodiff, Newton's method as a test (b once functions
-  exist), numpy interop (array API vs `__array_ufunc__`; today `__array_ufunc__ = None`), the
+  optional thin `ieee1788.py`, forward-mode autodiff, Newton's method as a test (b: the functions
+  exist since M12), numpy interop (array API vs `__array_ufunc__`; today `__array_ufunc__ = None`), the
   optional per-piece Allen matrix
 * **v1 surface with no v2 row in section 4** (a: port or record as gone): `<<` / `>>`,
   `random_multi_interval`, a public `apply()` (the applicator and `OpDescriptor` are not exported
@@ -443,10 +433,70 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
       same as M6's `sabotage.py`
     * the gate: 2817 passed
 
+### M12 the unblocked backlog: functions, step functions, min/max/fma, outward rounding (done 2026-09-25)
+
+the four (b) items of M11, built in one session by owner request ("build all the things that are
+unblocked, and add the relevant tests and reference vectors"). commits `53400d4` (the code and the
+vectors), `1ed5e70` (the unit tests), `5d584c1` (atan2); the design is in `v2-plan.md` "current
+design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its decision log entry
+"2026-09-25 revision: M12"
+* built:
+    * `intervals/elementary.py`: sqrt, exp, exp2, exp10, log (any base), log2, log10, sin, cos, tan,
+      asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh and the atan2 angle at one exact point,
+      correctly rounded down, to nearest and up, in pure python (no libm)
+    * `intervals/functions.py`: those functions and atan2 over sets; methods of the class
+    * `intervals/steps.py`: floor, ceil, trunc, round (and `round(A, ndigits)`), round_ties_away,
+      sign; `math.floor/ceil/trunc` and `round()` return sets; `modulo.floor` delegates here
+    * `intervals/ops.py`: `minimum`, `maximum`, `fma`, and the `OUTWARD` descriptors;
+      `intervals/rounding.py`; `outward=` on every rounding op, `mod` and `floordiv` included
+    * `OutwardMultiInterval`, exported from `intervals`
+    * itf1788: `libieeep1788_tests_bool.itl`, `_num.itl`, `_overlap.itl`, `_rec_bool.itl` and
+      `atan2.itl` vendored unmodified (git blob hashes equal upstream's), the parser reads numbers,
+      booleans and overlap states, and every interval-valued vector runs a second time through
+      `OutwardMultiInterval` with float operands, compared without adapter rounding
+* found while building, fixed: `MultiInterval(1e308) // MultiInterval(1e-308)` raised
+  `OverflowError` (a quotient past the float range; `modulo.py::_to_float` called `float()` on it).
+  it rounds to `inf` now, `(max float, inf)` outward
+* evidence, measured 2026-09-25 at `5d584c1`:
+    * the gate: 7979 passed in 206 s (2817 before M12)
+    * itf1788: 2932 vectors of 54 ops from 7 files (847 before), 2438 interval-valued run twice. 18
+      divergence rows, all anticipated by the plan's categories: 11 degenerate infinities (log,
+      log2, log10 of an operand meeting the domain only at 0; atanh of one meeting it only at ±1)
+      and 7 cut-based relations (overlap: 1788's meets is our overlaps). every function vector
+      matches 1788's tightest enclosure in both passes, atan2's 375 included
+    * `tests/test_elementary.py`: all 19 functions correctly rounded in the three directions against
+      the decimal oracle on 60 random points each, plus 40 extreme points (`sin(1e22)`, exp near the
+      float range, `log(10**-400)`, ...); the enclosures hold the value at 64, 100 and 180 bits.
+      libm is not an oracle: this laptop's UCRT `acosh` was 2 ulp off near 1, where the decimal
+      oracle agreed with `elementary`
+    * sabotage, each red (the scripts were throwaway, the results are here): the vectors under
+      elementary ignoring the direction, ops never rounding outward, functions rounding floats to
+      nearest when outward, round ties away instead of to even, sin/cos ignoring interior extrema;
+      the unit tests under cosh's direction flipped, a rounded end kept closed, the wrong end of sin
+      taken as the lower, an extremum at a piece's end counted as inside, tan ignoring a pole,
+      silent domain clipping, a wrong sin/cos quadrant, ln 2 a hair off, the error bounds dropped,
+      round's ties going down, ceil ignoring an open start, sign of an open end at 0, min never
+      attaining a flat end, min falling back to the face rule, fma rounding twice, the outward hook
+      rounding to nearest (`tests/test_extreme_floats.py`), the subclass losing its reflected add,
+      outward keeping flags at moved ends, and for atan2: the quadrant II corners swapped, no
+      attainment along an infinite edge, the cut read as pi from below, the (+, -) angle missing its
+      pi. two survived at first and were killed by new tests: an extremum at a piece's end (only cos
+      at 0; pinned by examples) and dropped error bounds (pinned through the raw constant series).
+      the taylor loops' error bounds still survive their removal, because the interval rounding
+      around them is wider than what they bound; they are argued, not pinned
+* choices made while building (also in `v2-plan.md`'s decision log): functions have their own
+  evaluator, not the applicator (an irrational value has no exact `Value`, and sin/cos/tan split at
+  irrational points); no libm; an irrational value of an exact operand is its tightest float
+  enclosure, open at both ends; outward, a moved end is open; a domain's end is a point of it where
+  the one-sided limit exists (`log(0)` = -inf); atan2 on the negative x axis is pi; `minimum` and
+  `maximum` for the method names; `exp2`/`exp10` of an int past 100000 are rounded, not built
+* not built, and why: `pow` with a real exponent (a: scope, M11); `less`, `strictLess`, `interior`,
+  `mid`, `rad`, `wid`, `mag`, `mig` (a: see M11); reverse ops (a)
+
 ## 3. order and parallelism
 
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
-the backlog. M4 depends on M3 (the class's
+the backlog, and M12 built its (b) items the same day. M4 depends on M3 (the class's
 `parse`, `__str__` and `__repr__` come from `fmt`); M7a and M9 are independent after M6. total ≈ 12
 working days (the per-milestone sum without M8) plus the M7b session. the first internally usable
 point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6; release needs M7b.
@@ -474,8 +524,8 @@ point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6
 | `INFINITY_IS_NOT_FINITE`, `CONSISTENCY_CHECK` | deleted; `if __debug__` check in the class |
 | `interval.py` (`Interval`, `MultipleInterval`) | archived in `archive/v1/`; `tests/oracles.py` does its job |
 | `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; comes back at M8 |
-| `exp()`, `log(base)` | open (M11): `functions.py` |
-| `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | open (M11): `floor()` exists as a set op, the dunders do not |
+| `exp()`, `log(base)` | `exp()`, `log(base=None)`, and the rest of `functions.py` (M12) |
+| `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | the same dunders, returning the set of values attained (`steps.py`, M12) |
 | `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | open (M11): int exponents only |
 | `<<`, `>>` | open (M11): port or record as gone |
 | `random_multi_interval` | open (M11): the tests use hypothesis strategies instead |

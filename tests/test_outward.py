@@ -92,3 +92,10 @@ def test_moved_ends_are_open(expr, expected):
 def test_nearest_is_the_default():
     assert M(0.1) + 0.2 == M(0.30000000000000004)
     assert M(1e308) // 1e-308 == M(math.inf)
+
+
+def test_an_infinite_corner_keeps_a_float_operand_float():
+    """`2.5 / inf` is exact (0) either way; the float operand makes it 0.0, as in MultiInterval"""
+    for cls in (M, O):
+        result = cls(2.5) / math.inf
+        assert result == cls(0.0) and isinstance(result.inf, float)

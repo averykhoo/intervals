@@ -4,7 +4,7 @@ two parts. **current design** is normative: if the code and that section disagre
 bug. the **decision log** below it is history, kept verbatim, with a marker wherever a later decision
 superseded it.
 
-## current design (2026-09-23; brought up to date with the build at M10, 2026-09-25)
+## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25)
 
 ### domain and semantics
 
@@ -12,9 +12,9 @@ superseded it.
   normalized to `0.0` at construction and the sign bit is never consulted (as v1 already does)
 * `[inf]` and `[-inf]` are legal degenerate intervals; `[a, inf]` and `[a, inf)` are different sets
 * number types: int and Fraction (exact, never rounded), float (endpoint arithmetic goes through the
-  rounding hook, identity by default — see arithmetic). datetime/timedelta: the time layer is
-  deferred; v1's `time_interval.py` is archived with the rest of v1 and returns once it runs on
-  the v2 class (D4)
+  rounding hook: to nearest in `MultiInterval`, outward in `OutwardMultiInterval` — see
+  arithmetic). datetime/timedelta: the time layer is deferred; v1's `time_interval.py` is archived
+  with the rest of v1 and returns once it runs on the v2 class (D4)
     * `int / int` that is not integral gives a Fraction; float only if an operand is float. a
       Fraction with denominator 1 is normalized to int in the Cut constructor, next to the `-0.0`
       normalization (they already compare and hash equal; this keeps types and printing clean)
@@ -223,18 +223,66 @@ superseded it.
       with `DomainClippedWarning`; a finite dividend mod a divisor of ±inf follows python's scalar
       result, which is also the limit along the box (`3 % [inf]` = `[3]`, `-3 % [inf]` = `[inf]`,
       `0 % [inf]` = `[0]`)
-* **rounding**: the hook exists from day one in the descriptor (retrofitting touches every op twice)
-  but is **identity by default**. int and Fraction are exact and never rounded. `mod`, `floor` and
-  `floordiv` have no hook: they compute exactly and round to nearest once (`modulo.py::_to_float`).
-  poles never go through the hook, and a float piece that rounding squeezes to one point keeps
-  that point, closed. outward `math.nextafter` (later gmpy2/mpfr as tight mode) is to be enabled
-  by a subclass or factory (**not built as of 2026-09-25**: only the tests set `rounded`, see
-  `tests/test_ops_properties.py::outward`; M11), never by a
-  flag or context manager: wrapper types add meanings, flags change what existing objects mean. once
-  an endpoint is rounded it is attained by nothing, so the open/closed flag on a rounded float
-  endpoint is conservative, not a promise; attainment tests run on exact types only (±inf counts
-  as exact, see number types). libm is not
-  correctly rounded, so ±1 ulp around trig is pragmatic, not rigorous — document
+* **rounding** is a property of the type, never a flag or context manager (wrapper types add
+  meanings, flags change what existing objects mean). `MultiInterval` rounds a float result to
+  nearest (the descriptor hook's identity default: python's float arithmetic).
+  **`OutwardMultiInterval`** (M12) is the subclass that rounds outward: its class attribute
+  `_outward` reaches every op as `outward=`, and the `ops.OUTWARD` descriptors evaluate a float corner
+  exactly (each float as the Fraction it denotes) and round it down for a low end and up for a high
+  end (`rounding.round_rational`). that is the tightest float enclosure, so gmpy2/mpfr would only be
+  faster, not tighter. mixed with a `MultiInterval` on either side, the result is outward: the
+  subclass overrides every reflected dunder, which python requires before it tries the right
+  operand first. int and Fraction are exact and never rounded. `mod`, `floordiv`, `fma` and the step
+  functions have no hook: they compute exactly and round once (`rounding.round_piece`), to nearest
+  or outward by type. poles never go through the hook, and a float piece that rounding squeezes to
+  one point keeps that point, closed
+* **flags at rounded ends**: outward, attainment is decided on exact values (an `OUTWARD`
+  descriptor's `fn` is exact too), so an end that directed rounding moved is **open** — nothing
+  attains it (`OutwardMultiInterval(0.1) + 0.2` = `(0.3, 0.30000000000000004)`), and an end that is a
+  double already keeps its flag. to nearest, flags are conservative, not a promise (the suite checks
+  the nearest mode against the closure). an irrational value of an exact operand is its tightest
+  float enclosure, open at both ends, in both classes (`sqrt([2])`): an exact operand never loses
+  its true value
+
+### elementary and step functions (M12)
+
+* `functions.py`: sqrt, exp, exp2, exp10, log (with an optional base), log2, log10, sin, cos, tan,
+  asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh, and atan2; methods of the class. the
+  result is the set of values attained, ±inf ordinary points where the function has a limit there
+  (`exp(-inf)` = 0, `tanh(inf)` = 1, `atan(inf)` = pi/2)
+    * **domain**: points with no value are dropped with one `DomainClippedWarning` (below 0 for sqrt
+      and the logs, outside [-1, 1] for asin acos atanh, below 1 for acosh, ±inf for sin cos tan). a
+      domain's end is a point of it wherever the function has a limit there from inside:
+      `log(0)` = -inf, `atanh(±1)` = ±inf. the domain reaches those ends from one side only, so no
+      second limit disagrees (1788 drops them: `log([0])` is empty there, `[-inf]` here)
+    * **shape**: each function is monotone and continuous on each piece once split where its
+      direction changes (cosh at 0), so a piece maps to the piece between its ends' images. sin and
+      cos add ±1 for an extremum strictly inside a piece (found by `elementary.floor_over_pi`, exact:
+      only cos at 0 has a rational extremum); tan splits a piece holding a pole into both sides, with
+      both infinities attained, as `1/x` does at a zero inside a piece
+    * **values**: `elementary.py` computes every value in pure python, correctly rounded in all three
+      directions: fixed-point interval enclosures with bounded errors, refined by ziv's strategy
+      until both ends round alike. it terminates because the rational values are exactly the known
+      ones (`exp(0)`, `sqrt` of a square, `log2` of a power of 2, `2 ** int`, ...) and every other
+      value is irrational (lindemann-weierstrass, gelfond-schneider). so results are the same on
+      every platform; libm is not correctly rounded (this laptop's UCRT `acosh` is 2 ulp off near 1,
+      measured 2026-09-25). `exp2`/`exp10` of an int past `elementary.EXACT_POWER_LIMIT` (100000)
+      are rounded rather than built exactly
+    * **atan2(y, x)**: the angle in [-pi, pi]. no -0, so the negative x axis is at pi and points just
+      below it near -pi; `atan2(v, ±inf)`, `atan2(±inf, u)` follow python (the limits). `(0, 0)` and
+      `(±inf, ±inf)` have no angle: a box that is one of them contributes nothing and warns
+      (`IndeterminateResultWarning`), a larger box takes the limits along its edges (D2's rule).
+      each box splits into negative, zero and positive parts, where the angle is monotone in both
+      coordinates
+* `steps.py`: floor, ceil, trunc, round (ties to even, as python), round_ties_away and sign, plus
+  `round(A, ndigits)` on a grid of `10 ** -ndigits`. one engine: a piece attains every grid value
+  from the one just inside its start to the one just inside its end, listed up to
+  `steps.ENUMERATION_CAP` (1000, shared across pieces), else their hull and a `HullWarning`.
+  `modulo.floor` delegates here. `math.floor/ceil/trunc` and `round()` call these (the dunders
+  return sets)
+* `ops.minimum/maximum` (the class's `minimum()`, `maximum()`; builtin `min` needs a bool from `<`):
+  descriptors with their own attainment, since min is flat where the other operand is out of reach.
+  `ops.fma`: `add(mul(a, b), c)` computed exactly, rounded once
 
 ### empties and warnings
 
@@ -269,23 +317,35 @@ superseded it.
   everywhere — a flag would be `INFINITY_IS_NOT_FINITE` ×10 and multiply the test matrix). instead a
   conformance adapter in the test suite over itf1788 vectors:
     * **input rule**: a 1788 unbounded bound maps to our open-at-inf, because 1788 never attains
-      infinity. *measured 2026-09-24 (M9): the ops built so far do not depend on it* — reading
-      unbounded bounds as closed at inf turns 0 of the 847 vectors red, because D2's corner rule
-      gives the same closed hull either way. it stays as the faithful reading, pinned by its own test
+      infinity. measured 2026-09-24 (M9): reading unbounded bounds as closed at inf turned 0 of the
+      847 vectors red, because D2's corner rule gives the same closed hull either way. re-measured
+      2026-09-25 (M12): 4 of the 2932 vectors go red, all `isMember ±infinity [entire]`, which only
+      the open reading answers false. it is the faithful reading, pinned by its own test
     * **precision rule** (added at M9): operands are the literals' nearest doubles held exactly,
       and our exact result is rounded outward to doubles before comparing, so a vector checks
-      soundness and sharpness against 1788's tightest enclosure. the float path (round to nearest)
-      is not what the vectors test
+      soundness and sharpness against 1788's tightest enclosure. functions return their tightest
+      enclosure themselves. the round-to-nearest float path is not what the vectors test
+    * **outward rule** (added at M12): every interval-valued vector runs a second time with the
+      operands as floats in an `OutwardMultiInterval`, compared with no rounding by the adapter, so
+      the library's own outward rounding must produce 1788's tightest enclosure
     * **output rule**: closed-hull **both** our result and the expected value before comparing
       (the input rule would otherwise read 1788's unbounded expected bound as open at inf, while
       our hulled result is closed there); absorbs multi-interval vs connected (`[1,2]/[-1,1]`:
-      1788 entire, ours `[-inf,-1] ∪ [1,inf]`, hull = entire → match)
+      1788 entire, ours `[-inf,-1] ∪ [1,inf]`, hull = entire → match). a bool, a number or an
+      overlap state is compared as it is
     * residual divergence table: degenerate infinities, domain-clipped functions, decoration
-      expectations. (`1/[0]` is not a row: both give empty.) empty as of 2026-09-24: all 847
-      vectors match (`tests/itf1788/test_itf1788.py::DIVERGENCES`)
+      expectations, and (added at M12) cut-based relations. (`1/[0]` is not a row: both give
+      empty.) as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
+      interval-valued and run twice; 18 rows (`tests/itf1788/test_itf1788.py::DIVERGENCES`): 11
+      degenerate infinities (`log`/`log2`/`log10` of an operand meeting the domain only at 0, `atanh`
+      of one meeting it only at ±1) and 7 cut-based relations (`overlap [1,2] [2,3]` is `meets` in
+      1788 and `overlaps` here, since the two share the point 2). counted and skipped: `pow` (real
+      exponents, open), `less`, `strictLess`, `interior`, `isNaI`, `mid`, `rad`, `wid`, `mag`, `mig`;
+      the reverse-op and cancel files are not vendored
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
-  community test framework and its `itl` vector DSL. two `.itl` files are vendored unmodified from
-  nehmeier/ITF1788 at `e0e0d7e` (Apache 2.0; `tests/itf1788/LICENSE`, `NOTICE`)
+  community test framework and its `itl` vector DSL. seven `.itl` files are vendored unmodified from
+  nehmeier/ITF1788 at `e0e0d7e` (Apache 2.0; `tests/itf1788/LICENSE`, `NOTICE`; the blob hashes
+  match upstream's)
 * decorations (`com/dac/def/trv/ill`) are **not in the core**. they answer "was f defined and
   continuous on the whole input", which the result set cannot (`sqrt([-1,4])` = `[0,2]` either way),
   and only solver existence proofs need that. when the solver comes, a decorated wrapper type; until
@@ -303,12 +363,17 @@ imports only point downward.
                            size; Builder (collect, sort once, sweep)
         fmt.py             format and parse cut tuples; regexes compiled at module level
         relations.py       TruthSet, pointwise compare, relation predicates, allen()
+        rounding.py        rounding an exact value to a double: nearest, down, up
         applicator.py      op descriptor, corner evaluation, closure pass, rounding hook
-        ops.py             neg pos absolute reciprocal add sub mul div, power (int exponents) as
-                           descriptors; functions later
-        modulo.py          v3 far-edge mod / floor / floordiv / divmod_
-        multi_interval.py  the class: immutable cut tuple; _coerce (numbers and intervals only —
-                           strings go through an explicit parse()); one-line dunders. arithmetic
+        ops.py             neg pos absolute reciprocal add sub mul div, power (int exponents),
+                           minimum maximum as descriptors; the OUTWARD descriptors; fma
+        modulo.py          v3 far-edge mod / floordiv / divmod_ (floor from steps)
+        steps.py           floor ceil trunc round round_ties_away sign: enumerate or hull
+        elementary.py      correctly rounded elementary functions at one exact point
+        functions.py       the elementary functions and atan2 over cut tuples
+        multi_interval.py  the class and OutwardMultiInterval: immutable cut tuple; _coerce
+                           (numbers and intervals only — strings go through an explicit
+                           parse()); one-line dunders. arithmetic
                            owns `+ - * / // % **` and unary `- + abs`; set algebra is `| & ^ ~`
                            plus named methods (`difference` has no operator, because `-` is
                            arithmetic subtraction, as in v1)
@@ -320,7 +385,8 @@ imports only point downward.
         exhaustive_modulo.py  exhaustive modulo differential, run by hand, not in the gate
         exhaustive_ops.py  exhaustive differential for + - * / reciprocal neg abs **, by hand
         itf1788/           vendored .itl files, itl.py parser, adapter + divergence table
-        test_<module>.py   (ops split into test_ops_examples.py and test_ops_properties.py)
+        test_<module>.py   (ops split into test_ops_examples.py and test_ops_properties.py;
+                           test_minmax_fma.py and test_outward.py for the rest of M12)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
@@ -366,6 +432,12 @@ imports only point downward.
   attained (pins e.g. `[-1, 1] * [inf]` = `[-inf] ∪ [inf]`, not `[-inf, inf]`)
 * sabotage each check once (flip one merge comparison) and watch it go red before trusting it
 * itf1788 conformance through the adapter above
+* elementary functions (`tests/test_elementary.py`): correctly rounded in all three directions
+  against an independent oracle (the decimal module, whose exp, ln, log10 and sqrt are correctly
+  rounded, and taylor series in decimal for the trig functions), and every enclosure holds the value
+  at several working precisions. the constant series' error bounds are pinned directly; the taylor
+  loops' bounds are covered by the interval rounding's slack around them, so no sampled value shows
+  one missing, and they are argued in their docstrings instead
 
 ### later (not in v2.0)
 
@@ -374,10 +446,36 @@ imports only point downward.
   only by branch-at-zero functions. never a position in the order — that is what the signed-zero seam
   was
 * a decorated wrapper type, with the solver
-* `functions.py` (sqrt/log/exp/trig through the applicator), forward-mode autodiff, newton's method as
-  a test, numpy compat (array API / `__array_ufunc__`), tight rounding via gmpy2/mpfr
+* forward-mode autodiff, newton's method as a test, numpy compat (array API / `__array_ufunc__`),
+  gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one)
 
 ## decision log
+
+### 2026-09-25 revision: M12, the unblocked backlog built
+
+the (b) items of the M11 backlog, built in one session by owner request ("build all the things that
+are unblocked"); the choices made while building are recorded here and in
+v2-implementation-plan.md (M12), and written into "current design" above:
+
+* **functions do not go through the applicator**: an irrational value has no exact `Value` for the
+  descriptor's `fn` to return, and sin/cos/tan split at irrational points. `functions.py` has its
+  own small evaluator, as `modulo.py` does; it reuses `applicator.split_pieces` and `warn`
+* **no libm**: every value comes from a pure-python, correctly rounded evaluator (`elementary.py`),
+  so results are the same on every platform and a directed rounding is a true bound. this replaces
+  "±1 ulp around trig is pragmatic, not rigorous — document"
+* **an irrational value of an exact operand is its tightest float enclosure** (`sqrt([2])` is the
+  open one-ulp piece), not a nearest float: an exact operand never loses its true value
+* **a moved end is open, outward**: attainment is decided on exact values, so the ends that directed
+  rounding moved are open; to nearest, flags stay conservative
+* **the end of a function's domain is a point of it** where the one-sided limit exists
+  (`log(0)` = -inf, `atanh(±1)` = ±inf); 1788 drops those points, and the 11 vectors where that
+  shows are divergence rows (degenerate infinities)
+* **atan2 on the negative x axis is pi** (there is no -0); `(0, 0)` and `(±inf, ±inf)` have no value
+* **Allen relations stay cut-based** (`[1, 2]` and `[2, 3]` overlap): a new divergence category,
+  "cut-based relations", for the 7 overlap vectors where 1788 says meets
+* **the step functions share one engine and one cap** (`steps.py`); `modulo.floor` delegates to it
+* names: `minimum`/`maximum` (numpy's names for the pointwise min and max; builtin `min` needs a
+  bool from `<`), `round_ties_away` (1788's roundTiesToAway), `OutwardMultiInterval`
 
 ### 2026-09-23 revision: implementability review
 
