@@ -387,11 +387,12 @@ def test_rpow_undefined():
 
 def test_package_exports_unchanged():
     # the ops, the applicator, modulo, steps and functions stay in their submodules; M7 adds only
-    # HullWarning, M12 only OutwardMultiInterval
+    # HullWarning, M12 only OutwardMultiInterval, M13h only the reductions (point functions, exported
+    # as M13e plans for the reverse ops)
     assert set(intervals.__all__) == {
         'MultiInterval', 'OutwardMultiInterval', 'EMPTY', 'REALS', 'Size', 'Builder', 'TruthSet', 'Allen',
         'Cut', 'Side', 'IntervalWarning', 'EmptySetPropagationWarning', 'DomainClippedWarning',
-        'IndeterminateResultWarning', 'HullWarning'}
+        'IndeterminateResultWarning', 'HullWarning', 'sum_', 'sum_abs', 'sum_sqr', 'dot'}
     for name in ('add', 'mul', 'OpDescriptor', 'apply_binary', 'mod', 'floordiv', 'floor', 'sqrt', 'sign',
                  'fma', 'apply', 'step'):
         assert not hasattr(intervals, name), name

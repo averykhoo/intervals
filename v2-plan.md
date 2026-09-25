@@ -4,8 +4,8 @@ two parts. **current design** is normative: if the code and that section disagre
 bug. the **decision log** below it is history, kept verbatim, with a marker wherever a later decision
 superseded it.
 
-## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a and
-M14's fuzz job and oracle, 2026-09-26)
+## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a,
+M13h and M14's fuzz job and oracle, 2026-09-26)
 
 ### domain and semantics
 
@@ -244,6 +244,15 @@ M14's fuzz job and oracle, 2026-09-26)
   the nearest mode against the closure). an irrational value of an exact operand is its tightest
   float enclosure, open at both ends, in both classes (`sqrt([2])`): an exact operand never loses
   its true value
+* **reductions** (M13h, 2026-09-26; `intervals/reductions.py`): 1788's `sum`, `sumAbs`,
+  `sumSquare`, `dot` as `sum_(xs)`, `sum_abs(xs)`, `sum_sqr(xs)`, `dot(xs, ys)`, exported from
+  `intervals`. point ops over any iterable of real numbers, not interval ops: each operand is held
+  exactly, the value is computed as a Fraction and rounded once to a float, to nearest (ties to
+  even) by default or by the keyword-only `rounding='down'` / `'up'`, so the operands' order never
+  matters. the result is always a float, never `-0.0`; the empty sum is `0.0`. ±inf are points: a
+  sum reaching one infinity is that infinity in every direction. a `nan` operand, `inf + -inf` and
+  `0 * inf` raise `ValueError` (1788 answers `NaN`; ours follows the constructors' `nan` rule and
+  D9's empty-set rule), as do sequences of different lengths in `dot`
 
 ### elementary and step functions (M12)
 
@@ -334,17 +343,21 @@ M14's fuzz job and oracle, 2026-09-26)
       our hulled result is closed there); absorbs multi-interval vs connected (`[1,2]/[-1,1]`:
       1788 entire, ours `[-inf,-1] ∪ [1,inf]`, hull = entire → match). a bool, a number or an
       overlap state is compared as it is
+    * **reduction rule** (added at M13h): a reduction's result must already be the double 1788
+      specifies (rounded to nearest) and is compared as it is; a `ValueError` from it is 1788's
+      `NaN` (`tests/itf1788/test_itf1788.py::REDUCTIONS`, `::_reduce`)
     * residual divergence table: degenerate infinities, domain-clipped functions, decoration
       expectations, and (added at M12) cut-based relations. (`1/[0]` is not a row: both give
       empty.) keyed on the statement with its decorations stripped
-      (`tests/itf1788/test_itf1788.py::key`) since M13a. measured 2026-09-26 (M13a), the current
-      count: 19 files, 9542 statements; 4767 vectors of 54 ops (every op in `OPS` has vectors),
+      (`tests/itf1788/test_itf1788.py::key`) since M13a. measured 2026-09-26 (M13h), the current
+      count: 19 files, 9542 statements; 4782 vectors of 58 ops (every op in `OPS` has vectors),
       4120 of them interval-valued and run twice; 49 keys and 0 unknown failures: 10 degenerate
       infinities (11 vectors), 5 cut-based relations (7 vectors) and 34 decoration expectations,
       the `[nai]` operands of implemented ops, generated in code (34 vectors and 6 outward items).
-      counted and skipped: 4775 statements of 57 ops not implemented yet (the largest `pow` 1431,
+      counted and skipped: 4760 statements of 53 ops not implemented yet (the largest `pow` 1431,
       the reverse ops, `cancelMinus`/`cancelPlus`, `csc`, `sec`, the text constructors), each
-      assigned to an M13 sub-task. history: as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
+      assigned to an M13 sub-task. history: at M13a (2026-09-26) 4767 vectors of 54 ops, 4775
+      statements of 57 ops skipped; M13h added the 15 reduction vectors. as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
       interval-valued and run twice; 18 rows (`tests/itf1788/test_itf1788.py::DIVERGENCES`): 11
       degenerate infinities (`log`/`log2`/`log10` of an operand meeting the domain only at 0, `atanh`
       of one meeting it only at ±1) and 7 cut-based relations (`overlap [1,2] [2,3]` is `meets` in
@@ -385,6 +398,7 @@ imports only point downward.
         steps.py           floor ceil trunc round round_ties_away sign: enumerate or hull
         elementary.py      correctly rounded elementary functions at one exact point
         functions.py       the elementary functions and atan2 over cut tuples
+        reductions.py      sum_ sum_abs sum_sqr dot over numbers: exact, rounded once (M13h)
         multi_interval.py  the class and OutwardMultiInterval: immutable cut tuple; _coerce
                            (numbers and intervals only — strings go through an explicit
                            parse()); one-line dunders. arithmetic
@@ -402,7 +416,8 @@ imports only point downward.
         conftest.py        the fuzz profile (M14); does nothing unless HYPOTHESIS_PROFILE is set
         test_<module>.py   (ops split into test_ops_examples.py and test_ops_properties.py;
                            test_minmax_fma.py and test_outward.py for the rest of M12;
-                           test_oracle_flint.py, the arb oracle for the functions, M14)
+                           test_oracle_flint.py, the arb oracle for the functions, M14;
+                           test_reductions.py, M13h)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
@@ -464,6 +479,11 @@ imports only point downward.
   `elementary.rounded_angle`/`floor_over_pi`. a comparison arb cannot decide retries at more bits
   (`test_oracle_flint.py::PRECISIONS`), then is rejected and counted (0 at default settings
   and under fuzz ×10, 2026-09-26)
+* the reductions (M13h, 2026-09-26; `tests/test_reductions.py`): a random differential against
+  Fraction arithmetic, each result checked from the definition of rounding on its neighbouring
+  doubles (`::is_rounded`, not the package's rounding) in all three directions, float sums also
+  against `math.fsum`, and the special values (±inf, `nan`, `0 * inf`) by rule, with the itf1788
+  vectors as `@example`s
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
   every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 100) times its
   own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
@@ -483,6 +503,24 @@ imports only point downward.
   gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one)
 
 ## decision log
+
+### 2026-09-26 revision: M13h, the reductions, built
+
+built and measured 2026-09-26; details in v2-implementation-plan.md (M13h). no D row covered it, so
+the choices below were made while building, each the most conservative reading of the plan, and
+are now "current design" (arithmetic, ieee 1788, testing):
+* **exported from `intervals`**: `sum_`, `sum_abs`, `sum_sqr`, `dot`, following M13e's plan for
+  the reverse ops (`sum_` keeps its underscore so it never shadows the builtin)
+* **the direction is a keyword-only string**, `rounding='nearest'` by default, `'down'`, `'up'`:
+  no public API took a direction before, and `rounding.py`'s constants stay internal
+* **the result is always a float**, also for int and Fraction operands (the plan's "rounded once",
+  an exception to "int and Fraction are never rounded", since a reduction is 1788's float op)
+* **no value raises**: a `nan` operand, `inf + -inf`, `0 * inf` raise `ValueError` where 1788
+  answers `NaN`, as `nan` does in a constructor and as D9 decided for `mid` of the empty set; the
+  adapter reads the error as `NaN`. no warning. open to the owner: returning `nan` instead (1788,
+  ieee 754 and python's float `sum` do) would be a looser, compatible change later
+* the 15 reduction vectors match with no divergence row; itf1788 now 4782 vectors of 58 ops, 4760
+  statements of 53 ops skipped
 
 ### 2026-09-25 revision: M13a and M14's fuzz job and oracle built
 

@@ -12,6 +12,10 @@ from intervals.kernel import Builder
 from intervals.kernel import Size
 from intervals.multi_interval import MultiInterval
 from intervals.multi_interval import OutwardMultiInterval
+from intervals.reductions import dot
+from intervals.reductions import sum_
+from intervals.reductions import sum_abs
+from intervals.reductions import sum_sqr
 from intervals.relations import Allen
 from intervals.relations import TruthSet
 
@@ -34,4 +38,8 @@ __all__ = [
     'DomainClippedWarning',
     'IndeterminateResultWarning',
     'HullWarning',
+    'sum_',
+    'sum_abs',
+    'sum_sqr',
+    'dot',
 ]

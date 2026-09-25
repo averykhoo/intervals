@@ -18,6 +18,9 @@ and lists them). the adapter's rules:
   it absorbs multi-interval vs connected (`1/[-10, 10]`: ours `[-inf, -1/10] ∪ [1/10, inf]`, 1788
   entire) and our attained infinities vs 1788's unattained ones. a boolean, a number or an overlap
   state is compared as it is
+* **reduction rule**: the reductions (`sum_nearest` and the rest) round their own value to nearest,
+  so ours must already be that double and is compared as it is; a `ValueError` from one (a `nan`
+  operand, `inf + -inf`, `0 * inf`) is 1788's `NaN`
 * **decorations**: dropped from inputs and expected values; only the bare interval is compared.
   decorations are not in the core (v2-plan.md "ieee 1788"), so no vector checks one, and a
   divergence row is keyed on the statement with its decorations stripped (the fork has many
@@ -45,6 +48,10 @@ from intervals import EMPTY
 from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import REALS
+from intervals import dot
+from intervals import sum_
+from intervals import sum_abs
+from intervals import sum_sqr
 from intervals.errors import IntervalWarning
 from intervals.relations import Allen
 from tests.itf1788.itl import Interval
@@ -109,7 +116,13 @@ OPS = {
     'sup': lambda a: a.sup if a else -math.inf,
     # the overlap state: our allen relation, named as in 1788
     'overlap': lambda a, b: _overlap(a, b),
+    # reductions: numbers in, one double out, rounded to nearest by the op itself (REDUCTIONS)
+    'sum_nearest': sum_,
+    'sum_abs_nearest': sum_abs,
+    'sum_sqr_nearest': sum_sqr,
+    'dot_nearest': dot,
 }
+REDUCTIONS = frozenset({'sum_nearest', 'sum_abs_nearest', 'sum_sqr_nearest', 'dot_nearest'})
 
 _OVERLAP_NAMES = {
     Allen.BEFORE: 'before', Allen.MEETS: 'meets', Allen.OVERLAPS: 'overlaps', Allen.STARTS: 'starts',
@@ -237,8 +250,20 @@ def _call(vector, args):
         return OPS[vector.op](*args)
 
 
+def _reduce(vector, args) -> float:
+    """the reduction rule: our double as it is, or 1788's NaN where ours raises ValueError"""
+    try:
+        result = _call(vector, args)
+    except ValueError:
+        return math.nan
+    assert isinstance(result, float), type(result)
+    return result
+
+
 def run(vector):
     """(ours, expected), both through the adapter"""
+    if vector.op in REDUCTIONS:
+        return _reduce(vector, [to_ours(a) for a in vector.args]), float(vector.expected)
     result = _call(vector, [to_ours(a) for a in vector.args])
     if isinstance(vector.expected, Interval):
         return closed_hull_of_ours(result), closed_hull_of_expected(vector.expected)

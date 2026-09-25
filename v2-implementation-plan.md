@@ -517,7 +517,7 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
 * not built, and why: `pow` with a real exponent (a: scope, M11); `less`, `strictLess`, `interior`,
   `mid`, `rad`, `wid`, `mag`, `mig` (a: see M11); reverse ops (a). all now M13
 
-### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a done 2026-09-26)
+### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a and M13h done 2026-09-26)
 
 owner request 2026-09-25: "implement all these ops and get all these tests vendored and passing".
 this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how;
@@ -679,12 +679,49 @@ operands of implemented ops and a decoration check on every decorated vector
   `PossiblyUndefinedOperation`, `IntvlPartOfNaI`, from `ieee1788-exceptions.itl` and the
   constructors' `signal` clauses): `IntervalWarning` subclasses or exceptions
 
-**M13h reductions**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`, `dot_nearest`, 1 each
-as counted 2026-09-25 by the old parser, which saw only the first statement of each of the file's
-4 testcases; M13a's parser reads the 11 it dropped (2026-09-26), so recount when this is built
+**M13h reductions (done 2026-09-26)**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`,
+`dot_nearest`, 1 each as counted 2026-09-25 by the old parser, which saw only the first statement of
+each of the file's 4 testcases; M13a's parser reads the 11 it dropped (2026-09-26): 3, 3, 3 and 6
 * `intervals/reductions.py`: `sum_`, `sum_abs`, `sum_sqr`, `dot` over sequences of numbers, the
   exact value through `Fraction` then rounded once, to nearest by default. point ops, not interval
   ops, so no M14 properties beyond a random differential against `Fraction` arithmetic
+* done 2026-09-26. built:
+    * `intervals/reductions.py::sum_`, `::sum_abs`, `::sum_sqr`, `::dot`, exported from `intervals`
+      (M13e's precedent for the reverse ops; `tests/test_applicator.py::test_package_exports_unchanged`,
+      which pins `intervals.__all__`, lists the four now). any iterable of real numbers (int, Fraction, float,
+      mixed; `bool` and non-reals are a `TypeError`, as in `cuts.py::normalize_value`); each operand
+      is held exactly, the value summed as a Fraction and rounded once by
+      `rounding.round_rational`. the result is always a float, never `-0.0`; `sum_([])` is `0.0`
+    * **choices the plan left open** (conservative, flagged in the decision log): the direction is a
+      keyword-only `rounding='nearest'`, with `'down'` and `'up'` for the largest double below and
+      the smallest above (a string, since no public API had a direction before; `rounding.py`'s
+      `DOWN`/`NEAREST`/`UP` stay internal). ±inf are points: a sum reaching one infinity is that
+      infinity in every direction, `sum_abs`/`sum_sqr` of anything infinite is `inf`. where 1788
+      answers `NaN` (a `NaN` operand, `inf + -inf`, `0 * inf` in `dot`) ours **raises
+      `ValueError`**, following D9's rule for `mid` of the empty set and the constructors' `nan`
+      rule, rather than returning a float `nan`; unequal lengths in `dot` are a `ValueError` too.
+      no warning is emitted
+    * adapter (`tests/itf1788/test_itf1788.py`): the four ops in `OPS`, and a **reduction rule**
+      (`::REDUCTIONS`, `::_reduce`): the result must already be a float and is compared as it is,
+      not through the number rule's `round_up` (which would hide a wrong direction), and a
+      `ValueError` from the op is 1788's `NaN`. no divergence row
+    * tests (`tests/test_reductions.py`, 20 items in 13.0 s, 2026-09-26): 5 `@given`: the sums
+      and `dot` against the exact value computed with Fraction, checked by `::is_rounded` from the
+      definition on the result's neighbouring doubles (ties to even, ±inf at ±2**1024 for nearest),
+      not by the package's rounding; float sums against `math.fsum`; special values (±inf, `nan`,
+      0 against ±inf) for the sums and for `dot`, each error by its message. the 15 itf1788
+      vectors are `@example`s, with the exact tie past `MAX`, `[0.1, 0.1, 0.1]` (a tie) and
+      overflow by direction; plus the errors, keyword-only `rounding`, `-0.0`, iterables
+* evidence, measured 2026-09-26 (census by importing the test module): the 15 reduction vectors
+  all match, 0 rows; all ops: 4782 vectors of 58 ops, 4120 interval-valued, 8902 vector test items,
+  49 divergence keys, 0 unknown failures; skipped 4760 statements of 53 ops
+* sabotage (section 2), each red, then `reductions.py` restored from a copy and `cmp`-checked: the
+  direction ignored (always nearest) 5 red (both differentials, both special-value properties,
+  `test_overflow_by_direction`); each term rounded to a float before summing 7 (the differentials,
+  fsum, `test_vector[libieeep1788_reduction.itl:45]`, the `2**104` dot); `inf + -inf` answered
+  4 (`reduction.itl:27` among them); `0 * inf` answered 4 (`:50`, `:51`); `sum_abs` without `abs` 6
+  (`:31`, `:33`); the `nan` check dropped 3 (both special-value properties and `test_errors`: the
+  adapter alone does not see this one, since `Fraction(nan)` raises a `ValueError` of its own)
 
 **every sub-task**
 * its ops' vectors pass in both passes (plain and, if interval-valued, outward) or are divergence
@@ -841,7 +878,8 @@ land with M13a so that every later M13 op arrives with them
 
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
 the backlog, and M12 built its (b) items the same day. M13 (full itf1788) and M14 (fuzzing) are
-open: M13a is done (2026-09-26), then M13b to M13h in any order, each with its M14 properties;
+open: M13a is done (2026-09-26), then M13b to M13h in any order, each with its M14 properties
+(M13h done 2026-09-26);
 M14's fuzz job and flint oracle are built (2026-09-26), the job's first green GitHub run still
 owed. M4 depends on M3 (the class's
 `parse`, `__str__` and `__repr__` come from `fmt`); M7a and M9 are independent after M6. total ≈ 12

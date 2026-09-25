@@ -59,13 +59,16 @@ Size(rays=0, length=2, points=0)
 * **step functions**: `floor()`, `ceil()`, `trunc()`, `round(ndigits)`, `round_ties_away()`,
   `sign()`, and `math.floor/ceil/trunc` and `round()` on a set: the values attained, listed up to
   1000 of them, else their hull with a `HullWarning`
+* **reductions**: `sum_()`, `sum_abs()`, `sum_sqr()`, `dot()` over sequences of numbers (1788's
+  reductions): the exact value, rounded once to a float, to nearest by default or
+  `rounding='down'` / `'up'`, so the order of the operands never matters
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)
-* **ieee 1788**: not a runtime mode. the test suite runs 4767 vectors of 54 ops from all 19 files
+* **ieee 1788**: not a runtime mode. the test suite runs 4782 vectors of 58 ops from all 19 files
   of the ITF1788 suite through an adapter, the 4120 interval-valued ones a second time through
   `OutwardMultiInterval`, and all of them match except 49 listed divergences where the semantics
   differ on purpose or the vector needs decorations (`tests/itf1788/`, measured 2026-09-26). the
@@ -77,7 +80,8 @@ Size(rays=0, length=2, points=0)
 * `intervals/` — the package: `cuts` (the representation), `kernel` (set algebra on cut tuples),
   `fmt` (printing and parsing), `multi_interval` (the two classes), `relations`, `applicator` and
   `ops` (arithmetic), `modulo`, `steps` (floor, ceil, round, sign), `functions` and `elementary`
-  (the elementary functions over sets, and at one point), `rounding`, `errors`
+  (the elementary functions over sets, and at one point), `reductions` (sums and dot products of
+  numbers), `rounding`, `errors`
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)
