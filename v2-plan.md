@@ -318,6 +318,7 @@ imports only point downward.
         oracles.py         sampling + attainment oracles, derived from the pointwise table only
         strategies.py      hypothesis strategies and probe points shared by the test modules
         exhaustive_modulo.py  exhaustive modulo differential, run by hand, not in the gate
+        exhaustive_ops.py  exhaustive differential for + - * / reciprocal neg abs **, by hand
         itf1788/           vendored .itl files, itl.py parser, adapter + divergence table
         test_<module>.py   (ops split into test_ops_examples.py and test_ops_properties.py)
 
@@ -336,7 +337,9 @@ imports only point downward.
 
 * soundness fuzz for every op: `op(x, y) ∈ op(A, B)` for sampled `x ∈ A, y ∈ B`, on exact operands
   and on floats under identity and outward rounding
-  (`tests/test_ops_properties.py::test_sound_float_identity_rounding`, `::test_sound_float_outward_rounding`)
+  (`tests/test_ops_properties.py::test_sound_float_identity_rounding`, `::test_sound_float_outward_rounding`),
+  and outward rounding with the flags as given over subnormals, near-overflow magnitudes and ±inf
+  (`tests/test_extreme_floats.py::test_outward_rounding_sound_on_extreme_floats`)
 * v1 as a differential oracle: set operations (`tests/test_kernel.py::test_matches_v1`) and
   `A % scalar`, where ours ⊆ v1 and v1 − ours ⊆ {0} (`tests/test_modulo.py::test_matches_v1_mod_scalar`,
   `::test_v1_phantom_zero`)

@@ -209,9 +209,11 @@ every new property test (flip one comparison, watch red, restore).
   an exhaustive differential against `tests/oracles.py` covered every 1- and 2-piece operand over
   the exact grid `{-inf, -2, -1, -1/2, 0, 1/2, 1, 2, inf}` with all open/closed combinations: about
   230k binary and 32k unary checks, plus 179k on the same grid as floats, all with 0 mismatches.
-  the harness was not kept
+  the harness was recovered from the Recycle Bin at M11 (2026-09-25) and is now
+  `tests/exhaustive_ops.py` (see M11)
 
-  recovered from the M6 review's scratch output at M10 (2026-09-25); none of the scripts were kept:
+  recovered from the M6 review's scratch output at M10 (2026-09-25). the differential and the
+  extreme-float fuzz scripts were recovered at M11 and are tracked now; the rest were not kept:
     * **outward rounding on extreme floats**: a fuzz over subnormals (5e-324, 1e-320,
       2.2250738585072014e-308), 1e308, `sys.float_info.max`, 1e±300, 1e154 and random `ldexp`
       values across the exponent range, mixed with ±inf and int/Fraction, checking soundness
@@ -220,7 +222,7 @@ every new property test (flip one comparison, watch red, restore).
       floats from `[-20, 20]` only). 2026-09-24 at `ca667e2`: 22000 boxes, 0 unsound; a hook
       that did not round made add, sub, mul, div and reciprocal unsound. re-run 2026-09-25 at
       `c6cfe14`, 2 × 4000 boxes: 0 unsound, and the rounding hook never received an infinite or
-      a float-free argument. not in the gate; see M11
+      a float-free argument. in the gate since M11 as `tests/test_extreme_floats.py`
     * two hand-derived tables (84 distinct cases, 58 not in `tests/test_ops_examples.py`) matched
       the implementation and `oracles.attained` at every probe point, so the oracle and the
       implementation do not share a blind spot there. four disagreements were the reviewers' own
@@ -414,13 +416,24 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
 * **v1 surface with no v2 row in section 4** (a: port or record as gone): `<<` / `>>`,
   `random_multi_interval`, a public `apply()` (the applicator and `OpDescriptor` are not exported
   from `intervals`). the rows are added to section 4 as "open (M11)"
-* **extreme floats in the gate** (b): outward-rounding soundness with the flags as given, over
-  subnormals and near-overflow magnitudes. it passed by hand at M6 and again 2026-09-25 (see
-  M6's recovered notes), but no tracked test covers it
-* **smaller** (c): the M6 exhaustive differential harness was not kept (modulo's was:
-  `tests/exhaustive_modulo.py`); the old README's reading list (arxiv 1111.0167) and its "redo the
-  modulo illustrations" item, if still wanted
+* **smaller** (c): the old README's reading list (arxiv 1111.0167) and its "redo the modulo
+  illustrations" item, if still wanted
 * **archive deletion** (a): `archive/v1/` goes only by owner decision, after release and M8
+* done 2026-09-25, from the backlog: the M6 differential and the M6 review's extreme-float fuzz,
+  restored from the Recycle Bin by the owner, are tracked again. evidence, at `6d4851f` plus the
+  two files:
+    * `tests/test_extreme_floats.py` (in the gate, about 8 s): 1000 boxes for each of two seeds, open/closed
+      flags as given, with an audit that the hook never sees an infinity and always sees a float.
+      sabotage, each red: a hook that does not round (the file's own
+      `test_fuzz_catches_a_hook_that_does_not_round`, unsound for add, sub, mul, div and
+      reciprocal); the exact hook rounding to nearest (6 ops unsound); `applicator._rounds` letting
+      infinite or all-exact corners through, and the exact hook rounding inward (both red by an
+      exception, not by the assertion)
+    * `python -m tests.exhaustive_ops`: 0 failures in 1105 s. `--float`: 0 failures in 665 s. both
+      ran the same check counts as at M6 (exact: 3213 each for neg, abs and reciprocal, 22491 pow,
+      58165 add, 57871 sub, 58071 mul, 58241 div). `--sabotage`: 1072, 801 and 209 failures, the
+      same as M6's `sabotage.py`
+    * the gate: 2817 passed
 
 ## 3. order and parallelism
 
