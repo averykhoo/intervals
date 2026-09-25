@@ -3,9 +3,11 @@ a parser for the subset of itf1788's `itl` vector language that the vendored fil
 
 a file is `testcase <name> { <statement>; ... }` blocks with `/* */` and `//` comments. a statement
 is `<op> <arg> ... = <expected>`, every value a literal: an interval (`[a, b]`, `[empty]`,
-`[entire]`, `[nai]`, optionally decorated `_trv`/`_def`/`_dac`/`_com`/`_ill`) or an integer (pown's
-exponent). only statements whose op is in `ops` are parsed; the rest are counted by op name. a
-parsed statement with anything else in it raises, so a vector is never dropped silently.
+`[entire]`, `[nai]`, optionally decorated `_trv`/`_def`/`_dac`/`_com`/`_ill`), an integer (pown's
+exponent), a number (`isMember`'s point, `inf`'s result: a `Fraction`, or ±inf), `true`/`false`, or an
+overlap state (`before`, `containedBy`, ...: a str). only statements whose op is in `ops` are parsed;
+the rest are counted by op name. a parsed statement with anything else in it raises, so a vector is
+never dropped silently.
 
 numbers are the literal's nearest double, as the libieeep1788 C++ tests the files were converted
 from read them (`pown [13.1, 13.1] 2` expects a one-ulp result, which an outward-rounded 13.1 could
@@ -17,6 +19,8 @@ Interval(lo=Fraction(0, 1), hi=Fraction(3, 1), decoration='com', nai=False)
 Interval(lo=-inf, hi=Fraction(2, 1), decoration=None, nai=False)
 >>> parse_literal('[entire]'), parse_literal('[empty]').empty
 (Interval(lo=-inf, hi=inf, decoration=None, nai=False), True)
+>>> parse_literal('-0.5'), parse_literal('+infinity'), parse_literal('true'), parse_literal('metBy')
+(Fraction(-1, 2), inf, True, 'metBy')
 """
 import math
 import re
@@ -36,6 +40,8 @@ _DECORATION = r'(?:_(?P<decoration>trv|def|dac|com|ill))?'
 _INTERVAL = re.compile(
     rf'\[\s*(?:(?P<special>empty|entire|nai)|(?P<lo>{_NUMBER})\s*,\s*(?P<hi>{_NUMBER}))\s*\]{_DECORATION}$')
 _INTEGER = re.compile(r'[-+]?[0-9]+$')
+_NUMBER_LITERAL = re.compile(rf'{_NUMBER}$')
+_WORD = re.compile(r'[A-Za-z]+$')
 _LITERAL = re.compile(r'\[[^\]]*\](?:_[a-z]+)?|[^\s\[\]]+')
 _TESTCASE = re.compile(r'testcase\s+(\w+)\s*\{(.*?)\}', re.DOTALL)
 _COMMENT = re.compile(r'/\*.*?\*/|//[^\n]*', re.DOTALL)
@@ -53,7 +59,7 @@ class Interval(NamedTuple):
         return self.lo is None and not self.nai
 
 
-Literal = Union[Interval, int]
+Literal = Union[Interval, int, Fraction, float, bool, str]
 
 
 class Vector(NamedTuple):
@@ -78,6 +84,12 @@ def parse_number(text: str) -> Union[Fraction, float]:
 def parse_literal(text: str) -> Literal:
     if _INTEGER.match(text):
         return int(text)
+    if _NUMBER_LITERAL.match(text):
+        return parse_number(text)
+    if text in ('true', 'false'):
+        return text == 'true'
+    if _WORD.match(text) and text not in ('infinity', 'empty', 'entire', 'nai'):
+        return text
     m = _INTERVAL.match(text)
     if m is None:
         raise ValueError(f'not an itl literal: {text!r}')

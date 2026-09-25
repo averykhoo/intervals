@@ -29,10 +29,12 @@ the algorithm is the far-edge one derived in `references/modulo-derivations/clau
 4. union the boxes and normalize
 
 finite values are computed exactly (a float as the Fraction it denotes). a float operand makes the
-result float, rounded once at the end, and a rounded end's flag is conservative, not a promise.
+result float, rounded once at the end (to nearest, or outward with `outward=True`), and a rounded
+end's flag is conservative, not a promise.
 
 `floor` enumerates the integers a set holds, up to `FLOOR_ENUMERATION_CAP` of them; above that, or
-for an unbounded piece, it returns their hull with a `HullWarning`.
+for an unbounded piece, it returns their hull with a `HullWarning` (`intervals.steps`, which also has
+ceil, trunc, round and sign).
 
 `floordiv` is `floor(div(A, B))` over the finite divisors, so it follows `div` at a zero divisor
 (`[1] // [0, 1]` holds inf) and gives `inf // 3` = inf where python gives nan. an infinite divisor
@@ -64,22 +66,26 @@ from typing import Tuple
 
 from intervals import kernel
 from intervals import ops
+from intervals import steps
 from intervals.applicator import is_infinite
 from intervals.applicator import split_pieces
 from intervals.applicator import warn
 from intervals.cuts import Value
 from intervals.errors import DomainClippedWarning
 from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import HullWarning
 from intervals.errors import IndeterminateResultWarning
 from intervals.kernel import Cuts
+from intervals.rounding import exact_cuts
+from intervals.rounding import float_cuts
+from intervals.rounding import has_finite_float
+from intervals.rounding import round_piece
 
 INF = math.inf
 
 Piece = Tuple[Value, bool, Value, bool]
 Span = Tuple[Value, Value]  # a located piece, both ends treated closed
 
-FLOOR_ENUMERATION_CAP = 1000
+FLOOR_ENUMERATION_CAP = steps.ENUMERATION_CAP
 
 _FINITE: Cuts = kernel.normalize([kernel.piece(-INF, INF, False, False)])
 _NONZERO: Cuts = kernel.complement(kernel.normalize([kernel.piece(0, 0)]))
@@ -88,7 +94,7 @@ _POSITIVE: Piece = (0, False, INF, False)
 
 # MOD
 
-def mod(a: Cuts, b: Cuts) -> Cuts:
+def mod(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     """
     `{x mod y : x in a, y in b}`; see the module docstring
 
@@ -111,13 +117,13 @@ def mod(a: Cuts, b: Cuts) -> Cuts:
         warn(DomainClippedWarning, 'mod: ±inf mod y has no value, so the dividend\'s infinite points were dropped')
     if divisor != b:
         warn(DomainClippedWarning, 'mod: x mod 0 has no value, so 0 was dropped from the divisor')
-    rounded = any(isinstance(cut.value, float) and not is_infinite(cut.value) for cut in a + b)
+    rounded = has_finite_float(a) or has_finite_float(b)
     xs = split_pieces([_exact(p) for p in kernel.pieces(dividend)], (0,))
     ys = [_exact(p) for p in kernel.pieces(divisor)]
     out = []
     for x, y in product(xs, ys):
         for p in _box(x, y):
-            lo, lo_closed, hi, hi_closed = _to_float(p) if rounded else p
+            lo, lo_closed, hi, hi_closed = round_piece(p, outward) if rounded else p
             out.append(kernel.piece(lo, hi, lo_closed, hi_closed))
     return kernel.normalize(out)
 
@@ -268,16 +274,6 @@ def _exact_value(v):
     return v if is_infinite(v) else Fraction(v)
 
 
-def _to_float(p: Piece) -> Piece:
-    """round the finite ends once; a piece rounding squeezes to a point keeps it, closed"""
-    lo, lo_closed, hi, hi_closed = p
-    lo = lo if is_infinite(lo) else float(lo)
-    hi = hi if is_infinite(hi) else float(hi)
-    if lo == hi:
-        return lo, True, hi, True
-    return lo, lo_closed, hi, hi_closed
-
-
 def _negated(p: Piece) -> Piece:
     lo, lo_closed, hi, hi_closed = p
     return -hi, hi_closed, -lo, lo_closed
@@ -310,35 +306,10 @@ def floor(a: Cuts) -> Cuts:
     >>> format_cuts(floor(parse('{ (-1, 1/2] , (2, 3) }')))
     '{ [-1] , [0] , [2] }'
     """
-    out, count, hulled = [], 0, False
-    for lo, lo_closed, hi, hi_closed in kernel.pieces(a):
-        if lo == -INF and lo_closed:
-            out.append(kernel.piece(-INF, -INF))
-        if hi == INF and hi_closed:
-            out.append(kernel.piece(INF, INF))
-        if lo == hi and is_infinite(lo):
-            continue
-        as_float = isinstance(lo, float) and not is_infinite(lo) or isinstance(hi, float) and not is_infinite(hi)
-        first = -INF if lo == -INF else math.floor(lo)
-        last = INF if hi == INF else math.floor(hi) if hi_closed or hi != math.floor(hi) else math.floor(hi) - 1
-        if is_infinite(first) or is_infinite(last) or count + last - first + 1 > FLOOR_ENUMERATION_CAP:
-            hulled = True
-            out.append(kernel.piece(_typed(first, as_float), _typed(last, as_float),
-                                    not is_infinite(first), not is_infinite(last)))
-            continue
-        count += last - first + 1
-        out.extend(kernel.piece(_typed(n, as_float), _typed(n, as_float)) for n in range(first, last + 1))
-    if hulled:
-        warn(HullWarning, f'floor: more than {FLOOR_ENUMERATION_CAP} integers, or infinitely many, so their '
-                          f'hull was returned')
-    return kernel.normalize(out)
+    return steps.floor(a)
 
 
-def _typed(n, as_float: bool):
-    return float(n) if as_float and not is_infinite(n) else n
-
-
-def floordiv(a: Cuts, b: Cuts) -> Cuts:
+def floordiv(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     """
     `floor(div(a, b))` over the finite divisors; an infinite divisor gives the limit (module docstring)
 
@@ -354,8 +325,8 @@ def floordiv(a: Cuts, b: Cuts) -> Cuts:
     # the quotient is taken exactly and only the integers are made float: a rounded quotient can
     # cross an integer, and the floor turns that ulp into a whole unit (`1 // 0.001` is 999, but the
     # float `1 / 0.001` is 1000.0)
-    as_float = _has_finite_float(a) or _has_finite_float(b)
-    a, b = _exact_cuts(a), _exact_cuts(b)
+    as_float = has_finite_float(a) or has_finite_float(b)
+    a, b = exact_cuts(a), exact_cuts(b)
     parts = []
     finite_divisor = kernel.intersection(b, _FINITE)
     if finite_divisor:
@@ -369,7 +340,7 @@ def floordiv(a: Cuts, b: Cuts) -> Cuts:
         warn(IndeterminateResultWarning, 'floordiv(±inf, ±inf) has no value at any point (an indeterminate '
                                          'form), so that part contributes nothing')
     out = kernel.union(*parts) if parts else kernel.EMPTY
-    return _float_cuts(out) if as_float else out
+    return float_cuts(out, outward) if as_float else out
 
 
 def _floordiv_by_infinity(finite_dividend: Cuts, y) -> Cuts:
@@ -380,30 +351,13 @@ def _floordiv_by_infinity(finite_dividend: Cuts, y) -> Cuts:
                             if kernel.intersection(finite_dividend, side))
 
 
-def _has_finite_float(cuts: Cuts) -> bool:
-    return any(isinstance(cut.value, float) and not is_infinite(cut.value) for cut in cuts)
-
-
-def _exact_cuts(cuts: Cuts) -> Cuts:
-    return kernel.normalize(kernel.piece(_exact_value(lo), _exact_value(hi), lc, hc)
-                            for lo, lc, hi, hc in kernel.pieces(cuts))
-
-
-def _float_cuts(cuts: Cuts) -> Cuts:
-    out = []
-    for p in kernel.pieces(cuts):
-        lo, lo_closed, hi, hi_closed = _to_float(p)
-        out.append(kernel.piece(lo, hi, lo_closed, hi_closed))
-    return kernel.normalize(out)
-
-
 def _isolated_infinities(cuts: Cuts) -> bool:
     return any(lo == hi and is_infinite(lo) for lo, _, hi, _ in kernel.pieces(cuts))
 
 
-def divmod_(a: Cuts, b: Cuts) -> Tuple[Cuts, Cuts]:
+def divmod_(a: Cuts, b: Cuts, outward: bool = False) -> Tuple[Cuts, Cuts]:
     """`(floordiv(a, b), mod(a, b))`, with one EmptySetPropagationWarning for an empty operand"""
     if not a or not b:
         warn(EmptySetPropagationWarning, 'divmod: an operand is empty, so the result is empty')
         return kernel.EMPTY, kernel.EMPTY
-    return floordiv(a, b), mod(a, b)
+    return floordiv(a, b, outward), mod(a, b, outward)

@@ -5,6 +5,9 @@ set algebra is `| & ^ ~` plus named methods; `-` is reserved for arithmetic subt
 so set difference is the `difference()` method. `==` and `hash` are structural set equality and do
 not coerce scalars: `MultiInterval(5) == 5` is False, because `hash(MultiInterval(5))` cannot equal
 `hash(5)` for every such pair.
+
+float arithmetic rounds to nearest; `OutwardMultiInterval` is the same class with outward rounding,
+so its results enclose the exact result. the rounding is a property of the type, never a flag.
 """
 import math
 from numbers import Integral
@@ -15,10 +18,12 @@ from typing import Set
 from typing import Tuple
 
 from intervals import fmt
+from intervals import functions
 from intervals import kernel
 from intervals import modulo
 from intervals import ops
 from intervals import relations
+from intervals import steps
 from intervals.cuts import Value
 from intervals.cuts import above
 from intervals.cuts import as_end
@@ -42,6 +47,8 @@ class MultiInterval:
     """
     __slots__ = ('_cuts',)
     _cuts: Cuts
+    # float results round to nearest here and outward in OutwardMultiInterval
+    _outward = False
     # numpy's opt-out, so `np.float64(2) * A` runs the reflected dunders instead of treating A as
     # a sequence (this is not the deferred numpy compat)
     __array_ufunc__ = None
@@ -202,7 +209,7 @@ class MultiInterval:
         if other is NotImplemented:
             return NotImplemented
         a, b = (other._cuts, self._cuts) if reflected else (self._cuts, other._cuts)
-        return self._wrap(op(a, b))
+        return self._wrap(op(a, b, outward=self._outward))
 
     def __add__(self, other):
         return self._binary(other, ops.add)
@@ -248,7 +255,7 @@ class MultiInterval:
         """int exponents only (not bool); on exact operands `A ** -n` is `(A ** n).reciprocal()`"""
         if modulo is not None or isinstance(exponent, bool) or not isinstance(exponent, Integral):
             return NotImplemented
-        return self._wrap(ops.power(self._cuts, exponent))
+        return self._wrap(ops.power(self._cuts, exponent, outward=self._outward))
 
     def reciprocal(self) -> 'MultiInterval':
         """
@@ -257,7 +264,7 @@ class MultiInterval:
         >>> MultiInterval.parse('[1, inf)').reciprocal()
         MultiInterval.parse('(0, 1]')
         """
-        return self._wrap(ops.reciprocal(self._cuts))
+        return self._wrap(ops.reciprocal(self._cuts, outward=self._outward))
 
     def __mod__(self, other):
         """
@@ -291,23 +298,166 @@ class MultiInterval:
         other = self._coerce(other)
         if other is NotImplemented:
             return NotImplemented
-        q, r = modulo.divmod_(self._cuts, other._cuts)
+        q, r = modulo.divmod_(self._cuts, other._cuts, outward=self._outward)
         return self._wrap(q), self._wrap(r)
 
     def __rdivmod__(self, other):
         other = self._coerce(other)
         if other is NotImplemented:
             return NotImplemented
-        return divmod(other, self)
+        q, r = modulo.divmod_(other._cuts, self._cuts, outward=self._outward)
+        return self._wrap(q), self._wrap(r)
 
     def floor(self) -> 'MultiInterval':
         """
-        the integers `floor(x)` for x in self
+        the integers `floor(x)` for x in self, listed up to `steps.ENUMERATION_CAP` of them (then their
+        hull, with a HullWarning); `math.floor(A)` is the same
 
         >>> MultiInterval.parse('[-1/2, 2)').floor()
         MultiInterval.parse('{ [-1] , [0] , [1] }')
         """
         return self._wrap(modulo.floor(self._cuts))
+
+    def ceil(self) -> 'MultiInterval':
+        """the integers `ceil(x)` for x in self (as `floor()`); `math.ceil(A)` is the same"""
+        return self._wrap(steps.ceil(self._cuts))
+
+    def trunc(self) -> 'MultiInterval':
+        """floor above 0 and ceil below; `math.trunc(A)` is the same"""
+        return self._wrap(steps.trunc(self._cuts))
+
+    def round(self, ndigits=None) -> 'MultiInterval':
+        """
+        `round(x, ndigits)` for x in self, ties to even as python rounds; `round(A)` is the same
+
+        >>> round(MultiInterval.parse('[1/2, 5/2]'))
+        MultiInterval.parse('{ [0] , [1] , [2] }')
+        """
+        return self._wrap(steps.round_(self._cuts, ndigits, outward=self._outward))
+
+    def round_ties_away(self, ndigits=None) -> 'MultiInterval':
+        """as `round()`, with ties away from zero (ieee 1788 roundTiesToAway)"""
+        return self._wrap(steps.round_ties_away(self._cuts, ndigits, outward=self._outward))
+
+    def sign(self) -> 'MultiInterval':
+        """
+        the signs attained, among -1, 0 and 1 (`sign(±inf)` = ±1)
+
+        >>> MultiInterval.parse('[-2, 0]').sign()
+        MultiInterval.parse('{ [-1] , [0] }')
+        """
+        return self._wrap(steps.sign(self._cuts))
+
+    def __floor__(self) -> 'MultiInterval':
+        return self.floor()
+
+    def __ceil__(self) -> 'MultiInterval':
+        return self.ceil()
+
+    def __trunc__(self) -> 'MultiInterval':
+        return self.trunc()
+
+    def __round__(self, ndigits=None) -> 'MultiInterval':
+        return self.round(ndigits)
+
+    def minimum(self, other) -> 'MultiInterval':
+        """
+        `{min(x, y) : x in self, y in other}` (builtin `min` needs a bool from `<`, which is pointwise)
+
+        >>> MultiInterval(0, 10).minimum(MultiInterval(3, 5))
+        MultiInterval.parse('[0, 5]')
+        """
+        return self._wrap(ops.minimum(self._cuts, self._coerce_or_raise(other)._cuts))
+
+    def maximum(self, other) -> 'MultiInterval':
+        """`{max(x, y) : x in self, y in other}`"""
+        return self._wrap(ops.maximum(self._cuts, self._coerce_or_raise(other)._cuts))
+
+    def fma(self, factor, addend) -> 'MultiInterval':
+        """`self * factor + addend`, rounded once (ieee 1788 fma)"""
+        return self._wrap(ops.fma(self._cuts, self._coerce_or_raise(factor)._cuts,
+                                  self._coerce_or_raise(addend)._cuts, outward=self._outward))
+
+    # ELEMENTARY FUNCTIONS (see intervals.functions)
+
+    def _function(self, name: str, base=None) -> 'MultiInterval':
+        return self._wrap(functions.apply(name, self._cuts, outward=self._outward, base=base))
+
+    def sqrt(self) -> 'MultiInterval':
+        """
+        points below 0 are dropped with a DomainClippedWarning; an irrational value of an exact
+        point is its tightest float enclosure, open because neither double is attained
+
+        >>> MultiInterval.parse('[1/4, 9]').sqrt()
+        MultiInterval.parse('[1/2, 3]')
+        >>> MultiInterval(2).sqrt()
+        MultiInterval.parse('(1.414213562373095, 1.4142135623730951)')
+        """
+        return self._function('sqrt')
+
+    def exp(self) -> 'MultiInterval':
+        """`exp(-inf)` = 0 and `exp(inf)` = inf"""
+        return self._function('exp')
+
+    def exp2(self) -> 'MultiInterval':
+        return self._function('exp2')
+
+    def exp10(self) -> 'MultiInterval':
+        return self._function('exp10')
+
+    def log(self, base=None) -> 'MultiInterval':
+        """
+        the natural logarithm, or to a finite `base` > 0 other than 1; `log(0)` = -inf
+
+        >>> MultiInterval(1, 8).log(2)
+        MultiInterval.parse('[0, 3]')
+        """
+        return self._function('log', base)
+
+    def log2(self) -> 'MultiInterval':
+        return self._function('log2')
+
+    def log10(self) -> 'MultiInterval':
+        return self._function('log10')
+
+    def sin(self) -> 'MultiInterval':
+        """±inf are dropped with a DomainClippedWarning (no limit there)"""
+        return self._function('sin')
+
+    def cos(self) -> 'MultiInterval':
+        return self._function('cos')
+
+    def tan(self) -> 'MultiInterval':
+        """a piece holding a pole maps to both sides of it, with -inf and inf attained"""
+        return self._function('tan')
+
+    def asin(self) -> 'MultiInterval':
+        return self._function('asin')
+
+    def acos(self) -> 'MultiInterval':
+        return self._function('acos')
+
+    def atan(self) -> 'MultiInterval':
+        return self._function('atan')
+
+    def sinh(self) -> 'MultiInterval':
+        return self._function('sinh')
+
+    def cosh(self) -> 'MultiInterval':
+        return self._function('cosh')
+
+    def tanh(self) -> 'MultiInterval':
+        return self._function('tanh')
+
+    def asinh(self) -> 'MultiInterval':
+        return self._function('asinh')
+
+    def acosh(self) -> 'MultiInterval':
+        return self._function('acosh')
+
+    def atanh(self) -> 'MultiInterval':
+        """`atanh(±1)` = ±inf"""
+        return self._function('atanh')
 
     # POINTWISE COMPARISONS (a TruthSet; see intervals.relations)
 
@@ -530,3 +680,53 @@ class MultiInterval:
 
     def __complex__(self) -> complex:
         return complex(self._point())
+
+
+class OutwardMultiInterval(MultiInterval):
+    """
+    a MultiInterval whose float results round outward: a low end down and a high end up, from the
+    exact value, so every result holds the exact result of its operands (the tightest such floats).
+    exact operands give the same results as in MultiInterval. mixed with a MultiInterval, the result
+    is an OutwardMultiInterval, whichever side it is on
+
+    an end that rounding moved is open, because nothing attains it: the exact sum below lies strictly
+    between the two neighbouring doubles
+
+    >>> OutwardMultiInterval(0.1) + 0.2
+    OutwardMultiInterval.parse('(0.3, 0.30000000000000004)')
+    >>> MultiInterval(0.1) + 0.2
+    MultiInterval.parse('[0.30000000000000004]')
+    """
+    __slots__ = ()
+    _outward = True
+
+    # python tries the right operand's reflected method first only if a subclass overrides it
+    def __radd__(self, other):
+        return MultiInterval.__radd__(self, other)
+
+    def __rsub__(self, other):
+        return MultiInterval.__rsub__(self, other)
+
+    def __rmul__(self, other):
+        return MultiInterval.__rmul__(self, other)
+
+    def __rtruediv__(self, other):
+        return MultiInterval.__rtruediv__(self, other)
+
+    def __rmod__(self, other):
+        return MultiInterval.__rmod__(self, other)
+
+    def __rfloordiv__(self, other):
+        return MultiInterval.__rfloordiv__(self, other)
+
+    def __rdivmod__(self, other):
+        return MultiInterval.__rdivmod__(self, other)
+
+    def __ror__(self, other):
+        return MultiInterval.__ror__(self, other)
+
+    def __rand__(self, other):
+        return MultiInterval.__rand__(self, other)
+
+    def __rxor__(self, other):
+        return MultiInterval.__rxor__(self, other)

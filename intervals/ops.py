@@ -12,6 +12,9 @@ every endpoint, finite or infinite, is closed iff attained. pointwise:
 * `reciprocal(A)` is `div([1], A)`; `neg`, `pos`, `abs` are pointwise
 * `power(A, n)` for an int n: `x ** n` for `n >= 1`, `[1]` for `n == 0` and `reciprocal(power(A, -n))`
   below that (evaluated as `1 / x ** -n` in one step, which is the same set on exact operands)
+* `minimum(A, B)`, `maximum(A, B)`: the pointwise min and max. they are flat where the other operand
+  is out of reach (`min(1, y)` is 1 for every y >= 1), so they decide attainment themselves
+* `fma(A, B, C)`: `x * y + z`, computed exactly and rounded once when an operand is float
 
 a box of the operands with no defined point at all (`[0] * [inf]`, `[inf] - [inf]`, `[0] / [0]`,
 `1 / [0]`) contributes nothing and the call emits one `IndeterminateResultWarning`; an empty operand
@@ -19,7 +22,9 @@ gives `∅` and an `EmptySetPropagationWarning`.
 
 int and Fraction are exact: `int / int` is a Fraction (an integral one becomes int in `Cut`), and
 python's float leaks at infinity (`0 * inf`, `inf - inf`, `Fraction(1) / inf`) are evaluated
-symbolically here, so an infinite operand never makes a result float.
+symbolically here, so an infinite operand never makes a result float. a float corner is rounded to
+nearest, or with `outward=True` computed exactly and rounded down for a low end and up for a high
+one (the `OUTWARD` descriptors), which gives the tightest float enclosure of the exact result.
 
 >>> from intervals.fmt import format_cuts, parse
 >>> format_cuts(reciprocal(parse('[-1, 0]')))
@@ -53,6 +58,13 @@ from intervals.cuts import above
 from intervals.cuts import below
 from intervals.errors import EmptySetPropagationWarning
 from intervals.kernel import Cuts
+from intervals.rounding import DOWN
+from intervals.rounding import UP
+from intervals.rounding import exact_cuts
+from intervals.rounding import float_cuts
+from intervals.rounding import has_finite_float
+from intervals.rounding import is_float
+from intervals.rounding import round_rational
 
 
 # POINTWISE (None where the op has no value)
@@ -133,6 +145,30 @@ def _abs(x):
     return abs(x)
 
 
+def _holds(p, v) -> bool:
+    lo, lo_closed, hi, hi_closed = p
+    return lo < v < hi or (v == lo and lo_closed) or (v == hi and hi_closed)
+
+
+def _reaches(p, v, upward: bool) -> bool:
+    """does piece p hold a point >= v (upward) or <= v?"""
+    lo, lo_closed, hi, hi_closed = p
+    if upward:
+        return hi > v or (hi == v and hi_closed)
+    return lo < v or (lo == v and lo_closed)
+
+
+def _min_attained(v, box) -> bool:
+    """min(x, y) == v: one of them is v and the other is at least v"""
+    a, b = box
+    return (_holds(a, v) and _reaches(b, v, True)) or (_holds(b, v) and _reaches(a, v, True))
+
+
+def _max_attained(v, box) -> bool:
+    a, b = box
+    return (_holds(a, v) and _reaches(b, v, False)) or (_holds(b, v) and _reaches(a, v, False))
+
+
 ADD = OpDescriptor('add', _add, monotone=(1, 1))
 SUB = OpDescriptor('sub', _sub, monotone=(1, -1))
 MUL = OpDescriptor('mul', _mul, split_points=(0,))
@@ -141,10 +177,36 @@ RECIPROCAL = OpDescriptor('reciprocal', _reciprocal, split_points=(0,), pole=_re
 NEG = OpDescriptor('neg', _neg)
 POS = OpDescriptor('pos', _pos)
 ABS = OpDescriptor('abs', _abs, split_points=(0,))
+MIN = OpDescriptor('min', min, monotone=(1, 1), attained=_min_attained)
+MAX = OpDescriptor('max', max, monotone=(1, 1), attained=_max_attained)
+
+
+def outward(desc: OpDescriptor) -> OpDescriptor:
+    """
+    the descriptor with a directed rounding hook: a float corner is evaluated exactly (each float as
+    the Fraction it denotes) and rounded down for a result's low end, up for its high end. `fn` is
+    exact too, so attainment is decided on exact values: an end that rounding moved is open
+    """
+    def exact(*args):
+        return desc.fn(*(Fraction(x) if is_float(x) else x for x in args))
+
+    def rounding(direction):
+        def rounded(*args):
+            return round_rational(exact(*args), direction)
+        return rounded
+    return desc._replace(fn=exact, rounded=(rounding(DOWN), rounding(UP)))
+
+
+# the descriptors that round (neg, pos, abs, min and max are exact on floats)
+OUTWARD = {desc.name: outward(desc) for desc in (ADD, SUB, MUL, DIV, RECIPROCAL)}
+
+
+def _pick(desc: OpDescriptor, outward_rounding: bool) -> OpDescriptor:
+    return OUTWARD[desc.name] if outward_rounding else desc
 
 
 @lru_cache(maxsize=64)
-def _power_descriptor(n: int) -> OpDescriptor:
+def _power_descriptor(n: int, rounds_outward: bool = False) -> OpDescriptor:
     """
     `x ** n` for `n != 0`: monotone on each side of zero, so split there for even n and for n < 0.
     n < 0 is `1 / x ** -n` in one step: the same set as `reciprocal(power(A, -n))` (a piece of A
@@ -161,6 +223,8 @@ def _power_descriptor(n: int) -> OpDescriptor:
         except OverflowError:  # float ** int raises where float * float gives inf
             return signed_inf(1 if x > 0 or k % 2 == 0 else -1)
 
+    if rounds_outward:
+        return outward(_power_descriptor(n))
     if n > 0:
         return OpDescriptor(f'pow{n}', fn, split_points=(0,) if n % 2 == 0 else ())
 
@@ -194,27 +258,59 @@ def absolute(a: Cuts) -> Cuts:
     return apply_unary(ABS, a)
 
 
-def reciprocal(a: Cuts) -> Cuts:
-    return apply_unary(RECIPROCAL, a)
+def reciprocal(a: Cuts, outward: bool = False) -> Cuts:
+    return apply_unary(_pick(RECIPROCAL, outward), a)
 
 
-def add(a: Cuts, b: Cuts) -> Cuts:
-    return apply_binary(ADD, a, b)
+def add(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
+    return apply_binary(_pick(ADD, outward), a, b)
 
 
-def sub(a: Cuts, b: Cuts) -> Cuts:
-    return apply_binary(SUB, a, b)
+def sub(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
+    return apply_binary(_pick(SUB, outward), a, b)
 
 
-def mul(a: Cuts, b: Cuts) -> Cuts:
-    return apply_binary(MUL, a, b)
+def mul(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
+    return apply_binary(_pick(MUL, outward), a, b)
 
 
-def div(a: Cuts, b: Cuts) -> Cuts:
-    return apply_binary(DIV, a, b)
+def div(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
+    return apply_binary(_pick(DIV, outward), a, b)
 
 
-def power(a: Cuts, n: int) -> Cuts:
+def minimum(a: Cuts, b: Cuts) -> Cuts:
+    """
+    `{min(x, y) : x in a, y in b}`
+
+    >>> from intervals.fmt import format_cuts, parse
+    >>> format_cuts(minimum(parse('[3]'), parse('(1, 5)')))  # 3 = min(3, 4)
+    '(1, 3]'
+    """
+    return apply_binary(MIN, a, b)
+
+
+def maximum(a: Cuts, b: Cuts) -> Cuts:
+    return apply_binary(MAX, a, b)
+
+
+def fma(a: Cuts, b: Cuts, c: Cuts, outward: bool = False) -> Cuts:
+    """
+    `{x * y + z}`: `add(mul(a, b), c)` computed exactly, then rounded once if an operand is float
+
+    >>> from intervals.fmt import format_cuts, parse
+    >>> format_cuts(fma(parse('[0.1]'), parse('[10]'), parse('[-1]')))  # 0.1 is a hair above 1/10
+    '[5.551115123125783e-17]'
+    """
+    if not a or not b or not c:
+        warn(EmptySetPropagationWarning, 'fma: an operand is empty, so the result is empty')
+        return kernel.EMPTY
+    result = add(mul(exact_cuts(a), exact_cuts(b)), exact_cuts(c))
+    if any(has_finite_float(x) for x in (a, b, c)):
+        return float_cuts(result, outward)
+    return result
+
+
+def power(a: Cuts, n: int, outward: bool = False) -> Cuts:
     """
     `a ** n` for an int n (bool is refused)
 
@@ -232,4 +328,4 @@ def power(a: Cuts, n: int) -> Cuts:
         return kernel.EMPTY
     if n == 0:
         return below(1), above(1)
-    return apply_unary(_power_descriptor(n), a)
+    return apply_unary(_power_descriptor(n, outward), a)

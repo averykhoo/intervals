@@ -11,6 +11,7 @@ from intervals.errors import IntervalWarning
 from intervals.kernel import Builder
 from intervals.kernel import Size
 from intervals.multi_interval import MultiInterval
+from intervals.multi_interval import OutwardMultiInterval
 from intervals.relations import Allen
 from intervals.relations import TruthSet
 
@@ -19,6 +20,7 @@ REALS = MultiInterval(-_math.inf, _math.inf)  # the affine extended reals, both 
 
 __all__ = [
     'MultiInterval',
+    'OutwardMultiInterval',
     'EMPTY',
     'REALS',
     'Size',
