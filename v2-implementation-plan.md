@@ -44,7 +44,10 @@ vendoring.
   pull request. it runs the gate on Python 3.11 to 3.14 and each exhaustive harness as its own job:
   `tests.exhaustive_ops` exact, `--float` and `--sabotage`, and `tests.exhaustive_modulo`.
   under GitHub Actions hypothesis loads its built-in `ci` profile (derandomized, no deadline), so
-  the suite needs no conftest
+  the suite needs no conftest. first run 2026-09-25 at `d232b78` (run 36091651163), all 8 jobs green:
+  the gate took 71-94 s on each python, and on the runners the exhaustive jobs took 21 s
+  (sabotage), 5 min (float), 6½ min (exact) and 12½ min (modulo). each harness exits nonzero on a
+  failure
 * v1 files stay in place, untouched, until M10, then move to `archive/v1/`. **no v1 file is ever
   deleted by this plan**: the archive is the reference until v2 works. v1 is the differential
   oracle for set ops and for `A % scalar`. the package is `intervals/`, so `import multi_interval`
@@ -388,9 +391,9 @@ not a milestone with an exit criterion: the open work left after M10, from a swe
 the old README (`archive/v1/README.md`), v1's public surface and the code (no TODO, FIXME, skip or
 xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owner decision first,
 **(b)** ready to build, **(c)** housekeeping. items become milestones when picked up
-* **release** (a, then c): merge `v2` into `master` (`v2` has never been pushed), `version =
-  "2.0.0"` in `pyproject.toml`, tag. D5's blocker (M7b) is met. CI exists since 2026-09-25
-  (section 1); it has not run yet because `v2` has not been pushed
+* **release** (a, then c): merge `v2` into `master` (`v2` pushed 2026-09-25), `version =
+  "2.0.0"` in `pyproject.toml`, tag. D5's blocker (M7b) is met. CI exists since 2026-09-25 and
+  is green on `v2` (section 1)
 * **M8, the time layer** (a: whether and when; 1½ days): see M8. D4 is still open, (a) recommended
 * **functions** (b): `functions.py` with `sqrt`, `exp`, `log`, trig through the applicator, with
   `DomainClippedWarning` outside the domain (`v2-plan.md` package layout and "later"); document
