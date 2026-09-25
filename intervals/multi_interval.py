@@ -379,6 +379,36 @@ class MultiInterval:
         return self._wrap(ops.fma(self._cuts, self._coerce_or_raise(factor)._cuts,
                                   self._coerce_or_raise(addend)._cuts, outward=self._outward))
 
+    def cancel_minus(self, other) -> 'MultiInterval':
+        """
+        the largest `X` with `other + X ⊆ self`, the Minkowski difference (ieee 1788's
+        `cancelMinus`). any two sets have one: `∅` when nothing fits, `[-inf, inf]` when `other` is
+        empty. exact for exact operands; a float operand rounds it once, to nearest, or outward in
+        an `OutwardMultiInterval` (an enclosure of `X`, as 1788 gives). derivation in
+        `intervals.ops.cancel_minus`
+
+        >>> A, B = MultiInterval(0, 10), MultiInterval(1, 3)
+        >>> X = A.cancel_minus(B)
+        >>> X, (B + X).issubset(A)
+        (MultiInterval.parse('[-1, 7]'), True)
+        >>> MultiInterval(0, 1).cancel_minus(MultiInterval(0, 2))  # 1788 answers entire here
+        MultiInterval.parse('{}')
+        >>> MultiInterval.parse('[0, 1] | [10, 12]').cancel_minus(MultiInterval.parse('[0] | [10, 11]'))
+        MultiInterval.parse('[0, 1]')
+        >>> OutwardMultiInterval(1.9).cancel_minus(0.1)  # the two doubles around the exact difference
+        OutwardMultiInterval.parse('(1.7999999999999998, 1.8)')
+        """
+        return self._wrap(ops.cancel_minus(self._cuts, self._coerce_or_raise(other)._cuts, outward=self._outward))
+
+    def cancel_plus(self, other) -> 'MultiInterval':
+        """
+        `self.cancel_minus(-other)`: the largest `X` with `X - other ⊆ self` (ieee 1788's `cancelPlus`)
+
+        >>> MultiInterval(0, 10).cancel_plus(MultiInterval(1, 3))
+        MultiInterval.parse('[3, 11]')
+        """
+        return self._wrap(ops.cancel_plus(self._cuts, self._coerce_or_raise(other)._cuts, outward=self._outward))
+
     # ELEMENTARY FUNCTIONS (see intervals.functions)
 
     def _function(self, name: str, base=None) -> 'MultiInterval':

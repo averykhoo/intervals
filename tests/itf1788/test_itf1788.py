@@ -32,6 +32,10 @@ and lists them). the adapter's rules:
   divergence row is keyed on the statement with its decorations stripped (the fork has many
   statements twice, `atanh [1.0,1.0]_def = [empty]_trv` beside `atanh [1.0,1.0] = [empty]`).
   NaI has no counterpart, so a vector with a `[nai]` in it is a row until M13g, generated below
+* **cancellation** (`cancelMinus`, `cancelPlus`): ours is the Minkowski difference (D13), a real set
+  wherever 1788 answers entire as "no answer"; those vectors are rows under "cancellation as a
+  Minkowski difference". the others match in both passes, the outward one included: like 1788, an
+  `OutwardMultiInterval` encloses the exact difference
 * a `signal` clause is kept on the vector and not checked yet (M13g). `NaN` equals `NaN` here
 * the library's warnings are ignored inside a vector (`1/[0]` is `∅` + `IndeterminateResultWarning`,
   and 1788's answer is also empty); they are pinned by their own tests elsewhere
@@ -139,6 +143,9 @@ OPS = {
     'sum_abs_nearest': sum_abs,
     'sum_sqr_nearest': sum_sqr,
     'dot_nearest': dot,
+    # cancellation (D13): the Minkowski difference, a real set where 1788 has no answer
+    'cancelMinus': lambda a, b: a.cancel_minus(b),
+    'cancelPlus': lambda a, b: a.cancel_plus(b),
 }
 REDUCTIONS = frozenset({'sum_nearest', 'sum_abs_nearest', 'sum_sqr_nearest', 'dot_nearest'})
 NUMERIC = frozenset({'mid', 'rad', 'wid', 'mag', 'mig', 'midRad'})
@@ -159,7 +166,7 @@ def _overlap(a, b):
 
 # the plan's residual categories (v2-plan.md "ieee 1788"); a row's reason starts with one of them
 REASONS = ('degenerate infinities', 'domain-clipped functions', 'decoration expectations',
-           'cut-based relations')
+           'cut-based relations', 'cancellation as a Minkowski difference')
 
 _LOG = ('degenerate infinities: the operand meets the domain [0, inf] only at 0, and log(0) is '
         '-inf here (the limit from the one side the domain has); 1788 drops 0 from the domain')
@@ -169,10 +176,16 @@ _NAI = ('decoration expectations: NaI is not a set, so the undecorated core has 
         '(D16: it arrives with the decorated wrapper type, M13g)')
 _MEETS = ('cut-based relations: two closed intervals that share an end share that point, so they '
           'overlap (relations.Allen, on cuts); 1788 calls touching closed intervals meets or metBy')
+_CANCEL = ('cancellation as a Minkowski difference: 1788 answers entire as "no answer" (A narrower '
+           'than B, or an unbounded operand); ours is the largest X with B + X ⊆ A, a real set, here ∅ '
+           'or a ray (D13)')
+_CANCEL_EMPTY = ('cancellation as a Minkowski difference: with B = ∅ every X has B + X = ∅ ⊆ A, so the '
+                 'largest is [-inf, inf]; 1788 answers ∅ when A is ∅ too (D13)')
 
-# (statement text, whitespace collapsed and decorations stripped) -> reason. as of 2026-09-25 every
-# listed row is a degenerate infinity of a function at the end of its domain, or a touching pair that
-# shares a point; the NaI rows are generated once the vectors are loaded
+# (statement text, whitespace collapsed and decorations stripped) -> reason. as of 2026-09-26 every
+# listed row is a degenerate infinity of a function at the end of its domain, a touching pair that
+# shares a point, or a cancellation where 1788 has no answer (or ∅ for ∅ and ∅); the NaI rows are
+# generated once the vectors are loaded
 DIVERGENCES = {
     'log [-infinity,0.0] = [empty]': _LOG,
     'log [-infinity,-0.0] = [empty]': _LOG,
@@ -189,7 +202,60 @@ DIVERGENCES = {
     'overlap [1.0,2.0] [2.0,infinity] = meets': _MEETS,
     'overlap [2.0,3.0] [1.0,2.0] = metBy': _MEETS,
     'overlap [2.0,3.0] [-infinity,2.0] = metBy': _MEETS,
+    'cancelMinus [empty] [empty] = [empty]': _CANCEL_EMPTY,
+    'cancelPlus [empty] [empty] = [empty]': _CANCEL_EMPTY,
 }
+
+# cancellation (D13): every vector where 1788 answers entire and ours is not the whole line. the
+# others with an entire answer match: `cancelMinus [entire] [-1.0,5.0]` is (-inf, inf) here too
+_CANCELLATION_ROWS = (
+    'cancelPlus [-infinity, -1.0] [-5.0,1.0] = [entire]',
+    'cancelPlus [-1.0, infinity] [-5.0,1.0] = [entire]',
+    'cancelPlus [-infinity, -1.0] [entire] = [entire]',
+    'cancelPlus [-1.0, infinity] [entire] = [entire]',
+    'cancelPlus [empty] [1.0, infinity] = [entire]',
+    'cancelPlus [empty] [-infinity,1.0] = [entire]',
+    'cancelPlus [empty] [entire] = [entire]',
+    'cancelPlus [-1.0,5.0] [1.0,infinity] = [entire]',
+    'cancelPlus [-1.0,5.0] [-infinity,1.0] = [entire]',
+    'cancelPlus [-1.0,5.0] [entire] = [entire]',
+    'cancelPlus [-5.0, -1.0] [1.0,5.1] = [entire]',
+    'cancelPlus [-5.0, -1.0] [0.9,5.0] = [entire]',
+    'cancelPlus [-5.0, -1.0] [0.9,5.1] = [entire]',
+    'cancelPlus [-10.0, 5.0] [-5.0,10.1] = [entire]',
+    'cancelPlus [-10.0, 5.0] [-5.1,10.0] = [entire]',
+    'cancelPlus [-10.0, 5.0] [-5.1,10.1] = [entire]',
+    'cancelPlus [1.0, 5.0] [-5.0,-0.9] = [entire]',
+    'cancelPlus [1.0, 5.0] [-5.1,-1.0] = [entire]',
+    'cancelPlus [1.0, 5.0] [-5.1,-0.9] = [entire]',
+    'cancelPlus [-0x1.FFFFFFFFFFFFFp1023,0X1.FFFFFFFFFFFFEP+1023] [-0x1.FFFFFFFFFFFFFp1023,0x1.FFFFFFFFFFFFFp1023] = [entire]',
+    'cancelPlus [-0X1.FFFFFFFFFFFFEP+1023,0x1.FFFFFFFFFFFFFp1023] [-0x1.FFFFFFFFFFFFFp1023,0x1.FFFFFFFFFFFFFp1023] = [entire]',
+    'cancelPlus [-0X1P+0,0X1.FFFFFFFFFFFFEP-53] [-0X1P+0,0X1.FFFFFFFFFFFFFP-53] = [entire]',
+    'cancelMinus [-infinity, -1.0] [-1.0,5.0] = [entire]',
+    'cancelMinus [-1.0, infinity] [-1.0,5.0] = [entire]',
+    'cancelMinus [-infinity, -1.0] [entire] = [entire]',
+    'cancelMinus [-1.0, infinity] [entire] = [entire]',
+    'cancelMinus [empty] [-infinity, -1.0] = [entire]',
+    'cancelMinus [empty] [-1.0, infinity] = [entire]',
+    'cancelMinus [empty] [entire] = [entire]',
+    'cancelMinus [-1.0,5.0] [-infinity, -1.0] = [entire]',
+    'cancelMinus [-1.0,5.0] [-1.0, infinity] = [entire]',
+    'cancelMinus [-1.0,5.0] [entire] = [entire]',
+    'cancelMinus [-5.0, -1.0] [-5.1,-1.0] = [entire]',
+    'cancelMinus [-5.0, -1.0] [-5.0,-0.9] = [entire]',
+    'cancelMinus [-5.0, -1.0] [-5.1,-0.9] = [entire]',
+    'cancelMinus [-10.0, 5.0] [-10.1, 5.0] = [entire]',
+    'cancelMinus [-10.0, 5.0] [-10.0, 5.1] = [entire]',
+    'cancelMinus [-10.0, 5.0] [-10.1, 5.1] = [entire]',
+    'cancelMinus [1.0, 5.0] [0.9, 5.0] = [entire]',
+    'cancelMinus [1.0, 5.0] [1.0, 5.1] = [entire]',
+    'cancelMinus [1.0, 5.0] [0.9, 5.1] = [entire]',
+    'cancelMinus [-0x1.FFFFFFFFFFFFFp1023,0X1.FFFFFFFFFFFFEP+1023] [-0x1.FFFFFFFFFFFFFp1023,0x1.FFFFFFFFFFFFFp1023] = [entire]',
+    'cancelMinus [-0X1.FFFFFFFFFFFFEP+1023,0x1.FFFFFFFFFFFFFp1023] [-0x1.FFFFFFFFFFFFFp1023,0x1.FFFFFFFFFFFFFp1023] = [entire]',
+    'cancelMinus [0X1P-1022,0X1.0000000000001P-1022] [0X1P-1022,0X1.0000000000002P-1022] = [entire]',
+    'cancelMinus [-0X1P+0,0X1.FFFFFFFFFFFFEP-53] [-0X1.FFFFFFFFFFFFFP-53,0X1P+0] = [entire]',
+)
+DIVERGENCES.update({text: _CANCEL for text in _CANCELLATION_ROWS})
 LISTED = dict(DIVERGENCES)
 
 

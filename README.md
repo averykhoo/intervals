@@ -28,6 +28,8 @@ Size(rays=0, length=2, points=0)
 >>> y = MI(-3, -2) | MI(2, 3)
 >>> y.mid(), y.wid(), y.mig()      # mid and wid of the hull, mig of the set
 (0, 6, 2)
+>>> print(MI(0, 10).cancel_minus(MI(1, 3)))   # the largest X with [1, 3] + X inside [0, 10]
+[-1, 7]
 >>> print(MI(0, 3).sqrt())           # sqrt(3) is irrational: its enclosure's upper end, open
 [0, 1.7320508075688774)
 >>> print(MI(1, 8).log(2))           # exact where the value is rational
@@ -61,6 +63,10 @@ Size(rays=0, length=2, points=0)
   the set of values attained: an infinite endpoint is closed iff it is attained, a pole at a closed
   zero attains the infinity of its piece's sign, and a box that *is* an indeterminate point
   (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`) is empty with an `IndeterminateResultWarning`
+* **cancellation**: `A.cancel_minus(B)` is the Minkowski difference, the largest `X` with
+  `B + X ⊆ A`, for any two sets (`∅` when nothing fits); `A.cancel_plus(B)` is
+  `A.cancel_minus(-B)`. 1788's `cancelMinus`/`cancelPlus` where 1788 has an answer, a real set
+  where it answers entire as "no answer". exact for exact operands, outward an enclosure of `X`
 * **functions**: `sqrt`, `exp`, `exp2`, `exp10`, `log` (any base), `log2`, `log10`, `sin`, `cos`,
   `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, as
   methods. values are correctly rounded by a pure-python evaluator (no libm), so they are the same on
@@ -80,13 +86,13 @@ Size(rays=0, length=2, points=0)
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)
-* **ieee 1788**: not a runtime mode. the test suite runs 5133 vectors of 67 ops from all 19 files
-  of the ITF1788 suite through an adapter, the 4120 interval-valued ones a second time through
+* **ieee 1788**: not a runtime mode. the test suite runs 5375 vectors of 69 ops from all 19 files
+  of the ITF1788 suite through an adapter, the 4362 interval-valued ones a second time through
   `OutwardMultiInterval`, the 167 numeric ones twice more with float operands, and all of them
-  match except 67 listed divergences where the semantics
+  match except 114 listed divergences where the semantics
   differ on purpose or the vector needs decorations (`tests/itf1788/`, measured 2026-09-26). the
-  statements of ops not built yet (`pow` with a real exponent, reverse ops, cancellation, ...) are
-  counted and skipped
+  statements of ops not built yet (`pow` with a real exponent, reverse ops, ...) are counted and
+  skipped
 
 ## layout
 

@@ -54,6 +54,8 @@ from intervals.applicator import is_infinite
 from intervals.applicator import sign
 from intervals.applicator import signed_inf
 from intervals.applicator import warn
+from intervals.cuts import Cut
+from intervals.cuts import Side
 from intervals.cuts import above
 from intervals.cuts import below
 from intervals.errors import EmptySetPropagationWarning
@@ -336,3 +338,133 @@ def power(a: Cuts, n: int, outward: bool = False) -> Cuts:
     if n == 0:
         return below(1), above(1)
     return apply_unary(_power_descriptor(n, outward), a)
+
+
+# CANCELLATION (ieee 1788's cancelMinus and cancelPlus, D13)
+
+_REAL_LINE: Cuts = (above(-math.inf), below(math.inf))  # (-inf, inf): the finite points
+_MINUS_INF: Cuts = (below(-math.inf), above(-math.inf))  # [-inf]
+_PLUS_INF: Cuts = (below(math.inf), above(math.inf))  # [inf]
+
+
+def cancel_minus(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
+    """
+    the Minkowski difference: the largest `X` with `b + X ⊆ a`, where `+` is `add` above
+
+    **the definition.** `add` is the set of values of the defined pairs, so `b + X` is the union of
+    the `{x} + b` over `x ∈ X`, and the largest `X` is exactly the set of the `x` that fit,
+    `X = {x : {x} + b ⊆ a}`, which is `∩_{y ∈ b} (a - y)` over the defined pairs. an `X` like that
+    exists for any two multi-intervals, so there is no "no answer" case: nothing fits gives `∅`, and
+    an empty `b` (every `x` fits, `∅ ⊆ a`) gives the whole line `[-inf, inf]`. for connected,
+    bounded, closed operands with `wid a ≥ wid b` it is ieee 1788's `[a1 - b1, a2 - b2]`; where
+    1788 answers entire as "no answer" (`a` narrower than `b`, an unbounded operand), ours is a real
+    set, often `∅`, and 1788's `cancelMinus [empty] [empty] = [empty]` is ours `[-inf, inf]`
+
+    **the derivation**, finite `x` and the two infinite points apart, since `x + inf` is `inf` for
+    every finite `x`, and `inf + -inf` has no value (so that pair drops out of `{x} + b`):
+
+    * finite `x`: `{x} + b` is the real part of `b` shifted by `x`, plus `b`'s infinite points
+      unchanged. so a finite `x` fits iff `inf ∈ b ⇒ inf ∈ a`, `-inf ∈ b ⇒ -inf ∈ a`, and
+      `x + b_R ⊆ a_R`, the real parts `b_R = b ∩ (-inf, inf)`, `a_R` likewise
+    * `x + b_R ⊆ a_R` holds iff it holds for every piece `q` of `b_R`, so the finite `x` are the
+      intersection over the pieces `q`. `x + q` is connected, and the pieces `p` of the normalized
+      `a_R` are its connected components (two pieces always have a missing point between them), so
+      `x + q ⊆ a_R` iff `x + q ⊆ p` for one `p`: a union over the pieces `p`
+    * one piece in one piece, `x + q ⊆ p`, as cuts: `start(p) <= start(q) + x` and
+      `end(q) + x <= end(p)`, a cut shifted by `x` keeping its side. so `x >= p1 - q1`, where
+      `x = p1 - q1` itself fits unless `p` is open there and `q` closed (a closed start of `q` would
+      land on the missing point `p1`); likewise `x <= p2 - q2`, closed unless `p` is open there and
+      `q` closed. an unbounded side of `q` needs the same side of `p` unbounded and then bounds
+      nothing, as does an unbounded side of `p` against a bounded `q`. `p1 - q1 > p2 - q2`
+      (`q` wider than `p`) or equal with an open side gives no `x`
+    * `x = inf`: `{inf} + b` is `{inf}` unless `b` is `[-inf]` (nothing defined, so it fits), so
+      `inf` fits iff `inf ∈ a` or `b = [-inf]`. `x = -inf` mirrors it
+
+    **rounding.** the difference is computed exactly (each float as the Fraction it denotes) and, if
+    an operand has a finite float end, rounded once like `fma`: to nearest, or with `outward=True`
+    down at a low end and up at a high one, an end that moved open. outward is the tightest float
+    enclosure of the exact `X`, which is ieee 1788's answer (`cancelMinus` of `[0x1.FFFFFFFFFFFFP+0]`
+    and the double 0.1 is the two doubles around the difference, and of `[max]` and `[-max]` is
+    `[max, inf]`) and the promise of `OutwardMultiInterval`: every `x` that fits is in it. it is not
+    a certificate that `b + X ⊆ a`, which an outward end can break by an ulp; the exact classes are:
+    int and Fraction operands (a float as `Fraction(f)`) give `X` exactly
+
+    >>> from intervals.fmt import format_cuts, parse
+    >>> format_cuts(cancel_minus(parse('[0, 10]'), parse('[1, 3]')))
+    '[-1, 7]'
+    >>> format_cuts(cancel_minus(parse('[0, 10)'), parse('[1, 3]')))  # 10 is missing: x + 3 < 10
+    '[-1, 7)'
+    >>> format_cuts(cancel_minus(parse('[0, 1]'), parse('[0, 2]')))  # nothing fits
+    '{}'
+    >>> format_cuts(cancel_minus(parse('[0, 1] | [10, 11]'), parse('[0] | [10]')))
+    '[0, 1]'
+    >>> format_cuts(cancel_minus(parse('(-inf, -1]'), parse('[-1, 5]')))
+    '(-inf, -6]'
+    >>> format_cuts(cancel_minus(parse('[3]'), parse('{}')))  # every x fits
+    '[-inf, inf]'
+    """
+    x = _fitting(exact_cuts(a), exact_cuts(b))
+    if has_finite_float(a) or has_finite_float(b):
+        return float_cuts(x, outward)
+    return x
+
+
+def cancel_plus(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
+    """
+    `cancel_minus(a, neg(b))`: the largest `X` with `X - b ⊆ a`, ieee 1788's `cancelPlus`
+
+    >>> from intervals.fmt import format_cuts, parse
+    >>> format_cuts(cancel_plus(parse('[0, 10]'), parse('[1, 3]')))
+    '[3, 11]'
+    """
+    return cancel_minus(a, neg(b) if b else b, outward)  # neg would warn of an empty operand
+
+
+def _fitting(a: Cuts, b: Cuts) -> Cuts:
+    """`{x : {x} + b ⊆ a}` for exact operands (see `cancel_minus` for the derivation)"""
+    if not b:
+        return kernel.REALS
+    has = kernel.contains_point
+    parts = []
+    if (has(a, math.inf) or not has(b, math.inf)) and (has(a, -math.inf) or not has(b, -math.inf)):
+        finite = _REAL_LINE
+        a_real = kernel.intersection(a, _REAL_LINE)
+        for q in kernel.pairs(kernel.intersection(b, _REAL_LINE)):
+            finite = kernel.intersection(finite, kernel.normalize(
+                fits for fits in (_piece_fits(p, q) for p in kernel.pairs(a_real)) if fits))
+            if not finite:
+                break
+        parts.append(finite)
+    if has(a, math.inf) or b == _MINUS_INF:
+        parts.append(_PLUS_INF)
+    if has(a, -math.inf) or b == _PLUS_INF:
+        parts.append(_MINUS_INF)
+    return kernel.union(*parts)
+
+
+def _piece_fits(p, q):
+    """
+    the cut pair of the finite `x` with `x + q ⊆ p`, for pieces `p`, `q` of the finite points, or
+    None when an unbounded side of `q` meets a bounded one of `p`. the pair may come out empty or
+    reversed (`q` wider than `p`), which `kernel.normalize` drops
+    """
+    (p_start, p_end), (q_start, q_end) = p, q
+    if q_start.value == -math.inf:  # q unbounded below: so must p be, and then nothing is bounded
+        if p_start.value != -math.inf:
+            return None
+        start = p_start
+    elif p_start.value == -math.inf:
+        start = p_start
+    else:  # x = p1 - q1 fits unless p is open there and q closed
+        missed = p_start.side is Side.ABOVE and q_start.side is Side.BELOW
+        start = Cut(p_start.value - q_start.value, Side.ABOVE if missed else Side.BELOW)
+    if q_end.value == math.inf:
+        if p_end.value != math.inf:
+            return None
+        end = p_end
+    elif p_end.value == math.inf:
+        end = p_end
+    else:  # x = p2 - q2 fits unless p is open there and q closed
+        missed = p_end.side is Side.BELOW and q_end.side is Side.ABOVE
+        end = Cut(p_end.value - q_end.value, Side.BELOW if missed else Side.ABOVE)
+    return start, end

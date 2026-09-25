@@ -23,7 +23,7 @@ with M13a and M14's first two items (2026-09-26) and are in "current design" now
 | D10 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13c), now in `v2-plan.md` "comparisons" and "set operations and size".** names for 1788's interval orders, since `<` and `<=` are pointwise and return a `TruthSet` (`MI(1,3) < MI(2,4)` is `BOTH`): `A.weakly_less(B)` for `less` (both of A's ends ≤ B's; 1788's own wording, "weakly less than"), `A.strictly_less(B)` for `strictLess`. `interior` is not a method: a new property `B.interior` (the set with every end opened, a set operation in its own right) and the existing `A.within(B.interior)` | `weakly_less`, `strictly_less`, `.interior` | M13c |
 | D11 | **decided 2026-09-25 by owner: recommended default.** power. an `int` exponent, or a float with an integral value, is `pown` as today, like python's scalars (`(-3.0) ** 2.0` = 9.0; `MI(-3,1) ** 2.0` = `[0, 9]`). a non-integral float or a `MultiInterval` exponent is 1788's `pow`: domain `x > 0`, plus `x = 0` where `y > 0` (`0 ** y` = 0); negative bases are dropped with `DomainClippedWarning`. so `MI(-3,1) ** MI(2)` = `[0, 1]`, not `[0, 9]`: an interval exponent means `pow`, never `pown`. `b ** A` for a scalar base is `MultiInterval(b) ** A` through `__rpow__`. exact where the value is rational, as `log` is. 3-argument `pow(A, n, m)` is dropped (not 1788; v1 had it on integers only) | pown for integral, else 1788 pow; 3-arg dropped | M13d |
 | D12 | **decided 2026-09-25 by owner: recommended default.** a reverse op whose answer has infinitely many or very many pieces (`sinRev`, `cosRev`, `tanRev` and their `*Bin` forms over an unbounded or wide `x`): the exact pieces up to the step functions' cap of 1000, past it their hull with a `HullWarning`, the rule `steps.py` already follows. a bounded `x` gets the exact union (`sinRev([0.5, 1], [0, 20])` has 4 pieces), which 1788 cannot give. ends are irrational, so each is its tightest float enclosure, open | exact to 1000 pieces, else hull + warning | M13e |
-| D13 | **decided 2026-09-25 by owner: recommended default.** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
+| D13 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13f), now in `v2-plan.md` "arithmetic" and "ieee 1788".** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
 | D14 | **decided 2026-09-25 by owner: recommended default.** the independent oracle for the elementary functions is **`python-flint`** (Arb: every result is a ball proven to contain the true value), a test-only dependency in the `[test]` extra, installed into the `intervals` env and in CI. `mpmath` was the alternative (pure python, but its values carry no proven bound). python-flint 0.9.0 has Windows wheels for 3.10 and later (abi3), 3.13 and 3.14 included (checked on PyPI 2026-09-25) | python-flint | M14 |
 | D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library. **corrected 2026-09-26 at M13a**, from every file's header: five files carry the all-permissive notice, not two (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`); the eleven `libieeep1788_*` are Apache 2.0 | vendor unmodified, with the licence files | M13a |
 | D16 | **decided 2026-09-25 by owner: recommended default.** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. still open, for M13g: whether 1788's signals (`UndefinedOperation`, `PossiblyUndefinedOperation`, `IntvlPartOfNaI`) become `IntervalWarning` subclasses or exceptions | wrapper type; signals open | M13g |
@@ -517,7 +517,7 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
 * not built, and why: `pow` with a real exponent (a: scope, M11); `less`, `strictLess`, `interior`,
   `mid`, `rad`, `wid`, `mag`, `mig` (a: see M11); reverse ops (a). all now M13
 
-### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a, M13b, M13c and M13h done 2026-09-26)
+### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a, M13b, M13c, M13f and M13h done 2026-09-26)
 
 owner request 2026-09-25: "implement all these ops and get all these tests vendored and passing".
 this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how;
@@ -780,13 +780,85 @@ M12; each checked against the D14 oracle (M14)
   enclosures, open
 * periodic answers per D12: exact pieces up to 1000, past that their hull with `HullWarning`
 
-**M13f cancellation** (D13). `cancelPlus` 116, `cancelMinus` 126
+**M13f cancellation (done 2026-09-26)** (D13). `cancelPlus` 116, `cancelMinus` 126
 * `A.cancel_minus(B)`: the largest `X` with `B + X ⊆ A` (the Minkowski difference);
   `A.cancel_plus(B)` is `A.cancel_minus(-B)`. for connected operands with `wid A ≥ wid B` it is
   `[a1 - b1, a2 - b2]`, 1788's answer
 * where 1788 returns entire as "no answer" (A narrower than B, an unbounded operand) ours is a real
   set, often `∅`: those rows get the new residual category **"cancellation as a Minkowski
   difference"**, added to `REASONS` and to `v2-plan.md` "ieee 1788" when this lands
+* done 2026-09-26. built:
+    * `intervals/ops.py::cancel_minus`, `::cancel_plus` over cut tuples (helpers `::_fitting`,
+      `::_piece_fits`), and the methods `MultiInterval.cancel_minus(B)`, `.cancel_plus(B)` (a
+      number is coerced to a point, anything else is a `TypeError`; the result has the receiver's
+      class, as `fma`). the derivation is in `cancel_minus`'s docstring: `+` is the set of values
+      of the defined pairs, so the largest `X` is `{x : {x} + B ⊆ A}`. a finite `x` needs `B`'s
+      infinite points in `A`, and each piece `q` of `B`'s reals shifted into one piece `p` of
+      `A`'s reals (the connected components), which is `[p1 - q1, p2 - q2]` with an end closed
+      unless `p` is open there and `q` closed, an unbounded side of `q` needing the same of `p`:
+      an intersection over the `q` of a union over the `p`. `inf` fits iff `inf ∈ A` or
+      `B = [-inf]` (`inf + -inf` has no value), `-inf` mirrored; an empty `B` gives `[-inf, inf]`
+    * **choices the plan left open** (conservative, flagged in the decision log):
+        * **rounding outward, not inward.** the task text suggested inward rounding, to keep
+          `B + X ⊆ A` for floats; 1788 and its vectors round outward (`cancel.itl:218`: `[0x1.FFFFFFFFFFFFP+0]`
+          minus the double 0.1 is the two doubles around the difference; `:221`: `[max]` minus
+          `[-max]` is `[max, infinity]`), the plan requires the outward pass to match, and
+          `OutwardMultiInterval` promises an enclosure of the exact result. so the difference is
+          computed exactly and rounded once like `fma`: outward in `OutwardMultiInterval` (every
+          `x` that fits is in it; `B + X ⊆ A` can fail by an ulp at a moved end), to nearest in
+          `MultiInterval`. a certified inner answer comes from exact operands (`Fraction(f)`);
+          an inward variant is **open to the owner**
+        * `cancel_minus(∅, ∅)` is `[-inf, inf]`, not 1788's `∅`: every `X` fits the empty `B`, and
+          "the largest `X`" leaves no choice. the two `[empty] [empty]` vectors are rows under the
+          new category with their own reason (`test_itf1788.py::_CANCEL_EMPTY`)
+        * the infinite points follow the library's `+`, so `[0, 1].cancel_minus([-inf])` is `[inf]`
+          (`{inf} + [-inf]` is empty and fits vacuously); no warning is emitted for any operand,
+          and `cancel_plus` negates a non-empty `B` only, since `neg(∅)` warns
+    * adapter (`tests/itf1788/test_itf1788.py`): `cancelMinus`, `cancelPlus` in `OPS`; "cancellation
+      as a Minkowski difference" in `REASONS`; rows `::_CANCELLATION_ROWS` (45 keys, reason
+      `::_CANCEL`, every vector where 1788 answers entire and ours is not the whole line) and the
+      two `[empty] [empty]` keys (`::_CANCEL_EMPTY`)
+    * tests (`tests/test_cancel.py`, 42 items in 24.8 s, 2026-09-26): 10 `@given`: the defining
+      property decided completely on exact operands, `x ∈ X` iff `{x} + B ⊆ A` with the library's
+      `+` at every difference of an end of `A` and one of `B`, a point between each two, one
+      beyond each end and ±inf (soundness and maximality at once; twice, the second with short
+      `B`s against many-piece `A`s, where `X` has several pieces in about 10% of examples); `B + X
+      ⊆ A` at set level; `C ⊆ (B + C).cancel_minus(B)`, equal for connected closed bounded `C`;
+      isotone in `A`, antitone in `B`; a point `B` is subtraction; 1788's formula on connected
+      closed operands; `cancel_plus(B)` = `cancel_minus(-B)` in both classes; float operands
+      (outward encloses the exact `X` of the same doubles and adds no double strictly inside,
+      nearest is `X` rounded once); soundness at sampled points (every sampled `x` of the exact
+      `X` fits and is in the outward result). `@example`s: `cancel.itl:166`, `:167`, `:177`,
+      `:183`, `:196`, `:204`, `:218`, `:219`, `:221`, `:223`, `:229`, `:231`, `:234`, `:235`, `:28`,
+      `:48`, and the infinite-point cases (`[inf]` minus `[-inf]`, `[0, 1]` minus `[-inf]` and
+      minus `[0] | [inf]`); plus 29 parametrized examples with open ends, several pieces and ±inf
+* evidence, measured 2026-09-26 (census by importing the test module): 242 vectors of the two ops
+  (`cancelPlus` 116, `cancelMinus` 126, all in `libieeep1788_cancel.itl`, all interval-valued): 148
+  match in both passes, the 16 that need rounding (outward differs from nearest) included; 94
+  (47 keys) are rows under the new category, 45 keys where 1788 answers entire as no answer
+  (ours `∅` or a ray) and
+  the 2 `[empty] [empty]`; no other category was needed. all ops: 5375 vectors of 69 ops, 4362
+  interval-valued, 167 numeric run twice more with floats, 10071 vector test items, 114
+  divergence keys (47 cancellation, 52 decoration expectations), 0 unknown failures; skipped
+  4167 statements of 42 ops. the gate: 13000 passed in 450 s
+* sabotage (section 2), each red, then the file restored from a copy and `cmp`-checked; targeted
+  runs (`tests/test_cancel.py`, every itf1788 cancel vector, the doctests of `ops.py` and
+  `multi_interval.py`): the start's side rule swapped (open against open missing, open against closed fitting) 11 red (the
+  defining property both ways, `B + X ⊆ A`, the cancellation, subtraction and sampled-soundness
+  properties, 5 examples); the end's 9 (the same kind, and the `ops.py` doctest); `p1 + q1` for
+  `p1 - q1` 198 (every property, 22 non-vector items, 176 vector items, `cancel.itl:63` among them); `B`'s
+  infinite points ignored for a finite `x` 6 (the defining property, `B + X ⊆ A`, sampled
+  soundness, 3 examples); the vacuous `inf` for `B = [-inf]` dropped 4 (the defining property,
+  the cancellation property, 2 examples; before those examples were added only the cancellation
+  property saw it); an empty `B` giving `∅` 63 (56 vector items, the `[empty] [empty]` rows red
+  as stale among them); an unbounded `q` accepted in a bounded `p` 5 (the defining property,
+  isotonicity, sampled soundness, 2 examples); outward rounded to nearest 20 (the float and
+  sampled-soundness properties, `test_1788_float_vectors`, the class doctest, 16 outward vector
+  items, `cancel.itl:218`, `:221`, `:234` among them); `cancel_plus` without the negation 104. **no
+  vector sees the side rules, the infinite points or an unbounded `q` in a bounded `p`**: the
+  vectors' finite ends are closed and their unbounded ones rows, which only assert that ours
+  differs; these are held by the properties alone. the wiring: `cancelMinus` run as
+  `cancel_plus` 100 red; the 45 rows dropped 180 (each key's 2 vectors in both passes)
 
 **M13g decorations, NaI, constructors and signals** (D16). 273 statements, plus the 40 `[nai]`
 operands of implemented ops and a decoration check on every decorated vector

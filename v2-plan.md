@@ -5,7 +5,7 @@ bug. the **decision log** below it is history, kept verbatim, with a marker wher
 superseded it.
 
 ## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a,
-M13b, M13c, M13h and M14's fuzz job and oracle, 2026-09-26)
+M13b, M13c, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
 
 ### domain and semantics
 
@@ -292,6 +292,31 @@ M13b, M13c, M13h and M14's fuzz job and oracle, 2026-09-26)
   sum reaching one infinity is that infinity in every direction. a `nan` operand, `inf + -inf` and
   `0 * inf` raise `ValueError` (1788 answers `NaN`; ours follows the constructors' `nan` rule and
   D9's empty-set rule), as do sequences of different lengths in `dot`
+* **cancellation** (D13, built at M13f 2026-09-26; `intervals/ops.py::cancel_minus`, `::cancel_plus`):
+  1788's `cancelMinus` and `cancelPlus` as the methods `A.cancel_minus(B)` and `A.cancel_plus(B)`.
+  `cancel_minus` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A` (the `+` above),
+  defined on any multi-intervals, open or closed ends, ±inf points included; `cancel_plus(B)` is
+  `cancel_minus(-B)`. since `+` is the set of values of the defined pairs, the largest `X` is
+  exactly the set of the `x` with `{x} + B ⊆ A`. for connected, closed, bounded operands with
+  `wid A ≥ wid B` it is 1788's `[a1 - b1, a2 - b2]`; where 1788 answers entire as "no answer"
+  (`A` narrower than `B`, an unbounded operand) ours is a real set, often `∅`
+  (`cancel_minus((-inf, -1], [-1, 5])` = `(-inf, -6]`), and an empty `B` fits every `x`, so the
+  answer is `[-inf, inf]` (for `A = ∅` too, where 1788 answers `∅`)
+    * the algorithm (derived in the docstring): a finite `x` fits iff `B`'s infinite points are in
+      `A` (a finite `x` leaves them where they are) and every piece `q` of `B`'s reals, shifted by
+      `x`, lies inside one piece `p` of `A`'s reals, the pieces being the connected components:
+      an intersection over the `q` of a union over the `p` of `[p1 - q1, p2 - q2]`, each end
+      closed unless `p` is open there and `q` closed; an unbounded side of `q` needs the same side
+      of `p` unbounded. `inf` fits iff `inf ∈ A` or `B = [-inf]` (`inf + -inf` has no value, so
+      `{inf} + [-inf]` is empty and fits); `-inf` mirrors it
+    * **rounding**: computed exactly and rounded once, like `fma`: to nearest in `MultiInterval`,
+      outward in `OutwardMultiInterval`, where it is the tightest float enclosure of the exact `X`.
+      that is 1788's answer (`cancelMinus [0x1.FFFFFFFFFFFFP+0] [0.1]` is the two doubles around the
+      difference, `cancelMinus [max] [-max]` is `[max, infinity]`) and the class's promise: every
+      `x` that fits is in the result. it is **not** a certificate that `B + X ⊆ A`, which a
+      moved end can break by an ulp; exact operands (a float as `Fraction(f)`) give that. the
+      result class is the receiver's, as for `fma`; no warning is emitted, since `∅` and
+      `[-inf, inf]` are real answers
 
 ### elementary and step functions (M12)
 
@@ -392,20 +417,25 @@ M13b, M13c, M13h and M14's fuzz job and oracle, 2026-09-26)
       specifies (rounded to nearest) and is compared as it is; a `ValueError` from it is 1788's
       `NaN` (`tests/itf1788/test_itf1788.py::REDUCTIONS`, `::_reduce`)
     * residual divergence table: degenerate infinities, domain-clipped functions, decoration
-      expectations, and (added at M12) cut-based relations. (`1/[0]` is not a row: both give
-      empty.) keyed on the statement with its decorations stripped
-      (`tests/itf1788/test_itf1788.py::key`) since M13a. measured 2026-09-26 (M13c), the current
-      count: 19 files, 9542 statements; 5133 vectors of 67 ops (every op in `OPS` has vectors),
-      4120 of them interval-valued and run twice, the 167 numeric ones run twice more with float
-      operands (9587 vector test items); 67 keys and 0 unknown failures: 10 degenerate
-      infinities (11 vectors), 5 cut-based relations (7 vectors) and 52 decoration expectations,
-      the `[nai]` operands of implemented ops, generated in code (52 vectors, 6 outward items and
-      12 float items). counted and skipped: 4409 statements of 44 ops not implemented yet (the
-      largest `pow` 1431, the reverse ops, `cancelMinus`/`cancelPlus`, `csc`, `sec`, the text
+      expectations, (added at M12) cut-based relations, and (added at M13f, approved with D13)
+      **cancellation as a Minkowski difference**: where 1788's `cancelMinus`/`cancelPlus` answer
+      entire as "no answer", ours is the real set of the fitting `x`, and for `[empty] [empty]` the
+      whole line where 1788 answers `∅`. (`1/[0]` is not a row: both give empty.) keyed on the
+      statement with its decorations stripped (`tests/itf1788/test_itf1788.py::key`) since M13a.
+      measured 2026-09-26 (M13f), the current count: 19 files, 9542 statements; 5375 vectors of 69
+      ops (every op in `OPS` has vectors), 4362 of them interval-valued and run twice, the 167
+      numeric ones run twice more with float operands (10071 vector test items); 114 keys and 0
+      unknown failures: 10 degenerate infinities (11 vectors), 5 cut-based relations (7 vectors),
+      47 cancellations as a Minkowski difference (94 vectors, each also an outward item;
+      `tests/itf1788/test_itf1788.py::_CANCELLATION_ROWS` and the two `[empty] [empty]` rows) and
+      52 decoration expectations, the `[nai]` operands of implemented ops, generated in code (52
+      vectors, 6 outward items and 12 float items). counted and skipped: 4167 statements of 42 ops
+      not implemented yet (the largest `pow` 1431, the reverse ops, `csc`, `sec`, the text
       constructors), each assigned to an M13 sub-task. history: at M13a (2026-09-26) 4767 vectors
       of 54 ops, 4775 statements of 57 ops skipped; M13h added the 15 reduction vectors (4782 of 58,
       4760 of 53 skipped, 49 keys); M13b the 167 numeric ones (4949 of 64, 4593 of 47 skipped, 55
-      keys); M13c the 184 of `less`, `strictLess`, `interior`. as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
+      keys); M13c the 184 of `less`, `strictLess`, `interior` (5133 of 67, 4409 of 44 skipped, 67
+      keys); M13f the 242 of `cancelMinus`, `cancelPlus`. as of 2026-09-25 (M12): 2932 vectors of 54 ops from 7 files, 2438 of them
       interval-valued and run twice; 18 rows (`tests/itf1788/test_itf1788.py::DIVERGENCES`): 11
       degenerate infinities (`log`/`log2`/`log10` of an operand meeting the domain only at 0, `atanh`
       of one meeting it only at ±1) and 7 cut-based relations (`overlap [1,2] [2,3]` is `meets` in
@@ -442,7 +472,8 @@ imports only point downward.
         rounding.py        rounding an exact value to a double: nearest, down, up
         applicator.py      op descriptor, corner evaluation, closure pass, rounding hook
         ops.py             neg pos absolute reciprocal add sub mul div, power (int exponents),
-                           minimum maximum as descriptors; the OUTWARD descriptors; fma
+                           minimum maximum as descriptors; the OUTWARD descriptors; fma;
+                           cancel_minus cancel_plus (M13f)
         modulo.py          v3 far-edge mod / floordiv / divmod_ (floor from steps)
         steps.py           floor ceil trunc round round_ties_away sign: enumerate or hull
         elementary.py      correctly rounded elementary functions at one exact point
@@ -468,7 +499,8 @@ imports only point downward.
                            test_minmax_fma.py and test_outward.py for the rest of M12;
                            test_oracle_flint.py, the arb oracle for the functions, M14;
                            test_reductions.py, M13h; test_numeric.py, M13b;
-                           test_orders.py, the orders and the interior, M13c)
+                           test_orders.py, the orders and the interior, M13c;
+                           test_cancel.py, cancellation, M13f)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
@@ -549,6 +581,14 @@ imports only point downward.
   idempotent, isotone, distributes over `&`), and `A.within(B.interior)` against a grid
   neighbourhood oracle. no vector can see the interior of a multi-interval or of a closed end at
   inf, so those are held by these properties alone
+* cancellation (M13f, 2026-09-26; `tests/test_cancel.py`): the defining property decided
+  completely on exact operands, `x ∈ A.cancel_minus(B)` iff `{x} + B ⊆ A` (the library's `+`) at
+  every difference of an end of `A` and one of `B`, a point between each two, beyond each end and
+  ±inf, which is soundness and maximality at once; `B + X ⊆ A` at set level;
+  `C ⊆ (B + C).cancel_minus(B)`; isotone in `A`, antitone in `B`; a point `B` is subtraction;
+  1788's formula; float operands: outward encloses the exact `X` tightly, nearest is `X` rounded
+  once; soundness at sampled points in both classes. no vector has an open finite end or a
+  multi-piece operand, so those are held by the properties alone
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
   every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 100) times its
   own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
@@ -568,6 +608,31 @@ imports only point downward.
   gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one)
 
 ## decision log
+
+### 2026-09-26 revision: M13f, cancellation, built
+
+built and measured 2026-09-26; details in v2-implementation-plan.md (M13f). D13 moved into "current
+design" (arithmetic, ieee 1788, testing), and its new residual category, "cancellation as a
+Minkowski difference", is in the divergence table. the choices D13 and the plan left open, each
+the most conservative reading, are now current design too:
+* **float operands round outward in `OutwardMultiInterval`**, to the tightest enclosure of the exact
+  `X`, and to nearest in `MultiInterval`, computed exactly and rounded once like `fma`. the vectors
+  require it (`cancel.itl:218`, `:221`: 1788's answer is the hull of the exact difference) and it
+  is that class's promise, every `x` that fits is in the result. inward rounding would certify
+  `B + X ⊆ A` but break the outward pass of 16 matching vectors and the class's meaning; it is
+  **open to the owner** as a separate method or type if a certified inner answer is wanted.
+  today exact operands (a float as `Fraction(f)`) give it
+* **an empty `B` gives `[-inf, inf]`, for `A = ∅` too**: every `X` has `∅ + X = ∅ ⊆ A`, so the
+  largest is the whole line. 1788 answers `∅` for `cancelMinus [empty] [empty]` (and entire for a
+  non-empty `A`, which matches); the two `[empty] [empty]` vectors are rows under the new category
+  with their own reason. special-casing `∅ ⊖ ∅ = ∅` would contradict "the largest `X`"
+* **the infinite points follow the library's `+`**: `inf + -inf` has no value, so `{inf} + [-inf]`
+  is empty and `inf` fits any `A` when `B = [-inf]` (`[0, 1].cancel_minus([-inf])` = `[inf]`)
+* **methods on the receiver's class**, as `fma`: `OutwardMultiInterval` only when `self` is one; a
+  number is coerced to a point; no warning, not even for an empty operand
+* the 242 vectors: 148 match in both passes; 94 (47 keys) are rows under the new category, 45 where
+  1788 has no answer and 2 for `[empty] [empty]`. itf1788 now 5375 vectors of 69 ops, 4167
+  statements of 42 ops skipped
 
 ### 2026-09-26 revision: M13c, the interval orders and the interior, built
 
