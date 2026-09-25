@@ -859,6 +859,12 @@ M12; each checked against the D14 oracle (M14)
   vectors' finite ends are closed and their unbounded ones rows, which only assert that ours
   differs; these are held by the properties alone. the wiring: `cancelMinus` run as
   `cancel_plus` 100 red; the 45 rows dropped 180 (each key's 2 vectors in both passes)
+* review (2026-09-26, a read-only reviewer over the four sub-task commits): no library bug. one
+  unpinned clause: the vacuous `-inf` for `B = [inf]` (`ops.py::_fitting`, `or b == _PLUS_INF`)
+  could be dropped with all 42 cancel tests green, even under the fuzz profile at ×10, since the
+  strategy almost never draws `[inf]` alone and `cancel_plus` routes both sides through the same
+  clause. now pinned by a `test_examples` row and an `@example` on
+  `tests/test_cancel.py::test_exactly_the_points_that_fit`; dropping the clause turns 2 red
 
 **M13g decorations, NaI, constructors and signals** (D16). 273 statements, plus the 40 `[nai]`
 operands of implemented ops and a decoration check on every decorated vector
@@ -934,7 +940,21 @@ it, so a file that gains an op cannot quietly add skips
 
 **suggested sessions** (a guide, not a rule; each ends with a green gate and a commit): (1) M13a
 with M14's fuzz job and oracle; (2) M13b, M13c, M13f and M13h, the small ones; (3) M13d; (4) M13e;
-(5) M13g, starting with the signals question
+(5) M13g, starting with the signals question. **(1) and (2) done 2026-09-26**, in one session
+(`814b302` to `d09ead3`, none pushed); M13d, M13e and M13g remain, and with them the M13 exit.
+
+**open for the owner after that session** (each built on the conservative reading and recorded in
+its decision-log entry; none blocks the next sub-task):
+* M13h: where 1788 answers NaN (a `nan` operand, `inf + -inf`, `0 * inf` in `dot`) the reductions
+  raise `ValueError`; returning `nan`, as 1788 and python's float `sum` do, would be looser and
+  compatible
+* M13c: "equal infinite ends count" read as 1788 writes it (two starts at -inf or two ends at
+  inf, so `[inf]` is not strictly less than itself), and `.interior` taken in the reals (`[5, inf]`
+  gives `(5, inf)`, not `(5, inf]`)
+* M13f: rounding is outward (the vectors require it), so `B + X ⊆ A` can fail by one ulp for float
+  operands; an inward variant is not built
+* M14: the fuzz workflow's first green GitHub run needs a push (a `workflow_dispatch` with
+  `multiplier=10` is the cheap first check); the exit records its count and time
 
 ### M14 fuzzing (open, added 2026-09-25; the fuzz job and the flint oracle built 2026-09-26)
 
@@ -1076,7 +1096,7 @@ land with M13a so that every later M13 op arrives with them
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
 the backlog, and M12 built its (b) items the same day. M13 (full itf1788) and M14 (fuzzing) are
 open: M13a is done (2026-09-26), then M13b to M13h in any order, each with its M14 properties
-(M13b, M13c and M13h done 2026-09-26);
+(M13b, M13c, M13f and M13h done 2026-09-26; M13d, M13e and M13g open);
 M14's fuzz job and flint oracle are built (2026-09-26), the job's first green GitHub run still
 owed. M4 depends on M3 (the class's
 `parse`, `__str__` and `__repr__` come from `fmt`); M7a and M9 are independent after M6. total ≈ 12

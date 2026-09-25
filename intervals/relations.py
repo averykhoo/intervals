@@ -192,7 +192,8 @@ def _ends(a: Cuts, b: Cuts):
 def weakly_less(a: Cuts, b: Cuts) -> bool:
     """
     `inf A <= inf B` and `sup A <= sup B`. two empty sets are ordered, an empty and a non-empty
-    set are not (1788's `less`: every point of each has a point of the other on the right side)
+    set are not. 1788's `less` on its closed intervals; on ends only, so open or closed ends do not
+    matter here (`[0, 2]` is weakly less than `[0, 2)`, which the pointwise reading would refuse)
     """
     if not a or not b:
         return not a and not b

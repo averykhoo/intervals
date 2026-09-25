@@ -113,6 +113,7 @@ def _quiet(fn, *args):
     ('[-inf, inf]', '[-inf]', '[-inf, inf]'),
     ('[-inf]', '[-inf]', '[-inf, inf]'),  # a finite x keeps -inf at -inf, and inf fits vacuously
     ('[0, 1]', '[-inf]', '[inf]'),  # only the vacuous inf
+    ('[0, 1]', '[inf]', '[-inf]'),  # the mirror: only the vacuous -inf, since -inf + inf has no value
     ('[0, 1] | [inf]', '[0] | [inf]', '{ [0, 1] , [inf] }'),  # a finite x keeps inf at inf
     ('[0, 1]', '[0] | [inf]', '{}'),  # ... which A must hold
     ('[-inf] | [0, 1]', '[-inf, 0]', '[-inf]'),  # no finite x: (-inf, 0] fits no piece of A; -inf + B = {-inf}
@@ -167,6 +168,7 @@ def test_coerces_numbers_only():
 @example(cut_tuples_a=union(one(-INF, -INF), one(0, 1)), cut_tuples_b=one(-INF, 0))
 @example(cut_tuples_a=one(INF, INF), cut_tuples_b=one(-INF, -INF))
 @example(cut_tuples_a=one(0, 1), cut_tuples_b=one(-INF, -INF))  # [inf]: inf + -inf fits vacuously
+@example(cut_tuples_a=one(0, 1), cut_tuples_b=one(INF, INF))  # [-inf]: the mirror
 @example(cut_tuples_a=one(0, 1), cut_tuples_b=union(one(0, 0), one(INF, INF)))  # ∅: a finite x keeps inf
 @example(cut_tuples_a=one(0, 1, lo_closed=False), cut_tuples_b=one(0, 1, lo_closed=False))
 def test_exactly_the_points_that_fit(cut_tuples_a, cut_tuples_b):
