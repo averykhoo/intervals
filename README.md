@@ -57,19 +57,24 @@ Size(rays=0, length=2, points=0)
   empty); `before after adjoins overlaps contains within` return bool; `allen()` gives the Allen
   relation; `weakly_less()` and `strictly_less()` are 1788's interval orders, on the ends (the
   hull's), and return bool. `==` is structural and `MultiInterval` is hashable and immutable
-* **arithmetic**: `+ - * /`, `reciprocal()`, `abs`, `**` with int exponents, `%`, `//`, `divmod`,
+* **arithmetic**: `+ - * /`, `reciprocal()`, `abs`, `**`, `%`, `//`, `divmod`,
   `minimum()`, `maximum()`, `fma()`, for every sign combination including zero-crossing and
   infinite operands. a result is
   the set of values attained: an infinite endpoint is closed iff it is attained, a pole at a closed
   zero attains the infinity of its piece's sign, and a box that *is* an indeterminate point
   (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`) is empty with an `IndeterminateResultWarning`
+* **power**: a number exponent with an integral value is 1788's pown, over every base
+  (`MI(-3, 1) ** 2` is `[0, 9]`); any other real exponent, and every `MultiInterval` one, is 1788's
+  pow, over the bases x > 0 and x = 0 where y > 0, the rest dropped with a `DomainClippedWarning`
+  (`MI(-3, 1) ** MI(2)` is `[0, 1]`). `2 ** A` is `MI(2) ** A`; 3-argument `pow` is refused
 * **cancellation**: `A.cancel_minus(B)` is the Minkowski difference, the largest `X` with
   `B + X ⊆ A`, for any two sets (`∅` when nothing fits); `A.cancel_plus(B)` is
   `A.cancel_minus(-B)`. 1788's `cancelMinus`/`cancelPlus` where 1788 has an answer, a real set
   where it answers entire as "no answer". exact for exact operands, outward an enclosure of `X`
-* **functions**: `sqrt`, `exp`, `exp2`, `exp10`, `log` (any base), `log2`, `log10`, `sin`, `cos`,
-  `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, as
-  methods. values are correctly rounded by a pure-python evaluator (no libm), so they are the same on
+* **functions**: `sqrt`, `exp`, `exp2`, `exp10`, `expm1`, `log` (any base), `log2`, `log10`,
+  `log1p`, `cbrt`, `rootn(n)`, `hypot`, `sin`, `cos`, `tan`, `cot`, `sec`, `csc`, `asin`, `acos`,
+  `atan`, `acot`, `atan2`, `sinh`, `cosh`, `tanh`, `coth`, `sech`, `csch`, `asinh`, `acosh`,
+  `atanh`, `acoth`, as methods; a pole inside a piece gives both infinities, as `1/x` does. values are correctly rounded by a pure-python evaluator (no libm), so they are the same on
   every platform; an irrational value of an exact operand is its tightest float enclosure
 * **step functions**: `floor()`, `ceil()`, `trunc()`, `round(ndigits)`, `round_ties_away()`,
   `sign()`, and `math.floor/ceil/trunc` and `round()` on a set: the values attained, listed up to
@@ -86,13 +91,13 @@ Size(rays=0, length=2, points=0)
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)
-* **ieee 1788**: not a runtime mode. the test suite runs 5375 vectors of 69 ops from all 19 files
-  of the ITF1788 suite through an adapter, the 4362 interval-valued ones a second time through
+* **ieee 1788**: not a runtime mode. the test suite runs 7314 vectors of 83 ops from all 19 files
+  of the ITF1788 suite through an adapter, the 6301 interval-valued ones a second time through
   `OutwardMultiInterval`, the 167 numeric ones twice more with float operands, and all of them
   match except 114 listed divergences where the semantics
   differ on purpose or the vector needs decorations (`tests/itf1788/`, measured 2026-09-26). the
-  statements of ops not built yet (`pow` with a real exponent, reverse ops, ...) are counted and
-  skipped
+  statements of ops not built yet (reverse ops, the text constructors, decorations) are counted
+  and skipped
 
 ## layout
 

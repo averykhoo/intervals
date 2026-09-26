@@ -13,7 +13,9 @@ from hypothesis import given
 from hypothesis import settings
 
 import intervals
+from intervals import EMPTY
 from intervals import MultiInterval
+from intervals import OutwardMultiInterval
 from intervals import kernel
 from intervals import ops
 from intervals.applicator import OpDescriptor
@@ -21,6 +23,7 @@ from intervals.applicator import apply_binary
 from intervals.applicator import apply_unary
 from intervals.applicator import evaluate_box
 from intervals.applicator import split_pieces
+from intervals.errors import DomainClippedWarning
 from intervals.errors import EmptySetPropagationWarning
 from intervals.errors import IndeterminateResultWarning
 from intervals.fmt import format_cuts
@@ -343,8 +346,8 @@ def test_numpy_scalars_run_the_reflected_dunders():
     assert np.int64(3) - a == P('[1, 2]')
     assert np.float64(1) / a == P('[0.5, 1.0]')
     assert (np.float64(0.5) < a) == (0.5 < a)
-    with pytest.raises(TypeError):
-        _ = a ** np.float64(2)  # int exponents only
+    assert a ** np.float64(2) == P('[1, 4]')  # an integral value: pown (D11)
+    assert a ** np.float64(0.5) == P('[1.0, 2.0]').sqrt()  # any other: 1788's pow, rounded as a float
     for thunk in (lambda: a + np.bool_(True), lambda: np.bool_(True) + a):
         with pytest.raises(TypeError):  # bool is refused, as in _coerce
             thunk()
@@ -355,18 +358,32 @@ def test_minus_is_arithmetic_not_set_difference():
     assert P('[0, 3]').difference(P('[1, 2]')) == P('[0, 1) | (2, 3]')
 
 
-@pytest.mark.parametrize('exponent', [True, 0.5, Fraction(1, 2), '2', P('[2]')])
-def test_pow_needs_an_int_exponent(exponent):
+@pytest.mark.parametrize('exponent', [True, '2', None, [2]])
+def test_pow_refuses_non_numbers(exponent):
     with pytest.raises(TypeError):
         _ = P('[1, 2]') ** exponent
+
+
+@pytest.mark.parametrize('exponent, expected', [
+    # D11: a number with an integral value is pown, over every base, as python's numbers do
+    (2, '[0, 9]'), (2.0, '[0, 9]'), (Fraction(4, 2), '[0, 9]'), (-1, '{ [-inf, -1/3] , [1, inf] }'),
+    # a non-integral number, or any MultiInterval, is 1788's pow: the negative bases are dropped
+    (P('[2]'), '[0, 1]'), (0.5, '[0.0, 1.0]'), (Fraction(1, 2), '[0, 1]'),
+    (P('[1/2, 2]'), '[0, 1]'), (math.inf, '[0]'),
+])
+def test_pow_dispatch(exponent, expected):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', DomainClippedWarning)
+        warnings.simplefilter('ignore', IndeterminateResultWarning)
+        assert str(P('[-3, 1]') ** exponent) == expected
 
 
 def test_pow_zero_and_three_argument_pow():
     assert P('[-inf, 0)') ** 0 == P('[1]')
     with pytest.raises(TypeError):
-        pow(P('[1, 2]'), 2, 3)
+        pow(P('[1, 2]'), 2, 3)  # dropped (D11): not 1788, and v1 had it on integers only
     with pytest.raises(TypeError):
-        _ = 2 ** P('[1, 2]')  # no __rpow__ in M6
+        pow(P('[1, 2]'), P('[2]'), 3)
     with pytest.raises(TypeError):
         ops.power(parse('[1]'), True)
 
@@ -380,9 +397,21 @@ def test_non_numbers_are_refused(other):
             op()
 
 
-def test_rpow_undefined():
-    # `// % divmod` arrived in M7 (tests/test_modulo.py); `2 ** A` is still refused
-    assert not hasattr(MultiInterval, '__rpow__')
+def test_rpow_is_pow_of_a_point():
+    # M13d (D11): `b ** A` for a real b is `MultiInterval(b) ** A`, so 1788's pow
+    assert 2 ** P('[1, 3]') == P('[2, 8]')
+    assert Fraction(1, 4) ** P('[1/2]') == P('[1/2]')
+    assert 4.0 ** P('[1/2]') == P('[2.0]')
+    assert type(2 ** OutwardMultiInterval(1.0, 3.0)) is OutwardMultiInterval
+    # a subclass's reflected method runs first, so mixing keeps the outward class on either side
+    assert type(P('[2]') ** OutwardMultiInterval(0.5)) is OutwardMultiInterval
+    assert type(OutwardMultiInterval(2.0) ** P('[1/2]')) is OutwardMultiInterval
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', DomainClippedWarning)
+        assert (-2) ** P('[1, 2]') == EMPTY  # a negative base is outside pow's domain
+    for base in (True, '2', None):
+        with pytest.raises(TypeError):
+            _ = base ** P('[1, 2]')
 
 
 def test_package_exports_unchanged():

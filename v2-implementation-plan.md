@@ -24,7 +24,7 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D8 | **decided 2026-09-24 by owner: recommended default**, implemented in M7. modulo with infinite operands: python gives `inf % 3` = `nan`, `3 % inf` = `3`, `-3 % inf` = `inf`. a dividend of ±inf attains nothing, so it is dropped with `DomainClippedWarning`; a finite dividend mod an infinite divisor follows python's scalar result (also the limit along the box) | clip / follow python | M7b |
 | D9 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13b), now in `v2-plan.md` "set operations and size".** 1788's numeric ops on a multi-interval. `mid`, `rad`, `wid` (and `midRad`) are **of the hull**: a midpoint outside the set (`mid([0,1] ∪ [9,10])` = 5) is still a valid bisection point, a per-piece form would return a tuple, and `size.length` already gives the width without the gaps. `mag` and `mig` are **of the set**, as `sup` and `inf` of `{abs(x) : x ∈ A}`: `mig([-3,-2] ∪ [2,3])` = 2, where the hull would give 0; on a connected set the two readings agree. unbounded operands follow 1788 (`mid` of entire is 0, of a half-bounded set ±max float; `rad` and `wid` are inf); the empty set raises `ValueError`, as `.inf` does today, and the adapter maps it to 1788's `NaN` | hull for mid/rad/wid, set for mag/mig | M13b |
 | D10 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13c), now in `v2-plan.md` "comparisons" and "set operations and size".** names for 1788's interval orders, since `<` and `<=` are pointwise and return a `TruthSet` (`MI(1,3) < MI(2,4)` is `BOTH`): `A.weakly_less(B)` for `less` (both of A's ends ≤ B's; 1788's own wording, "weakly less than"), `A.strictly_less(B)` for `strictLess`. `interior` is not a method: a new property `B.interior` (the set with every end opened, a set operation in its own right) and the existing `A.within(B.interior)` | `weakly_less`, `strictly_less`, `.interior` | M13c |
-| D11 | **decided 2026-09-25 by owner: recommended default.** power. an `int` exponent, or a float with an integral value, is `pown` as today, like python's scalars (`(-3.0) ** 2.0` = 9.0; `MI(-3,1) ** 2.0` = `[0, 9]`). a non-integral float or a `MultiInterval` exponent is 1788's `pow`: domain `x > 0`, plus `x = 0` where `y > 0` (`0 ** y` = 0); negative bases are dropped with `DomainClippedWarning`. so `MI(-3,1) ** MI(2)` = `[0, 1]`, not `[0, 9]`: an interval exponent means `pow`, never `pown`. `b ** A` for a scalar base is `MultiInterval(b) ** A` through `__rpow__`. exact where the value is rational, as `log` is. 3-argument `pow(A, n, m)` is dropped (not 1788; v1 had it on integers only) | pown for integral, else 1788 pow; 3-arg dropped | M13d |
+| D11 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13d), now in `v2-plan.md` "arithmetic" and "elementary and step functions".** power. an `int` exponent, or a float with an integral value, is `pown` as today, like python's scalars (`(-3.0) ** 2.0` = 9.0; `MI(-3,1) ** 2.0` = `[0, 9]`). a non-integral float or a `MultiInterval` exponent is 1788's `pow`: domain `x > 0`, plus `x = 0` where `y > 0` (`0 ** y` = 0); negative bases are dropped with `DomainClippedWarning`. so `MI(-3,1) ** MI(2)` = `[0, 1]`, not `[0, 9]`: an interval exponent means `pow`, never `pown`. `b ** A` for a scalar base is `MultiInterval(b) ** A` through `__rpow__`. exact where the value is rational, as `log` is. 3-argument `pow(A, n, m)` is dropped (not 1788; v1 had it on integers only) | pown for integral, else 1788 pow; 3-arg dropped | M13d |
 | D12 | **decided 2026-09-25 by owner: recommended default.** a reverse op whose answer has infinitely many or very many pieces (`sinRev`, `cosRev`, `tanRev` and their `*Bin` forms over an unbounded or wide `x`): the exact pieces up to the step functions' cap of 1000, past it their hull with a `HullWarning`, the rule `steps.py` already follows. a bounded `x` gets the exact union (`sinRev([0.5, 1], [0, 20])` has 4 pieces), which 1788 cannot give. ends are irrational, so each is its tightest float enclosure, open | exact to 1000 pieces, else hull + warning | M13e |
 | D13 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13f), now in `v2-plan.md` "arithmetic" and "ieee 1788".** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
 | D14 | **decided 2026-09-25 by owner: recommended default.** the independent oracle for the elementary functions is **`python-flint`** (Arb: every result is a ball proven to contain the true value), a test-only dependency in the `[test]` extra, installed into the `intervals` env and in CI. `mpmath` was the alternative (pure python, but its values carry no proven bound). python-flint 0.9.0 has Windows wheels for 3.10 and later (abi3), 3.13 and 3.14 included (checked on PyPI 2026-09-25) | python-flint | M14 |
@@ -418,7 +418,8 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
   four (b) items: built at M12 (below), done 2026-09-25
 * **reverse ops** (a): `mulRevToPair` and friends, for the reverse-op itf1788 files and for a solver.
   owner 2026-09-25: build, as M13e
-* **power beyond int exponents** (a: scope; owner 2026-09-25: build 1788's `pow`, as M13d): `A ** 0.5`, `A ** B`, `2 ** A` are TypeError today
+* **power beyond int exponents** (a: scope; owner 2026-09-25: build 1788's `pow`, as M13d; built
+  2026-09-26, see M13d): `A ** 0.5`, `A ** B`, `2 ** A` were TypeError until then
   (`intervals/multi_interval.py::MultiInterval.__pow__`); v1 took an interval exponent on a
   positive base. 3-argument `pow(A, n, m)` (v1: integers only; old README "allow interval modulo
   for `__pow__()`"). settled by D11: integral exponents stay pown, others are 1788 pow, and
@@ -512,7 +513,7 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
 * not built, and why: `pow` with a real exponent (a: scope, M11); `less`, `strictLess`, `interior`,
   `mid`, `rad`, `wid`, `mag`, `mig` (a: see M11); reverse ops (a). all now M13
 
-### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a, M13b, M13c, M13f and M13h done 2026-09-26)
+### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a, M13b, M13c, M13d, M13f and M13h done 2026-09-26)
 
 owner request 2026-09-25: "implement all these ops and get all these tests vendored and passing".
 this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how,
@@ -749,7 +750,7 @@ statements
   the wiring: `interior` as `a.within(b)` 16 red (`bool.itl:368`, `c-xsc.itl:132` among them),
   `strictLess` as `weakly_less` 10, `less` with its operands swapped 34
 
-**M13d power and the rest of the elementary functions** (D11). every value correctly rounded in
+**M13d power and the rest of the elementary functions (done 2026-09-26)** (D11). every value correctly rounded in
 pure python, in `intervals/elementary.py` at one point and `intervals/functions.py` over sets, as at
 M12; each checked against the D14 oracle (M14)
 * `pow` 1431: `__pow__` as D11 (integral exponent → pown as today; non-integral float or
@@ -761,6 +762,116 @@ M12; each checked against the D14 oracle (M14)
   `sech` 14. python's name where python has one, 1788's otherwise. the poles of csc, sec, cot,
   coth, csch split a piece as tan's do; `acoth`'s domain is `|x| ≥ 1` with the M12 rule for a
   domain's end (the one-sided limit, so ±inf at ±1: expect degenerate-infinity rows like atanh's)
+* done 2026-09-26. built:
+    * `intervals/elementary.py`: the twelve functions at an exact point in `NAMES` (and `rootn`
+      through the `base` argument, as its degree n), with their exact values (`exact`: 0 or 1 at
+      the obvious points, the rational roots, the limits at ±inf and at a domain's end) and their
+      enclosures (`_enclose`): `::_expm1_fractions` (exp at extra precision near 0, by
+      `::_tiny_bits`), log1p as the log of the exact `1 + x`, `::_root_fractions` as
+      `exp(ln|x| / n)`, cot/csc/sec from `_sin_cos`, acot as `atan(1/x)` (plus pi below 0),
+      `::_reciprocal_hyperbolic` (coth and csch through expm1, sech through exp), acoth as
+      `ln((x + 1)/(x - 1)) / 2`. `_beyond` knows where expm1, coth, csch and sech round like a value
+      next to -1, ±1 or 0 or past the float range. `POLE_AT_ZERO` (cot, csc, coth, csch): `exact`
+      raises `ValueError` there. `::exact_pow` (rational iff x is a b-th power for y = a/b, via
+      `::_exact_root` and the integer root `::_iroot`; not built past `EXACT_POWER_LIMIT` bits)
+      and `::rounded_pow` (`exp(y ln x)` through ziv, overflow and underflow decided first from
+      `::_ln_bracket`, two rationals of one sign within a factor of 3.1 of `ln x`)
+    * `intervals/functions.py`: the new names in `NAMES`, a public `::domain(name, base)`, the
+      tables `MONOTONE` (expm1, log1p, cbrt, acot, sech with its new `'above 0'`, acoth on
+      `|x| ≥ 1`), `RECIPROCAL_TRIG` (cot, csc, sec: the poles' and extrema's offsets in pi) and
+      `POLE_AT_ZERO` (coth, csch). `_Function.reciprocal_trig` cuts a piece at its poles and
+      extrema (`::_inside_k`, `floor_over_pi` as for sin) into monotone segments
+      (`_Function.segment`); `_Function.pole_at_zero` for coth, csch and an odd negative root;
+      `rootn` through `apply(name, a, base=n)` (`::_check_degree`). `::pow_` over boxes as atan2
+      does (`::_power_box`, `::_power_corner`, `::_POW_EXTREMES`), and `::hypot` (exact sums of
+      squares, one square root; `_Function`'s new `float_operands`)
+    * `intervals/multi_interval.py`: the methods `expm1()`, `log1p()`, `cbrt()`, `rootn(n)`,
+      `hypot(B)`, `cot()`, `sec()`, `csc()`, `acot()`, `coth()`, `csch()`, `sech()`, `acoth()`;
+      `__pow__` per D11 (`::_is_integral` for a number's value) and `__rpow__`, overridden in
+      `OutwardMultiInterval` as the other reflected dunders are
+    * **choices the plan left open** (conservative, flagged in the decision log):
+        * a Fraction with an integral value is pown, as D11 says of a float; any `MultiInterval`
+          exponent is pow, `[2]` included
+        * `0 ** y` for y <= 0 is outside pow's domain (D11's words), dropped with the
+          `DomainClippedWarning`, not an `IndeterminateResultWarning`, and the one-sided limit
+          `0 ** -1` = inf is not taken: `[0, 1] ** [-1]` is `[1, inf)`, pown's `[0, 1] ** -1` is
+          `[1, inf]`
+        * ±inf in pow are points where the power has a limit; `1 ** ±inf` and `inf ** 0` are
+          indeterminate points, atan2's treatment (nothing and a warning for a box that is one,
+          the other points' values for a larger box). a corner is attained iff in the box or on a
+          closed infinite edge
+        * the poles at 0 (cot, csc, coth, csch, an odd negative root) follow `reciprocal`: a piece
+          ending at 0 takes the one-sided limit, closed iff it holds 0; `[0]` alone is empty with
+          an `IndeterminateResultWarning`; a pole inside a piece gives both infinities, attained
+        * acot is continuous, `pi/2 - atan x` in (0, pi) (fi_lib's; its vectors are all positive,
+          where the conventions agree), not `atan(1/x)`
+        * rootn for every int n other than 0 (1788's): n < 0 is the root of `1/x`, an even root's
+          domain x >= 0 with `rootn(0, -2)` = inf at its end; `rootn(x, 0)` a `ValueError`
+        * hypot rounded once from the exact sums of squares, in the receiver's class
+    * adapter (`tests/itf1788/test_itf1788.py`): the 14 ops in `OPS` (`logp1` as `log1p()`,
+      `rootn` with its int, `pow` as `a ** b`: an interval exponent, so 1788's pow). no rule and no
+      row: all 1939 vectors match in both passes. 41 of them end at or are the pole 0 of cot, csc,
+      coth or csch, where the closed hulls agree; no vector has acoth at ±1
+    * tests:
+        * `tests/test_elementary.py`: the decimal oracle for the eleven unary functions (working
+          precision grown by the operand's distance from 1, `::_oracle_new`), so
+          `test_correctly_rounded` and `test_enclosures_hold_the_value` cover them; 30 extreme
+          points, 9 known roundings past the float range, 36 exact values, the poles raising;
+          `::test_rootn_correctly_rounded` for 9 degrees, `::test_exact_rootn`,
+          `::test_iroot_is_the_floor`; `::test_pow_correctly_rounded` (150 draws, three kinds, at
+          least 90 checked), `::test_exact_pow`, `::test_known_pow_roundings`,
+          `::test_ln_bracket_holds_ln`
+        * `tests/test_oracle_flint.py`: the eleven through `_ARB` (arb's own expm1, log1p, root,
+          cot, sec, csc, coth, csch, sech; acot and acoth through atan and atanh), log transforms
+          where arb cannot hold the value (`::_shifted_logged_sign` for expm1 near -1 and coth near
+          1, the log of expm1, csch, sech far out), 42 more extremes, 14 more ends and 8 more
+          outside points; `::test_rootn_against_arb`, `::test_pow_against_arb` (through
+          `log(x ** y) = y log x`, so past the float range too), `::test_hypot_against_arb`
+        * `tests/test_functions.py`: the property tests over every name through `domain()`, the
+          poles at 0 skipped where there is no value and the union law relaxed to the finite
+          points there; `::test_m13d_examples` (46), `::test_a_pole_at_zero_has_no_value_there`,
+          `::test_the_infinities_of_a_pole_at_zero` (±inf in the result iff the operand reaches 0
+          from that side while holding it; coth, csch, rootn -3 and -1),
+          rootn (examples, domain and poles, refusals, soundness and isotonicity over 12 degrees,
+          `cbrt` = `rootn(3)`), pow (28 examples, 5 outward, domain and indeterminate warnings, and
+          `@given`: soundness on exact sets, ends sharp, isotone and distributing over a union in
+          each argument, outward soundness on floats, nearest holding the nearest power), hypot
+          (examples, outward, soundness on exact and float sets, isotone and symmetric)
+        * `tests/test_applicator.py`: D11's dispatch (`::test_pow_dispatch`), numbers refused,
+          3-argument pow refused, `::test_rpow_is_pow_of_a_point` (the class on both sides)
+    * **a bug found while building, in the tests' first draft, not the library**: my hand-written
+      expected strings for six set examples were wrong (cot on `[1, 4]` taken on the wrong branch,
+      five last digits); arb agreed with the library on each
+* evidence, measured 2026-09-26 (census by importing the test module, `tools/itf1788_census.py`):
+  1939 vectors of the 14 ops (by file: libieeep1788_elem 1428, all pow; mpfi 329; fi_lib 176; c-xsc
+  6, pow 3 and rootn 3),
+  all matching in both passes; all ops: 7314 vectors of 83 ops, 6301 interval-valued, 167
+  numeric run twice more with floats, 13949 vector test items, 114 divergence keys (unchanged),
+  0 unknown failures; skipped 2228 statements of 28 ops. the gate: 17346 passed in 373 s (13000 at M13f)
+* sabotage (section 2): 25 breaks, each run against its targeted tests by a throwaway harness
+  that restored the file from a copy and byte-compared it (`filecmp`), results appended as they
+  landed. red: csc/sec extrema of the wrong sign 207 (19 unit, 188 mpfi vectors); the side of a
+  pole flipped 7 (isotonicity, union, examples; **no vector**: a piece holding a pole hulls to
+  entire either way); the pole 0 as a start giving -inf 13 (8 vectors); the whole range already
+  at two poles 1 at first (only `sec [1, 5]`), 2 after adding `csc [3, 7]`; the infinity at the
+  pole 0 always closed 1 at first (only `coth (0, 1]`), 3 after adding
+  `::test_the_infinities_of_a_pole_at_zero` with `@example`s for an open 0 (**no vector**: the
+  closed hull hides attainment); pow's corners of `(x < 1, y > 0)` swapped 1077 (1060 vectors);
+  `0 ** y` = 0 for y <= 0 558 (554 vectors); no attainment on a closed infinite edge 4 (the
+  properties; no vector, the input rule never closes an infinity); float corners to nearest when
+  outward 164 (160 outward vectors); overflow decided at `ln > 80` 2; no rational root for a
+  non-integral exponent 3 (`test_exact_pow`), and its other two targets **hung**, ziv climbing
+  toward `_MAX_PRECISION` on a rational value it cannot settle, killed after 835 s and 140 s: a
+  missed exact case costs minutes before the `ArithmeticError`, as M12 designed it; `ln 2 > 0.8`
+  in the bracket 3; expm1's -1 from -30 2 at first (two mpfi vectors), 4 after adding the
+  extreme points -37 and -35; coth's 1 from `|x| >= 10` 5; csch/sech's 0 from 700 6; acot
+  without pi below 0 11 (no vector: fi_lib's are all positive); rootn not reciprocated for n < 0
+  7; hypot's float operands as exact 3 (the examples; the vectors test outward, where the
+  result is the same enclosure); an integral float exponent as pow 2; sech's direction reversed
+  35 (26 vectors); cbrt losing the negative root 16. the wiring: `logp1` run as expm1 70 vectors,
+  `pow` run as pown on a degenerate integral exponent 56 vectors. **green, as argued**: expm1's
+  and log1p's extra bits near 0 (`_tiny_bits`) removed, 0 red: they save ziv iterations, and
+  without them ziv doubles the precision until the ends agree, so the value is the same
 
 **M13e reverse ops** (D12). 1955 statements
 * a new module `intervals/reverse.py`, the functions exported from `intervals`, each taking the
@@ -1106,7 +1217,7 @@ point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6
 | `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; comes back at M8 |
 | `exp()`, `log(base)` | `exp()`, `log(base=None)`, and the rest of `functions.py` (M12) |
 | `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | the same dunders, returning the set of values attained (`steps.py`, M12) |
-| `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | int exponents only; interval and real exponents planned as 1788 `pow` (M13d, D11); `pow(A, n, m)` dropped (D11) |
+| `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | an integral number exponent is pown; any other real or interval exponent is 1788 `pow`, and `b ** A` works (M13d, D11); `pow(A, n, m)` dropped (D11) |
 | `<<`, `>>` | open: port or record as gone (`HANDOFF.md` Q6) |
 | `random_multi_interval` | open: port or record as gone (`HANDOFF.md` Q6); the tests use hypothesis strategies instead |
 | public `apply()` | open: port or record as gone (`HANDOFF.md` Q6); `applicator` and `OpDescriptor` are not exported |

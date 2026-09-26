@@ -253,10 +253,34 @@ class MultiInterval:
         return self._wrap(ops.absolute(self._cuts))
 
     def __pow__(self, exponent, modulo=None):
-        """int exponents only (not bool); on exact operands `A ** -n` is `(A ** n).reciprocal()`"""
-        if modulo is not None or isinstance(exponent, bool) or not isinstance(exponent, Integral):
+        """
+        a number with an integral value (int, or a float or Fraction equal to one; not bool) is ieee
+        1788's pown, as for python's numbers: every base, and on exact operands `A ** -n` is
+        `(A ** n).reciprocal()`. any other real exponent, and every `MultiInterval` one (even `[2]`), is
+        1788's pow (`functions.pow_`): `{x ** y}` over the bases x > 0, and x = 0 where y > 0, the
+        others dropped with a `DomainClippedWarning`. 3-argument `pow` is a TypeError
+
+        >>> MultiInterval(-3, 1) ** 2.0
+        MultiInterval.parse('[0, 9]')
+        >>> MultiInterval(1, 4) ** MultiInterval.parse('[1/2]')
+        MultiInterval.parse('[1, 2]')
+        """
+        if modulo is not None or isinstance(exponent, bool):
             return NotImplemented
-        return self._wrap(ops.power(self._cuts, exponent, outward=self._outward))
+        if isinstance(exponent, MultiInterval):
+            return self._wrap(functions.pow_(self._cuts, exponent._cuts, outward=self._outward))
+        if not isinstance(exponent, Real):
+            return NotImplemented
+        if _is_integral(exponent):
+            return self._wrap(ops.power(self._cuts, int(exponent), outward=self._outward))
+        return self._wrap(functions.pow_(self._cuts, self._coerce_or_raise(exponent)._cuts, outward=self._outward))
+
+    def __rpow__(self, base):
+        """`b ** A` for a real b is `MultiInterval(b) ** A`, 1788's pow (an interval exponent)"""
+        other = self._coerce(base)
+        if other is NotImplemented:
+            return NotImplemented
+        return self._wrap(functions.pow_(other._cuts, self._cuts, outward=self._outward))
 
     def reciprocal(self) -> 'MultiInterval':
         """
@@ -489,6 +513,74 @@ class MultiInterval:
     def atanh(self) -> 'MultiInterval':
         """`atanh(±1)` = ±inf"""
         return self._function('atanh')
+
+    def expm1(self) -> 'MultiInterval':
+        """`exp(x) - 1`, correctly rounded near 0 as well; `expm1(-inf)` = -1"""
+        return self._function('expm1')
+
+    def log1p(self) -> 'MultiInterval':
+        """`log(1 + x)` (ieee 1788's logp1); points below -1 are dropped, and `log1p(-1)` = -inf"""
+        return self._function('log1p')
+
+    def cbrt(self) -> 'MultiInterval':
+        """
+        the real cube root, negative bases included
+
+        >>> MultiInterval(-8, 27).cbrt()
+        MultiInterval.parse('[-2, 3]')
+        """
+        return self._function('cbrt')
+
+    def rootn(self, n: int) -> 'MultiInterval':
+        """
+        the real n-th root for an int n other than 0, of `1/x` for n < 0 (ieee 1788's rootn); an even
+        root drops the points below 0, and an odd negative one has a pole at 0, as `reciprocal()`
+
+        >>> MultiInterval(0, 16).rootn(4)
+        MultiInterval.parse('[0, 2]')
+        >>> MultiInterval(1, 8).rootn(-3)
+        MultiInterval.parse('[1/2, 1]')
+        """
+        return self._function('rootn', n)
+
+    def hypot(self, other) -> 'MultiInterval':
+        """
+        `sqrt(x**2 + y**2)` for x in self and y in other, rounded once
+
+        >>> MultiInterval(3).hypot(MultiInterval(-4, 0))
+        MultiInterval.parse('[3, 5]')
+        """
+        return self._wrap(functions.hypot(self._cuts, self._coerce_or_raise(other)._cuts, outward=self._outward))
+
+    def cot(self) -> 'MultiInterval':
+        """poles at every k pi, 0 included: a piece ending at 0 takes the limit on its side"""
+        return self._function('cot')
+
+    def sec(self) -> 'MultiInterval':
+        return self._function('sec')
+
+    def csc(self) -> 'MultiInterval':
+        """poles at every k pi, 0 included: a piece ending at 0 takes the limit on its side"""
+        return self._function('csc')
+
+    def acot(self) -> 'MultiInterval':
+        """`pi/2 - atan(x)`, continuous and falling from pi at -inf to 0 at inf"""
+        return self._function('acot')
+
+    def coth(self) -> 'MultiInterval':
+        """a pole at 0: `coth([0, 1])` is `[coth 1, inf]`, and `coth([0])` is empty with a warning"""
+        return self._function('coth')
+
+    def csch(self) -> 'MultiInterval':
+        """a pole at 0, as `coth`"""
+        return self._function('csch')
+
+    def sech(self) -> 'MultiInterval':
+        return self._function('sech')
+
+    def acoth(self) -> 'MultiInterval':
+        """defined for `|x| >= 1`; `acoth(±1)` = ±inf and `acoth(±inf)` = 0"""
+        return self._function('acoth')
 
     def atan2(self, x) -> 'MultiInterval':
         """
@@ -843,6 +935,16 @@ class MultiInterval:
         return complex(self._point())
 
 
+def _is_integral(v: Real) -> bool:
+    """a real number with an integer value (±inf and nan have none)"""
+    if isinstance(v, Integral):
+        return True
+    try:
+        return v == int(v)
+    except (OverflowError, ValueError):
+        return False
+
+
 class OutwardMultiInterval(MultiInterval):
     """
     a MultiInterval whose float results round outward: a low end down and a high end up, from the
@@ -882,6 +984,9 @@ class OutwardMultiInterval(MultiInterval):
 
     def __rdivmod__(self, other):
         return MultiInterval.__rdivmod__(self, other)
+
+    def __rpow__(self, other):
+        return MultiInterval.__rpow__(self, other)
 
     def __ror__(self, other):
         return MultiInterval.__ror__(self, other)

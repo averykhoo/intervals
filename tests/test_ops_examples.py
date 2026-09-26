@@ -593,12 +593,12 @@ def test_empty_operand_propagates_with_one_warning(thunk):
     pytest.param(lambda a: a * None, id='MI * None'),
     pytest.param(lambda a: a / 'x', id='MI / str'),
     pytest.param(lambda a: a + True, id='MI + bool'),  # _coerce rejects bool
-    pytest.param(lambda a: a ** 0.5, id='MI ** 0.5'),
-    pytest.param(lambda a: a ** 2.0, id='MI ** 2.0'),
-    pytest.param(lambda a: a ** Fraction(1, 2), id='MI ** Fraction(1, 2)'),
-    pytest.param(lambda a: a ** a, id='MI ** MI'),
+    # M13d (D11) defines `**` for every real exponent and `b ** A` for a real base; the rest refuses
     pytest.param(lambda a: a ** True, id='MI ** True'),
-    pytest.param(lambda a: 2 ** a, id='2 ** MI'),
+    pytest.param(lambda a: a ** '2', id='MI ** str'),
+    pytest.param(lambda a: None ** a, id='None ** MI'),
+    pytest.param(lambda a: True ** a, id='bool ** MI'),
+    pytest.param(lambda a: pow(a, 2, 3), id='pow(MI, 2, 3)'),
     # M7 defines `// % divmod` for numbers and MultiIntervals (tests/test_modulo.py); anything else refuses
     pytest.param(lambda a: a // 'x', id='MI // str'),
     pytest.param(lambda a: a % None, id='MI % None'),
@@ -613,9 +613,9 @@ def test_type_errors(thunk):
 
 def test_integral_fraction_exponent_is_an_int_exponent():
     """
-    `__pow__` returns NotImplemented for a Fraction, and python then calls `Fraction.__rpow__`, which
-    turns an integral Fraction into its int (`a ** Fraction(2)` is `a ** 2`). that is the pointwise
-    answer and D3's "an integral Fraction is an int", so it is pinned rather than refused
+    an integral Fraction is pown, as D11 says of an integral float (`a ** Fraction(2)` is `a ** 2`):
+    the pointwise answer and D3's "an integral Fraction is an int". before M13d it got there through
+    `Fraction.__rpow__`; `__pow__` now decides it itself
     """
     assert P('[1, 2]') ** Fraction(2) == P('[1, 4]')
     assert P('[1, 2]') ** Fraction(-1) == P('[1/2, 1]')

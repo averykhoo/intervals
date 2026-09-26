@@ -4,7 +4,8 @@ elementary functions at one exact point, correctly rounded
 `rounded(name, x, direction)` is `f(x)` rounded to a double to nearest, down or up, for an exact x
 (int or Fraction, or ±inf where f has a limit there); `exact(name, x)` is `f(x)` itself where it is
 rational (`sqrt(9/4)`, `exp(0)`, `log2(1/8)`, `tanh(inf)`) and None where it is not. `name` is one
-of `NAMES`; `log` also takes a `base`.
+of `NAMES`, or `rootn`; `log` also takes a `base`, and `rootn` its degree n (an int other than 0) in
+the same argument. `rounded_pow(x, y, direction)` and `exact_pow(x, y)` are the same for `x ** y`.
 
 nothing here calls libm. a value is enclosed between two dyadic rationals at a working precision of
 p bits, every rounding error bounded, and p is doubled until both ends of the enclosure round to the
@@ -12,7 +13,8 @@ same double (ziv's strategy). that terminates because an irrational number is ne
 midpoint of two, and the rational values are exactly the ones `exact` returns: for a rational x the
 values of exp, log, sin, atan, sinh and their kin are transcendental unless x is the obvious point
 (lindemann-weierstrass, gelfond-schneider), `2 ** x` and `10 ** x` are irrational unless x is an int,
-and `sqrt(x)` unless x is a square. so a directed result is a true bound, a nearest result is the
+`sqrt(x)` unless x is a square (and the n-th root unless x is an n-th power, so `x ** (a/b)` in lowest
+terms unless x is a b-th power). so a directed result is a true bound, a nearest result is the
 correctly rounded one, and both are the same on every platform.
 
 the enclosures are fixed-point intervals: a pair of ints `(lo, hi)` standing for
@@ -34,7 +36,10 @@ from intervals.rounding import round_rational
 INF = math.inf
 
 NAMES = ('sqrt', 'exp', 'exp2', 'exp10', 'log', 'log2', 'log10', 'sin', 'cos', 'tan', 'asin', 'acos',
-         'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh')
+         'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
+         'expm1', 'log1p', 'cbrt', 'cot', 'sec', 'csc', 'acot', 'coth', 'csch', 'sech', 'acoth')
+# the poles at 0, where `exact` and `rounded` have no value to give (the set level takes the limits)
+POLE_AT_ZERO = ('cot', 'csc', 'coth', 'csch')
 
 _START_PRECISION = 64
 # `2 ** x` and `10 ** x` for an int x beyond this are not built exactly (2**100000 has 100001 bits);
@@ -382,7 +387,79 @@ def _enclose(name: str, x: Fraction, p: int, base=None) -> Tuple[Fraction, Fract
         # atanh x = ln((1 + x) / (1 - x)) / 2, |x| < 1
         lo, hi = _fractions(_log_rational((1 + x) / (1 - x), p), p)
         return lo / 2, hi / 2
+    if name == 'expm1':
+        return _expm1_fractions(x, p)
+    if name == 'log1p':
+        # ln(1 + x) of the exact 1 + x; the series' error is absolute, so a small x needs more bits
+        q = p + _tiny_bits(x)
+        return _fractions(_log_rational(1 + x, q), q)
+    if name == 'cbrt':
+        return _root_fractions(x, 3, p)
+    if name == 'rootn':
+        return _root_fractions(x, base, p)
+    if name in ('cot', 'csc', 'sec'):
+        s, c = _sin_cos(x, p)
+        top, bottom = {'cot': (c, s), 'csc': (_one(p), s), 'sec': (_one(p), c)}[name]
+        return _fractions(_div(top, bottom, p), p)
+    if name == 'acot':
+        # pi/2 - atan x, continuous and falling from pi to 0: atan(1/x) above 0, pi + atan(1/x) below
+        if x == 0:
+            return _fractions(_shift(_pi(p), -1), p)
+        angle = _atan_rational(1 / x, p)
+        return _fractions(angle if x > 0 else _add(_pi(p), angle), p)
+    if name in ('coth', 'csch', 'sech'):
+        return _reciprocal_hyperbolic(name, x, p)
+    if name == 'acoth':
+        # acoth x = atanh(1/x) = ln((x + 1) / (x - 1)) / 2, |x| > 1
+        lo, hi = _fractions(_log_rational((x + 1) / (x - 1), p), p)
+        return lo / 2, hi / 2
     raise ValueError(f'unknown function {name!r}')
+
+
+def _tiny_bits(x: Fraction) -> int:
+    """how far below 1 |x| is, in bits (0 for |x| >= 1/2): the extra precision a value near x needs"""
+    return max(0, x.denominator.bit_length() - abs(x.numerator).bit_length()) + 8
+
+
+def _expm1_fractions(x: Fraction, p: int) -> Tuple[Fraction, Fraction]:
+    """exp(x) - 1 for an exact x (|x| < 2**12), with p bits relative to the value even near 0"""
+    q = p + _tiny_bits(x)
+    lo, hi = _exp_fix(_fix(x, q), q)
+    return lo - 1, hi - 1
+
+
+def _root_fractions(x: Fraction, n: int, p: int) -> Tuple[Fraction, Fraction]:
+    """the n-th root of an exact x != 0 (n odd if x < 0; n < 0 for its reciprocal) as exp(ln|x| / n)"""
+    if x < 0:
+        lo, hi = _root_fractions(-x, n, p)
+        return -hi, -lo
+    q = p + 16
+    ln = _log_rational(x, q)
+    return _exp_fix(_div_int(ln, n) if n > 0 else _neg(_div_int(ln, -n)), q)
+
+
+def _reciprocal_hyperbolic(name: str, x: Fraction, p: int) -> Tuple[Fraction, Fraction]:
+    """coth, csch (x != 0) and sech, from exp and expm1 so that nothing cancels near 0"""
+    if name == 'sech':
+        # 2 / (e + 1/e) falls as e = exp|x| >= 1 rises
+        lo, hi = _exp_fix(_fix(abs(x), p), p)
+        lo = max(lo, Fraction(1))
+        return 2 / (hi + 1 / hi), 2 / (lo + 1 / lo)
+    if x < 0:  # both odd
+        lo, hi = _reciprocal_hyperbolic(name, -x, p)
+        return -hi, -lo
+    if name == 'coth':
+        # 1 + 2 / expm1(2x), falling as expm1(2x) > 0 rises
+        lo, hi = _expm1_fractions(2 * x, p)
+        if lo <= 0:
+            raise _Retry
+        return 1 + 2 / hi, 1 + 2 / lo
+    # csch x = 2 / (expm1(x) - expm1(-x)), the difference being 2 sinh x > 0
+    a_lo, a_hi = _expm1_fractions(x, p)
+    b_lo, b_hi = _expm1_fractions(-x, p)
+    if a_lo - b_hi <= 0:
+        raise _Retry
+    return 2 / (a_hi - b_lo), 2 / (a_lo - b_hi)
 
 
 def _hyperbolic(name: str, x: Fraction, p: int) -> Tuple[Fraction, Fraction]:
@@ -419,11 +496,25 @@ def exact(name: str, x, base=None):
     >>> exact('exp', 1) is None
     True
     """
+    if name == 'rootn':
+        return _exact_rootn(x, base)
     if is_infinite(x):
         return _AT_INFINITY[name](x, base)
     x = Fraction(x)
+    if name in POLE_AT_ZERO and x == 0:
+        raise ValueError(f'{name} has a pole at 0, so no value there')
     if name == 'sqrt':
         return _exact_sqrt(x)
+    if name == 'cbrt':
+        return _exact_root(x, 3)
+    if name in ('expm1', 'cot', 'csc', 'coth', 'csch', 'acot'):
+        return 0 if x == 0 and name == 'expm1' else None
+    if name in ('sec', 'sech'):
+        return 1 if x == 0 else None
+    if name == 'log1p':
+        return 0 if x == 0 else -INF if x == -1 else None
+    if name == 'acoth':
+        return INF if x == 1 else -INF if x == -1 else None
     if name in ('sinh', 'tanh', 'asinh', 'sin', 'tan', 'asin', 'atan'):
         return 0 if x == 0 else None
     if name in ('exp', 'cos', 'cosh'):
@@ -455,6 +546,41 @@ def _exact_sqrt(x: Fraction) -> Optional[Fraction]:
     n, d = x.numerator, x.denominator
     rn, rd = math.isqrt(n), math.isqrt(d)
     return Fraction(rn, rd) if rn * rn == n and rd * rd == d else None
+
+
+def _iroot(n: int, k: int) -> int:
+    """the floor of the k-th root of an int n >= 0 (newton's method from above)"""
+    if n < 2 or k == 1:
+        return n
+    if k >= n.bit_length():
+        return 1
+    x = 1 << -(-n.bit_length() // k)
+    while True:
+        y = ((k - 1) * x + n // x ** (k - 1)) // k
+        if y >= x:
+            return x
+        x = y
+
+
+def _exact_root(x: Fraction, k: int) -> Optional[Fraction]:
+    """the rational k-th root of x (k >= 1, odd if x < 0), or None if there is none"""
+    if x < 0:
+        r = _exact_root(-x, k)
+        return None if r is None else -r
+    n, d = x.numerator, x.denominator
+    rn, rd = _iroot(n, k), _iroot(d, k)
+    return Fraction(rn, rd) if rn ** k == n and rd ** k == d else None
+
+
+def _exact_rootn(x, n: int):
+    """rootn(x, n) where rational: at ±inf its limit, at 0 for n < 0 the limit from above (+inf)"""
+    if is_infinite(x):
+        return 0 if n < 0 else x
+    x = Fraction(x)
+    if x == 0:
+        return 0 if n > 0 else INF
+    r = _exact_root(x, abs(n))
+    return None if r is None else r if n > 0 else 1 / r
 
 
 def _exact_log(x: Fraction, b: Fraction) -> Optional[int]:
@@ -502,6 +628,14 @@ _AT_INFINITY = {
     'asinh': lambda x, base: x,
     'acosh': lambda x, base: x,
     'atan': lambda x, base: None,  # ±pi/2
+    'expm1': lambda x, base: x if x > 0 else -1,
+    'log1p': lambda x, base: x,
+    'cbrt': lambda x, base: x,
+    'acot': lambda x, base: 0 if x > 0 else None,  # pi at -inf
+    'coth': lambda x, base: 1 if x > 0 else -1,
+    'csch': lambda x, base: 0,
+    'sech': lambda x, base: 0,
+    'acoth': lambda x, base: 0,
 }
 
 
@@ -519,7 +653,9 @@ def rounded(name: str, x, direction: int, base=None) -> float:
     value = exact(name, x, base)
     if value is not None:
         return value if is_infinite(value) else round_rational(value, direction)
-    if is_infinite(x):  # atan(±inf) = ±pi/2
+    if is_infinite(x):  # atan(±inf) = ±pi/2, acot(-inf) = pi
+        if name == 'acot':
+            return _ziv(lambda p: _fractions(_pi(p), p), direction)
         sign = 1 if x > 0 else -1
         return sign * _ziv(lambda p: _fractions(_shift(_pi(p), -1), p), direction * sign)
     x = Fraction(x)
@@ -560,6 +696,15 @@ def _beyond(name: str, x: Fraction, base):
     if name == 'tanh' and abs(x) >= 20:
         # 1 - tanh x = 2 / (exp(2x) + 1) < 2**-54 there, so it rounds like a value just below 1
         return 'below 1' if x > 0 else 'above -1'
+    if name == 'expm1':
+        # exp(x) < 2**-57 below -40, so exp(x) - 1 rounds like a value just above -1
+        return 'overflow' if x >= 710 else 'above -1' if x <= -40 else None
+    if name == 'coth' and abs(x) >= 20:
+        # coth x - 1 = 2 / (exp(2x) - 1) < 2**-56 there
+        return 'above 1' if x > 0 else 'below -1'
+    if name in ('csch', 'sech') and abs(x) >= 747:
+        # |f(x)| < 2 exp(-|x|) < 2**-1076, under half the least subnormal
+        return 'below 0' if name == 'csch' and x < 0 else 'above 0'
     return None
 
 
@@ -569,9 +714,79 @@ def _round_outside(where: str, direction: int) -> float:
         'overflow': {DOWN: MAX, NEAREST: INF, UP: INF},
         '-overflow': {DOWN: -INF, NEAREST: -INF, UP: -MAX},
         'above 0': {DOWN: 0.0, NEAREST: 0.0, UP: math.ulp(0.0)},
+        'below 0': {DOWN: -math.ulp(0.0), NEAREST: 0.0, UP: 0.0},
         'below 1': {DOWN: below_one, NEAREST: 1.0, UP: 1.0},
+        'above 1': {DOWN: 1.0, NEAREST: 1.0, UP: math.nextafter(1.0, 2.0)},
         'above -1': {DOWN: -1.0, NEAREST: -1.0, UP: -below_one},
+        'below -1': {DOWN: -math.nextafter(1.0, 2.0), NEAREST: -1.0, UP: -1.0},
     }[where][direction]
+
+
+# POWERS, FOR 1788'S POW
+
+def exact_pow(x, y):
+    """
+    `x ** y` where it is rational, None where it is not (then `rounded_pow` is needed), for exact
+    finite x > 0, or x = 0 with y > 0. with y = a/b in lowest terms it is rational iff x is a b-th
+    power. a value longer than `EXACT_POWER_LIMIT` bits is not built; ziv's loop still ends for it,
+    since a value that long in lowest terms is neither a double nor the midpoint of two
+
+    >>> exact_pow(Fraction(9, 4), Fraction(3, 2)), exact_pow(8, Fraction(-2, 3)), exact_pow(2, Fraction(1, 2))
+    (Fraction(27, 8), Fraction(1, 4), None)
+    """
+    x, y = Fraction(x), Fraction(y)
+    if x == 0:
+        return Fraction(0)
+    if y == 0 or x == 1:
+        return Fraction(1)
+    root = x if y.denominator == 1 else _exact_root(x, y.denominator)
+    if root is None:
+        return None
+    a = y.numerator
+    if abs(a) * max(root.numerator.bit_length(), root.denominator.bit_length()) > EXACT_POWER_LIMIT:
+        return None
+    return root ** a
+
+
+def rounded_pow(x, y, direction: int) -> float:
+    """
+    `x ** y` rounded to a double, for the operands of `exact_pow`: exp(y ln x) enclosed, or known to
+    round like a value past the float range
+
+    >>> rounded_pow(2, Fraction(1, 2), DOWN), rounded_pow(2, Fraction(1, 2), UP)
+    (1.414213562373095, 1.4142135623730951)
+    """
+    value = exact_pow(x, y)
+    if value is not None:
+        return round_rational(value, direction)
+    x, y = Fraction(x), Fraction(y)
+    lo, hi = sorted(y * b for b in _ln_bracket(x))
+    # ln(x ** y) is known within a factor of 3.1, so an undecided one is under 2500 and exp's argument
+    # stays small; e**800 > 2**1154 is past the float range, and e**-800 under half a subnormal
+    if lo > 800:
+        return _round_outside('overflow', direction)
+    if hi < -800:
+        return _round_outside('above 0', direction)
+    extra = max(0, abs(y.numerator).bit_length() - y.denominator.bit_length()) + 16
+
+    def enclose(p):
+        q = p + extra
+        return _exp_fix(_mul(_log_rational(x, q), _fix(y, q), q), q)
+    return _ziv(enclose, direction)
+
+
+def _ln_bracket(x: Fraction) -> Tuple[Fraction, Fraction]:
+    """two rationals of one sign holding ln x (x > 0, x != 1), within a factor of 3.1 of each other"""
+    if Fraction(1, 2) <= x <= 2:
+        # ln x = 2 atanh(t) with |t| <= 1/3, and atanh(t) lies between t and t / (1 - t**2)
+        t = (x - 1) / (x + 1)
+        return tuple(sorted((2 * t, 2 * t / (1 - t * t))))
+    # x lies in (2**(e-1), 2**(e+1)), and ln 2 in (0.69, 0.7)
+    e = x.numerator.bit_length() - x.denominator.bit_length()
+    low, high = Fraction(69, 100), Fraction(7, 10)
+    if x > 2:
+        return max((e - 1) * low, low), (e + 1) * high
+    return (e - 1) * high, min((e + 1) * low, -low)
 
 
 # ANGLES, FOR ATAN2

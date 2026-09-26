@@ -46,5 +46,5 @@ it prints `ok` for all 22 files (python 3.9 or later; the GitHub API needs no to
 
 `test_itf1788.py` runs every vector of the ops the package implements through the conformance
 adapter described in its docstring (and in `v2-plan.md`, "ieee 1788"); `itl.py` is the parser, which
-reads every statement of every file. the statements of ops not implemented yet (`pow`, the reverse
-ops, `cancelMinus`, `mid`, the text constructors, ...) are counted in `SKIPPED` and not run.
+reads every statement of every file. the statements of ops not implemented yet (the reverse ops, the
+text constructors, the decoration ops) are counted in `SKIPPED` and not run.

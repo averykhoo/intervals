@@ -36,6 +36,8 @@ and lists them). the adapter's rules:
   wherever 1788 answers entire as "no answer"; those vectors are rows under "cancellation as a
   Minkowski difference". the others match in both passes, the outward one included: like 1788, an
   `OutwardMultiInterval` encloses the exact difference
+* **power** (`pow`): run as `a ** b`, an interval exponent, which D11 makes 1788's pow (never pown,
+  even for `[2.0, 2.0]`); all its vectors match in both passes, as do those of M13d's other functions
 * a `signal` clause is kept on the vector and not checked yet (M13g). `NaN` equals `NaN` here
 * the library's warnings are ignored inside a vector (`1/[0]` is `∅` + `IndeterminateResultWarning`,
   and 1788's answer is also empty); they are pinned by their own tests elsewhere
@@ -106,7 +108,13 @@ OPS = {
     'sign': lambda a: a.sign(),
     **{name: _function(name) for name in ('sqrt', 'exp', 'exp2', 'exp10', 'log', 'log2', 'log10', 'sin',
                                           'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh',
-                                          'asinh', 'acosh', 'atanh')},
+                                          'asinh', 'acosh', 'atanh', 'expm1', 'cbrt', 'cot', 'sec', 'csc',
+                                          'acot', 'coth', 'csch', 'sech', 'acoth')},
+    'logp1': lambda a: a.log1p(),
+    'rootn': lambda a, n: a.rootn(n),
+    'hypot': lambda a, b: a.hypot(b),
+    # an interval exponent is 1788's pow (D11), never pown
+    'pow': lambda a, b: a ** b,
     'atan2': lambda y, x: y.atan2(x),
     'intersection': lambda a, b: a & b,
     'convexHull': lambda a, b: (a | b).hull,

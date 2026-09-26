@@ -19,9 +19,12 @@ the checks, for each function at a drawn float or exact point:
   where attained), and `MultiInterval` of a float gives the nearest double
 where arb cannot hold the value itself (exp(1e308) overflows its ball, 1 - tanh(1e308) underflows
 it), the comparisons go through an increasing function of it that arb can hold: the log of exp,
-sinh and cosh, and -log(1 - t) for tanh near 1.
+sinh and cosh, and -log(1 - t) for tanh near 1; for M13d's the log of expm1, csch and sech, the log
+of v + 1 for expm1 near -1 and of v - 1 for coth near 1. rootn, pow and hypot are checked the same
+way at drawn points, against arb's root, power and square root.
 """
 import math
+import warnings
 from fractions import Fraction
 
 import pytest
@@ -96,6 +99,17 @@ _ARB = {
     'asinh': arb.asinh,
     'acosh': arb.acosh,
     'atanh': arb.atanh,
+    'expm1': arb.expm1,
+    'log1p': arb.log1p,
+    'cbrt': lambda x: x.root(3) if x >= 0 else -(-x).root(3),
+    'cot': arb.cot,
+    'sec': arb.sec,
+    'csc': arb.csc,
+    'acot': lambda x: arb.pi() / 2 - x.atan(),
+    'coth': arb.coth,
+    'csch': arb.csch,
+    'sech': arb.sech,
+    'acoth': lambda x: (1 / x).atanh(),
 }
 
 
@@ -121,6 +135,17 @@ def _logged_sign(log_v: arb):
     return sign
 
 
+def _shifted_logged_sign(log_shifted: arb, shift: int):
+    """`sign(q)` for a value v with v + shift > 0 known only as log(v + shift)"""
+    def sign(q) -> int:
+        if q == INF:
+            return 1
+        if q + shift <= 0:
+            return -1
+        return _cmp((_arb(q) + shift).log(), log_shifted)
+    return sign
+
+
 def _near_one_sign(g_v: arb):
     """`sign(q)` for a value v in (0, 1) known only as -log(1 - v), which rises with v"""
     def sign(q) -> int:
@@ -134,10 +159,22 @@ def _near_one_sign(g_v: arb):
 
 def _oracle(name: str, x, base=None):
     """`sign(q)` = the sign of q - f(x), at the working precision; x a float, int or Fraction"""
-    if name in ('sinh', 'tanh') and x < 0:  # odd: sign(q - f(x)) = -sign(-q - f(-x))
+    if name in ('sinh', 'tanh', 'coth', 'csch') and x < 0:  # odd: sign(q - f(x)) = -sign(-q - f(-x))
         odd = _oracle(name, -x)
         return lambda q: -odd(-q)
+    if name == 'sech' and x < 0:  # even
+        return _oracle(name, -x)
     b = _arb(x)
+    if name == 'expm1' and x > 600:  # log(expm1 x) = x + log1p(-exp(-x))
+        return _logged_sign(b + (-(-b).exp()).log1p())
+    if name == 'expm1' and x < -600:  # log(expm1 x + 1) = x
+        return _shifted_logged_sign(b, 1)
+    if name in ('csch', 'sech') and x > 600:
+        # log(2 / (e**x ∓ e**-x)) = log 2 - x - log1p(∓ exp(-2x))
+        tail = (-2 * b).exp()
+        return _logged_sign(arb.const_log2() - b - (-tail if name == 'csch' else tail).log1p())
+    if name == 'coth' and x > 20:  # log(coth x - 1) = log(2 / (exp(2x) - 1)) = log 2 - 2x - log1p(-exp(-2x))
+        return _shifted_logged_sign(arb.const_log2() - 2 * b - (-(-2 * b).exp()).log1p(), -1)
     if name in ('exp', 'exp2', 'exp10') and abs(x) > 600:
         return _logged_sign(b * {'exp': arb(1), 'exp2': arb.const_log2(), 'exp10': arb(10).log()}[name])
     if name in ('sinh', 'cosh') and abs(x) > 600:
@@ -286,6 +323,8 @@ def _domain(name: str):
     """(lowest, highest, whether the ends are excluded) of the finite points drawn for f"""
     if name == 'sqrt':
         return 0, None, False
+    if name == 'log1p':
+        return -1, None, True
     if name in ('log', 'log2', 'log10'):
         return 0, None, True
     if name in ('asin', 'acos'):
@@ -298,6 +337,10 @@ def _domain(name: str):
 
 
 def _inside(name: str, x) -> bool:
+    if name in elementary.POLE_AT_ZERO and x == 0:
+        return False
+    if name == 'acoth':
+        return abs(x) > 1
     lo, hi, open_ends = _domain(name)
     if open_ends:
         return (lo is None or x > lo) and (hi is None or x < hi)
@@ -313,17 +356,23 @@ def _rational_points(name: str):
     if name in ('log2', 'log10'):
         b = 2 if name == 'log2' else 10
         return st.integers(-400, 400).map(lambda k: Fraction(b) ** k)
-    return st.sampled_from([x for x in (-1, 0, 1) if _inside(name, x) and elementary.exact(name, x) is not None])
+    if name == 'cbrt':
+        return st.fractions(max_denominator=10 ** 6).map(lambda q: q ** 3)
+    found = [x for x in (-1, 0, 1) if _inside(name, x) and elementary.exact(name, x) is not None]
+    return st.sampled_from(found) if found else st.nothing()
 
 
 def points(name: str):
+    if name == 'acoth':  # |x| > 1: two rays
+        return st.one_of(points('log1p').map(lambda x: 2 + x), points('log1p').map(lambda x: -2 - x)).filter(
+            lambda x: _inside('acoth', x))
     lo, hi, open_ends = _domain(name)
     floats = st.floats(min_value=lo, max_value=hi, exclude_min=open_ends and lo is not None,
                        exclude_max=open_ends and hi is not None, allow_nan=False, allow_infinity=False)
     step = 1 if open_ends else 0
     ints = st.integers(-10 ** 30 if lo is None else lo + step, 10 ** 30 if hi is None else hi - step)
     exact = st.one_of(ints, st.fractions(min_value=lo, max_value=hi, max_denominator=10 ** 12))
-    return st.one_of(floats, exact.filter(lambda x: _inside(name, x)), _rational_points(name))
+    return st.one_of(floats, exact, _rational_points(name)).filter(lambda x: _inside(name, x))
 
 
 NAMES = elementary.NAMES
@@ -354,6 +403,15 @@ EXTREMES = [
     ('atanh', 1 - 2 ** -53), ('atanh', -1 + 2 ** -53), ('atanh', 5e-324), ('asin', 1 - 2 ** -53),
     ('asin', 1.0), ('asin', -1), ('acos', -1.0), ('acos', 1 - 2 ** -53), ('acos', -1 + 2 ** -53),
     ('exp10', 22), ('exp10', -3), ('log10', Fraction(1, 1000)), ('log2', 2.0 ** -1074), ('sqrt', Fraction(9, 4)),
+    # M13d
+    ('expm1', 5e-324), ('expm1', -5e-324), ('expm1', 709.782712893384), ('expm1', 709.7827128933841),
+    ('expm1', -37.5), ('expm1', -40.0), ('expm1', -MAX), ('expm1', MAX), ('log1p', 5e-324),
+    ('log1p', -1 + 2 ** -53), ('log1p', MAX), ('log1p', -5e-324), ('cbrt', 5e-324), ('cbrt', -MAX),
+    ('cbrt', Fraction(-27, 8)), ('cot', 5e-324), ('cot', MAX), ('cot', math.pi), ('cot', math.pi / 2),
+    ('csc', math.pi), ('csc', -5e-324), ('csc', 1e22), ('sec', math.pi / 2), ('sec', MAX), ('sec', 0),
+    ('acot', MAX), ('acot', -MAX), ('acot', 5e-324), ('acot', 0), ('coth', 5e-324), ('coth', 19.0625),
+    ('coth', 20.0), ('coth', -MAX), ('csch', 5e-324), ('csch', 745.5), ('csch', -MAX), ('sech', 745.5),
+    ('sech', -MAX), ('sech', 5e-324), ('acoth', 1 + 2 ** -52), ('acoth', -1 - 2 ** -52), ('acoth', MAX),
 ]
 
 
@@ -396,19 +454,24 @@ ENDS = [
     ('acos', 1, None, 0), ('sinh', -INF, None, -INF), ('cosh', -INF, None, INF), ('tanh', INF, None, 1),
     ('tanh', -INF, None, -1), ('asinh', -INF, None, -INF), ('acosh', INF, None, INF),
     ('atan', INF, None, 'pi/2'), ('atan', -INF, None, '-pi/2'),
+    ('expm1', -INF, None, -1), ('expm1', INF, None, INF), ('log1p', -1, None, -INF), ('log1p', INF, None, INF),
+    ('cbrt', -INF, None, -INF), ('acot', INF, None, 0), ('acot', -INF, None, 'pi'), ('coth', INF, None, 1),
+    ('coth', -INF, None, -1), ('csch', -INF, None, 0), ('sech', INF, None, 0), ('acoth', 1, None, INF),
+    ('acoth', -1, None, -INF), ('acoth', -INF, None, 0),
 ]
 
 
 @pytest.mark.parametrize('name, x, base, value', ENDS)
 def test_domain_ends_and_limits(name, x, base, value):
     m = _method(MultiInterval(x), name, base)
-    if isinstance(value, str):  # atan(±inf) = ±pi/2, irrational: the open one-ulp piece, checked by arb
+    if isinstance(value, str):  # atan(±inf) = ±pi/2 and acot(-inf) = pi: the open one-ulp piece, checked by arb
         s = -1 if value.startswith('-') else 1
+        sign = (lambda q: _cmp(_arb(q), arb.pi())) if value == 'pi' else _pi_over_2(s)
         [piece] = _pieces(m)
         down, near, up = (elementary.rounded(name, x, d) for d in (DOWN, NEAREST, UP))
         with ctx.workprec(200):
-            _check_rounding(_pi_over_2(s), down, near, up, f'{name}({x})')
-            _check_piece(_pi_over_2(s), piece, f'{name}({x})')
+            _check_rounding(sign, down, near, up, f'{name}({x})')
+            _check_piece(sign, piece, f'{name}({x})')
         return
     assert elementary.exact(name, x, base) == value
     assert _pieces(m) == [(value, True, value, True)]
@@ -417,7 +480,9 @@ def test_domain_ends_and_limits(name, x, base, value):
 # points outside the domain, and sin, cos, tan at ±inf, where there is no limit: dropped, with a warning
 OUTSIDE = [('sqrt', -1), ('sqrt', -5e-324), ('log', -1), ('log2', -INF), ('log10', Fraction(-1, 3)),
            ('asin', 1 + 2 ** -52), ('acos', -2), ('atanh', 1.5), ('atanh', -INF), ('acosh', 1 - 2 ** -53),
-           ('acosh', -INF), ('sin', INF), ('cos', -INF), ('tan', INF)]
+           ('acosh', -INF), ('sin', INF), ('cos', -INF), ('tan', INF), ('log1p', -1 - 2 ** -52), ('log1p', -INF),
+           ('acoth', 0), ('acoth', 1 - 2 ** -53), ('acoth', Fraction(-1, 2)), ('cot', INF), ('sec', -INF),
+           ('csc', INF)]
 
 
 @pytest.mark.parametrize('name, x', OUTSIDE)
@@ -489,3 +554,126 @@ def test_floor_over_pi_against_arb(x, offset):
         assert not on_it
         assert _cmp(arb(k), v) < 0 < _cmp(arb(k + 1), v), f'floor({x!r} / pi - {offset}) is not {k}'
     _decided('test_floor_over_pi_against_arb', _bits(x), run)
+
+
+
+# ROOTN, POW AND HYPOT (M13d)
+
+def _root_ball(x, n: int) -> arb:
+    b = _arb(x)
+    r = abs(b).root(abs(n))
+    r = r if x > 0 else -r
+    return r if n > 0 else 1 / r
+
+
+@settings(max_examples=80, deadline=None)
+@given(x=st.one_of(st.floats(allow_nan=False, allow_infinity=False), st.fractions(max_denominator=10 ** 9),
+                   st.fractions(max_denominator=10 ** 6).map(lambda q: q ** 3)),
+       n=st.sampled_from([2, 3, 4, 5, 7, 10, -2, -3, -4, -7]))
+@example(x=27.0, n=3)
+@example(x=1024.0, n=10)
+@example(x=5e-324, n=-3)
+@example(x=MAX, n=-2)
+def test_rootn_against_arb(x, n):
+    assume(x != 0 and (n % 2 or x > 0))
+    exact_x = Fraction(x)
+    where = f'rootn({x!r}, {n})'
+    r = elementary.exact('rootn', exact_x, n)
+    down, near, up = (elementary.rounded('rootn', exact_x, d, n) for d in (DOWN, NEAREST, UP))
+    exact_result = MultiInterval(exact_x).rootn(n)
+    outward = OutwardMultiInterval(x).rootn(n) if isinstance(x, float) else None
+
+    def run():
+        if r is not None:
+            assert (_root_ball(x, n) * Fraction(r).denominator).overlaps(arb(Fraction(r).numerator)), where
+            sign = _exact_sign(Fraction(r))
+            assert _pieces(exact_result) == [(r, True, r, True)], where
+        else:
+            sign = _ball_sign(_root_ball(x, n))
+            [piece] = _pieces(exact_result)
+            assert not piece[1] and not piece[3], f'{where}: {piece}'
+            _check_piece(sign, piece, where)
+        _check_rounding(sign, down, near, up, where)
+        if outward is not None:
+            [piece] = _pieces(outward)
+            _check_piece(sign, piece, where + ' outward')
+    _decided('test_rootn_against_arb', _bits(x), run)
+
+
+def _pow_sign(x, y):
+    """`sign(q)` of q - x ** y, through log(x ** y) = y log x, which arb holds even past the float range"""
+    return _logged_sign(_arb(y) * _arb(x).log())
+
+
+@settings(max_examples=120, deadline=None)
+@given(x=st.one_of(st.floats(min_value=5e-324, allow_infinity=False), st.fractions(min_value=0, max_denominator=10 ** 6)),
+       y=st.one_of(st.floats(min_value=-2000, max_value=2000), st.fractions(max_denominator=10 ** 6),
+                   st.integers(-60, 60).map(lambda k: Fraction(k, 2)), st.integers(-3000, 3000)))
+@example(x=4.0, y=0.5)
+@example(x=0.1, y=2.5)
+@example(x=Fraction(9, 4), y=Fraction(3, 2))
+@example(x=2.0, y=-1074.5)
+@example(x=2.0, y=1023.9999999999999)
+@example(x=10.0, y=308.25)
+@example(x=1 + 2 ** -52, y=1e19)
+def test_pow_against_arb(x, y):
+    """1788's pow at one point of its domain: x > 0 (0 ** y is covered by the set tests)"""
+    assume(x > 0)
+    exact_x, exact_y = Fraction(x), Fraction(y)
+    where = f'pow({x!r}, {y!r})'
+    r = elementary.exact_pow(exact_x, exact_y)
+    down, near, up = (elementary.rounded_pow(exact_x, exact_y, d) for d in (DOWN, NEAREST, UP))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        exact_result = MultiInterval(exact_x) ** MultiInterval(exact_y)
+        floats = isinstance(x, float) and isinstance(y, float)
+        outward = OutwardMultiInterval(x) ** OutwardMultiInterval(y) if floats else None
+        nearest = MultiInterval(x) ** MultiInterval(y) if floats else None
+
+    def run():
+        if r is not None:
+            if r > 0 and abs(exact_y) < 10 ** 6:
+                ball = _arb(exact_y) * _arb(exact_x).log()
+                assert ball.overlaps(_arb(r).log()), f'{where} is not the rational {r}'
+            sign = _exact_sign(Fraction(r))
+            assert _pieces(exact_result) == [(r, True, r, True)], f'{where}: {_pieces(exact_result)}'
+        else:
+            sign = _pow_sign(x, y)
+            [piece] = _pieces(exact_result)
+            assert not piece[1] and not piece[3], f'{where}: {piece}'
+            _check_piece(sign, piece, where)
+        _check_rounding(sign, down, near, up, where)
+        if outward is not None:
+            [piece] = _pieces(outward)
+            _check_piece(sign, piece, where + ' outward')
+            assert _pieces(nearest) == [(near, True, near, True)], f'{where} to nearest: {_pieces(nearest)}'
+    _decided('test_pow_against_arb', _bits(x, y), run)
+
+
+@settings(max_examples=80, deadline=None)
+@given(x=_operand(), y=_operand())
+@example(x=3.0, y=4.0)
+@example(x=MAX, y=MAX)
+@example(x=5e-324, y=5e-324)
+@example(x=1e-300, y=1.0)
+def test_hypot_against_arb(x, y):
+    where = f'hypot({x!r}, {y!r})'
+    s = Fraction(x) ** 2 + Fraction(y) ** 2
+    r = elementary.exact('sqrt', s)
+    exact_result = MultiInterval(Fraction(x)).hypot(MultiInterval(Fraction(y)))
+    floats = isinstance(x, float) or isinstance(y, float)
+    outward = OutwardMultiInterval(x).hypot(OutwardMultiInterval(y)) if floats else None
+
+    def run():
+        if r is not None:
+            sign = _exact_sign(Fraction(r))
+            assert _pieces(exact_result) == [(r, True, r, True)], where
+        else:
+            sign = _ball_sign((_arb(x) ** 2 + _arb(y) ** 2).sqrt())
+            [piece] = _pieces(exact_result)
+            assert not piece[1] and not piece[3], f'{where}: {piece}'
+            _check_piece(sign, piece, where)
+        if outward is not None:
+            [piece] = _pieces(outward)
+            _check_piece(sign, piece, where + ' outward')
+    _decided('test_hypot_against_arb', _bits(x, y), run)

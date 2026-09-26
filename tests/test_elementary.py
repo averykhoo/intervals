@@ -97,6 +97,8 @@ def _atan(x: Decimal, prec: int = PREC) -> Decimal:
 
 
 def oracle(name: str, x: Fraction, prec: int = PREC) -> Decimal:
+    if name in NEW:
+        return _oracle_new(name, x, prec)
     with localcontext() as ctx:
         ctx.prec = prec + 20
         d = Decimal(x.numerator) / Decimal(x.denominator)
@@ -142,6 +144,44 @@ def oracle(name: str, x: Fraction, prec: int = PREC) -> Decimal:
         return +v
 
 
+# M13d's functions: each value has to cancel nothing it cannot afford, so the working precision grows
+# with the operand's distance from 1 in decimal digits (expm1 and log1p near 0, acoth far out)
+NEW = ('expm1', 'log1p', 'cbrt', 'cot', 'sec', 'csc', 'acot', 'coth', 'csch', 'sech', 'acoth')
+
+
+def _oracle_new(name: str, x: Fraction, prec: int) -> Decimal:
+    with localcontext() as ctx:
+        ctx.prec = prec + 20
+        d = Decimal(x.numerator) / Decimal(x.denominator)
+        ctx.prec = prec + 30 + abs(d.adjusted())
+        d = Decimal(x.numerator) / Decimal(x.denominator)
+        if name == 'expm1':
+            v = d.exp() - 1
+        elif name == 'log1p':
+            v = (1 + d).ln()
+        elif name == 'cbrt':
+            v = (abs(d).ln() / 3).exp().copy_sign(d)
+        elif name in ('cot', 'sec', 'csc'):
+            r = _reduced(d, ctx.prec)
+            s, c = _series_sin(r), _series_cos(r)
+            v = {'cot': c / s, 'sec': 1 / c, 'csc': 1 / s}[name]
+        elif name == 'acot':
+            v = _pi(ctx.prec) / 2 if d == 0 else _atan(1 / d, ctx.prec) + (0 if d > 0 else _pi(ctx.prec))
+        elif name == 'coth':
+            e = (2 * d).exp()
+            v = (e + 1) / (e - 1)
+        elif name == 'csch':
+            v = 2 / (d.exp() - (-d).exp())
+        elif name == 'sech':
+            v = 2 / (d.exp() + (-d).exp())
+        elif name == 'acoth':
+            v = ((d + 1) / (d - 1)).ln() / 2
+        else:
+            raise ValueError(name)
+        ctx.prec = prec + 20
+        return +v
+
+
 def roundings(v: Decimal):
     """(DOWN, NEAREST, UP) of v, or None where v is within 1e-70 of a double or a midpoint"""
     nearest = float(v)  # decimal -> float is correctly rounded
@@ -175,14 +215,30 @@ def _draw(name: str, rng):
         x = rng.uniform(-300, 300)
     elif name == 'tanh':
         x = rng.uniform(-25, 25)
-    elif name in ('sin', 'cos', 'tan'):
+    elif name in ('sin', 'cos', 'tan', 'cot', 'sec', 'csc'):
         x = rng.choice((-1, 1)) * math.ldexp(rng.random(), rng.randrange(-30, 70))
-    else:  # atan, asinh
+    elif name == 'expm1':
+        x = rng.uniform(-45, 700) if r < 0.6 else rng.choice((-1, 1)) * math.ldexp(rng.random(), rng.randrange(-70, 2))
+    elif name == 'log1p':
+        x = math.ldexp(rng.random(), rng.randrange(-70, 1000)) if r < 0.6 else rng.uniform(-1, 1)
+    elif name in ('coth', 'csch'):
+        x = rng.choice((-1, 1)) * math.ldexp(rng.random(), rng.randrange(-60, 10))
+    elif name == 'sech':
+        x = rng.uniform(-740, 740) if r < 0.6 else rng.uniform(-3, 3)
+    elif name == 'acoth':
+        x = rng.choice((-1, 1)) * (1 + math.ldexp(rng.random(), rng.randrange(-50, 60)))
+    else:  # atan, asinh, cbrt, acot
         x = rng.choice((-1, 1)) * math.ldexp(rng.random(), rng.randrange(-60, 200))
     if r < 0.2 and name not in ('sqrt', 'log', 'log2', 'log10', 'acosh'):
         x = Fraction(rng.randrange(-999, 1000), rng.randrange(1, 1000))
         if name in ('asin', 'acos', 'atanh') and abs(x) >= 1:
             x = 1 / (x + (1 if x >= 0 else -1) * 2)
+        if name == 'acoth' and abs(x) <= 1:
+            x = (1 / x if x else 2) + (1 if x >= 0 else -1)
+        if name == 'log1p' and x <= -1:
+            x = -1 / (1 - x)
+    if x == 0 and name in elementary.POLE_AT_ZERO:
+        x = Fraction(1, 3)
     return Fraction(x)
 
 
@@ -298,6 +354,16 @@ def test_constant_series_hold_the_value(n, p, alternating):
     ('acosh', 1 + Fraction(1, 10 ** 30)), ('acosh', Fraction(10 ** 150)),
     ('atanh', 1 - Fraction(1, 10 ** 40)), ('atanh', Fraction(-1, 10 ** 30)),
     ('exp2', Fraction(-1074.5)), ('exp10', Fraction(-323.5)), ('exp10', Fraction(308.25)),
+    # M13d: cancellation near 0 and 1, poles, and the edges of the float range
+    ('expm1', Fraction(1, 10 ** 30)), ('expm1', Fraction(-1, 10 ** 30)), ('expm1', Fraction(709.78)),
+    ('expm1', Fraction(-39.5)), ('expm1', Fraction(-37)), ('expm1', Fraction(-35)), ('coth', Fraction(18)), ('log1p', Fraction(1, 10 ** 40)), ('log1p', -1 + Fraction(1, 10 ** 30)),
+    ('log1p', Fraction(10 ** 300)), ('cbrt', Fraction(2) ** -1073), ('cbrt', Fraction(-10 ** 300)),
+    ('cot', Fraction(1, 10 ** 30)), ('cot', Fraction(355)), ('cot', Fraction(10 ** 22)),
+    ('csc', Fraction(355)), ('csc', Fraction(-1, 10 ** 25)), ('sec', Fraction(355, 226)),
+    ('sec', Fraction(10 ** 22)), ('acot', Fraction(10 ** 300)), ('acot', Fraction(-10 ** 300)),
+    ('acot', Fraction(1, 10 ** 30)), ('coth', Fraction(1, 10 ** 30)), ('coth', Fraction(19.99)),
+    ('csch', Fraction(-1, 10 ** 30)), ('csch', Fraction(745)), ('sech', Fraction(746)),
+    ('sech', Fraction(1, 10 ** 20)), ('acoth', 1 + Fraction(1, 10 ** 30)), ('acoth', Fraction(-10 ** 200)),
 ])
 def test_extreme_points(name, x):
     with localcontext() as ctx:
@@ -329,6 +395,16 @@ def test_sin_of_ten_to_the_22():
     ('atan', -INF, -1.5707963267948968, -1.5707963267948966, -1.5707963267948966),
     ('asin', -1, -1.5707963267948968, -1.5707963267948966, -1.5707963267948966),
     ('acos', -1, 3.141592653589793, 3.141592653589793, 3.1415926535897936),
+    # M13d, past the float range or next to a limit, without computing the value
+    ('expm1', 710, MAX, INF, INF),
+    ('expm1', -40, -1.0, -1.0, -0.9999999999999999),
+    ('expm1', -10 ** 100, -1.0, -1.0, -0.9999999999999999),
+    ('coth', 20, 1.0, 1.0, 1.0000000000000002),
+    ('coth', -10 ** 300, -1.0000000000000002, -1.0, -1.0),
+    ('csch', 747, 0.0, 0.0, 5e-324),
+    ('csch', -10 ** 9, -5e-324, 0.0, 0.0),
+    ('sech', -747, 0.0, 0.0, 5e-324),
+    ('acot', -INF, 3.141592653589793, 3.141592653589793, 3.1415926535897936),
 ])
 def test_known_roundings(name, x, down, nearest, up):
     assert (rounded(name, x, DOWN), rounded(name, x, NEAREST), rounded(name, x, UP)) == (down, nearest, up)
@@ -352,6 +428,15 @@ def test_known_roundings(name, x, down, nearest, up):
     ('tanh', 0, 0), ('tanh', INF, 1), ('tanh', -INF, -1),
     ('asinh', 0, 0), ('asinh', INF, INF), ('acosh', 1, 0), ('acosh', INF, INF),
     ('atanh', 0, 0), ('atanh', 1, INF), ('atanh', -1, -INF), ('atanh', Fraction(1, 2), None),
+    ('expm1', 0, 0), ('expm1', INF, INF), ('expm1', -INF, -1), ('expm1', 1, None),
+    ('log1p', 0, 0), ('log1p', -1, -INF), ('log1p', INF, INF), ('log1p', 1, None),
+    ('cbrt', Fraction(-27, 8), Fraction(-3, 2)), ('cbrt', 0, 0), ('cbrt', -INF, -INF), ('cbrt', 2, None),
+    ('cbrt', Fraction(2) ** -1073, None), ('cbrt', Fraction(2) ** -1074, Fraction(2) ** -358),
+    ('cot', 1, None), ('csc', Fraction(1, 2), None), ('sec', 0, 1), ('sec', 1, None),
+    ('acot', 0, None), ('acot', INF, 0), ('acot', -INF, None), ('acot', 1, None),
+    ('coth', INF, 1), ('coth', -INF, -1), ('coth', 2, None), ('csch', INF, 0), ('csch', -INF, 0),
+    ('sech', 0, 1), ('sech', INF, 0), ('sech', -INF, 0), ('sech', 1, None),
+    ('acoth', 1, INF), ('acoth', -1, -INF), ('acoth', INF, 0), ('acoth', -INF, 0), ('acoth', 2, None),
 ])
 def test_exact(name, x, value):
     assert exact(name, x) == value
@@ -402,3 +487,137 @@ def test_floor_over_pi(x, offset, expected):
 ])
 def test_compare(name, x, y, sign):
     assert compare(name, x, y) == sign
+
+
+@pytest.mark.parametrize('name', elementary.POLE_AT_ZERO)
+def test_no_value_at_a_pole(name):
+    """the set level takes the one-sided limits; a point has no value to round"""
+    with pytest.raises(ValueError):
+        exact(name, 0)
+
+
+# ROOTN AND POW (M13d)
+
+def _decimal_root(x: Fraction, n: int) -> Decimal:
+    with localcontext() as ctx:
+        ctx.prec = PREC + 20
+        d = _decimal(x)
+        v = (abs(d).ln() / n).exp()
+        return +(v if d > 0 else -v)
+
+
+@pytest.mark.parametrize('n', [2, 3, 4, 7, -2, -3, -4, -5, 100])
+def test_rootn_correctly_rounded(n):
+    rng = random.Random(f'rootn {n}')
+    checked = 0
+    for _ in range(40):
+        x = Fraction(math.ldexp(rng.random(), rng.randrange(-1074, 1024)))
+        if rng.random() < 0.2:
+            x = Fraction(rng.randrange(1, 10 ** 6), rng.randrange(1, 10 ** 6))
+        if n % 2 and rng.random() < 0.5:
+            x = -x
+        if x == 0 or exact('rootn', x, n) is not None:
+            continue
+        expected = roundings(_decimal_root(x, n))
+        if expected is None:
+            continue
+        assert tuple(rounded('rootn', x, d, n) for d in (DOWN, NEAREST, UP)) == expected, (x, n)
+        checked += 1
+    assert checked >= 25, checked
+
+
+@pytest.mark.parametrize('x, n, value', [
+    (Fraction(27), 3, 3), (Fraction(-27, 64), 3, Fraction(-3, 4)), (Fraction(1024), 10, 2), (0, 4, 0),
+    (Fraction(16), -4, Fraction(1, 2)), (Fraction(-8), -3, Fraction(-1, 2)), (0, -2, INF), (0, -3, INF),
+    (INF, 5, INF), (-INF, 3, -INF), (INF, -2, 0), (-INF, -3, 0), (Fraction(5), 1, 5),
+    (Fraction(5), -1, Fraction(1, 5)), (Fraction(2), 2, None), (Fraction(2) ** 300, 7, None),
+    (Fraction(3) ** 700, 700, 3), (Fraction(7), 10 ** 6, None),
+])
+def test_exact_rootn(x, n, value):
+    assert exact('rootn', x, n) == value
+
+
+@pytest.mark.parametrize('n', [2, 3, 5, 64])
+def test_iroot_is_the_floor(n):
+    rng = random.Random(n)
+    for _ in range(200):
+        m = rng.randrange(0, 1 << rng.randrange(1, 400))
+        r = elementary._iroot(m, n)
+        assert r ** n <= m < (r + 1) ** n, (m, n, r)
+
+
+def _decimal_pow(x: Fraction, y: Fraction) -> Decimal:
+    with localcontext() as ctx:
+        ctx.prec = PREC + 30 + len(str(abs(y.numerator)))
+        v = (_decimal(y) * _decimal(x).ln()).exp()
+        ctx.prec = PREC + 20
+        return +v
+
+
+def _pow_draw(rng):
+    r = rng.random()
+    if r < 0.4:
+        x = Fraction(math.ldexp(rng.random(), rng.randrange(-60, 60)))
+        y = Fraction(rng.uniform(-40, 40))
+    elif r < 0.7:  # near the edges of the float range: x ** y around 2 ** ±1000
+        x = Fraction(math.ldexp(rng.random() + 1, rng.randrange(1, 20)))
+        y = Fraction(rng.choice((-1, 1)) * rng.uniform(900, 1100) / math.log2(float(x)))
+    else:
+        x = Fraction(rng.randrange(1, 1000), rng.randrange(1, 1000))
+        y = Fraction(rng.randrange(-999, 1000), rng.randrange(1, 100))
+    return x, y
+
+
+def test_pow_correctly_rounded():
+    rng = random.Random('pow')
+    checked = 0
+    for _ in range(150):
+        x, y = _pow_draw(rng)
+        if x == 0 or elementary.exact_pow(x, y) is not None:
+            continue
+        v = _decimal_pow(x, y)
+        expected = roundings(v) if v < Decimal(MAX) else None
+        if expected is None:
+            continue
+        assert tuple(elementary.rounded_pow(x, y, d) for d in (DOWN, NEAREST, UP)) == expected, (x, y)
+        checked += 1
+    assert checked >= 90, checked
+
+
+@pytest.mark.parametrize('x, y, value', [
+    (Fraction(9, 4), Fraction(3, 2), Fraction(27, 8)), (8, Fraction(-2, 3), Fraction(1, 4)),
+    (2, Fraction(1, 2), None), (0, Fraction(1, 3), 0), (1, Fraction(10 ** 50, 3), 1), (Fraction(7, 3), 0, 1),
+    (2, -3, Fraction(1, 8)), (Fraction(2) ** 60, Fraction(5, 6), Fraction(2) ** 50),
+    (Fraction(3), Fraction(1, 2 ** 55), None),
+    (3, elementary.EXACT_POWER_LIMIT, None),  # rational, but longer than the limit: rounded instead
+    (Fraction(1, 2), 1000, Fraction(1, 2 ** 1000)),
+])
+def test_exact_pow(x, y, value):
+    assert elementary.exact_pow(x, y) == value
+
+
+@pytest.mark.parametrize('x, y, down, nearest, up', [
+    # past the float range, decided from the bracket of ln x without computing the value
+    (3, 10 ** 6 + Fraction(1, 2), MAX, INF, INF),
+    (Fraction(1, 3), 10 ** 9 + Fraction(1, 3), 0.0, 0.0, 5e-324),
+    (1 + Fraction(1, 2 ** 60), 2 ** 80, MAX, INF, INF),
+    (3, elementary.EXACT_POWER_LIMIT, MAX, INF, INF),
+    (2, Fraction(-2149, 2), 0.0, 5e-324, 5e-324),  # 2**-1074.5, above half the least subnormal
+    (2, Fraction(-2151, 2), 0.0, 0.0, 5e-324),  # 2**-1075.5, under it
+    # exact values round like any other
+    (Fraction(1, 100), Fraction(1, 2), 0.09999999999999999, 0.1, 0.1),
+    (2, 1024, MAX, INF, INF),
+])
+def test_known_pow_roundings(x, y, down, nearest, up):
+    assert tuple(elementary.rounded_pow(x, y, d) for d in (DOWN, NEAREST, UP)) == (down, nearest, up)
+
+
+@pytest.mark.parametrize('x', [Fraction(1, 10 ** 30), Fraction(1, 3), Fraction(1, 2), Fraction(3, 4),
+                               1 + Fraction(1, 2 ** 70), Fraction(2), Fraction(5, 2), Fraction(10 ** 300),
+                               Fraction(3, 10 ** 300)])
+def test_ln_bracket_holds_ln(x):
+    lo, hi = elementary._ln_bracket(x)
+    with localcontext() as ctx:
+        ctx.prec = PREC
+        assert _decimal(lo) <= _decimal(x).ln() <= _decimal(hi)
+    assert (lo > 0) == (hi > 0) and hi / lo <= Fraction(31, 10)

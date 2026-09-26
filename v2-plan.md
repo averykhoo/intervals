@@ -7,7 +7,7 @@ open work and open questions for the owner (including the ones raised in the dec
 2026-09-25/26 entries) live in `HANDOFF.md`; the milestones are in `v2-implementation-plan.md`.
 
 ## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a,
-M13b, M13c, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
+M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
 
 ### domain and semantics
 
@@ -285,6 +285,14 @@ M13b, M13c, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
   the nearest mode against the closure). an irrational value of an exact operand is its tightest
   float enclosure, open at both ends, in both classes (`sqrt([2])`): an exact operand never loses
   its true value
+* **power** (D11, built at M13d 2026-09-26; `intervals/multi_interval.py::MultiInterval.__pow__`,
+  `::__rpow__`): a number exponent with an integral value (int, or a float or Fraction equal to one;
+  never bool) is 1788's **pown**, over every base, as python's numbers do (`[-3, 1] ** 2.0` =
+  `[0, 9]`). every other real exponent and **every `MultiInterval` exponent**, `[2]` included, is
+  1788's **pow** (`functions.pow_`, "elementary and step functions" below), so `[-3, 1] ** [2]` =
+  `[0, 1]`. `b ** A` for a real `b` is `MultiInterval(b) ** A`, in `A`'s class, and a subclass's
+  `__rpow__` keeps `MultiInterval(2) ** OutwardMultiInterval(...)` outward. 3-argument `pow` is a
+  `TypeError`: dropped (not 1788; v1 had it on integers only)
 * **reductions** (M13h, 2026-09-26; `intervals/reductions.py`): 1788's `sum`, `sumAbs`,
   `sumSquare`, `dot` as `sum_(xs)`, `sum_abs(xs)`, `sum_sqr(xs)`, `dot(xs, ys)`, exported from
   `intervals`. point ops over any iterable of real numbers, not interval ops: each operand is held
@@ -320,22 +328,51 @@ M13b, M13c, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       result class is the receiver's, as for `fma`; no warning is emitted, since `∅` and
       `[-inf, inf]` are real answers
 
-### elementary and step functions (M12)
+### elementary and step functions (M12, M13d)
 
 * `functions.py`: sqrt, exp, exp2, exp10, log (with an optional base), log2, log10, sin, cos, tan,
-  asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh, and atan2; methods of the class. the
+  asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh, and atan2 (M12); expm1, log1p (1788's
+  logp1), cbrt, rootn(n), cot, sec, csc, acot, coth, csch, sech, acoth, hypot and pow (M13d, D11);
+  methods of the class, python's name where python has one and 1788's otherwise. the
   result is the set of values attained, ±inf ordinary points where the function has a limit there
-  (`exp(-inf)` = 0, `tanh(inf)` = 1, `atan(inf)` = pi/2)
-    * **domain**: points with no value are dropped with one `DomainClippedWarning` (below 0 for sqrt
-      and the logs, outside [-1, 1] for asin acos atanh, below 1 for acosh, ±inf for sin cos tan). a
-      domain's end is a point of it wherever the function has a limit there from inside:
-      `log(0)` = -inf, `atanh(±1)` = ±inf. the domain reaches those ends from one side only, so no
-      second limit disagrees (1788 drops them: `log([0])` is empty there, `[-inf]` here)
+  (`exp(-inf)` = 0, `tanh(inf)` = 1, `atan(inf)` = pi/2, `acot(-inf)` = pi, `coth(-inf)` = -1)
+    * **domain**: points with no value are dropped with one `DomainClippedWarning` (below 0 for sqrt,
+      the logs and an even root, below -1 for log1p, outside [-1, 1] for asin acos atanh, inside
+      (-1, 1) for acoth, below 1 for acosh, ±inf for the six trigonometric functions). a domain's
+      end is a point of it wherever the function has a limit there from inside: `log(0)` = -inf,
+      `atanh(±1)` = ±inf, `log1p(-1)` = -inf, `acoth(±1)` = ±inf, `rootn(0, -2)` = inf. the domain
+      reaches those ends from one side only, so no second limit disagrees (1788 drops them:
+      `log([0])` is empty there, `[-inf]` here)
     * **shape**: each function is monotone and continuous on each piece once split where its
-      direction changes (cosh at 0), so a piece maps to the piece between its ends' images. sin and
-      cos add ±1 for an extremum strictly inside a piece (found by `elementary.floor_over_pi`, exact:
-      only cos at 0 has a rational extremum); tan splits a piece holding a pole into both sides, with
-      both infinities attained, as `1/x` does at a zero inside a piece
+      direction changes (cosh and sech at 0), so a piece maps to the piece between its ends' images.
+      sin and cos add ±1 for an extremum strictly inside a piece (found by `elementary.floor_over_pi`,
+      exact: only cos at 0 has a rational extremum); tan splits a piece holding a pole into both
+      sides, with both infinities attained, as `1/x` does at a zero inside a piece. cot, csc and sec
+      (`functions.py::_Function.reciprocal_trig`) cut a piece at its poles and extrema into
+      monotone segments, each between the values at its ends (a pole inside gives both
+      infinities, an extremum its ±1, both attained; three poles inside hold a period, so the whole
+      range)
+    * **a pole at 0 with a side each way** (M13d): coth, csch, cot, csc and an odd negative root
+      follow `reciprocal`: a piece ending at 0 takes the one-sided limit there, closed iff the piece
+      holds 0 (`coth([0, 1])` = `[coth 1, inf]`, `coth((0, 1])` = `(coth 1, inf)`), a piece with 0
+      inside gets both infinities, and the point 0 alone has no value: it contributes nothing and
+      warns once (`IndeterminateResultWarning`, as `1/[0]`). `A ∪ B` can then gain an infinity that
+      neither image had (`[-1, 0) ∪ [0]`), the same trade D2's rule makes for `1/x`
+    * **acot** is `pi/2 - atan x`, continuous and falling from pi to 0 (fi_lib's, whose vectors are
+      the only ones), not `atan(1/x)` with its jump at 0
+    * **pow(A, B)** (`functions.pow_`, 1788's pow): defined for x > 0, and x = 0 where y > 0
+      (`0 ** y` = 0); every other pair is dropped with one `DomainClippedWarning` (a negative base,
+      `0 ** y` for y <= 0). the base splits at 0 and 1, the exponent at 0: the power is 0 at x = 0,
+      1 at x = 1 or y = 0, and elsewhere monotone in each coordinate, so a box's ends are two
+      corners (as atan2's). ±inf are points where there is a limit: `inf ** y` is inf for y > 0 and 0
+      for y < 0, `x ** ±inf` is 0 or inf by the side of 1; `1 ** ±inf` and `inf ** 0` have none, so a
+      box that is one of them contributes nothing and warns (`IndeterminateResultWarning`). a
+      corner's value is attained iff the corner is in the box or on a closed infinite edge, along
+      which the power is constant. exact operands give an exact end where the power is rational
+      (`[4] ** [1/2]` = `[2]`; `x ** (a/b)` is rational iff x is a b-th power), else the tightest
+      float enclosure; float operands round once, to nearest or outward
+    * **hypot(A, B)** (`functions.hypot`): the sums of squares as an exact set (float operands as the
+      rationals they are), then one square root, rounded once like `fma`
     * **values**: `elementary.py` computes every value in pure python, correctly rounded in all three
       directions: fixed-point interval enclosures with bounded errors, refined by ziv's strategy
       until both ends round alike. it terminates because the rational values are exactly the known
@@ -343,7 +380,13 @@ M13b, M13c, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       value is irrational (lindemann-weierstrass, gelfond-schneider). so results are the same on
       every platform; libm is not correctly rounded (this laptop's UCRT `acosh` is 2 ulp off near 1,
       measured 2026-09-25). `exp2`/`exp10` of an int past `elementary.EXACT_POWER_LIMIT` (100000)
-      are rounded rather than built exactly
+      are rounded rather than built exactly, and so is a rational power longer than that many bits
+      (`elementary.exact_pow`), which ziv's loop still settles, since a value that long in lowest
+      terms is neither a double nor a midpoint of two. M13d's functions avoid cancellation where
+      they need it: expm1 from exp at extra precision near 0, log1p as the log of the exact `1 + x`,
+      coth and csch through expm1, acot as `atan(1/x)`, roots and pow as `exp(ln x / n)` and
+      `exp(y ln x)`; pow decides overflow and underflow from a bracket of `ln x` good to a factor of
+      3.1, before any series
     * **atan2(y, x)**: the angle in [-pi, pi]. no -0, so the negative x axis is at pi and points just
       below it near -pi; `atan2(v, ±inf)`, `atan2(±inf, u)` follow python (the limits). `(0, 0)` and
       `(±inf, ±inf)` have no angle: a box that is one of them contributes nothing and warns
@@ -424,16 +467,18 @@ M13b, M13c, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       entire as "no answer", ours is the real set of the fitting `x`, and for `[empty] [empty]` the
       whole line where 1788 answers `∅`. (`1/[0]` is not a row: both give empty.) keyed on the
       statement with its decorations stripped (`tests/itf1788/test_itf1788.py::key`) since M13a.
-      measured 2026-09-26 (M13f), the current count: 19 files, 9542 statements; 5375 vectors of 69
-      ops (every op in `OPS` has vectors), 4362 of them interval-valued and run twice, the 167
-      numeric ones run twice more with float operands (10071 vector test items); 114 keys and 0
+      measured 2026-09-26 (M13d), the current count: 19 files, 9542 statements; 7314 vectors of 83
+      ops (every op in `OPS` has vectors), 6301 of them interval-valued and run twice, the 167
+      numeric ones run twice more with float operands (13949 vector test items); 114 keys and 0
       unknown failures: 10 degenerate infinities (11 vectors), 5 cut-based relations (7 vectors),
       47 cancellations as a Minkowski difference (94 vectors, each also an outward item;
       `tests/itf1788/test_itf1788.py::_CANCELLATION_ROWS` and the two `[empty] [empty]` rows) and
       52 decoration expectations, the `[nai]` operands of implemented ops, generated in code (52
-      vectors, 6 outward items and 12 float items). counted and skipped: 4167 statements of 42 ops
-      not implemented yet (the largest `pow` 1431, the reverse ops, `csc`, `sec`, the text
-      constructors), each assigned to an M13 sub-task. history: at M13a (2026-09-26) 4767 vectors
+      vectors, 6 outward items and 12 float items). counted and skipped: 2228 statements of 28 ops
+      not implemented yet (the reverse ops, the largest `powRev1` 429, then the text constructors
+      and the decoration ops), each assigned to an M13 sub-task. M13d added the 1939 vectors of
+      `pow` (1431) and the 13 other functions, all matching in both passes with no row. history:
+      at M13f 5375 vectors of 69 ops, 4167 statements of 42 ops skipped. at M13a (2026-09-26) 4767 vectors
       of 54 ops, 4775 statements of 57 ops skipped; M13h added the 15 reduction vectors (4782 of 58,
       4760 of 53 skipped, 49 keys); M13b the 167 numeric ones (4949 of 64, 4593 of 47 skipped, 55
       keys); M13c the 184 of `less`, `strictLess`, `interior` (5133 of 67, 4409 of 44 skipped, 67
@@ -610,6 +655,39 @@ imports only point downward.
   gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one)
 
 ## decision log
+
+### 2026-09-26 revision: M13d, power and the rest of the elementary functions, built
+
+built and measured 2026-09-26; details in v2-implementation-plan.md (M13d). D11 moved into "current
+design" (arithmetic: power; elementary and step functions: pow, hypot and the twelve functions;
+ieee 1788: the counts). the choices D11 and the plan left open, each the most conservative
+reading, are now current design too:
+* **a Fraction with an integral value is pown**, as D11 says for a float: `A ** Fraction(4, 2)` is
+  `A ** 2`. any `MultiInterval` exponent is pow, even a degenerate integral one, as D11 says
+* **`0 ** y` for y <= 0 is outside the domain**, dropped with the `DomainClippedWarning` negative
+  bases get, not an `IndeterminateResultWarning`: D11 names the domain as x > 0 plus x = 0 where
+  y > 0. the one-sided limit `0 ** -1` = inf, which the M12 rule for a domain's end would allow, is
+  not taken, since 1788's domain excludes those points outright; so `[0, 1] ** [-1]` is `[1, inf)`
+  while pown's `[0, 1] ** -1` is `[1, inf]`
+* **±inf in pow are points where the power has a limit** (`inf ** 2` = inf, `(1/2) ** inf` = 0),
+  and `1 ** ±inf`, `inf ** 0` are indeterminate points with atan2's treatment: a box that is one of
+  them contributes nothing and warns, a larger box keeps the values of its other points
+* **the poles at 0 of cot, csc, coth, csch and an odd negative root follow `reciprocal`** (a
+  one-sided limit at a piece's end, closed iff the piece holds 0; the point 0 alone empty with an
+  `IndeterminateResultWarning`), the plan's "split a piece as tan's do" for the poles inside
+* **acot is continuous**, `pi/2 - atan x` with values in (0, pi), fi_lib's reading (its 30 vectors
+  are all on positive operands, where the two readings agree); `atan(1/x)`, with a jump at 0 and
+  values in (-pi/2, pi/2], is the other convention
+* **rootn(n) for every int n other than 0**, 1788's: n < 0 is the root of `1/x`; an even root's
+  domain is x >= 0 with `rootn(0, -2n)` = inf at the domain's end; an odd negative root has the
+  two-sided pole at 0; `rootn(x, 0)` is a `ValueError`, a non-int degree a `TypeError`
+* **hypot is rounded once** from the exact sums of squares, like `fma`; its class is the receiver's
+* the 1939 vectors of the 14 ops match in both passes with no divergence row. 41 of them end at or
+  are the pole 0 of cot, csc, coth or csch: `[0]` is empty in both, and a piece ending at 0 has the
+  same closed hull whether the infinity is attained or not. `0 ** y` for y <= 0 is outside both
+  domains (`pow [0.0,0.0] [0.0,0.0] = [empty]`); no vector has `acoth` at ±1, and the input rule
+  never gives a closed infinity. itf1788 now 7314 vectors of 83 ops; 2228 statements of 28 ops
+  skipped (M13e, M13g)
 
 ### 2026-09-26 revision: M13f, cancellation, built
 
