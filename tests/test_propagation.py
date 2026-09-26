@@ -296,6 +296,8 @@ def _check(name, fn, operands, extra=(), unit=Fraction(1)):
 @example('sqrt', set_dec(M(0, 25), DEF))  # :756: _def
 @example('log', set_dec(M(0, 1), COM))  # :3236: [-infinity,0.0]_trv (log 0 is -inf here, still undefined)
 @example('acosh', set_dec(M(1), COM))  # :4086: acosh [1.0,1.0]_com = [0.0,0.0]_com
+@example('log1p', set_dec(M(-1, 0), COM))  # log1p(-1) is -inf here, and undefined: trv
+@example('log1p', set_dec(M(-1, 0, start_closed=False), COM))  # off -1: (-inf, 0], dac
 @example('acosh', set_dec(M(Fraction(9, 10), 1), COM))  # :4087: _trv
 @example('atanh', set_dec(M(-1, 1), COM))  # :4114: [entire]_trv
 @example('asin', set_dec(M.parse('[0, inf)'), DAC))  # :3554: _trv
@@ -378,9 +380,11 @@ def test_pown_decorates_as_1788(x, n):
 
 
 @quiet
-@settings(max_examples=30, deadline=None)
+@settings(max_examples=60, deadline=None)
 @given(decorated(grid_sets()), st.integers(-4, 4).filter(bool))
 @example(set_dec(M(0, 16), COM), 4)  # an even root from 0: com
+@example(set_dec(M(-1, 4), COM), 2)  # below 0: trv
+@example(set_dec(M(-1, 1), COM), -3)  # an odd negative root at 0: trv
 @example(set_dec(M(0, 16), COM), -2)  # rootn(0, -2) has no value: trv
 @example(set_dec(M(-8, 27), COM), 3)
 @example(set_dec(M(-8, -1), COM), -3)
@@ -442,6 +446,8 @@ def _as_exact(x: DecoratedInterval) -> DecoratedInterval:
 @example('add', set_dec(M(1.0, 2.0), COM), set_dec(M(5.0, MAX), COM), M)  # rounds to max: com
 @example('mul', set_dec(M(-MAX, 2.0), COM), set_dec(M(-1.0, 5.0), COM), OutwardMultiInterval)  # :306: _dac
 @example('div', set_dec(M(-200.0, -1.0), COM), set_dec(M(5e-324, 10.0), COM), OutwardMultiInterval)  # :676
+@example('mod', set_dec(M(1.0), COM), set_dec(M(0.1), COM), M)  # 1.0 / 0.1 is 9.99..., 10.0 rounded: com
+@example('floordiv', set_dec(M(1.0), COM), set_dec(M(0.1), COM), OutwardMultiInterval)
 def test_float_operands_decorate_as_their_exact_values(name, a, b, cls):
     """the same decision on the same doubles; only com needs the rounded result bounded"""
     fn = BINARY[name]
@@ -540,6 +546,10 @@ def test_numbers_are_points_and_a_bare_set_is_refused():
             a.minimum(other)
     with pytest.raises(TypeError):
         _ = a ** M(2)
+    x = DecoratedInterval(M(-3, 1))  # an integral float exponent is pown, as in the core (D11)
+    assert x ** 2.0 == x ** 2 == DecoratedInterval(M(0, 9))
+    with pytest.warns(DomainClippedWarning):
+        assert (x ** 2.5).decoration is TRV  # pow: negative bases are outside its domain
     with pytest.raises(TypeError):
         pow(a, 2, 3)
 

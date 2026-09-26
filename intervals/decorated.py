@@ -42,6 +42,25 @@ DecoratedInterval(MultiInterval.parse('[1, 2]'), Decoration.COM)
 Traceback (most recent call last):
     ...
 intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[1,]_com': com is for bounded non-empty intervals only
+
+propagation (M13g part 3; 1788-2015 §11): the type has the core's point functions (`+ - * /`, `%`,
+`//`, `**`, `abs`, `reciprocal`, `minimum`, `maximum`, `fma`, `hypot`, `atan2`, the elementary
+functions, `log(base)`, `rootn(n)`, the step functions) and set operations. each computes the core's
+set on the intervals, then its decoration: the op's own on the box of the operands' sets (trv unless
+every point is in the op's domain, a set of reals, so an attained ±inf never is; def unless the op
+restricted to the box is continuous; dac unless it is continuous at each point and every operand is
+bounded; else com), capped by each operand's decoration and by the best the result can have. a set
+of several pieces is decided on the set, so on each piece, never on its hull. set operations and
+cancellation are trv, as 1788 decorates intersection and convexHull; booleans and numbers are asked
+of `.interval`. an operand is a DecoratedInterval or a real number, never a bare MultiInterval.
+
+>>> x = DecoratedInterval(MultiInterval(-1, 4))
+>>> print((x + 1).decoration, abs(x).sqrt().decoration, set_dec(x.interval, 'def').exp().decoration)
+Decoration.COM Decoration.COM Decoration.DEF
+>>> print(DecoratedInterval(MultiInterval.parse('{ [1/4, 1/2] , [5/4, 3/2) }')).floor())
+{ [0] , [1] }_com
+>>> print((x & DecoratedInterval(MultiInterval(0, 1))).decoration)
+Decoration.TRV
 """
 import enum
 import math

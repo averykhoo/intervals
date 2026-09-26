@@ -1323,7 +1323,8 @@ plus a decoration check on every decorated vector
       `:756`, `:1403`, `:1405`, `:1588`, `:1589`, `:1596`-`1598`, `:3167`, `:3236`, `:3506`, `:3508`,
       `:3527`, `:3554`, `:4086`, `:4087`, `:4114`, `:4141`, `:4145`, `:4167`, `:4200`, `:4203`,
       `:4232`, `:4241`, `:4269`, `:4299`, `:4301`, `:4353`, the atan2 cut cases, the pow domain cases,
-      `libieeep1788_set.itl:33`. the first strategy gave trv in about 95% of examples; rebalanced
+      `libieeep1788_set.itl:33`; and, added after the sabotage runs (below), the ends of rootn's and
+      log1p's domains, `1.0 % 0.1` in floats and `x ** 2.0 == x ** 2`. the first strategy gave trv in about 95% of examples; rebalanced
       (mostly newDec's decoration, infinities mostly open, narrow pieces, ends at 0, ±1/2, ±1 often),
       per 200 examples of the earlier rebalance floor gave trv 99, def 71, dac 8, com 22 and atan2
       135, 20, 28, 17 (2026-09-26). under `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10` the file ran
@@ -1351,7 +1352,45 @@ plus a decoration check on every decorated vector
   relations). all ops: 7587 vectors of 92 ops, 6351 interval-valued; 142 keys (unchanged) plus the
   12 plain-only rows; 0 unknown failures; skipped 1955 statements of 19 ops, all M13e's.
   the gate, in two runs: `tests/itf1788` 14330 passed in 120 s and the rest 3636 passed in 863 s (a
-  shared, loaded laptop), 17966 in all (2026-09-26)
+  shared, loaded laptop), 17966 in all (2026-09-26); after the sabotage runs' examples, 14330 in
+  35 s and 3636 in 411 s (2026-09-26)
+* sabotage (section 2), 45 breaks by a throwaway harness, each file restored from a copy and
+  byte-compared (all `cmp` ok), results appended as they landed; targets `tests/test_propagation.py`,
+  `tests/test_decorated.py`, the doctests of `decorated.py` and the itf1788 vectors of the seven files
+  with decorated vectors plus the adapter's own tests (2026-09-26). a first run stopped at break 31:
+  under the load, hypothesis's 200 ms deadline failed unrelated atan2 and div properties, so every
+  `@settings` in the file now has `deadline=None` and the run was repeated clean. red, library:
+  `_propagate` without the operands' decorations 273 (every per-op property, `elem.itl:4352`,
+  `:4353` ...); undefined read as def 329; restricted continuity ignored 73 (`elem.itl:4271`
+  ...); continuity at every point ignored 23 (`:4211`, the `round(ndigits)`
+  examples); the reals closed at ±inf 26; div defined at 0 5 (`:677` both passes); pow at `0 ** y`,
+  `y <= 0` 56; pow on negative bases 5 (`:3081`, `:3092`); atan2 at the origin 118; atan2's cut from
+  below missed 7 (`:3816`, `:3900`, `:3928`); atan2's cut ignored for com 4 (`:3942`, the atan2
+  doctest); poles inside a piece ignored 25 (`:3501`, `:3509` ...); tan's poles at `k pi` 18;
+  constancy of a step not checked 63; a closed jump not checked 16 (`:4167`, `:4211`); round's jumps
+  at the integers 5 (`:4269`); `floor(x / y)` constancy not checked 4; the `%`/`//` domain 3; pown
+  `n < 0` at 0 6 (`:1596`, `:1598`); acosh without 1 8 (`:4084`, `:4086`, `:4088`); reciprocal at 0 10
+  (`:709`-`:712`); set operations newDec's instead of trv 193 (`test_set_operations_are_trv`, the
+  decorated `cancel.itl` vectors); the result cap dropped with the strict constructor kept 36 (it raises: `:3167`,
+  atanh, cot, coth, csc properties). **seen by examples only** (the random properties missed them in
+  the run, so each is pinned by an `@example` or a direct test, several added after the first
+  runs): a closed end at the pole 0 (cot, csc) 2; trunc jumping at 0 2; sign never jumping 1;
+  `round(ndigits)`'s grid ignored 2 (0 before `test_round_to_ndigits_examples`, whose first example
+  had been wrong); `x / y` reaching the integer not checked 2 (`test_divmod_is_both_decorated`; the
+  first `%` example, meant for it, was def); an even root below 0 and an odd negative root at 0,
+  1 each (0 and 1 before two rootn examples); log1p at -1 1 (0 before its example); decisions on the
+  float set instead of the exact one 1 (0 before the example `1.0 % 0.1`, whose float ratio rounds to
+  10); `**` of an integral float as pow 1 (0 before `x ** 2.0 == x ** 2`); a bare `MultiInterval`
+  accepted 1, the core's calls not quieted 1, `__rsub__` not reflected 1. **green, as expected**: the
+  cap replaced by `set_dec` 0, which demotes to newDec's the same way (equivalent code; the real break
+  is the one above, 36); the operands' boundedness ignored for com 0, unreachable, since an unbounded
+  operand is never com (the strict constructor), kept as 1788 states the rule. adapter: decorated
+  vectors not detected 1132; the expected decoration dropped 1132; `BARE_PART` ops given the
+  decorated operands 467; `PLAIN_ONLY` read in the outward pass 12, dropped 12. **both sides
+  dropped: 13**, the 12 plain-only rows going stale and `::test_decorated_vectors_run_decorated`;
+  `floor` out of `PROPAGATED`: 1, that test alone (every floor vector matches on the interval part).
+  those two first ran green: the harness's `-k 'not vector'` had excluded the pin test by its name,
+  so they were rerun with it
 
 **M13h reductions (done 2026-09-26)**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`,
 `dot_nearest`, 1 each as counted 2026-09-25 by the old parser, which saw only the first statement of
