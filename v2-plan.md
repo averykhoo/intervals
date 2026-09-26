@@ -508,6 +508,19 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       one with no warning (`ieee1788-exceptions.itl:18`) and raises on the three whose lower bound
       exceeds the upper as rationals (`libieeep1788_class.itl:136`-`138`). 4 keys, 4 vectors
       (`::_EXACT_VALID`, `::_EXACT_INVALID`); the three `d-textToInterval` twins will need the same
+    * (M13g part 2, 2026-09-26) **decorated rule**: for the ops in
+      `tests/itf1788/test_itf1788.py::DECORATED` (`d-textToInterval`, `d-numsToInterval`, `newDec`,
+      `setDec`, `intervalPart`, `decorationPart`) a decorated operand is a `DecoratedInterval` and a
+      decorated result is compared as (closed hull, decoration), so the decoration is checked
+      (`::_ours`, `::_expected`); a raised `UndefinedOperationError` is the decorated flavour's
+      `[nai]` with `signal UndefinedOperation`, so those vectors match and are no row
+      (`::_nai_is_a_raise`). `newDec`, `setDec` and `intervalPart` run outward too, the set in an
+      `OutwardMultiInterval`; only the constructors (`::CONSTRUCTORS`) do not. the other ops still
+      drop decorations: propagation through them is not built. the three `d-textToInterval` twins
+      are rows under the PROPOSED category above (7 keys now), and three vectors whose literal is
+      bounded as a rational but past the doubles (`libieeep1788_class.itl:165`, `:201`, `:204`:
+      com here, 1788's `dac` for its binary64 hull `[max, inf]` or entire) are rows under
+      **decoration expectations** (`::_BOUNDED_EXACTLY`)
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
   community test framework and its `itl` vector DSL. all 19 `.itl` files of the maintained fork,
   oheim/ITF1788 at `b6ee1e2`, are vendored unmodified with its `LICENSE`, `NOTICE` and
@@ -521,6 +534,20 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
   continuous on the whole input", which the result set cannot (`sqrt([-1,4])` = `[0,2]` either way),
   and only solver existence proofs need that. when the solver comes, a decorated wrapper type; until
   then `DomainClippedWarning`
+* (M13g part 2, 2026-09-26, D16) **the decorated type**, `intervals/decorated.py`: `DecoratedInterval`
+  is a `MultiInterval` (any subclass, kept) with a `Decoration`, an enum `COM`, `DAC`, `DEF`, `TRV`
+  ordered `TRV < DEF < DAC < COM` (so the weaker of two is `min`), with **no `ill` and no NaI**.
+  immutable, hashable, equal iff both parts are, never equal to its bare set. 1788's ops:
+  `DecoratedInterval(x)` is `newDec` (com for a non-empty set with no point at and no piece reaching
+  ±inf, decided exactly, so `[10**400]` is com; dac for any other non-empty set; trv for ∅);
+  `DecoratedInterval(x, d)` requires `d` to fit and raises `UndefinedOperationError` otherwise;
+  `set_dec(x, d)` is 1788's `setDec`, which demotes instead (∅ gets trv, com on an unbounded set dac:
+  `min(d, newDec's)`); `.interval` and `.decoration` are `intervalPart` and `decorationPart`;
+  `text_to_decorated_interval` and `nums_to_decorated_interval` are the `d-` constructors, the bare
+  ones plus the literal's decoration or newDec's. a decoration is a `Decoration` or its lower-case
+  name; `ill` and any other name raise `UndefinedOperationError`, anything else is a `TypeError`.
+  `str` is the set in our syntax then `_com`. **not built yet**: propagation through the core's
+  ops (1788's decorated arithmetic and functions)
 
 ### package layout
 
@@ -548,6 +575,8 @@ imports only point downward.
         numeric.py         mid rad wid mag mig mid_rad of a set: exact, or rounded as 1788 (M13b)
         literals.py        1788's interval literals, parse_literal; text_to_interval and
                            nums_to_interval, 1788's bare constructors (M13g); above the class
+        decorated.py       Decoration, DecoratedInterval (a MultiInterval and a decoration),
+                           set_dec and the d- constructors (M13g); above literals
         multi_interval.py  the class and OutwardMultiInterval: immutable cut tuple; _coerce
                            (numbers and intervals only — strings go through an explicit
                            parse()); one-line dunders. arithmetic
@@ -722,6 +751,27 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
 * **H3**: numpy interop and a gmpy2/mpfr backend are recorded, not built now ("later (not in
   v2.0)" above). the session's suggested first pick when the solver stack starts: Newton's
   method with forward-mode autodiff, the demonstration of what multi-intervals are for
+
+### 2026-09-26 revision: M13g part 2, the decorated type, built
+
+built and measured 2026-09-26 on branch `m13g`; details in v2-implementation-plan.md (M13g, "part 2").
+the decorated wrapper of D16 is `DecoratedInterval` (`intervals/decorated.py`, "ieee 1788" above),
+named after M8's `DateTimeInterval`, with a `Decoration` enum and no `ill`. the choices the plan left
+open, each the conservative reading, flagged:
+* **the constructor is strict, `set_dec` is 1788's**: `DecoratedInterval(x, d)` raises
+  `UndefinedOperationError` for a decoration that does not fit, as the literal `"[1,]_com"` does;
+  `set_dec` demotes as 1788 defines it, with no signal (`libieeep1788_class.itl:283`-`288` expect
+  `[empty]_trv` and `_dac`), and raises only for `ill`. raising for every unfitting `setDec` would
+  have turned six matching vectors into rows needing a new category, for input 1788 calls valid
+* **bounded is decided on the exact set**, so `[1.0E+400]_com` stays com: three vectors are rows
+  under the existing "decoration expectations" (owner question: or the PROPOSED exact-parsing
+  category, widened)
+* a decoration name is exact lower case (`'COM'` raises): a python argument is not 1788 text
+* **a core bug fixed**: `MultiInterval.is_finite` and `.finite` raised `OverflowError` on an exact end
+  past the doubles (`MultiInterval(10**400)`), since `math.isfinite` converts to float; they compare
+  with ±inf now (`tests/test_multi_interval.py::test_finiteness_of_an_exact_end_past_the_doubles`)
+* not built: decorations propagated through the core's ops (1788's decorated arithmetic); every
+  other op's vectors still drop their decorations
 
 ### 2026-09-26 revision: M13g part 1, signals and bare constructors, built
 

@@ -192,6 +192,14 @@ def test_predicates():
     assert P('[-1, 0]').is_non_positive and not P('(-1, 1)').is_non_positive
 
 
+def test_finiteness_of_an_exact_end_past_the_doubles():
+    # M13g: math.isfinite overflowed on 10**400, so is_finite and finite raised OverflowError
+    big = MultiInterval(-Fraction(10 ** 400, 3), 10 ** 400)
+    assert big.is_finite and big.finite == big
+    assert not (big | P('[inf]')).is_finite and (big | P('[inf]')).finite == big
+    assert not MultiInterval(10 ** 400, math.inf).is_finite and MultiInterval(10 ** 400, math.inf).finite == EMPTY
+
+
 def test_derived_sets():
     a = P('{ [-inf, -3] , [-1, 1) , [2] , [5, inf] }')
     assert a.finite == P('{ [-1, 1) , [2] }')  # pieces touching infinity are dropped whole, as v1

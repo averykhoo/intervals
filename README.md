@@ -90,6 +90,12 @@ Size(rays=0, length=2, points=0)
   `MultiInterval.parse`; `nums_to_interval()` takes two bounds. both give the exact set with an
   infinite end open, as 1788 reads one, and raise `UndefinedOperationError` (a `ValueError`) on
   invalid input, where 1788 signals `UndefinedOperation`
+* **decorated intervals** (M13g): `DecoratedInterval(x)` is a set with 1788's best decoration for it
+  (`Decoration.COM`, `DAC`, `DEF`, `TRV`; no NaI and no `ill`); `set_dec()` sets one as 1788 does,
+  demoting it where it cannot fit; `.interval` and `.decoration` are its parts;
+  `text_to_decorated_interval()` (`"[1, 2]_def"`) and `nums_to_decorated_interval()` are the
+  decorated constructors. the core `MultiInterval` stays undecorated, and decorations are not yet
+  carried through arithmetic
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`
@@ -111,7 +117,7 @@ Size(rays=0, length=2, points=0)
   `ops` (arithmetic), `modulo`, `steps` (floor, ceil, round, sign), `functions` and `elementary`
   (the elementary functions over sets, and at one point), `numeric` (midpoint, radius, width,
   magnitude, mignitude), `reductions` (sums and dot products of numbers), `literals` (1788's
-  interval literals and constructors), `rounding`, `errors`
+  interval literals and constructors), `decorated` (1788's decorated type), `rounding`, `errors`
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)
