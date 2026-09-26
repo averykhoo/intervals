@@ -85,6 +85,11 @@ Size(rays=0, length=2, points=0)
 * **reductions**: `sum_()`, `sum_abs()`, `sum_sqr()`, `dot()` over sequences of numbers (1788's
   reductions): the exact value, rounded once to a float, to nearest by default or
   `rounding='down'` / `'up'`, so the order of the operands never matters
+* **reverse ops** (1788's reverse-mode functions): `sqr_rev(c, x)`, `abs_rev(c, x)`,
+  `pown_rev(c, n, x)`, `cosh_rev(c, x)` are the set `{t ∈ x : f(t) ∈ c}` as an exact union, not
+  1788's hull (`sqr_rev(MI(1, 4))` is `[-2, -1] ∪ [1, 2]`); `x` defaults to `[-inf, inf]`, and an
+  irrational end is its tightest float enclosure, open. their 476 ITF1788 vectors run through the
+  adapter below (M13e, 2026-09-26)
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`

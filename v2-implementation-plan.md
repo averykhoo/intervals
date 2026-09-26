@@ -885,6 +885,102 @@ M12; each checked against the D14 oracle (M14)
   union (our closed pieces against the pair's). ends that are irrational are tightest float
   enclosures, open
 * periodic answers per D12: exact pieces up to 1000, past that their hull with `HullWarning`
+* **in progress. part 1 done 2026-09-26 (branch `m13e`): `sqr_rev`, `abs_rev`, `pown_rev`,
+  `cosh_rev`** (476 statements); sin, cos, tan, mul and pow still to come (later builders add
+  their parts below). built:
+    * `intervals/reverse.py`: `::sqr_rev`, `::abs_rev`, `::pown_rev`, `::cosh_rev`, exported from
+      `intervals` (`tests/test_applicator.py::test_package_exports_unchanged` lists them). the
+      engine, for the later reverse ops (the design is in the module docstring): `::Branch` (a
+      piece of f's domain where f is continuous and strictly monotone, given by its image, each end
+      closed iff attained, and its inverse as `exact` and `rounded`), `::named` (a branch whose
+      inverse is one of `elementary`'s correctly rounded functions: `sqrt`, `rootn` with its degree,
+      `acosh`), `::branch_preimage` (the inverse applied piece by piece to `c ∩ image`, flags kept,
+      ends swapped for a decreasing f), `::_end` (the rounding of one end, `functions._Function.end`'s
+      rule), `::negate`, `::_even` (`P ∪ -P`), `::_odd` (`P(c) ∪ -P(-c)`), `::_reverse` (coercion,
+      the class, the empty-operand warning, then `∩ x` after rounding). the four ops are one branch
+      on `[0, inf]` each: identity (abs), sqrt (sqr), rootn(n) (pown; for n < 0 the image is
+      `[0, inf)`, falling, 0 attained at inf), acosh on `[1, inf]` (cosh); `pown_rev(c, 0, x)` is
+      `x` if `1 ∈ c`, else `∅`. a later op with many branches (sin: `k pi + (-1)^k asin`) gives each
+      branch its own `exact`/`rounded` and unions `branch_preimage` over them, capped per D12
+    * **choices the plan left open** (conservative, flagged in the decision log, `v2-plan.md`
+      "2026-09-26 revision: M13e, first part"):
+        * `x=REALS` is `[-inf, inf]` with f's own values at ±inf (`MultiInterval(inf) ** -2` is
+          `[0]`), so `pown_rev([0], -2)` = `[-inf] ∪ [inf]`; the vectors this touches are rows
+        * a point where f has no value (0 for n < 0) is in no preimage: the result is pointwise,
+          although the set op `1/[-1, 1]` attains ±inf around 0
+        * an empty operand gives `∅` and `EmptySetPropagationWarning`, as the functions do; an empty
+          answer from non-empty operands warns nothing
+        * the result is an `OutwardMultiInterval` if either operand is one (the dunders' rule); a
+          number is a point; `n` an int, not bool (`TypeError` otherwise, `n = 0` allowed)
+        * `∩ x` after rounding, so an end of `x` inside an irrational end's slack is kept and the
+          result never leaves `x`
+        * a float end produced by an earlier irrational enclosure is a float operand when fed back
+          into a `MultiInterval` (rounded to nearest), the library-wide rule: `T ⊆ rev(f(T))` is
+          promised for cosh only in `OutwardMultiInterval` (the property test runs in that class)
+    * adapter (`tests/itf1788/test_itf1788.py`): `sqrRev`, `sqrRevBin`, `absRev`, `absRevBin`,
+      `pownRev`, `pownRevBin`, `coshRev`, `coshRevBin` in `OPS`, one labelled block; the unary form is
+      the call with `x` omitted, the `*Bin` form passes `x` through the input rule; the exponent, a
+      1788 integer literal (a float in the outward pass), is made an int. **the comparison rule**:
+      the output rule unchanged, closed hulls, since 1788's reverse op is by definition the hull of
+      the preimage; the pieces inside the hull are held by the property tests. rows:
+      `::_POWN_REV_ROWS` (26 keys, reason `::_POWN_REV_INF`, "degenerate infinities") and
+      `::_POWN_REV_LOOSE_ROWS` (2 keys, `::_POWN_REV_LOOSE`) under **"tighter than the vector", a
+      new category PROPOSED here, added to `REASONS` with a PROPOSED comment, awaiting the owner**
+    * **a finding: two 1788 vectors are not tight.** `pownRev [0X0P+0,0X0.0000000000001P-1022] -7 =
+      [0x1.588cea3f093bcp+153,infinity]` (`rev.itl:276`, its mirror `:277`, decorated `:477`, `:478`):
+      the end is `2 ** (1074/7)` = 1.53674635563762978699...e46 (arb at 200 bits), strictly between
+      the doubles 0x1.588cea3f093bdp+153 and 0x1.588cea3f093bep+153; ours is `(0x...bd, ...)`, 1788's
+      one double lower. the infinity row would have hidden it: it was caught by the check that each
+      row matches once `x` is 1788's entire
+    * tests (`tests/test_reverse.py`, 50 items in 15.5 s, 2026-09-26): 9 `@given`, over the four ops
+      and pown with n in {-8, -7, -3, -2, -1, 0, 1, 2, 3, 4, 7, 8}: `::test_exactly_the_points_with_f_in_c`
+      (exact operands; at every end value, a point between each two, beyond each end, ±inf and a
+      fraction of an ulp either side of every float end: soundness, every `t` of the result with
+      `f(t) ∈ c` except inside an open rounded end's one-double slack, and tightness, the next
+      double inward from a rounded end is a true point; `f(t)` from the definitions in the test,
+      cosh through `elementary`), `::test_the_largest_set` (`T ⊆ rev(C)` whenever `f(T) ⊆ C`, the
+      library's `f` on sets), `::test_the_image_of_the_preimage` (`f(rev(f(T))) = f(T)`, all but
+      cosh), `::test_isotone` (in `c` and `x`), `::test_union_and_x` (distributes over `∪` of `c`;
+      `rev(c, x) = rev(c) ∩ x`), `::test_symmetry` (even, odd), `::test_relations_between_the_ops`
+      (`sqr_rev` = `pown_rev(., 2)`, sqrt against rootn 2; `pown_rev(., 1)` = `c ∩ x`;
+      `pown_rev(., 0)`; `abs_rev`), `::test_float_operands` (outward holds the exact result of the
+      same doubles and adds no double strictly inside what it adds; nearest within one double and
+      inside the outward closure), `::test_sound_at_sampled_points`. every property's `rev` asserts
+      an empty operand warns and gives `∅`, and nothing else warns. `@example`s: `rev.itl:35`, `:52`,
+      `:189`, `:217`, `:224`, `:246`, `:261`, `:276`, `:289`, `:322`, `:760`, `:762`, `abs_rev.itl:29`,
+      `:35`, closed inf in `c` for n < 0, an `x` end inside the slack; plus 35 parametrized
+      examples, the enclosures, class and coercion, warnings, and
+      `::test_the_rows_differ_only_at_the_infinities`, `::test_pown_rev_is_tighter_than_the_vector`
+* evidence, measured 2026-09-26 (`tools/itf1788_census.py`): the 476 vectors of the eight ops
+  (`libieeep1788_rev.itl` 452, `abs_rev.itl` 24; all interval-valued, none with `[nai]`): 420 match
+  in both passes; 52 (26 keys) are degenerate infinities of the unary `pownRev` with n < 0 and 0 in
+  `c`, each matching with 1788's entire as `x`; 4 (2 keys) the proposed category. all ops: 7790
+  vectors of 91 ops, 6777 interval-valued, 142 divergence keys (36 degenerate infinities, 2
+  proposed), 0 unknown failures; skipped 1752 statements of 20 ops. the gate, as two runs on
+  2026-09-26: `tests/itf1788` 14953 passed in 33.6 s, the rest 3401 passed in 392.7 s (18354 in
+  all; 17346 at M13d)
+* sabotage (section 2), 2026-09-26: 22 breaks, each run by a throwaway harness against
+  `tests/test_reverse.py`, the doctests of `intervals/reverse.py` and every itf1788 item matching
+  `rev` (1018 items), the file restored from a copy and byte-compared (`filecmp`, all equal),
+  results appended as they landed. red: an irrational end closed 6 (the enclosure, defining,
+  sampled-soundness and arb tests, 2 doctests; **no vector**: the closed hull hides a flag); the
+  ends' rounding directions swapped 252; a decreasing branch's ends not swapped 255; `_even`
+  without its mirror 320; `_odd`'s negative side from `c` not `-c` 219; the n < 0 image closed at
+  inf 4 (3 examples, the defining property; **no vector**: the input rule never closes inf); the
+  n < 0 image open at 0 116 (the ±inf rows go stale); `x` not intersected 189; `n = 0` always the
+  whole line 26; cosh's image from 0 13; the class from `c` only 1 (`test_class_and_coercion`; no
+  vector, their operands share a class); outward ignored 123 (the outward vector items, the float
+  property); no empty-operand warning 9 (every property through the test's `rev`); float ends
+  directed in nearest 1 (the enclosure test; no vector, the plain pass is exact and the outward
+  pass directed); parity swapped 350. the wiring: `pownRevBin` with `c` and `x` swapped 66,
+  `sqrRev` run as `abs_rev` 16, the 26 infinity rows dropped 104, `coshRevBin` ignoring `x` 16,
+  the 2 loose rows dropped 8. **first green, now pinned**: an outward end moved by rounding but
+  kept closed (0 red: sound, so no soundness check sees it) and the squeeze rule removed (0 red:
+  hypothesis never drew an open piece of `c` narrow enough). pinned by
+  `test_irrational_ends_are_open_one_ulp_enclosures` (`pown_rev(O(3.0), -1)` open at both ends;
+  `sqr_rev` of `(2, 2 + ulp)` to nearest is `±sqrt 2`), a new clause of `test_float_operands` (an
+  outward end is closed only if it is a point of the exact result; the nearest result is not
+  empty when the exact one is not) and two `@example`s on it; re-run, each now turns 2 red
 
 **M13f cancellation (done 2026-09-26)** (D13). `cancelPlus` 116, `cancelMinus` 126
 * `A.cancel_minus(B)`: the largest `X` with `B + X ⊆ A` (the Minkowski difference);

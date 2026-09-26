@@ -402,6 +402,28 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
 * `ops.minimum/maximum` (the class's `minimum()`, `maximum()`; builtin `min` needs a bool from `<`):
   descriptors with their own attainment, since min is flat where the other operand is out of reach.
   `ops.fma`: `add(mul(a, b), c)` computed exactly, rounded once
+* **reverse ops** (M13e, D12; `intervals/reverse.py`, exported from `intervals`; built 2026-09-26
+  for `sqr_rev(c, x=REALS)`, `abs_rev(c, x=REALS)`, `pown_rev(c, n, x=REALS)`, `cosh_rev(c,
+  x=REALS)`; sin, cos, tan, mul and pow to come): each is `{t ∈ x : f(t) has a value and f(t) ∈ c}`
+  for the library's own f at a point, an exact multi-interval, where 1788 answers its hull. `x`
+  defaults to `[-inf, inf]`, so ±inf are points with f's value there: `inf ** -2` = 0, so
+  `pown_rev([0], -2)` = `[-inf] ∪ [inf]`; a point with no value (0 for n < 0, as `1/[0]` is empty)
+  is in no preimage; `t ** 0` = 1 everywhere, so `pown_rev(c, 0, x)` is `x` or `∅`
+    * **the engine** (the module docstring; built for the later reverse ops to reuse): a *branch*
+      (`reverse.Branch`) is a piece of f's domain where f is continuous and strictly monotone,
+      given from the value side: its image (each end closed iff attained) and its inverse g, exact
+      where rational and correctly rounded otherwise (`reverse.named` wraps `elementary`'s `sqrt`,
+      `rootn`, `acosh`). g is an order isomorphism of the image onto the branch, so the preimage of
+      `c` is g applied piece by piece to `c ∩ image`, flags kept (`reverse.branch_preimage`). these
+      four are even or odd in one branch on `[0, inf]` (`P ∪ -P`, `P(c) ∪ -P(-c)`)
+    * **rounding**: an irrational end is its tightest float enclosure, open; a float end of `c` is
+      a float operand, to nearest in `MultiInterval` (flags kept) and outward in
+      `OutwardMultiInterval` (a moved end open), the functions' rule (`reverse._end` is
+      `functions._Function.end`'s). the union is intersected with `x` **after** rounding, so the
+      result never leaves `x`. the result is an `OutwardMultiInterval` if either operand is one
+    * an empty operand gives `∅` and an `EmptySetPropagationWarning`, as the functions do; an empty
+      answer from non-empty operands (no solution) warns nothing. a number is a point; `n` must be
+      an int (not bool), else `TypeError`
 
 ### empties and warnings
 
@@ -489,6 +511,19 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       1788 and `overlaps` here, since the two share the point 2). counted and skipped: `pow` (real
       exponents, open), `less`, `strictLess`, `interior`, `isNaI`, `mid`, `rad`, `wid`, `mag`, `mig`;
       the reverse-op and cancel files are not vendored
+    * **reverse ops** (added at M13e, 2026-09-26): the unary form (`sqrRev`) is the call with `x`
+      omitted, so `x` is `[-inf, inf]`; the `*Bin` form passes `x` through the input rule. compared
+      by the output rule, closed hulls: 1788's reverse op is by definition the hull of the
+      preimage, so the closed hulls agree iff ours has that hull; the pieces inside are held by
+      `tests/test_reverse.py`. of the 476 vectors of `sqrRev`, `absRev`, `pownRev`, `coshRev` and
+      their `*Bin` forms, 420 match in both passes; 52 (26 keys,
+      `tests/itf1788/test_itf1788.py::_POWN_REV_ROWS`) are **degenerate infinities**, the unary
+      `pownRev` with n < 0 and 0 in `c`, where ±inf join (each matches with 1788's entire as `x`,
+      pinned by `tests/test_reverse.py::test_the_rows_differ_only_at_the_infinities`); and 4 (2
+      keys, `::_POWN_REV_LOOSE_ROWS`, `rev.itl:276`, `:277`) are under **a new category, "tighter
+      than the vector", PROPOSED at M13e and not yet approved by the owner**: 1788's end for
+      `2 ** (1074/7)` is one double outside the tightest enclosure, which ours is (arb, in
+      `tests/test_reverse.py::test_pown_rev_is_tighter_than_the_vector`)
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
   community test framework and its `itl` vector DSL. all 19 `.itl` files of the maintained fork,
   oheim/ITF1788 at `b6ee1e2`, are vendored unmodified with its `LICENSE`, `NOTICE` and
@@ -701,6 +736,32 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
 * **H3**: numpy interop and a gmpy2/mpfr backend are recorded, not built now ("later (not in
   v2.0)" above). the session's suggested first pick when the solver stack starts: Newton's
   method with forward-mode autodiff, the demonstration of what multi-intervals are for
+
+### 2026-09-26 revision: M13e, first part (sqr_rev, abs_rev, pown_rev, cosh_rev), built
+
+built and measured 2026-09-26; details in v2-implementation-plan.md (M13e, in progress). D12's
+reading for these four moved into "current design" (elementary and step functions: reverse ops;
+ieee 1788: the reverse ops rule). the choices the plan left open, each the most conservative
+reading, are now current design too:
+* **`x` defaults to `[-inf, inf]` with f's own values at ±inf** (the plan's `x=REALS`), so the
+  infinities are points of a preimage like any other: `pown_rev([0], -2)` is `[-inf] ∪ [inf]`,
+  1788's `[empty]`. the 1788 vectors this touches are rows under "degenerate infinities"
+* **a point where f has no value is in no preimage**: 0 for n < 0, where the library's `1/[0]` is
+  empty, even though the set op `1/[-1, 1]` attains ±inf around it. so the result is pointwise,
+  and `T ⊆ rev(f(T))` holds for every `T` without such points
+* **an empty operand warns** (`EmptySetPropagationWarning`, off by default), as the functions do;
+  an empty answer from non-empty operands does not warn: "no solution here" is a normal answer
+* **the result class is `OutwardMultiInterval` if either operand is one**, as for the dunders;
+  the functions are module-level (`intervals.sqr_rev`), not methods, as the plan's signatures say
+* **the adapter compares the closed hulls** (the output rule unchanged): 1788's reverse op is the
+  hull of the preimage by definition
+* **a proposed new residual category, "tighter than the vector" (not yet approved)**: two
+  `pownRev` vectors (`rev.itl:276`, `:277`) expect an end one double outside the tightest enclosure
+  of `2 ** (1074/7)`; ours is the tightest (checked against arb). they are rows under it, and the
+  owner decides whether the category stands
+* the 476 vectors: 420 match in both passes, 52 (26 keys) are degenerate infinities of the unary
+  `pownRev`, 4 (2 keys) the proposed category. itf1788 now 7790 vectors of 91 ops; 1752
+  statements of 20 ops skipped (the rest of M13e, and M13g)
 
 ### 2026-09-26 revision: M13d, power and the rest of the elementary functions, built
 

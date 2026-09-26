@@ -18,6 +18,11 @@ from intervals.reductions import sum_abs
 from intervals.reductions import sum_sqr
 from intervals.relations import Allen
 from intervals.relations import TruthSet
+# reverse ops (M13e)
+from intervals.reverse import abs_rev
+from intervals.reverse import cosh_rev
+from intervals.reverse import pown_rev
+from intervals.reverse import sqr_rev
 
 EMPTY = MultiInterval()
 REALS = MultiInterval(-_math.inf, _math.inf)  # the affine extended reals, both infinities included
@@ -42,4 +47,9 @@ __all__ = [
     'sum_abs',
     'sum_sqr',
     'dot',
+    # reverse ops (M13e)
+    'sqr_rev',
+    'abs_rev',
+    'pown_rev',
+    'cosh_rev',
 ]

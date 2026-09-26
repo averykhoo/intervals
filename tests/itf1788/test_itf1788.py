@@ -60,7 +60,11 @@ from intervals import EMPTY
 from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import REALS
+from intervals import abs_rev
+from intervals import cosh_rev
 from intervals import dot
+from intervals import pown_rev
+from intervals import sqr_rev
 from intervals import sum_
 from intervals import sum_abs
 from intervals import sum_sqr
@@ -154,6 +158,18 @@ OPS = {
     # cancellation (D13): the Minkowski difference, a real set where 1788 has no answer
     'cancelMinus': lambda a, b: a.cancel_minus(b),
     'cancelPlus': lambda a, b: a.cancel_plus(b),
+    # reverse ops (M13e, D12): `{x in X : f(x) in C}` as a union; the unary form is the call with x
+    # omitted (x = REALS, ±inf included), the *Bin form the call with x given. compared by the output
+    # rule: 1788's reverse op is the hull of the preimage, so closed hulls agree iff ours has its hull.
+    # the exponent is a 1788 integer literal (a float in the outward pass): an int here
+    'sqrRev': sqr_rev,
+    'sqrRevBin': sqr_rev,
+    'absRev': abs_rev,
+    'absRevBin': abs_rev,
+    'pownRev': lambda c, n: pown_rev(c, int(n)),
+    'pownRevBin': lambda c, x, n: pown_rev(c, int(n), x),
+    'coshRev': cosh_rev,
+    'coshRevBin': cosh_rev,
 }
 REDUCTIONS = frozenset({'sum_nearest', 'sum_abs_nearest', 'sum_sqr_nearest', 'dot_nearest'})
 NUMERIC = frozenset({'mid', 'rad', 'wid', 'mag', 'mig', 'midRad'})
@@ -174,7 +190,11 @@ def _overlap(a, b):
 
 # the plan's residual categories (v2-plan.md "ieee 1788"); a row's reason starts with one of them
 REASONS = ('degenerate infinities', 'domain-clipped functions', 'decoration expectations',
-           'cut-based relations', 'cancellation as a Minkowski difference')
+           'cut-based relations', 'cancellation as a Minkowski difference',
+           # PROPOSED at M13e (2026-09-26), not yet approved by the owner: a vector whose expected end
+           # is not the tightest double enclosure, where ours is (checked against arb in
+           # tests/test_reverse.py::test_pown_rev_is_tighter_than_the_vector)
+           'tighter than the vector')
 
 _LOG = ('degenerate infinities: the operand meets the domain [0, inf] only at 0, and log(0) is '
         '-inf here (the limit from the one side the domain has); 1788 drops 0 from the domain')
@@ -264,6 +284,54 @@ _CANCELLATION_ROWS = (
     'cancelMinus [-0X1P+0,0X1.FFFFFFFFFFFFEP-53] [-0X1.FFFFFFFFFFFFFP-53,0X1P+0] = [entire]',
 )
 DIVERGENCES.update({text: _CANCEL for text in _CANCELLATION_ROWS})
+
+# reverse ops (M13e): `t ** n` for n < 0 is 0 at ±inf here (the library's value there, `MultiInterval(inf)
+# ** -2` is [0]), so the unary pownRev, whose x is all of [-inf, inf] (the default REALS), has ±inf in the
+# preimage of every C holding 0. every such vector is a row; run with 1788's entire as x, each matches
+# (tests/test_reverse.py::test_the_rows_differ_only_at_the_infinities). the *Bin forms never meet it:
+# their x comes through the input rule, open at inf
+_POWN_REV_INF = ('degenerate infinities: t ** n for n < 0 is 0 at t = ±inf here, so with x = [-inf, inf] '
+                 '(the default) ±inf are in the preimage of a C holding 0; 1788 has no infinite points')
+_POWN_REV_ROWS = (
+    'pownRev [0.0,0.0] -2 = [empty]',
+    'pownRev [-0.0,-0.0] -2 = [empty]',
+    'pownRev [-10.0,0.0] -2 = [empty]',
+    'pownRev [-10.0,-0.0] -2 = [empty]',
+    'pownRev [0.0,0.0] -8 = [empty]',
+    'pownRev [-0.0,-0.0] -8 = [empty]',
+    'pownRev [0.0,0.0] -1 = [empty]',
+    'pownRev [-0.0,-0.0] -1 = [empty]',
+    'pownRev [0.0,infinity] -1 = [0.0,infinity]',
+    'pownRev [-0.0,infinity] -1 = [0.0,infinity]',
+    'pownRev [-infinity,0.0] -1 = [-infinity,0.0]',
+    'pownRev [-infinity,-0.0] -1 = [-infinity,0.0]',
+    'pownRev [0.0,0.0] -3 = [empty]',
+    'pownRev [-0.0,-0.0] -3 = [empty]',
+    'pownRev [0X0P+0,0X0.0000000000001P-1022] -3 = [0x1p+358,infinity]',
+    'pownRev [-0X0.0000000000001P-1022,-0X0P+0] -3 = [-infinity,-0x1p+358]',
+    'pownRev [0.0,infinity] -3 = [0.0,infinity]',
+    'pownRev [-0.0,infinity] -3 = [0.0,infinity]',
+    'pownRev [-infinity,0.0] -3 = [-infinity,0.0]',
+    'pownRev [-infinity,-0.0] -3 = [-infinity,0.0]',
+    'pownRev [0.0,0.0] -7 = [empty]',
+    'pownRev [-0.0,-0.0] -7 = [empty]',
+    'pownRev [0.0,infinity] -7 = [0.0,infinity]',
+    'pownRev [-0.0,infinity] -7 = [0.0,infinity]',
+    'pownRev [-infinity,0.0] -7 = [-infinity,0.0]',
+    'pownRev [-infinity,-0.0] -7 = [-infinity,0.0]',
+)
+DIVERGENCES.update({text: _POWN_REV_INF for text in _POWN_REV_ROWS})
+# two more have the same infinities and a second difference: 1788's end is one double outside the
+# tightest enclosure of 2 ** (1074/7), which ours is (arb: 1.5367463556376297869...e46, strictly between
+# 0x1.588cea3f093bdp+153 and 0x1.588cea3f093bep+153), so they differ even with x = 1788's entire
+_POWN_REV_LOOSE = ('tighter than the vector (PROPOSED): 1788 gives ±0x1.588cea3f093bcp+153 for 2 ** (1074/7), '
+                   'one double outside the tightest enclosure, whose inner double is 0x1.588cea3f093bdp+153 '
+                   '(ours); the unary form also has ±inf here (degenerate infinities, as the other pownRev rows)')
+_POWN_REV_LOOSE_ROWS = (
+    'pownRev [0X0P+0,0X0.0000000000001P-1022] -7 = [0x1.588cea3f093bcp+153,infinity]',
+    'pownRev [-0X0.0000000000001P-1022,-0X0P+0] -7 = [-infinity,-0x1.588cea3f093bcp+153]',
+)
+DIVERGENCES.update({text: _POWN_REV_LOOSE for text in _POWN_REV_LOOSE_ROWS})
 LISTED = dict(DIVERGENCES)
 
 
