@@ -732,7 +732,8 @@ class MultiInterval:
     @property
     def is_finite(self) -> bool:
         """no point at, and no piece reaching, ±inf (the empty set is finite)"""
-        return not self._cuts or (math.isfinite(self._cuts[0].value) and math.isfinite(self._cuts[-1].value))
+        # compared, never converted: math.isfinite overflows on an exact end past the doubles (10**400)
+        return not self._cuts or (-math.inf < self._cuts[0].value and self._cuts[-1].value < math.inf)
 
     @property
     def is_integral(self) -> bool:
@@ -760,7 +761,7 @@ class MultiInterval:
     def finite(self) -> 'MultiInterval':
         """the pieces that neither touch nor reach ±inf (as v1: a piece `[5, inf]` is dropped whole)"""
         return self._wrap(tuple(cut for start, end in kernel.pairs(self._cuts)
-                                if math.isfinite(start.value) and math.isfinite(end.value)
+                                if -math.inf < start.value and end.value < math.inf
                                 for cut in (start, end)))
 
     @property

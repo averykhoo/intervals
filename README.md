@@ -49,6 +49,18 @@ Size(rays=0, length=2, points=0)
 >>> from intervals import OutwardMultiInterval as OMI
 >>> print(OMI(0.1) + 0.2)            # outward rounding: the exact sum is strictly between
 (0.3, 0.30000000000000004)
+>>> from intervals import text_to_interval, text_to_decorated_interval, DecoratedInterval
+>>> print(text_to_interval('[0.1, infinity]'))   # 1788's literals, read exactly; an infinite end open
+[1/10, inf)
+>>> text_to_interval('[2, 1]')                   # 1788's UndefinedOperation raises
+Traceback (most recent call last):
+    ...
+intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]': the lower bound exceeds the upper
+>>> d = text_to_decorated_interval('[1, 4]_com')
+>>> print(d.sqrt())                              # decorations propagate as 1788's do
+[1, 2]_com
+>>> print(d / DecoratedInterval(MI(-1, 1)))      # 1/0 is outside the domain: trv
+{ [-inf, -1] , [1, inf] }_trv
 
 ```
 
@@ -112,6 +124,19 @@ Size(rays=0, length=2, points=0)
   (`pow_rev1(MI(-1, 1), MI(2))` is `(0, 1/2] ∪ [2, inf)`, `pow_rev2(MI(4), MI(2))` is `[1/2]`);
   exact where rational, else the tightest float enclosure, open. their 804 ITF1788 vectors run
   through the adapter (M13e, 2026-09-26)
+* **1788 constructors** (M13g): `text_to_interval()` reads 1788's interval literals (`[1, 2]`,
+  `[1,]`, `[entire]`, `3.56?1e2`, hex and `p/q` numbers), a syntax separate from
+  `MultiInterval.parse`; `nums_to_interval()` takes two bounds. both give the exact set with an
+  infinite end open, as 1788 reads one, and raise `UndefinedOperationError` (a `ValueError`) on
+  invalid input, where 1788 signals `UndefinedOperation`
+* **decorated intervals** (M13g): `DecoratedInterval(x)` is a set with 1788's best decoration for it
+  (`Decoration.COM`, `DAC`, `DEF`, `TRV`; no NaI and no `ill`); `set_dec()` sets one as 1788 does,
+  demoting it where it cannot fit; `.interval` and `.decoration` are its parts;
+  `text_to_decorated_interval()` (`"[1, 2]_def"`) and `nums_to_decorated_interval()` are the
+  decorated constructors. the core `MultiInterval` stays undecorated; a `DecoratedInterval`'s own
+  arithmetic, functions, step functions, `%`, `//` and set operations compute the core's set and
+  propagate the decoration as 1788 does (the weakest of the operands' and the op's own on the
+  operands' sets: `DecoratedInterval(MI(1, 2)) / DecoratedInterval(MI(0, 1))` is `[1, inf]_trv`)
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`
@@ -125,6 +150,18 @@ Size(rays=0, length=2, points=0)
   differ on purpose or the vector needs decorations (`tests/itf1788/`, measured 2026-09-27, M13e). the
   273 statements of ops not built yet (the text constructors, decorations) are counted
   and skipped
+* **1788's signals** (M13g): `UndefinedOperation` raises `UndefinedOperationError`, a `ValueError`,
+  so a 1788 constructor or `DecoratedInterval` given invalid input stops, as `MI(2, 1)` does; hence
+  there is no NaI. `PossiblyUndefinedOperation` would be `PossiblyUndefinedOperationWarning`, an
+  `IntervalWarning`, with the result returned; the exact parser can always decide validity, so it
+  is never emitted today
+* **ieee 1788**: not a runtime mode. the test suite runs 7587 vectors of 92 ops from all 19 files
+  of the ITF1788 suite through an adapter, the 6351 interval-valued ones a second time through
+  `OutwardMultiInterval`, the 167 numeric ones twice more with float operands, a decorated vector
+  through `DecoratedInterval` with its decoration checked, and all of them match except the 195
+  vectors under 142 listed divergences where the semantics differ on purpose or the vector needs a
+  NaI, and 12 on a decoration alone in the exact pass (`tests/itf1788/`, measured 2026-09-26 at M13g). the
+  statements of ops not built yet (the reverse ops) are counted and skipped
 
 ## layout
 
@@ -133,7 +170,8 @@ Size(rays=0, length=2, points=0)
   `ops` (arithmetic), `modulo`, `steps` (floor, ceil, round, sign), `functions` and `elementary`
   (the elementary functions over sets, and at one point), `numeric` (midpoint, radius, width,
   magnitude, mignitude), `reductions` (sums and dot products of numbers), `reverse` (the reverse
-  ops), `rounding`, `errors`
+  ops), `literals` (1788's interval literals and constructors), `decorated` (1788's decorated
+  type), `rounding`, `errors`
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)

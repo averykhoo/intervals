@@ -29,7 +29,7 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D13 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13f), now in `v2-plan.md` "arithmetic" and "ieee 1788".** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
 | D14 | **decided 2026-09-25 by owner: recommended default.** the independent oracle for the elementary functions is **`python-flint`** (Arb: every result is a ball proven to contain the true value), a test-only dependency in the `[test]` extra, installed into the `intervals` env and in CI. `mpmath` was the alternative (pure python, but its values carry no proven bound). python-flint 0.9.0 has Windows wheels for 3.10 and later (abi3), 3.13 and 3.14 included (checked on PyPI 2026-09-25) | python-flint | M14 |
 | D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library. **corrected 2026-09-26 at M13a**, from every file's header: five files carry the all-permissive notice, not two (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`); the eleven `libieeep1788_*` are Apache 2.0 | vendor unmodified, with the licence files | M13a |
-| D16 | **decided 2026-09-25 by owner: recommended default.** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. 1788's signals, owner 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers"): `UndefinedOperation` **raises** (a `ValueError` subclass, so it reads like `MultiInterval(2, 1)`'s `ValueError`); `PossiblyUndefinedOperation` is an **`IntervalWarning` subclass** (the result is returned); names chosen when built. **no NaI** and no `ill` (owner 2026-09-26): its statements are rows under a new category, M13g | wrapper type; signals as the owner chose | M13g |
+| D16 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13g), now in `v2-plan.md` "ieee 1788" (`DecoratedInterval`, `UndefinedOperationError`, `PossiblyUndefinedOperationWarning`).** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. 1788's signals, owner 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers"): `UndefinedOperation` **raises** (a `ValueError` subclass, so it reads like `MultiInterval(2, 1)`'s `ValueError`); `PossiblyUndefinedOperation` is an **`IntervalWarning` subclass** (the result is returned); names chosen when built. **no NaI** and no `ill` (owner 2026-09-26): its statements are rows under a new category, M13g | wrapper type; signals as the owner chose | M13g |
 | D17 | **decided 2026-09-25 by owner**: M13 does **not** block the 2.0.0 release, and there is no hurry to release either ("I have zero users and this is a yak shaving pet project"). M13 only adds methods and a type and gives a meaning to exponents that raise `TypeError` today, so nothing that works now changes | release whenever; not blocked | — |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
@@ -1538,7 +1538,7 @@ M12; each checked against the D14 oracle (M14)
   clause. now pinned by a `test_examples` row and an `@example` on
   `tests/test_cancel.py::test_exactly_the_points_that_fit`; dropping the clause turns 2 red
 
-**M13g decorations, constructors and signals** (D16; no NaI, owner 2026-09-26). 273 statements,
+**M13g decorations, constructors and signals (done 2026-09-26)** (D16; no NaI, owner 2026-09-26). 273 statements,
 plus a decoration check on every decorated vector
 * a decorated wrapper type around a `MultiInterval` (name chosen when built, recorded in the
   decision log): a decoration per 1788's com/dac/def/trv, propagated through every op the core
@@ -1568,6 +1568,532 @@ plus a decoration check on every decorated vector
   adapter takes the raised error as a vector's expected result with `signal UndefinedOperation`
   (the `b-` flavour's `[empty]`, the `d-` flavour's `[nai]`), as the reduction rule takes
   `ValueError` as `NaN`
+* **part 1 built 2026-09-26 (branch `m13g`): the signals, the 1788 text parser, the
+  bare constructors, the new category.** left for parts 2 and 3 then (both built, below): the decorated wrapper type,
+  `d-textToInterval`, `d-numsToInterval`, `setDec`, `newDec`, `intervalPart`, `decorationPart`, and
+  the adapter checking decorations. built:
+    * signals (`intervals/errors.py`): `UndefinedOperationError(ValueError)` and
+      `PossiblyUndefinedOperationWarning(IntervalWarning)`, exported from `intervals`
+      (`tests/test_applicator.py::test_package_exports_unchanged` lists them)
+    * `intervals/literals.py`, a new module (not `ieee1788.py`, which `HANDOFF.md` H3 keeps for a
+      later thin adapter): `::parse_literal` reads 1788's interval literal (1788-2015 §9.7) into a
+      `::Literal` (exact `lo`, `hi`, `None` for empty, and the decoration if any); `::number` one
+      number literal; `::text_to_interval` (1788's `b-textToInterval`) and `::nums_to_interval`
+      (`b-numsToInterval`) give a bare `MultiInterval` under 1788's input rule (a finite end closed,
+      an infinite one open, `::_bare`), both exported from `intervals`. the grammar, from the
+      vectors of `libieeep1788_class.itl`, `ieee1788-constructors.itl`, `ieee1788-exceptions.itl`:
+      `[l, u]`, `[x]`, `[l,]`, `[,u]`, `[,]`, `[ ]`, `[empty]`, `[entire]`; the uncertain form
+      `m?r`, `m?`, `m??` with a direction `u`/`d` and an exponent `e`; decimal, hex (`0x...p...`),
+      `p/q` and `inf`/`infinity` numbers; decorations `_com` `_dac` `_def` `_trv`; any letter case.
+      invalid input, `[nai]` included, raises `UndefinedOperationError`
+    * **choices the plan left open** (conservative):
+        * names: 1788's with python's suffix, `UndefinedOperationError` and
+          `PossiblyUndefinedOperationWarning`; the functions `text_to_interval`, `nums_to_interval`
+          (1788's names in python's style, module-level as the reductions are, not methods beside
+          our own `MultiInterval.parse`). the warning gets no import-time `'ignore'` filter, so it
+          is shown, like `IndeterminateResultWarning`
+        * **exact values**: a literal's numbers are the rationals they spell (`[0.1]` is the point
+          `1/10`, `[1.0E+400]` is `10**400`), never rounded, as int and Fraction are exact everywhere
+          in the package (D3). 1788's binary64 enclosure is what the adapter's precision rule makes
+          of it. so validity is decided exactly too: `[1.0000000000000002,1.0000000000000001]` is
+          invalid and raises, `[1.0000000000000001, 1.0000000000000002]` is valid and does not
+          warn; `PossiblyUndefinedOperationWarning` is never emitted today (the owner foresaw it,
+          `v2-plan.md` "2026-09-26 revision: owner answers", Q1)
+        * the result is always a `MultiInterval`: no class argument, since an exact result has
+          nothing for `OutwardMultiInterval` to round; the constructors are not in the outward pass
+        * strict syntax: no white space outside the brackets, inside a number or anywhere in the
+          uncertain form (`" [1, 2]"` raises); ASCII white space inside the brackets; a hex number
+          needs its `p` exponent (IEEE 754's hex form); `1.` and `.5` are numbers; the sign of `p/q`
+          goes before `p` only. a non-str argument is a `TypeError`, as are a `bool` or a non-real
+          bound for `nums_to_interval`
+        * a decoration is checked against the exact value: `com` needs a bounded non-empty
+          interval, the empty set takes `trv` only, `ill` and an unknown word never fit (the
+          vectors' `[ Empty ]_ill`, `[,]_com`, `_fooo`, `_da`). `[1.0E+400 ]_com` fits here
+          (bounded as a rational) where 1788's binary64 hull is unbounded and gets `dac`
+          (`libieeep1788_class.itl:165`): the decorated type's question. the bare constructor
+          refuses every decorated literal, as 1788's does (`class.itl:50`)
+        * `nums_to_interval(-inf, -inf)` and `(inf, inf)` raise, as 1788 says, although `[-inf]` is
+          a legal point of `MultiInterval`; `nan` raises `UndefinedOperationError`, not the plain
+          `ValueError` of `MultiInterval(nan)`
+        * no limit on an exponent's size: `1e999999999` builds the exact power, slowly, as
+          `Fraction('1e999999999')` does; the fuzz property assumes away exponents of 4 digits or
+          more
+        * `isNaI` is in `OPS` as an op with no counterpart (all 16 vectors rows), not as
+          `lambda a: False`, which would match 15 of them with an op the package does not have
+    * adapter (`tests/itf1788/test_itf1788.py`): `b-textToInterval`, `b-numsToInterval`, `isNaI`
+      in `OPS`; the **signal rule** (`::SIGNALLED`, `::_signalled`: (closed hull, signal) pairs,
+      a raise read as `[empty]` with `UndefinedOperation`, the warning as
+      `PossiblyUndefinedOperation`), `::test_signals_are_checked` (every op whose vectors carry a
+      signal is in `SIGNALLED`, so `d-textToInterval`, `setDec`, `intervalPart` join it when
+      built), `::test_signalled_reads_both_signals` (the warning's branch, which no vector reaches);
+      `REASONS` gains "no NaI: invalid input raises" (D16) and, **PROPOSED, not approved: an owner
+      question**, "exact parsing decides validity" for the 4 `b-textToInterval` vectors that expect
+      `PossiblyUndefinedOperation` (`::_EXACT_VALID`, `::_EXACT_INVALID`); `::_NAI` moved to the
+      new category and `::_NO_IS_NAI` added. `tools/itf1788_census.py` matches a reason to its
+      `REASONS` entry, since the new one holds a colon
+    * tests (`tests/test_literals.py`, 122 items in 1.5 s, 2026-09-26): 8 `@given`:
+      `nums_to_interval` against 1788's definition at probe points (raises iff invalid, else exactly
+      the reals between the bounds: soundness and maximality); every spelling of a value (a
+      float's exact decimal expansion, `float.hex`, `p/q`, `inf`) reads back exactly, through `[x]`
+      and `[l, u]`, with an empty side as an infinity; the uncertain form against a
+      `decimal.Decimal` oracle, with soundness (the midpoint and the radius's ends inside) and
+      maximality (a tenth of a unit past an end outside); white space and case inside the brackets
+      do not matter and outside they do; decorations read iff they fit and always refused by the
+      bare constructor; any text over the literal alphabet is one interval under the input rule or
+      raises `UndefinedOperationError`, nothing else. `@example`s: `class.itl:30`-`33`, `:50`,
+      `:120`, `:123`, `:125`, `:127`, `:165`, `:227`, `exceptions.itl:16`, `constructors.itl:17`,
+      `3.56?1`, `-10?u`, `0.0??u`, `2.500?5de-5`, `10?3e380`. plus 32 examples, 55 invalid texts,
+      the fitting and unfitting decorations of `parse_literal`, and the signals' classes. under
+      `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=20` the file ran green in 57 s (2026-09-26, 91
+      items then)
+* evidence, measured 2026-09-26 at part 1 (`tools/itf1788_census.py`): the 101 vectors of the two
+  bare constructors (`libieeep1788_class.itl` 76, `ieee1788-constructors.itl` 22,
+  `ieee1788-exceptions.itl` 3; 33 with a signal) all match with their signal except the 4 rows
+  above; `isNaI` 16, all rows. all ops: 7431 vectors of 86 ops, 6301 interval-valued; 132
+  divergence keys: 66 "no NaI: invalid input raises" (68 vectors: the 52 former "decoration
+  expectations" rows, `isNaI [nai]` and 15 more `isNaI`), 4 "exact parsing decides validity"
+  (PROPOSED), 47 cancellation, 10 degenerate infinities, 5 cut-based relations, 0 decoration
+  expectations; 0 unknown failures; skipped 2111 statements of 25 ops. `tests/itf1788`: 14120
+  passed in 46 s. the gate, in two runs: `tests/itf1788` 14120 and the rest 3471 in 450 s, 17591
+  in all (2026-09-26)
+* sabotage (section 2), 28 breaks by a throwaway harness, each file restored from a copy and
+  byte-compared, results appended as they landed; targets `tests/test_literals.py`, the doctests
+  of `literals.py` and the itf1788 vectors (all of them for an adapter break). red, library: `nums`
+  accepting `lo > hi` 3 (`class.itl:31`); accepting `lo = +inf`/`hi = -inf` 3 (`:32`, `:33`); `nan`
+  as a plain `ValueError` 2 (`:30`); text accepting `lo > hi` 8 (`:136`-`138`, the exact-parsing
+  rows going stale); accepting `[inf, inf]` 4 (`:130`); an infinite point 5 (`:129`,
+  `exceptions.itl:15`); infinite ends closed 15; an omitted radius a full unit 17; `u` and `d`
+  swapped 21; the exponent not scaling the radius 5 (`:102`-`104`, `constructors.itl:34`); the unit
+  from the whole digits 32; the bare constructor accepting a decoration 8 (`:50`, `:52`, `:55`,
+  `:57`, `:60`); `[nai]` read as empty 3 (`:114`); hex fraction digits as 1 bit 8
+  (`constructors.itl:31`); no zero-denominator check 2 (a `ZeroDivisionError` escapes); case
+  sensitive 18; the decimal exponent's sign dropped 6 (`:104`, `constructors.itl:30`). **4 were
+  thin, 1 red each, only `test_decorations` or the white-space property saw them**: the empty set
+  decorated other than `trv`, `com` on an unbounded interval, an unknown decoration accepted,
+  outer white space stripped. no vector can see the first three through the bare constructor, which
+  refuses every decoration; `test_parse_literal_reads_a_fitting_decoration`,
+  `test_parse_literal_refuses_a_decoration_that_does_not_fit` and four outer-space texts in
+  `test_invalid` were added, and the four breaks then turned 3, 6, 3 and 5 red. adapter: the
+  expected signal ignored 30; a raise read as no signal 30; the constructors not routed to the
+  signal rule 33; `b-numsToInterval` out of `SIGNALLED` 16 (`test_signals_are_checked` among
+  them); the `isNaI` rows dropped 15; `isNaI` answered `False` 15; **the warning never read 1,
+  only `test_signalled_reads_both_signals`**: no vector reaches it, since the library never warns,
+  which is why that test was added before the run
+* **part 2 built 2026-09-26 (branch `m13g`): the decorated type, `d-textToInterval`,
+  `d-numsToInterval`, `newDec`, `setDec`, `intervalPart`, `decorationPart`, and the adapter checking
+  their decorations.** still open for M13g after it: **decorations propagated through the core's
+  ops** (1788's decorated arithmetic and functions; the plan's "propagated through every op the
+  core has"), and the adapter checking the decorations of those ops' vectors, which it still drops:
+  1503 vectors of other ops carry a decoration (1022 of built ops: `libieeep1788_elem.itl` 493,
+  `bool` 210, `cancel` 121, `num` 87, `rec_bool` 72, `overlap` 29, `set` 10; 481 of the reverse
+  ops; counted with `tests/itf1788/itl.py::parse_file`, 2026-09-26). built:
+    * `intervals/decorated.py`, a new module above `literals.py`: `::Decoration`, an enum `COM`,
+      `DAC`, `DEF`, `TRV` (values the 1788 names) ordered `TRV < DEF < DAC < COM`, no `ILL`;
+      `::DecoratedInterval(interval, decoration=None)`, immutable and hashable, with the properties
+      `.interval` (1788's `intervalPart`) and `.decoration` (`decorationPart`); `::set_dec`
+      (`setDec`); `::text_to_decorated_interval` (`d-textToInterval`, `literals.py::parse_literal`
+      then the literal's decoration or newDec's) and `::nums_to_decorated_interval`
+      (`d-numsToInterval`). all five exported from `intervals`
+      (`tests/test_applicator.py::test_package_exports_unchanged` lists them)
+    * **a core bug found and fixed**: `MultiInterval.is_finite` and `.finite` raised `OverflowError`
+      on an exact end past the doubles (`MultiInterval(10**400).is_finite`), since `math.isfinite`
+      converts to float; `newDec` of the literal `[1.0E+400]` hit it. they compare with ±inf now,
+      pinned by `tests/test_multi_interval.py::test_finiteness_of_an_exact_end_past_the_doubles`
+    * **choices the plan left open** (conservative, flagged in the decision log, `v2-plan.md`
+      "2026-09-26 revision: M13g part 2"):
+        * the name `DecoratedInterval`, after M8's `DateTimeInterval`/`TimeDeltaInterval` (wrappers
+          of a `MultiInterval` named `...Interval` though multi-piece); `Decoration` is a plain
+          enum, not a `str` one, so `Decoration.COM != 'com'` (`==` does not coerce, as in the core)
+        * newDec is the constructor with no decoration and the two parts are properties, so only
+          `set_dec` and the two constructors are functions (module-level, as `text_to_interval`)
+        * **the constructor is strict, `set_dec` follows 1788**: `DecoratedInterval(x, d)` with a
+          `d` that does not fit (anything but `trv` on ∅, `com` on an unbounded set) raises
+          `UndefinedOperationError`, as the literal `"[1,]_com"` does; `set_dec` demotes as 1788
+          defines `setDec`, with no signal (`libieeep1788_class.itl:283`-`288`: `[empty]_trv`,
+          `_dac`), so its decoration is `min(d, newDec's)`, and raises only for `ill`
+          (`:289`-`291`, which 1788 answers `[nai]` with `UndefinedOperation`). the task suggested
+          raising for every unfitting `setDec`; that would turn six vectors 1788 answers without a
+          signal into rows under a new category, so it was not taken. **an owner question**
+        * a decoration argument is a `Decoration` or its exact lower-case name (`'COM'` raises: a
+          python argument is not 1788 text, whose parser is case-insensitive); `ill` and any other
+          name raise `UndefinedOperationError`; any other type, and a non-`MultiInterval` set, is a
+          `TypeError`
+        * **bounded is decided on the exact set**: com needs a non-empty set with no point at and
+          no piece reaching ±inf, so `[1.0E+400]_com` keeps com where 1788's binary64 hull
+          `[max, inf]` is demoted to dac; an attained infinity (`[1, inf]`) is unbounded; a
+          bounded set of several pieces is com. the three vectors (`libieeep1788_class.itl:165`,
+          `:201`, `:204`) are rows under the existing **"decoration expectations"**
+          (`tests/itf1788/test_itf1788.py::_BOUNDED_EXACTLY`); **an owner question**: or under the
+          PROPOSED "exact parsing decides validity", widened to "exact parsing"
+        * equal iff both parts are; never equal to the bare set; the set keeps its class (an
+          `OutwardMultiInterval` stays one); `str` is the set in our syntax then `_com` (it reads
+          back as 1788 text for a bounded connected closed exact set only); `repr` evaluates back;
+          no `__bool__`, no arithmetic (propagation is the open part)
+    * adapter (`tests/itf1788/test_itf1788.py`): the six ops in `OPS` (`newDec` is
+      `DecoratedInterval`, the parts `.interval`, `.decoration`); `::DECORATED`, `::CONSTRUCTORS`;
+      `::to_ours` keeps a decorated operand's decoration for a decorated op (`decorated=`, via
+      `::_args`); `::_ours` and `::_expected` compare a decorated value as (closed hull, decoration)
+      and a `Decoration` by name; `::_nai_is_a_raise` and `::_RAISED`: a raise is the decorated
+      flavour's `[nai]` with `UndefinedOperation`, so those vectors match and the generated NaI
+      rows skip them; `SIGNALLED` gains `d-textToInterval`, `d-numsToInterval`, `setDec`,
+      `intervalPart`; the outward pass now excludes only `CONSTRUCTORS`, so `newDec`, `setDec` and
+      `intervalPart` run outward (`::_signalled(vector, outward=True)`, and `::_outward_hull`,
+      factored out of `::run_outward`); `::test_decorated_ops_are_checked` pins both. rows: the
+      three `d-` twins of the `_EXACT_INVALID` vectors (`class.itl:229`-`231`, PROPOSED category,
+      pending the owner) and the three `_BOUNDED_EXACTLY`; no new category
+    * tests (`tests/test_decorated.py`, 40 items, 2026-09-26): 12 `@given`: newDec against 1788's
+      definition written out in the test (`::fits`, `::bounded` on the cuts), with maximality
+      (every decoration up to newDec's fits and constructs, none past it does, over sets with
+      several pieces, ±inf as points and unattained ends, and exact ends past the doubles);
+      `set_dec` against 1788's definition, never promoting, the best fitting at or below `d`,
+      `min(d, newDec's)`, idempotent, by member and by name; the order `trv < def < dac < com`;
+      `text_to_decorated_interval` as `text_to_interval` plus a decoration over bracket literals,
+      the uncertain form and any undecorated text over the literal alphabet (fitting kept,
+      unfitting raises, none gives newDec's); `nums_to_decorated_interval` as `nums_to_interval`
+      plus newDec's; round trips (`str` of a bounded connected closed exact set read back as 1788
+      text, `repr` through `eval`, pickle, deepcopy); equality of both parts and hash; the set's
+      class kept (`OutwardMultiInterval`); immutability. `@example`s: `libieeep1788_class.itl:37`,
+      `:38`, `:40`, `:42`-`44`, `:143`, `:144`, `:147`, `:148`, `:152`, `:155`, `:165`, `:167`, `:168`,
+      `:188`, `:198`, `:204`, `:208`-`211`, `:214`, `:216`, `:223`, `:225`, `:227`, `:229`, `:261`,
+      `:263`, `:264`, `:276`, `:279`, `:280`, `:283`-`288`, `ieee1788-constructors.itl:25`, `:52`,
+      `:57`, `:71`, `:73`. plus parametrized: `ill` and other names raise, non-decorations and
+      non-sets are `TypeError`s, the constructor refuses each unfitting pair that `set_dec`
+      demotes. under `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10` the file ran green, 40 items in
+      307 s (2026-09-26, a loaded laptop)
+* evidence, measured 2026-09-26 at part 2 (`tools/itf1788_census.py`, and the adapter imported
+  for the decorated counts): the 156 vectors of the six decorated ops (`d-textToInterval` 91,
+  `setDec` 22, `intervalPart` 15, `newDec` 13, `d-numsToInterval` 9, `decorationPart` 6; 35 with a
+  signal) all match, decoration included, except 11 rows: 5 "no NaI" (`[nai]` as text or operand),
+  3 PROPOSED "exact parsing decides validity", 3 "decoration expectations"; 30 of them match by a
+  raise read as `[nai]` with `UndefinedOperation`. the 50 outward items of `newDec`, `setDec`,
+  `intervalPart` match but for the 2 `intervalPart [nai]` rows. all ops: 7587 vectors of 92 ops,
+  6351 interval-valued; 142 divergence keys: 70 "no NaI: invalid input raises" (73 vectors), 7
+  "exact parsing decides validity" (PROPOSED), 3 decoration expectations, 47 cancellation, 10
+  degenerate infinities, 5 cut-based relations; 0 unknown failures. **skipped: 1955 statements of 19
+  ops, all M13e's reverse ops**; no other op is left for M13's exit. the gate, in two runs:
+  `tests/itf1788` 14329 passed in 141 s; the rest 3516 passed in 953 s (the laptop shared and loaded; the same run took 450 s at part 1), 17845 in all (2026-09-26)
+* sabotage (section 2), 31 breaks by a throwaway harness, each file restored from a copy and
+  byte-compared, results appended as they landed; targets `tests/test_decorated.py`, the doctests
+  of `decorated.py`, `tests/test_multi_interval.py` and the itf1788 vectors of the class,
+  constructor, exception and bool files with the adapter's own tests (962 items then). red,
+  library: newDec com for every non-empty set 28 (`class.itl:38`-`40`, `:147` ...); dac for every
+  one 68; def for ∅ 17 (`:142`, `:264`, `:283`-`285`); set_dec not demoting 18 (`:283`-`288`);
+  set_dec as `max` 35; `ill` read as trv 7 (`:289`-`291`); names case-insensitive 2; a non-str
+  decoration passed through 5; a non-`MultiInterval` accepted 6; def and dac swapped in the order
+  10; the text's decoration dropped 19; nums as def 6; `str` without the decoration 6; the core's
+  `is_finite` through `math.isfinite` again 11 (`class.itl:165`, `:204` among them); the
+  constructor refusing newDec's own decoration too: a collection error (a module-level
+  `DecoratedInterval` in a parametrize), then 112 and 2 errors with
+  `--continue-on-collection-errors`. **seen by one test each**, each the property that decides the
+  clause: `__lt__` answering a str (`test_the_order_is_only_among_decorations`), `==` ignoring the
+  decoration or the set (`test_equality_is_both_parts`), pickle dropping the decoration
+  (`test_repr_pickle_and_copy_give_it_back`), `.finite` through `math.isfinite`
+  (`test_finiteness_of_an_exact_end_past_the_doubles`). **thin, then thickened**: the
+  constructor's fit check dropped, 1 (only newDec's maximality property; `set_dec` demotes and the
+  literal parser checks the fit itself, so no vector reaches it): `test_the_constructor_refuses_what_does_not_fit`
+  added, then 7. adapter: our decoration dropped 129; always com 74; the expected decoration
+  dropped 129; a decorated raise read as empty 33; operand decorations dropped 31; `setDec` out of
+  `SIGNALLED` 7; the decorated ops not run outward 1 (`test_decorated_ops_are_checked`); a
+  `_BOUNDED_EXACTLY` row dropped 1 (`class.itl:204`). **green, then pinned**: `_nai_is_a_raise`
+  always false turned 0 red, since the 30 vectors it matches then become generated NaI rows,
+  which pass as rows: a rule that fails by passing. `test_undefined_operation_is_never_a_row`
+  added (no vector with `signal UndefinedOperation`, 59 of them, is a row), then 1 red. the
+  decorated outward pass run on `MultiInterval` turned 0 red, since `newDec` does no arithmetic:
+  `test_outward_pass_of_a_decorated_op_is_outward` added (a spy on the operand's class), then 1
+* **part 3 built 2026-09-26 (branch `m13g`): decoration propagation through every point function
+  of the core, set operations trv, and the adapter checking the decoration of every decorated
+  vector.** left for M13g after it: the reverse ops' decorated vectors, with M13e (a parallel
+  branch; the hook below). built:
+    * `intervals/decorated.py`: `DecoratedInterval` gains the core's point functions: `+ - * /` and
+      their reflected forms, `%`, `//`, `divmod`, `**` (D11's dispatch: an integral real exponent is
+      pown, `::_pown`, anything else pow, `::_pow`) and `__rpow__`, `-x`, `+x`, `abs`, `reciprocal`,
+      `minimum`, `maximum`, `fma`, `hypot`, `atan2` (`::_atan2`), `log(base)`, `rootn(n)`, the 29
+      other elementary functions (made by `::_function` from `::_FUNCTION_DOMAINS` and `::_POLES`),
+      `floor`, `ceil`, `trunc`, `round(ndigits)`, `round_ties_away(ndigits)`, `sign` (`::_step`), and
+      `math.floor`/`ceil`/`trunc` and `round()`; and the set operations `& | ^ ~`, `difference`,
+      `complement`, `hull`, `closed_hull`, `interior`, `cancel_minus`, `cancel_plus`, all trv
+      (`::_trivial`). each computes the core's set on the intervals (so the set, its class and the
+      core's warnings are the core's) and decorates it with `::_propagate`: the local decoration on
+      the box of the operands' sets is trv unless `defined` (the box inside 1788's domain of the op,
+      a set of reals: `::_REALS`, `::_NON_ZERO`, `::_POSITIVE`, ...), def unless `restricted` (the op
+      restricted to the box is continuous), dac unless `everywhere` (continuous at each point of the
+      box) and every operand is bounded, else com; the result's decoration is `min(local, newDec of
+      the result, each operand's)`. only four kinds of op have jumps inside their domain and compute
+      `restricted` and `everywhere`: the step functions (`::_step`: constant on each piece, and no
+      closed end a jump, `::_JUMPS`), atan2 (the negative x axis), `%` and `//`
+      (`::_quotient_steps`: per pair of pieces, `floor(x / y)` one integer and `x / y` never reaching
+      it). the poles of tan, sec, cot, csc are found exactly (`::_misses_poles`, through
+      `functions.py::_inside_k` and `elementary.py::floor_over_pi`). every decision is made on the
+      exact set (`::_exact`, `rounding.py::exact_cuts`), the core's ops it needs computed quietly
+      (`::_quietly`)
+    * **choices the plan left open** (conservative, flagged in the decision log, `v2-plan.md`
+      "2026-09-26 revision: M13g part 3"):
+        * **a multi-piece box is decided on the set, not on the hull** (the reading the task asked
+          for): continuity on the set is continuity on each piece, since normalized pieces are
+          apart, so `floor` on `[1/4, 1/2] ∪ [5/4, 3/2)` is com and on `[1/4, 1/2] ∪ [1, 3/2)` dac (a
+          closed jump at 1), though it is constant on neither hull; `%` and `//` per pair of pieces
+        * **an attained ±inf is outside every domain**: 1788's functions are functions of reals, so
+          an operand holding ±inf as a point gets trv, even where the core gives it a limit
+          (`exp([0, inf])` trv, `exp([0, inf))` dac); the number `inf` as an operand is such a point
+        * **com needs the result bounded as returned**: exact for exact operands, rounded for float
+          ones. exact operands keep com where 1788's binary64 result overflows: 12 vectors, rows in
+          the plain pass only (below). `OutwardMultiInterval` rounds as 1788 does and matches them;
+          `MultiInterval` rounds `2.0 + max` to nearest (max) and keeps com
+        * continuity at a point is relative to the op's domain: `sqrt([0, 25])`, `acosh([1])` and
+          `pow([0, 1/2], [1/10])` are com, as `libieeep1788_elem.itl` has them; `pown(x, 0)` is
+          defined at 0 (`pown [-5.0,10.0]_com 0 = [1.0,1.0]_com`)
+        * a step function is at best dac on a set holding a jump (`sign([0])` from com is dac, as
+          `ceil [max,max]_com` is in 1788). `%`, `//`, `divmod` and `round(ndigits)`, which 1788
+          lacks, follow the same rule from their definitions: defined where the divisor is not 0,
+          jumps where `x / y` is an integer or at the half grid step
+        * every set operation, `hull` and `interior` included, is trv, as 1788 decorates
+          intersection, convexHull, cancelMinus and cancelPlus. the booleans, numbers and relations
+          are not on the wrapper: `.interval` first, as 1788 defines them on the interval part
+        * an operand is a `DecoratedInterval` or a real number (newDec's point, in the receiver's
+          class); a bare `MultiInterval`, a `bool` or anything else is a `TypeError`, as 1788 has no
+          implicit mix of bare and decorated intervals
+        * the core's warnings reach the caller once, attributed as before; the decoration's own core
+          calls warn nothing
+    * **M13e hook**: 1788 decorates every reverse op's result trv (the 459 decorated results in the
+      four reverse-op files are all `_trv`, counted 2026-09-26), so a decorated reverse op is
+      `decorated.py::_trivial(<the reverse op on the intervals>)`, and in the adapter each reverse
+      op joins `tests/itf1788/test_itf1788.py::PROPAGATED`. until it does,
+      `::test_decorated_vectors_run_decorated` fails after the merge (an interval-valued op with
+      decorated vectors outside `PROPAGATED`): the reminder is mechanical. **but not for a pair**
+      (the M13g review, 2026-09-26): `mulRevToPair`'s 174 decorated vectors expect a pair, which
+      that test does not see and `::_ours`/`::_expected` do not compare with decorations, so the
+      merge also needs a pair-with-decoration case there; `::test_no_decorated_pair_goes_unchecked`
+      fails until it is written
+    * adapter (`tests/itf1788/test_itf1788.py`): `::PROPAGATED` (57 interval-valued ops) and
+      `::BARE_PART` (the other 23 with interval operands: booleans, numbers, overlap); `::is_decorated`;
+      `::_args` builds a decorated vector's operands as `DecoratedInterval`s (so each decoration must
+      fit its set) and gives a `BARE_PART` op their interval parts; `::run`, `::run_outward` and
+      `::run_float` all go through `::_args` and `::_ours`, and `::_expected` keeps the expected
+      decoration for `PROPAGATED`. `::PLAIN_ONLY`: rows on a decoration alone, for the plain pass
+      only, keyed on the statement with its decorations (`exp2 [1024.0,1024.0] = [max,infinity]`
+      is also the key of its bare twin, which matches), read by `::row(vector, outward)` in `::check`;
+      `::test_divergence_rows` checks each is one interval-valued vector under no other row, so its
+      outward item must match. `::test_decorated_vectors_run_decorated` pins the wiring: every
+      decorated interval-valued op in `PROPAGATED`, none in `BARE_PART`, and a decoration on both
+      sides of a propagated result in both passes (an adapter dropping it on both sides passes every
+      vector). `tools/itf1788_census.py` counts the decorated vectors and the plain-only rows
+    * tests (`tests/test_propagation.py`, 115 items, 67 s on the loaded laptop, 2026-09-26): an
+      oracle written out from 1788's definitions and decided by brute force (operands on a quarter
+      grid, so the domains' ends and the jumps are grid points, and the eighth grid plus points just
+      inside each end decides domain, constancy and jumps exactly; the poles against a 32-digit pi;
+      atan2's cut and `%`'s jumps from their definitions, `x / y` from the corners). `@given`: every
+      unary op (40) and binary op (11) against the oracle, over a mixed-op strategy with the itf1788
+      examples and per op (parametrized, 40 examples each); pown, rootn, fma, `round(ndigits)` on a
+      scaled grid; float operands, both classes and doubles up to ±max, decorate as the exact values
+      of the same doubles but for newDec of the rounded result; the min law (`f(set_dec(x, d))` is
+      `min(d, f(newDec x))`); antitone in the box (a non-empty sub-box never decorates worse). plus
+      set operations trv, the class kept, numbers as points and a bare set refused, divmod, warnings
+      once, the methods mirroring the core, `round(ndigits)` examples. `@example`s:
+      `libieeep1788_elem.itl:110`, `:111`, `:113`, `:306`, `:676`-`678`, `:708`, `:709`, `:755`,
+      `:756`, `:1403`, `:1405`, `:1588`, `:1589`, `:1596`-`1598`, `:3167`, `:3236`, `:3506`, `:3508`,
+      `:3527`, `:3554`, `:4086`, `:4087`, `:4114`, `:4141`, `:4145`, `:4167`, `:4200`, `:4203`,
+      `:4232`, `:4241`, `:4269`, `:4299`, `:4301`, `:4353`, the atan2 cut cases, the pow domain cases,
+      `libieeep1788_set.itl:33`; and, added after the sabotage runs (below), the ends of rootn's and
+      log1p's domains, `1.0 % 0.1` in floats and `x ** 2.0 == x ** 2`. the first strategy gave trv in about 95% of examples; rebalanced
+      (mostly newDec's decoration, infinities mostly open, narrow pieces, ends at 0, ±1/2, ±1 often),
+      per 200 examples of the earlier rebalance floor gave trv 99, def 71, dac 8, com 22 and atan2
+      135, 20, 28, 17 (2026-09-26). under `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10` the file ran
+      green, 111 items in 304 s (2026-09-26, before the 4 `round(ndigits)` examples)
+    * **a test-oracle bug found by the gate run** (not the library): M13d's
+      `tests/test_functions.py::_hypot_holds` required an irrational value's float bracket inside
+      the result, which fails next to an exact end: `hypot((-inf, -2/3], [0, 1/2))` is `[2/3, inf)`,
+      right, and `hypot(-2/3, 2**-27)` lies in it though its lower double is below 2/3. it now
+      decides the bracket exactly on the squares, pinned by
+      `tests/test_functions.py::test_the_hypot_oracle_next_to_an_exact_end`; flipping that
+      comparison turned 2 red (restored, `cmp` ok)
+* evidence, measured 2026-09-26 at part 3 (`tools/itf1788_census.py`, and the adapter imported): of
+  the 1022 decorated vectors of the core's ops (`libieeep1788_elem.itl` 493, `bool` 210, `cancel`
+  121, `num` 87, `rec_bool` 72, `overlap` 29, `set` 10), 624 are of 44 propagating ops and now
+  checked with their decoration in both passes: 560 match in the plain pass and 572 outward; 52
+  keep the rows their bare part already had (47 cancellation, 4 no NaI, 1 degenerate infinity,
+  `atanh [1.0,1.0]_def`); **12 are new rows on the decoration alone, plain pass only**, under the
+  existing **decoration expectations** (`::_OVERFLOWS_ONLY_ROUNDED`): the exact result is bounded,
+  past the doubles, so com; 1788's binary64 result overflows and is dac. they are
+  `libieeep1788_elem.itl:111`, `:112` (add), `:161`, `:162` (sub), `:305`, `:306` (mul), `:676`
+  (div), `:731` (sqr), `:1404` (fma), `:1591`, `:1593` (pown), `:3167` (exp2, `2 ** 1024`); **an
+  owner question**, as part 2's `_BOUNDED_EXACTLY`: this category, or one for exact values past the
+  doubles. no decoration differs because of the multi-interval set semantics. the other 398 (of
+  `BARE_PART` ops) take the interval part: 358 match, 40 keep their rows (38 no NaI, 2 cut-based
+  relations). all ops: 7587 vectors of 92 ops, 6351 interval-valued; 142 keys (unchanged) plus the
+  12 plain-only rows; 0 unknown failures; skipped 1955 statements of 19 ops, all M13e's.
+  the gate, in two runs: `tests/itf1788` 14330 passed in 120 s and the rest 3636 passed in 863 s (a
+  shared, loaded laptop), 17966 in all (2026-09-26); after the sabotage runs' examples, 14330 in
+  35 s and 3636 in 411 s (2026-09-26)
+* sabotage (section 2), 45 breaks by a throwaway harness, each file restored from a copy and
+  byte-compared (all `cmp` ok), results appended as they landed; targets `tests/test_propagation.py`,
+  `tests/test_decorated.py`, the doctests of `decorated.py` and the itf1788 vectors of the seven files
+  with decorated vectors plus the adapter's own tests (2026-09-26). a first run stopped at break 31:
+  under the load, hypothesis's 200 ms deadline failed unrelated atan2 and div properties, so every
+  `@settings` in the file now has `deadline=None` and the run was repeated clean. red, library:
+  `_propagate` without the operands' decorations 273 (every per-op property, `elem.itl:4352`,
+  `:4353` ...); undefined read as def 329; restricted continuity ignored 73 (`elem.itl:4271`
+  ...); continuity at every point ignored 23 (`:4211`, the `round(ndigits)`
+  examples); the reals closed at ±inf 26; div defined at 0 5 (`:677` both passes); pow at `0 ** y`,
+  `y <= 0` 56; pow on negative bases 5 (`:3081`, `:3092`); atan2 at the origin 118; atan2's cut from
+  below missed 7 (`:3816`, `:3900`, `:3928`); atan2's cut ignored for com 4 (`:3942`, the atan2
+  doctest); poles inside a piece ignored 25 (`:3501`, `:3509` ...); tan's poles at `k pi` 18;
+  constancy of a step not checked 63; a closed jump not checked 16 (`:4167`, `:4211`); round's jumps
+  at the integers 5 (`:4269`); `floor(x / y)` constancy not checked 4; the `%`/`//` domain 3; pown
+  `n < 0` at 0 6 (`:1596`, `:1598`); acosh without 1 8 (`:4084`, `:4086`, `:4088`); reciprocal at 0 10
+  (`:709`-`:712`); set operations newDec's instead of trv 193 (`test_set_operations_are_trv`, the
+  decorated `cancel.itl` vectors); the result cap dropped with the strict constructor kept 36 (it raises: `:3167`,
+  atanh, cot, coth, csc properties). **seen by examples only** (the random properties missed them in
+  the run, so each is pinned by an `@example` or a direct test, several added after the first
+  runs): a closed end at the pole 0 (cot, csc) 2; trunc jumping at 0 2; sign never jumping 1;
+  `round(ndigits)`'s grid ignored 2 (0 before `test_round_to_ndigits_examples`, whose first example
+  had been wrong); `x / y` reaching the integer not checked 2 (`test_divmod_is_both_decorated`; the
+  first `%` example, meant for it, was def); an even root below 0 and an odd negative root at 0,
+  1 each (0 and 1 before two rootn examples); log1p at -1 1 (0 before its example); decisions on the
+  float set instead of the exact one 1 (0 before the example `1.0 % 0.1`, whose float ratio rounds to
+  10); `**` of an integral float as pow 1 (0 before `x ** 2.0 == x ** 2`); a bare `MultiInterval`
+  accepted 1, the core's calls not quieted 1, `__rsub__` not reflected 1. **green, as expected**: the
+  cap replaced by `set_dec` 0, which demotes to newDec's the same way (equivalent code; the real break
+  is the one above, 36); the operands' boundedness ignored for com 0, unreachable, since an unbounded
+  operand is never com (the strict constructor), kept as 1788 states the rule. adapter: decorated
+  vectors not detected 1132; the expected decoration dropped 1132; `BARE_PART` ops given the
+  decorated operands 467; `PLAIN_ONLY` read in the outward pass 12, dropped 12. **both sides
+  dropped: 13**, the 12 plain-only rows going stale and `::test_decorated_vectors_run_decorated`;
+  `floor` out of `PROPAGATED`: 1, that test alone (every floor vector matches on the interval part).
+  those two first ran green: the harness's `-k 'not vector'` had excluded the pin test by its name,
+  so they were rerun with it
+* **done 2026-09-26 (branch `m13g`; parts 1 to 3 above, then a close-out).** M13g's spec is met,
+  but for the owner's decisions below (the PROPOSED category's 7 rows; the constructors' outward
+  pass, from the review):
+  every statement of its ops is a vector that matches or is a row, every decorated vector's
+  decoration is checked, and nothing of M13g is skipped. built, over the three parts:
+    * the signals, `intervals/errors.py::UndefinedOperationError` (a `ValueError`) and
+      `::PossiblyUndefinedOperationWarning` (an `IntervalWarning`); 1788's literals,
+      `intervals/literals.py::parse_literal`, and the bare constructors `::text_to_interval`,
+      `::nums_to_interval` (part 1)
+    * the decorated type, `intervals/decorated.py::Decoration` and `::DecoratedInterval` (newDec,
+      `.interval`, `.decoration`), `::set_dec`, `::text_to_decorated_interval`,
+      `::nums_to_decorated_interval` (part 2); decoration propagation through every point function of
+      the core and trv for its set operations, `::_propagate`, `::_trivial` (part 3). the core
+      `MultiInterval` stays undecorated (D16), with one fix, `is_finite`/`finite` on an exact end past
+      the doubles (part 2)
+    * the close-out: `tests/itf1788/test_itf1788.py::test_only_the_reverse_ops_are_skipped` (with
+      `::_REVERSE_OPS`, the 19 reverse ops' names); the stale comment above `::DIVERGENCES` now
+      names M13g's rows; README (a doctest-checked example of the constructors, the raise and
+      propagation; a signals bullet; the `ieee 1788` counts re-measured); `v2-plan.md` "ieee 1788"
+      (D16 as current design, the counts at M13g, the signal rule's list), "package layout",
+      "testing", "later", and "2026-09-26 revision: M13g, decorations, constructors and signals,
+      done"
+* **choices the plan left open** (conservative; each part's own are in its record above and in its
+  `v2-plan.md` revision entry):
+    * the close-out pin checks that the skipped ops are a **subset** of the 19 reverse ops, named in
+      the test rather than derived, so it holds before and after M13e's merge (which empties
+      `SKIPPED`); M13's exit, `SKIPPED` empty and asserted, stays M13-exit's to add
+    * the README and `v2-plan.md` counts are re-measured on this branch (M13e's merge changes them
+      again, and they are to be re-measured then with `tools/itf1788_census.py`); the M13 heading's
+      status line is left to the session that merges
+    * three owner questions stay open, each built as the conservative reading: the PROPOSED category
+      "exact parsing decides validity" (7 rows); the 15 rows where an exact value past the doubles
+      keeps com (`::_BOUNDED_EXACTLY` 3, `::PLAIN_ONLY` 12) under "decoration expectations" or a
+      category of their own; `set_dec` demoting as 1788's `setDec` does rather than raising
+* M14: no new op landed in the close-out, so no new property; the M13g ops have theirs from their
+  parts (`tests/test_literals.py`, `tests/test_decorated.py`, `tests/test_propagation.py`)
+* tests, measured 2026-09-26: `tests/test_literals.py` 122 passed in 1.1 s,
+  `tests/test_decorated.py` 40 in 4.7 s, `tests/test_propagation.py` 115 in 15.1 s; `tests/itf1788`
+  14331 passed in 35.1 s (the one new pin added to part 3's 14330)
+* evidence, measured 2026-09-26 at the close-out (`tools/itf1788_census.py`, and the adapter
+  imported): the 273 statements of M13g's ops are all vectors: `b-textToInterval` and
+  `b-numsToInterval` 101, the six decorated ops 156, `isNaI` 16. every decorated vector's
+  decoration is checked: 1040 vectors carry one, 624 of 44 propagating ops (with it, both passes),
+  398 of `BARE_PART` ops (each operand built as a `DecoratedInterval`, so its decoration must fit,
+  then its interval part), 18 of the decorated ops, whose 156 vectors are all compared with their
+  decoration or raise. all ops: 7587 vectors of 92 ops, 6351 interval-valued, 167 numeric run twice
+  more, 14272 vector test items; 142 keys (70 no NaI with 73 vectors, 47 cancellation, 10 degenerate
+  infinities, 7 exact parsing PROPOSED, 5 cut-based relations, 3 decoration expectations) plus 12
+  plain-only rows; 0 unknown failures. skipped: 1955 statements of 19 ops, all M13e's reverse ops.
+  the gate, in two runs: `tests/itf1788` 14331 passed in 35 s; the rest 3636 passed in 459 s;
+  17967 in all (2026-09-26)
+* sabotage (section 2) of the close-out, each file restored from a copy and `cmp`-checked: `isNaI`
+  dropped from `OPS` 1 red, **only the new pin**: before it, its 16 statements would have become
+  silent skips with every test green (`test_parser_drops_nothing` only checks that an op in `OPS`
+  is not skipped), which is why the pin was added; `setDec` dropped from `OPS` 2
+  (`::test_decorated_ops_are_checked` and the pin); the README's `_trv` example expected as `_dac`
+  1 (the README doctest, so the example is collected). the parts' own: 28, 31 and 45 breaks, above
+* review (2026-09-26, three read-only reviewers over `4956c86`, lenses math, sabotage and spec; each
+  finding reproduced on this branch before any change): **no wrong result in the library** (the math
+  lens's own brute-force oracle over 39 unary and 11 binary ops, pown, rootn, fma and 75000 float
+  calls: 0 mismatches in set, decoration or warning). found and fixed:
+    * **the wrapper lacked some of the core's set operations** (math and spec lenses): the named
+      n-ary `union`, `intersection`, `symmetric_difference` were missing, `difference` took one
+      operand, and `positive`, `negative`, `finite`, `expand` were missing. now on
+      `decorated.py::DecoratedInterval`, n-ary as the core's and trv as every set operation; so is
+      the restriction `x[a:b]` (`__getitem__`), with `__iter__ = None` so that the wrapper is not
+      taken for a sequence. pinned by 15 new ops in `tests/test_propagation.py::test_set_operations_are_trv`
+      (60 items) and by `::test_every_public_name_of_the_core_is_on_the_wrapper_or_asked_of_the_interval`:
+      every public name of `MultiInterval` is on the wrapper or in `::NOT_ON_THE_WRAPPER` (the
+      booleans, numbers, relations and structure, asked of `.interval`), so a name the core gains
+      goes red until it is placed. **a choice the plan left open**: `expand`, which 1788 lacks, is
+      trv as a set operation (the weakest claim), not propagated as a point function
+    * **the literal regex backtracked in cubic time on invalid text** (math lens): a digit run
+      matched `[0-9]+\.?[0-9]*` in as many ways as it has digits, and adjacent `\s*` split white
+      space every way; measured 2026-09-26, two runs of 400 digits 5.4 s, two of 400 spaces 0.8 s,
+      8x per doubling. `literals.py::_DECIMAL`, `::_HEX` and the uncertain form's mantissa now read
+      `[0-9]+(?:\.[0-9]*)?` (the same language, one split) and `::_LITERAL`'s white space is
+      possessive (`\s*+`, python >= 3.11, as `pyproject.toml` requires): those texts now take under
+      1 ms. pinned by `tests/test_literals.py::test_invalid_text_is_refused_in_linear_time` (8 long
+      invalid texts, under 1 s together; about 10 ms, 2026-09-26)
+    * the strict constructor's message cited both rules; it now gives the one that applies
+      (`tests/test_decorated.py::test_the_constructor_refuses_what_does_not_fit` matches it)
+    * docs: README's "142 listed divergences" counted keys, and now says the 195 vectors under the
+      142 keys; "every sub-task" below now names D16's category as approved too; the done line above
+      is qualified by the owner's open decisions
+    * **unpinned clauses, each now pinned** (the sabotage lens found each at 0 red under
+      `HYPOTHESIS_PROFILE=ci`): the reflected `/ % // **` (`::test_reflected_operators_reflect`,
+      values, not only the class); the attained-inf checks on pow's exponent, div's dividend, fma's
+      addend and unary plus, fma's addend decoration, rootn's even negative domain on
+      `{[-1, -1/2], [1, 4]}`, asin's lower end and acoth's two ends (`@example`s on the per-op
+      properties); the step functions deciding constancy on the exact set
+      (`::test_a_step_is_decided_on_the_exact_set`: `OutwardMultiInterval(0.12, 0.13)` and `(0.15)`,
+      `round(1)` and `round_ties_away(1)`, com); `re.ASCII` (7 texts in `test_invalid`: white space
+      ` `, `\xa0`, `　`, `\x1c`, and `ı`, which folds to `i` without it); the adapter's
+      `::_signalled` reading only `UndefinedOperationError` as the signal
+      (`tests/itf1788/test_itf1788.py::test_signalled_reads_only_undefined_operation`)
+    * **the M13e hook missed pairs** (sabotage lens): see "M13e hook" above;
+      `tests/itf1788/test_itf1788.py::test_no_decorated_pair_goes_unchecked` fails once an op with a
+      decorated pair-valued vector joins `OPS` (its predicate over every statement of the 19 files,
+      `itl.py::parse_file`, finds `mulRevToPair` 174, 2026-09-26)
+* sabotage of the review's fixes (section 2), a throwaway harness, each file restored from a copy and
+  `cmp`-checked (all ok); targets `tests/test_propagation.py`, `tests/test_decorated.py`,
+  `tests/test_literals.py`, the doctests of `decorated.py` and `literals.py`, the adapter's own tests;
+  `HYPOTHESIS_PROFILE=ci`, 2026-09-26. every mutation the sabotage lens reported green is now red:
+  `__rtruediv__`, `__rmod__`, `__rfloordiv__`, `__rpow__` not reflected 1 each; pow's exponent
+  check 1, div's dividend check 1, fma's addend decoration 1 and its inf check 1, unary plus 1; the
+  step on the float set 4; rootn's `_POSITIVE` as `_NON_ZERO` 1; asin widened to -2 1; acoth closed
+  at 1 1, at -1 1; the lax adapter (`except ValueError`) 1; `re.ASCII` dropped 6. the new clauses:
+  newDec instead of trv for `union` 12, `symmetric_difference` 8, `positive` 4, `negative` 1,
+  `finite` 3, `expand` 8, the restriction 8; `intersection` and `difference` on their first operand
+  only 4 and 3 (`intersection` first ran green: its case `a.intersection(b, a)` equals `a ∩ b`, so
+  it became `a.intersection(a, b)`); `__iter__` not refused 1; the generic message 6; the white space
+  not possessive 1, the decimal, hex or mantissa run ambiguous again 1 each, the whole regex of
+  `4956c86` 1 (each `test_invalid_text_is_refused_in_linear_time`). **equivalent, so not kept**: an
+  atomic group around a number and possessive radius, exponent and decoration runs, 0 red: with one
+  split per run nothing is left to retry
+* **owner questions** from the review (the orchestrator carries them to `HANDOFF.md`, which this
+  branch does not edit): (1) the PROPOSED category "exact parsing decides validity" (7 rows), in
+  `REASONS` unapproved; (2) **the constructors' 201 interval-valued vectors run in the plain pass
+  only** (spec lens: `b-textToInterval` 91, `d-textToInterval` 91, `b-numsToInterval` 10,
+  `d-numsToInterval` 9), where the rule says both passes. they take text or numbers, not an interval,
+  and return the exact set, so an outward item would repeat the plain call; a class argument (an
+  `OutwardMultiInterval` result, 1788's binary64 hull) would give the pass something to check, and
+  is new API. conservative, kept as built; (3) and (4) as in the close-out: the 15 rows where an
+  exact value past the doubles keeps com, and `set_dec` demoting
+* not a defect: a trial merge with `m13e` (spec lens) puts `m13e`'s `PAIRS` branch of `run_outward`
+  inside `::_outward_hull`, which has no `vector`; the merger moves it back by hand. the other
+  conflicts are insertion points
+* tests and evidence, measured 2026-09-26 after the review: `tests/test_literals.py` 130 items,
+  `tests/test_decorated.py` 40, `tests/test_propagation.py` 181; `tools/itf1788_census.py` unchanged
+  (7587 vectors of 92 ops, 6351 interval-valued; 142 keys with 195 vectors plus 12 plain-only rows;
+  1040 decorated vectors; skipped 1955 statements of 19 ops, all reverse ops). the gate, in two
+  runs: `tests/itf1788` 14333 passed in 50 s; the rest 3710 passed in 529 s (a shared, loaded laptop); 18043 in all
 
 **M13h reductions (done 2026-09-26)**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`,
 `dot_nearest`, 1 each as counted 2026-09-25 by the old parser, which saw only the first statement of
@@ -1615,7 +2141,7 @@ each of the file's 4 testcases; M13a's parser reads the 11 it dropped (2026-09-2
 
 **every sub-task**
 * its ops' vectors pass in both passes (plain and, if interval-valued, outward) or are divergence
-  rows with a reason from `REASONS`; a new category needs an owner decision (D13's is the only one
+  rows with a reason from `REASONS`; a new category needs an owner decision (D13's and D16's are the only ones
   approved so far) and a line in `v2-plan.md` "ieee 1788"
 * its ops get the M14 properties the day they land, sabotage per section 2
 * the D rows it implements move into `v2-plan.md` "current design", the README's feature list and

@@ -18,12 +18,25 @@ from tests.itf1788 import test_itf1788 as t  # noqa: E402
 print('files', len(t.FILES))
 print('vectors', len(t.VECTORS), 'interval-valued', len(t.INTERVAL_VECTORS), 'test items', len(t.VECTORS) + len(t.INTERVAL_VECTORS))
 print('ops in OPS', len(t.OPS), 'ops with vectors', len({v.op for v in t.VECTORS}))
-cats = Counter(r.split(':')[0] for r in t.DIVERGENCES.values())
+
+
+def category(reason):
+    """the REASONS entry a row's reason starts with (a category may hold a colon: 'no NaI: ...')"""
+    return next(c for c in t.REASONS if reason.startswith(c))
+
+
+cats = Counter(category(r) for r in t.DIVERGENCES.values())
 print('rows (keys) by category', dict(cats), 'total', len(t.DIVERGENCES), 'listed', len(t.LISTED))
-hit = Counter(t.DIVERGENCES[t.key(v)].split(':')[0] for v in t.VECTORS if t.key(v) in t.DIVERGENCES)
+hit = Counter(category(t.DIVERGENCES[t.key(v)]) for v in t.VECTORS if t.key(v) in t.DIVERGENCES)
 print('vectors under a row by category', dict(hit))
-hito = Counter(t.DIVERGENCES[t.key(v)].split(':')[0] for v in t.INTERVAL_VECTORS if t.key(v) in t.DIVERGENCES)
+hito = Counter(category(t.DIVERGENCES[t.key(v)]) for v in t.INTERVAL_VECTORS if t.key(v) in t.DIVERGENCES)
 print('interval vectors under a row by category', dict(hito))
+# M13g part 3: the decorated vectors, and the rows on a decoration alone (plain pass only)
+print('plain-only rows by category', dict(Counter(category(r) for r in t.PLAIN_ONLY.values())))
+dec = [v for v in t.VECTORS if t.is_decorated(v)]
+print('decorated vectors', len(dec), 'propagated', sum(v.op in t.PROPAGATED for v in dec),
+      'bare part', sum(v.op in t.BARE_PART for v in dec), 'decorated ops', sum(v.op in t.DECORATED for v in dec),
+      'propagated ops with one', len({v.op for v in dec if v.op in t.PROPAGATED}))
 per_file = Counter(v.source.split(':')[0] for v in t.VECTORS)
 print('vectors per file', dict(per_file))
 sk = Counter()

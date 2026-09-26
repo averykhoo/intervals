@@ -27,11 +27,20 @@ and lists them). the adapter's rules:
 * **reduction rule**: the reductions (`sum_nearest` and the rest) round their own value to nearest,
   so ours must already be that double and is compared as it is; a `ValueError` from one (a `nan`
   operand, `inf + -inf`, `0 * inf`) is 1788's `NaN`
-* **decorations**: dropped from inputs and expected values; only the bare interval is compared.
-  decorations are not in the core (v2-plan.md "ieee 1788"), so no vector checks one, and a
-  divergence row is keyed on the statement with its decorations stripped (the fork has many
-  statements twice, `atanh [1.0,1.0]_def = [empty]_trv` beside `atanh [1.0,1.0] = [empty]`).
-  NaI has no counterpart, so a vector with a `[nai]` in it is a row until M13g, generated below
+* **decorations** (M13g part 3): decorations are not in the core (v2-plan.md "ieee 1788") but in
+  `DecoratedInterval`, and every decorated vector runs through it: an op in `PROPAGATED` (arithmetic,
+  functions, set operations) gets `DecoratedInterval` operands and its result is compared as (closed
+  hull, decoration), so 1788's propagation is checked in both passes; any other op (`BARE_PART`: the
+  booleans, numbers and overlap) gets each operand's interval part, as 1788 defines them, after the
+  operand was built with its decoration. a divergence row is keyed on the statement with its
+  decorations stripped (the fork has many statements twice, `atanh [1.0,1.0]_def = [empty]_trv` beside
+  `atanh [1.0,1.0] = [empty]`), except a row on a decoration alone (`PLAIN_ONLY`), keyed with them.
+  there is no NaI (D16, owner 2026-09-26), so a vector with a `[nai]` in it, and every `isNaI`, is
+  a row under "no NaI: invalid input raises", generated below
+* **decorated ops** (M13g, `DECORATED`: the `d-` constructors, `newDec`, `setDec`, `intervalPart`,
+  `decorationPart`): a decorated operand is a `DecoratedInterval`, and a decorated result is compared
+  as (closed hull, decoration) with 1788's, so the decoration is checked. a raised `UndefinedOperationError` is the decorated flavour's `[nai]` with `signal
+  UndefinedOperation`, so those vectors match and are no row
 * **cancellation** (`cancelMinus`, `cancelPlus`): ours is the Minkowski difference (D13), a real set
   wherever 1788 answers entire as "no answer"; those vectors are rows under "cancellation as a
   Minkowski difference". the others match in both passes, the outward one included: like 1788, an
@@ -41,7 +50,13 @@ and lists them). the adapter's rules:
 * **pair rule** (`mulRevToPair`, M13e): 1788's two intervals are one multi-interval here, `mul_rev`;
   each of our pieces, closed (rounded outward in the first pass), is compared in order with the
   pair's non-empty intervals, piece by piece. the pairs run in the outward pass too
-* a `signal` clause is kept on the vector and not checked yet (M13g). `NaN` equals `NaN` here
+* **signals** (M13g): for an op in `SIGNALLED` (the constructors, `setDec`, `intervalPart`), ours and 1788's are compared as
+  (value, signal) pairs: an `UndefinedOperationError` raised is 1788's bare answer to invalid input,
+  `[empty]` with `signal UndefinedOperation`, and a `PossiblyUndefinedOperationWarning` emitted is
+  `signal PossiblyUndefinedOperation`. a constructor has no interval operand to give as floats, so it
+  is not in the outward pass (`CONSTRUCTORS`); `setDec` and `intervalPart` are, signals and all.
+  `test_signals_are_checked` keeps every op with a signal in `SIGNALLED`.
+  `NaN` equals `NaN` here
 * the library's warnings are ignored inside a vector (`1/[0]` is `∅` + `IndeterminateResultWarning`,
   and 1788's answer is also empty); they are pinned by their own tests elsewhere
 
@@ -60,6 +75,8 @@ from pathlib import Path
 import pytest
 
 from intervals import EMPTY
+from intervals import DecoratedInterval
+from intervals import Decoration
 from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import REALS
@@ -68,16 +85,23 @@ from intervals import cos_rev
 from intervals import cosh_rev
 from intervals import dot
 from intervals import mul_rev
+from intervals import nums_to_decorated_interval
+from intervals import nums_to_interval
 from intervals import pow_rev1
 from intervals import pow_rev2
 from intervals import pown_rev
+from intervals import set_dec
 from intervals import sin_rev
 from intervals import sqr_rev
 from intervals import sum_
 from intervals import sum_abs
 from intervals import sum_sqr
 from intervals import tan_rev
+from intervals import text_to_decorated_interval
+from intervals import text_to_interval
 from intervals.errors import IntervalWarning
+from intervals.errors import PossiblyUndefinedOperationWarning
+from intervals.errors import UndefinedOperationError
 from intervals.kernel import pieces
 from intervals.relations import Allen
 from tests.itf1788.itl import Interval
@@ -199,6 +223,17 @@ OPS = {
     # every 1788 vector gives the domain, so none is the call with it omitted
     'powRev1': pow_rev1,
     'powRev2': pow_rev2,
+    # M13g: 1788's bare constructors (SIGNALLED), and isNaI, which has no counterpart: no NaI (D16)
+    'b-textToInterval': lambda text: text_to_interval(text.value),
+    'b-numsToInterval': nums_to_interval,
+    'isNaI': lambda a: _no_nai(),
+    # M13g: the decorated type (DECORATED); newDec is its constructor, the two parts its properties
+    'd-textToInterval': lambda text: text_to_decorated_interval(text.value),
+    'd-numsToInterval': nums_to_decorated_interval,
+    'newDec': DecoratedInterval,
+    'setDec': set_dec,
+    'intervalPart': lambda d: d.interval,
+    'decorationPart': lambda d: d.decoration,
 }
 REDUCTIONS = frozenset({'sum_nearest', 'sum_abs_nearest', 'sum_sqr_nearest', 'dot_nearest'})
 NUMERIC = frozenset({'mid', 'rad', 'wid', 'mag', 'mig', 'midRad'})
@@ -224,14 +259,25 @@ REASONS = ('degenerate infinities', 'domain-clipped functions', 'decoration expe
            # PROPOSED at M13e (2026-09-26), not yet approved by the owner: a vector whose expected end
            # is not the tightest double enclosure, where ours is (checked against arb in
            # tests/test_reverse.py::test_pown_rev_is_tighter_than_the_vector)
-           'tighter than the vector')
+           'tighter than the vector',
+           # M13g: approved with D16 (owner 2026-09-26)
+           'no NaI: invalid input raises',
+           # M13g, PROPOSED, not approved: needs the owner (v2-implementation-plan.md M13g)
+           'exact parsing decides validity')
 
 _LOG = ('degenerate infinities: the operand meets the domain [0, inf] only at 0, and log(0) is '
         '-inf here (the limit from the one side the domain has); 1788 drops 0 from the domain')
 _ATANH = ('degenerate infinities: the operand meets the domain [-1, 1] only at an end, and atanh(±1) '
           'is ±inf here (the limit from inside); 1788 drops ±1 from the domain')
-_NAI = ('decoration expectations: NaI is not a set, so the undecorated core has no counterpart for it '
-        '(D16: it arrives with the decorated wrapper type, M13g)')
+_NAI = ('no NaI: invalid input raises: NaI is not a set, and the package has none (D16, owner '
+        '2026-09-26): a 1788 constructor given invalid input raises, so nothing makes a NaI')
+_NO_IS_NAI = ('no NaI: invalid input raises: with no NaI (D16) there is nothing for isNaI to ask, '
+              'so it has no counterpart')
+_EXACT_VALID = ('exact parsing decides validity: the literal is valid as rationals, so ours returns it '
+                'and emits nothing; 1788 lets a parser that rounds first signal PossiblyUndefinedOperation')
+_EXACT_INVALID = ('exact parsing decides validity: the lower bound exceeds the upper as rationals, so '
+                  'ours raises UndefinedOperationError; 1788 lets a parser that rounds first return the '
+                  'hull of the rounded bounds with PossiblyUndefinedOperation')
 _MEETS = ('cut-based relations: two closed intervals that share an end share that point, so they '
           'overlap (relations.Allen, on cuts); 1788 calls touching closed intervals meets or metBy')
 _CANCEL = ('cancellation as a Minkowski difference: 1788 answers entire as "no answer" (A narrower '
@@ -242,8 +288,10 @@ _CANCEL_EMPTY = ('cancellation as a Minkowski difference: with B = ∅ every X h
 
 # (statement text, whitespace collapsed and decorations stripped) -> reason. as of 2026-09-26 every
 # listed row is a degenerate infinity of a function at the end of its domain, a touching pair that
-# shares a point, or a cancellation where 1788 has no answer (or ∅ for ∅ and ∅); the NaI rows are
-# generated once the vectors are loaded
+# shares a point, or a cancellation where 1788 has no answer (or ∅ for ∅ and ∅); M13g adds, below,
+# the literals decided exactly (PossiblyUndefinedOperation, PROPOSED) and bounded exactly (com). the
+# NaI and isNaI rows are generated once the vectors are loaded, and PLAIN_ONLY holds the rows on a
+# decoration alone
 DIVERGENCES = {
     'log [-infinity,0.0] = [empty]': _LOG,
     'log [-infinity,-0.0] = [empty]': _LOG,
@@ -390,6 +438,32 @@ _POW_REV_LOOSE_ROWS = (
     'powRev2 [0.25, 1.0] [2.0, infinity] [entire] = [-infinity, 0.0]',
 )
 DIVERGENCES.update({text: _POW_REV_LOOSE for text in _POW_REV_LOOSE_ROWS})
+# M13g: the vectors expecting PossiblyUndefinedOperation, decided exactly here (PROPOSED category)
+DIVERGENCES.update({
+    'b-textToInterval "[1.0000000000000001, 1.0000000000000002]" = [1.0, 0x1.0000000000001p+0] '
+    'signal PossiblyUndefinedOperation': _EXACT_VALID,
+    'b-textToInterval "[1.0000000000000002,1.0000000000000001]" = [1.0,0x1.0000000000001p+0] '
+    'signal PossiblyUndefinedOperation': _EXACT_INVALID,
+    'b-textToInterval "[10000000000000001/10000000000000000,10000000000000002/10000000000000001]" = '
+    '[1.0,0x1.0000000000001p+0] signal PossiblyUndefinedOperation': _EXACT_INVALID,
+    'b-textToInterval "[0x1.00000000000002p0,0x1.00000000000001p0]" = [1.0,0x1.0000000000001p+0] '
+    'signal PossiblyUndefinedOperation': _EXACT_INVALID,
+})
+# M13g, the decorated type: the d- twins of the three above, and a com the exact value keeps
+_BOUNDED_EXACTLY = ('decoration expectations: the literal is bounded as a rational, so com fits it '
+                    'here; 1788 decorates its binary64 hull, which overflows to [max, inf] or entire, '
+                    'and demotes com to dac')
+DIVERGENCES.update({
+    'd-textToInterval "[1.0000000000000002,1.0000000000000001]" = [1.0,0x1.0000000000001p+0] '
+    'signal PossiblyUndefinedOperation': _EXACT_INVALID,
+    'd-textToInterval "[10000000000000001/10000000000000000,10000000000000002/10000000000000001]" = '
+    '[1.0,0x1.0000000000001p+0] signal PossiblyUndefinedOperation': _EXACT_INVALID,
+    'd-textToInterval "[0x1.00000000000002p0,0x1.00000000000001p0]" = [1.0,0x1.0000000000001p+0] '
+    'signal PossiblyUndefinedOperation': _EXACT_INVALID,
+    'd-textToInterval "[1.0E+400 ]_com" = [0x1.fffffffffffffp+1023,infinity]': _BOUNDED_EXACTLY,
+    'd-textToInterval "10?3e380_com" = [0x1.fffffffffffffp+1023,infinity]': _BOUNDED_EXACTLY,
+    'd-textToInterval "10?1' + '8' + '0' * 308 + '_com" = [-infinity,infinity]': _BOUNDED_EXACTLY,
+})
 LISTED = dict(DIVERGENCES)
 
 
@@ -400,6 +474,12 @@ def key(vector) -> str:
 
 def _has_nai(vector) -> bool:
     return any(isinstance(v, Interval) and v.nai for v in (*vector.args, vector.expected))
+
+
+def _nai_is_a_raise(vector) -> bool:
+    """M13g: 1788's `[nai]` answer to invalid input, `signal UndefinedOperation`, which a raise matches"""
+    return (vector.signal == 'UndefinedOperation' and isinstance(vector.expected, Interval) and vector.expected.nai
+            and not any(isinstance(v, Interval) and v.nai for v in vector.args))
 
 
 def _load():
@@ -414,7 +494,52 @@ def _load():
 VECTORS, SKIPPED = _load()
 INTERVAL_VECTORS = tuple(v for v in VECTORS if isinstance(v.expected, Interval) or v.op in PAIRS)
 NUMERIC_VECTORS = tuple(v for v in VECTORS if v.op in NUMERIC)
-DIVERGENCES.update({key(v): _NAI for v in VECTORS if _has_nai(v)})
+DIVERGENCES.update({key(v): _NAI for v in VECTORS if _has_nai(v) and not _nai_is_a_raise(v)})
+# M13g: every isNaI is a row; the constructors, which have no interval operand, are not run outward
+SIGNALLED = frozenset({'b-textToInterval', 'b-numsToInterval',
+                       'd-textToInterval', 'd-numsToInterval', 'setDec', 'intervalPart'})
+CONSTRUCTORS = frozenset({'b-textToInterval', 'b-numsToInterval', 'd-textToInterval', 'd-numsToInterval'})
+DECORATED = frozenset({'d-textToInterval', 'd-numsToInterval', 'newDec', 'setDec', 'intervalPart', 'decorationPart'})
+# M13g part 3: the ops whose decorated vectors run on DecoratedInterval operands, the decoration
+# propagated by the op and checked (1788's decorated arithmetic, functions and set operations). any
+# other op of a decorated vector takes the interval part of each operand (BARE_PART), as 1788 defines
+# the booleans and numbers of a decorated interval. M13e hook: the reverse ops (sqrRev, mulRevToPair,
+# powRev1, ...) join PROPAGATED when they are merged; 1788 decorates all their results trv (the 459
+# decorated results in the files are `_trv`, counted 2026-09-26), `decorated.py::_trivial`. a pair
+# (mulRevToPair's 174 decorated vectors) also needs a pair-with-decoration case in `_ours` and
+# `_expected`, which have none: `test_no_decorated_pair_goes_unchecked` fails until it is written
+PROPAGATED = frozenset({
+    'pos', 'neg', 'abs', 'add', 'sub', 'mul', 'div', 'recip', 'sqr', 'pown', 'fma', 'min', 'max', 'floor',
+    'ceil', 'trunc', 'roundTiesToEven', 'roundTiesToAway', 'sign', 'sqrt', 'exp', 'exp2', 'exp10', 'log',
+    'log2', 'log10', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh',
+    'atanh', 'expm1', 'cbrt', 'cot', 'sec', 'csc', 'acot', 'coth', 'csch', 'sech', 'acoth', 'logp1', 'rootn',
+    'hypot', 'pow', 'atan2', 'intersection', 'convexHull', 'cancelMinus', 'cancelPlus'})
+BARE_PART = frozenset(OPS) - PROPAGATED - DECORATED - REDUCTIONS - {'b-textToInterval', 'b-numsToInterval'}
+# M13g part 3: rows on a decoration alone, for the plain pass only, keyed on the statement WITH its
+# decorations (`exp2 [1024.0,1024.0] = [max,infinity]` without them is also its bare twin's key,
+# which matches). the plain pass is exact; the outward pass rounds to doubles as 1788 does, so each
+# of these must match there (`check`, `test_divergence_rows`)
+_OVERFLOWS_ONLY_ROUNDED = ('decoration expectations: the exact result is bounded (a rational past the '
+                           'doubles), so com fits it here; 1788 decorates its binary64 result, which '
+                           'overflows to infinity, and demotes com to dac. the outward pass rounds to '
+                           'doubles as 1788 does, and matches')
+_MAX = '0x1.FFFFFFFFFFFFFp1023'
+PLAIN_ONLY = {text: _OVERFLOWS_ONLY_ROUNDED for text in (
+    f'add [1.0,2.0]_com [5.0,{_MAX}]_com = [6.0,infinity]_dac',
+    f'add [-{_MAX},2.0]_com [-0.1, 5.0]_com = [-infinity,7.0]_dac',
+    f'sub [-1.0,2.0]_com [5.0,{_MAX}]_com = [-infinity,-3.0]_dac',
+    f'sub [-{_MAX},2.0]_com [-1.0, 5.0]_com = [-infinity,3.0]_dac',
+    f'mul [1.0,2.0]_com [5.0,{_MAX}]_com = [5.0,infinity]_dac',
+    f'mul [-{_MAX},2.0]_com [-1.0, 5.0]_com = [-infinity,{_MAX}]_dac',
+    'div [-200.0,-1.0]_com [0x0.0000000000001p-1022, 10.0]_com = [-infinity,-0X1.9999999999999P-4]_dac',
+    f'sqr [-{_MAX},-0x0.0000000000001p-1022]_com = [0.0,infinity]_dac',
+    f'fma [1.0,2.0]_com [1.0, {_MAX}]_com [0.0,1.0]_com = [1.0,infinity]_dac',
+    f'pown [-{_MAX},2.0]_com 2 = [0.0,infinity]_dac',
+    f'pown [-{_MAX},2.0]_com 3 = [-infinity, 8.0]_dac',
+    'exp2 [1024.0,1024.0]_com = [0X1.FFFFFFFFFFFFFP+1023,infinity]_dac',  # 2 ** 1024, an exact int
+)}
+DIVERGENCES.update({key(v): _NO_IS_NAI for v in VECTORS if v.op == 'isNaI' and not _has_nai(v)})
+INTERVAL_VECTORS = tuple(v for v in INTERVAL_VECTORS if v.op not in CONSTRUCTORS)
 
 
 # THE ADAPTER
@@ -423,16 +548,37 @@ class NoCounterpart(ValueError):
     """a 1788 value the core has no counterpart for (NaI)"""
 
 
-def to_ours(literal, cls=MultiInterval, as_float=False):
-    """the input rule; `as_float` gives the literal's doubles as floats instead of Fractions"""
+def to_ours(literal, cls=MultiInterval, as_float=False, decorated=False):
+    """the input rule; `as_float` gives the literal's doubles as floats instead of Fractions;
+    `decorated` (M13g) keeps a literal's decoration, as a `DecoratedInterval`"""
     if not isinstance(literal, Interval):
         return float(literal) if as_float and isinstance(literal, Fraction) else literal
     if literal.nai:
         raise NoCounterpart('NaI')
     if literal.empty:
-        return cls()
-    lo, hi = (float(literal.lo), float(literal.hi)) if as_float else (literal.lo, literal.hi)
-    return cls(lo, hi, start_closed=literal.lo != -math.inf, end_closed=literal.hi != math.inf)
+        bare = cls()
+    else:
+        lo, hi = (float(literal.lo), float(literal.hi)) if as_float else (literal.lo, literal.hi)
+        bare = cls(lo, hi, start_closed=literal.lo != -math.inf, end_closed=literal.hi != math.inf)
+    return DecoratedInterval(bare, literal.decoration) if decorated and literal.decoration else bare
+
+
+def is_decorated(vector) -> bool:
+    """a decoration on an operand or on the result (M13g part 3)"""
+    values = (*vector.args, *(vector.expected if isinstance(vector.expected, tuple) else (vector.expected,)))
+    return any(isinstance(v, Interval) and v.decoration for v in values)
+
+
+def _args(vector, cls=MultiInterval, as_float=False):
+    """the operands under the input rule. a decorated op's, and a decorated vector's (M13g part 3), are
+    `DecoratedInterval`s, so each decoration must fit its set; a BARE_PART op then gets the interval
+    part of each"""
+    if vector.op not in DECORATED and not is_decorated(vector):
+        return [to_ours(a, cls, as_float) for a in vector.args]
+    ours = [to_ours(a, cls, as_float, decorated=True) for a in vector.args]
+    if vector.op in BARE_PART:
+        return [a.interval if isinstance(a, DecoratedInterval) else a for a in ours]
+    return ours
 
 
 def round_down(v) -> float:
@@ -518,7 +664,7 @@ def _numeric(vector, args):
 
 def run_float(vector, cls):
     """(ours, expected): the numeric rule's second pass, float operands, our numbers as they are"""
-    args = [to_ours(a, cls, as_float=True) for a in vector.args]
+    args = _args(vector, cls, as_float=True)
     try:
         result = _call(vector, args)
     except ValueError:
@@ -532,17 +678,71 @@ def _numbers(value):
     return value if isinstance(value, tuple) else (value,)
 
 
+def _no_nai():
+    raise NoCounterpart('isNaI: there is no NaI')
+
+
+def _signalled(vector, outward=False):
+    """(ours, expected) as (value, signal) pairs, for an op in SIGNALLED (M13g): a raised
+    UndefinedOperationError is 1788's answer to invalid input with UndefinedOperation, empty for a
+    bare op and NaI for a decorated one. `outward`: the operands as floats in OutwardMultiInterval"""
+    args = _args(vector, OutwardMultiInterval, True) if outward else _args(vector)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        try:
+            result = OPS[vector.op](*args)
+        except UndefinedOperationError:
+            ours = _RAISED if vector.op in DECORATED else None, 'UndefinedOperation'
+        else:
+            possibly = any(issubclass(w.category, PossiblyUndefinedOperationWarning) for w in caught)
+            ours = (_ours(result, _outward_hull if outward else closed_hull_of_ours),
+                    'PossiblyUndefinedOperation' if possibly else None)
+    return ours, (_expected(vector), vector.signal)
+
+
+# M13g: the decorated flavour's answer to invalid input, which ours gives by raising
+_RAISED = '[nai], raised as UndefinedOperationError'
+
+
+def _ours(result, hull):
+    """our value under the output rule (`hull`); a DecoratedInterval is (closed hull, decoration)
+    and a Decoration its name (M13g)"""
+    if isinstance(result, DecoratedInterval):
+        return hull(result.interval), result.decoration.value
+    if isinstance(result, Decoration):
+        return result.value
+    return hull(result)
+
+
+def _expected(vector):
+    """1788's value under the output rule; a decorated one, for a decorated or (M13g part 3)
+    propagating op, is (closed hull, decoration), and `[nai]` with UndefinedOperation is what a raise
+    gives (M13g)"""
+    literal = vector.expected
+    if not isinstance(literal, Interval):
+        return literal
+    if _nai_is_a_raise(vector):
+        return _RAISED
+    hull = closed_hull_of_expected(literal)
+    decorated = vector.op in DECORATED or vector.op in PROPAGATED
+    return (hull, literal.decoration) if decorated and literal.decoration else hull
+
+
 def run(vector):
     """(ours, expected), both through the adapter"""
+    if vector.op in SIGNALLED:
+        return _signalled(vector)
+    if vector.op in DECORATED:
+        return _ours(_call(vector, _args(vector)), closed_hull_of_ours), _expected(vector)
     if vector.op in NUMERIC:
-        return _numeric(vector, [to_ours(a) for a in vector.args]), _numbers_as_floats(vector.expected)
+        return _numeric(vector, _args(vector)), _numbers_as_floats(vector.expected)
     if vector.op in REDUCTIONS:
         return _reduce(vector, [to_ours(a) for a in vector.args]), float(vector.expected)
-    result = _call(vector, [to_ours(a) for a in vector.args])
+    result = _call(vector, _args(vector))
     if vector.op in PAIRS:
         return _pair(result, rounded=True), _pair_of_expected(vector.expected)
     if isinstance(vector.expected, Interval):
-        return closed_hull_of_ours(result), closed_hull_of_expected(vector.expected)
+        return _ours(result, closed_hull_of_ours), _expected(vector)
     if isinstance(vector.expected, Fraction) or isinstance(vector.expected, float):
         return round_down(result) if vector.op == 'inf' else round_up(result), float(vector.expected)
     return result, vector.expected
@@ -550,17 +750,25 @@ def run(vector):
 
 def run_outward(vector):
     """(ours, expected): float operands in an OutwardMultiInterval, our closed hull taken exactly"""
-    result = _call(vector, [to_ours(a, OutwardMultiInterval, as_float=True) for a in vector.args])
-    assert isinstance(result, OutwardMultiInterval), type(result)
+    if vector.op in SIGNALLED:
+        return _signalled(vector, outward=True)
+    if vector.op in DECORATED:
+        return _ours(_call(vector, _args(vector, OutwardMultiInterval, True)), _outward_hull), _expected(vector)
+    result = _call(vector, _args(vector, OutwardMultiInterval, as_float=True))
     if vector.op in PAIRS:
         return _pair(result, rounded=False), _pair_of_expected(vector.expected)
-    expected = closed_hull_of_expected(vector.expected)
+    return _ours(result, _outward_hull), _expected(vector)
+
+
+def _outward_hull(result):
+    """the outward rule's closed hull, taken exactly: `None` for empty, else `(lo, hi)`"""
+    assert isinstance(result, OutwardMultiInterval), type(result)
     if result.is_empty:
-        return None, expected
+        return None
     lo, hi = result.inf, result.sup
     # every finite end is a double already: nothing is left for the adapter to round
     assert all(isinstance(v, float) or v == round_down(v) for v in (lo, hi)), (lo, hi)
-    return (lo, hi), expected
+    return lo, hi
 
 
 # the pair rule (M13e, mulRevToPair): 1788 gives the preimage as two intervals, the second empty unless
@@ -607,9 +815,15 @@ def outcome(runner, vector):
 
 # THE VECTORS
 
-def check(vector, runner):
+def row(vector, outward=False):
+    """the reason a vector is a divergence row in the plain or the outward pass, else None"""
+    reason = DIVERGENCES.get(key(vector))
+    return PLAIN_ONLY.get(vector.text) if reason is None and not outward else reason
+
+
+def check(vector, runner, outward=False):
     ours, expected = outcome(runner, vector)
-    if key(vector) in DIVERGENCES:
+    if row(vector, outward) is not None:
         assert not same(ours, expected), f'stale divergence row, it matches now: {vector.text}'
     else:
         assert same(ours, expected), vector.text
@@ -622,7 +836,7 @@ def test_vector(vector):
 
 @pytest.mark.parametrize('vector', INTERVAL_VECTORS, ids=[v.source for v in INTERVAL_VECTORS])
 def test_vector_outward(vector):
-    check(vector, run_outward)
+    check(vector, run_outward, outward=True)
 
 
 @pytest.mark.parametrize('cls', [MultiInterval, OutwardMultiInterval], ids=['nearest', 'outward'])
@@ -638,6 +852,12 @@ def test_divergence_rows():
         assert reason.startswith(REASONS), reason
     # the generated NaI rows never overwrite a listed one
     assert all(DIVERGENCES[text] is LISTED[text] for text in LISTED)
+    # M13g part 3: a plain-only row is one interval-valued vector, whose outward pass must match, and
+    # is not under a row already
+    for text, reason in PLAIN_ONLY.items():
+        found = [v for v in INTERVAL_VECTORS if v.text == text]
+        assert len(found) == 1 and key(found[0]) not in DIVERGENCES, text
+        assert reason.startswith(REASONS), reason
 
 
 # a statement line: an op name, its operands, ` = `, the result, `;`. no comment line in these files
@@ -661,6 +881,119 @@ def test_parser_reads_every_statement(name):
     assert not skipped
     assert Counter(v.op for v in everything) == Counter(
         _STATEMENT_LINE.findall((HERE / name).read_text(encoding='utf-8')))
+
+
+def test_signals_are_checked():
+    """every op whose vectors carry a 1788 signal has it compared (M13g)"""
+    assert {v.op for v in VECTORS if v.signal} <= SIGNALLED
+
+
+def test_decorated_ops_are_checked():
+    """M13g: the decorated ops' vectors carry decorations and are compared with them, and those with an
+    interval operand run outward too; only the constructors, which have none, are not"""
+    assert {v.op for v in VECTORS if v.op in DECORATED} == DECORATED
+    assert {v.op for v in INTERVAL_VECTORS if v.op in DECORATED} == DECORATED - CONSTRUCTORS - {'decorationPart'}
+    assert not {v.op for v in INTERVAL_VECTORS} & CONSTRUCTORS
+
+
+def test_decorated_vectors_run_decorated():
+    """M13g part 3: every decorated vector runs through the decorated type, and a propagating op's
+    result is compared with its decoration on both sides (an adapter dropping it on both would pass)"""
+    ops = {v.op for v in VECTORS if is_decorated(v)}
+    assert ops <= PROPAGATED | BARE_PART | DECORATED and ops & PROPAGATED and ops & BARE_PART
+    assert PROPAGATED <= set(OPS) and not PROPAGATED & BARE_PART
+    # an interval-valued op is never read on the interval part alone, which would drop its decoration
+    assert {v.op for v in INTERVAL_VECTORS if is_decorated(v)} - DECORATED <= PROPAGATED
+    assert not {v.op for v in INTERVAL_VECTORS} & BARE_PART
+    first = {}
+    for v in INTERVAL_VECTORS:
+        if v.op in PROPAGATED and is_decorated(v) and row(v) is None:
+            first.setdefault(v.op, v)
+    assert len(first) >= 40, sorted(first)
+    names = {d.value for d in Decoration}
+    for v in first.values():
+        for runner in (run, run_outward):
+            ours, expected = runner(v)
+            assert ours[1] in names and expected[1] in names, v.text
+
+
+def test_undefined_operation_is_never_a_row():
+    """M13g: 1788's answer to invalid input, `signal UndefinedOperation` with `[empty]` (bare) or `[nai]`
+    (decorated), is matched by our raise; a rule that turned those vectors into rows would pass them all"""
+    signalled = [v for v in VECTORS if v.signal == 'UndefinedOperation']
+    assert any(v.expected.nai for v in signalled) and any(v.expected.empty for v in signalled)
+    assert not [v.source for v in signalled if key(v) in DIVERGENCES]
+
+
+def test_outward_pass_of_a_decorated_op_is_outward(monkeypatch):
+    """M13g: the decorated ops' outward pass gives the set as floats in an OutwardMultiInterval (newDec
+    does no arithmetic, so its values alone cannot tell the classes apart)"""
+    seen = []
+
+    def spy(x, *rest):
+        seen.append(x)
+        return DecoratedInterval(x, *rest)
+
+    monkeypatch.setitem(OPS, 'newDec', spy)
+    vector = next(v for v in INTERVAL_VECTORS if v.op == 'newDec' and not v.expected.empty)
+    assert same(*run_outward(vector))
+    assert type(seen[-1]) is OutwardMultiInterval and isinstance(seen[-1].inf, float)
+    run(vector)
+    assert type(seen[-1]) is MultiInterval and isinstance(seen[-1].inf, Fraction)
+
+
+def test_signalled_reads_both_signals(monkeypatch):
+    """the adapter's reading of ours, pinned apart from the library, which never warns today"""
+    vector = next(v for v in VECTORS if v.op == 'b-numsToInterval' and v.signal is None)
+
+    def possibly(*args):
+        warnings.warn('possibly', PossiblyUndefinedOperationWarning)
+        return nums_to_interval(*args)
+
+    def undefined(*args):
+        raise UndefinedOperationError('undefined')
+
+    monkeypatch.setitem(OPS, vector.op, possibly)
+    assert _signalled(vector)[0] == (closed_hull_of_expected(vector.expected), 'PossiblyUndefinedOperation')
+    monkeypatch.setitem(OPS, vector.op, undefined)
+    assert _signalled(vector)[0] == (None, 'UndefinedOperation')
+
+
+def test_signalled_reads_only_undefined_operation(monkeypatch):
+    """M13g review: only `UndefinedOperationError` is 1788's signal. a plain `ValueError` escapes, so a
+    library raising the wrong class fails the vectors instead of matching them"""
+    vector = next(v for v in VECTORS if v.op == 'b-textToInterval' and v.signal == 'UndefinedOperation')
+
+    def plain(*args):
+        raise ValueError('plain')
+
+    monkeypatch.setitem(OPS, vector.op, plain)
+    with pytest.raises(ValueError, match='plain'):
+        _signalled(vector)
+
+
+def test_no_decorated_pair_goes_unchecked():
+    """M13g review, the M13e hook: `_ours` and `_expected` have no pair-with-decoration case, so a
+    pair-valued op's decorations would pass unchecked (mulRevToPair: 174 decorated vectors, each
+    expecting a pair; 2026-09-26). until such a rule is written, no op in OPS has one"""
+    pairs = {v.op for v in VECTORS if is_decorated(v) and isinstance(v.expected, tuple)
+             and any(isinstance(e, Interval) for e in v.expected)}
+    assert not pairs, sorted(pairs)
+
+
+# M13g close-out: once M13g is done, every statement still skipped is a reverse op's (M13e). when
+# M13e lands, SKIPPED is empty and this still holds; M13's exit then asserts it empty
+_REVERSE_OPS = frozenset({
+    'sqrRev', 'sqrRevBin', 'absRev', 'absRevBin', 'pownRev', 'pownRevBin', 'sinRev', 'sinRevBin', 'cosRev',
+    'cosRevBin', 'tanRev', 'tanRevBin', 'coshRev', 'coshRevBin', 'mulRev', 'mulRevTen', 'mulRevToPair',
+    'powRev1', 'powRev2'})
+
+
+def test_only_the_reverse_ops_are_skipped():
+    """M13g: no constructor, decoration op or NaI statement (`isNaI`) is skipped; they are ops in OPS,
+    matched or rows"""
+    skipped = set().union(*SKIPPED.values())
+    assert skipped <= _REVERSE_OPS, sorted(skipped - _REVERSE_OPS)
 
 
 def test_every_op_has_vectors():

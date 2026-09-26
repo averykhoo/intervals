@@ -31,6 +31,17 @@ from intervals.reverse import tan_rev
 # power reverse ops (M13e)
 from intervals.reverse import pow_rev1
 from intervals.reverse import pow_rev2
+# M13g: ieee 1788's signals and bare constructors
+from intervals.errors import PossiblyUndefinedOperationWarning
+from intervals.errors import UndefinedOperationError
+from intervals.literals import nums_to_interval
+from intervals.literals import text_to_interval
+# M13g: ieee 1788's decorated type and its constructors
+from intervals.decorated import DecoratedInterval
+from intervals.decorated import Decoration
+from intervals.decorated import nums_to_decorated_interval
+from intervals.decorated import set_dec
+from intervals.decorated import text_to_decorated_interval
 
 EMPTY = MultiInterval()
 REALS = MultiInterval(-_math.inf, _math.inf)  # the affine extended reals, both infinities included
@@ -68,4 +79,15 @@ __all__ = [
     # power reverse ops (M13e)
     'pow_rev1',
     'pow_rev2',
+    # M13g: ieee 1788's signals and bare constructors
+    'UndefinedOperationError',
+    'PossiblyUndefinedOperationWarning',
+    'text_to_interval',
+    'nums_to_interval',
+    # M13g: ieee 1788's decorated type and its constructors
+    'DecoratedInterval',
+    'Decoration',
+    'set_dec',
+    'text_to_decorated_interval',
+    'nums_to_decorated_interval',
 ]

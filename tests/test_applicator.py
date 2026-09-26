@@ -426,7 +426,11 @@ def test_package_exports_unchanged():
         'sqr_rev', 'abs_rev', 'pown_rev', 'cosh_rev',
         'mul_rev',
         'sin_rev', 'cos_rev', 'tan_rev',
-        'pow_rev1', 'pow_rev2'}
+        'pow_rev1', 'pow_rev2',
+        # M13g: ieee 1788's signals and bare constructors
+        'UndefinedOperationError', 'PossiblyUndefinedOperationWarning', 'text_to_interval', 'nums_to_interval',
+        # M13g: ieee 1788's decorated type and its constructors
+        'DecoratedInterval', 'Decoration', 'set_dec', 'text_to_decorated_interval', 'nums_to_decorated_interval'}
     for name in ('add', 'mul', 'OpDescriptor', 'apply_binary', 'mod', 'floordiv', 'floor', 'sqrt', 'sign',
                  'fma', 'apply', 'step'):
         assert not hasattr(intervals, name), name
