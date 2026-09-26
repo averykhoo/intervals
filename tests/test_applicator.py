@@ -421,7 +421,9 @@ def test_package_exports_unchanged():
     assert set(intervals.__all__) == {
         'MultiInterval', 'OutwardMultiInterval', 'EMPTY', 'REALS', 'Size', 'Builder', 'TruthSet', 'Allen',
         'Cut', 'Side', 'IntervalWarning', 'EmptySetPropagationWarning', 'DomainClippedWarning',
-        'IndeterminateResultWarning', 'HullWarning', 'sum_', 'sum_abs', 'sum_sqr', 'dot'}
+        'IndeterminateResultWarning', 'HullWarning', 'sum_', 'sum_abs', 'sum_sqr', 'dot',
+        # M13g: ieee 1788's signals and bare constructors
+        'UndefinedOperationError', 'PossiblyUndefinedOperationWarning', 'text_to_interval', 'nums_to_interval'}
     for name in ('add', 'mul', 'OpDescriptor', 'apply_binary', 'mod', 'floordiv', 'floor', 'sqrt', 'sign',
                  'fma', 'apply', 'step'):
         assert not hasattr(intervals, name), name

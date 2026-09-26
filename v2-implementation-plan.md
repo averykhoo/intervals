@@ -1002,6 +1002,117 @@ plus a decoration check on every decorated vector
   adapter takes the raised error as a vector's expected result with `signal UndefinedOperation`
   (the `b-` flavour's `[empty]`, the `d-` flavour's `[nai]`), as the reduction rule takes
   `ValueError` as `NaN`
+* **in progress. part 1 built 2026-09-26 (branch `m13g`): the signals, the 1788 text parser, the
+  bare constructors, the new category.** still open for M13g: the decorated wrapper type,
+  `d-textToInterval`, `d-numsToInterval`, `setDec`, `newDec`, `intervalPart`, `decorationPart`, and
+  the adapter checking decorations. built:
+    * signals (`intervals/errors.py`): `UndefinedOperationError(ValueError)` and
+      `PossiblyUndefinedOperationWarning(IntervalWarning)`, exported from `intervals`
+      (`tests/test_applicator.py::test_package_exports_unchanged` lists them)
+    * `intervals/literals.py`, a new module (not `ieee1788.py`, which `HANDOFF.md` H3 keeps for a
+      later thin adapter): `::parse_literal` reads 1788's interval literal (1788-2015 §9.7) into a
+      `::Literal` (exact `lo`, `hi`, `None` for empty, and the decoration if any); `::number` one
+      number literal; `::text_to_interval` (1788's `b-textToInterval`) and `::nums_to_interval`
+      (`b-numsToInterval`) give a bare `MultiInterval` under 1788's input rule (a finite end closed,
+      an infinite one open, `::_bare`), both exported from `intervals`. the grammar, from the
+      vectors of `libieeep1788_class.itl`, `ieee1788-constructors.itl`, `ieee1788-exceptions.itl`:
+      `[l, u]`, `[x]`, `[l,]`, `[,u]`, `[,]`, `[ ]`, `[empty]`, `[entire]`; the uncertain form
+      `m?r`, `m?`, `m??` with a direction `u`/`d` and an exponent `e`; decimal, hex (`0x...p...`),
+      `p/q` and `inf`/`infinity` numbers; decorations `_com` `_dac` `_def` `_trv`; any letter case.
+      invalid input, `[nai]` included, raises `UndefinedOperationError`
+    * **choices the plan left open** (conservative):
+        * names: 1788's with python's suffix, `UndefinedOperationError` and
+          `PossiblyUndefinedOperationWarning`; the functions `text_to_interval`, `nums_to_interval`
+          (1788's names in python's style, module-level as the reductions are, not methods beside
+          our own `MultiInterval.parse`). the warning gets no import-time `'ignore'` filter, so it
+          is shown, like `IndeterminateResultWarning`
+        * **exact values**: a literal's numbers are the rationals they spell (`[0.1]` is the point
+          `1/10`, `[1.0E+400]` is `10**400`), never rounded, as int and Fraction are exact everywhere
+          in the package (D3). 1788's binary64 enclosure is what the adapter's precision rule makes
+          of it. so validity is decided exactly too: `[1.0000000000000002,1.0000000000000001]` is
+          invalid and raises, `[1.0000000000000001, 1.0000000000000002]` is valid and does not
+          warn; `PossiblyUndefinedOperationWarning` is never emitted today (the owner foresaw it,
+          `v2-plan.md` "2026-09-26 revision: owner answers", Q1)
+        * the result is always a `MultiInterval`: no class argument, since an exact result has
+          nothing for `OutwardMultiInterval` to round; the constructors are not in the outward pass
+        * strict syntax: no white space outside the brackets, inside a number or anywhere in the
+          uncertain form (`" [1, 2]"` raises); ASCII white space inside the brackets; a hex number
+          needs its `p` exponent (IEEE 754's hex form); `1.` and `.5` are numbers; the sign of `p/q`
+          goes before `p` only. a non-str argument is a `TypeError`, as are a `bool` or a non-real
+          bound for `nums_to_interval`
+        * a decoration is checked against the exact value: `com` needs a bounded non-empty
+          interval, the empty set takes `trv` only, `ill` and an unknown word never fit (the
+          vectors' `[ Empty ]_ill`, `[,]_com`, `_fooo`, `_da`). `[1.0E+400 ]_com` fits here
+          (bounded as a rational) where 1788's binary64 hull is unbounded and gets `dac`
+          (`libieeep1788_class.itl:165`): the decorated type's question. the bare constructor
+          refuses every decorated literal, as 1788's does (`class.itl:50`)
+        * `nums_to_interval(-inf, -inf)` and `(inf, inf)` raise, as 1788 says, although `[-inf]` is
+          a legal point of `MultiInterval`; `nan` raises `UndefinedOperationError`, not the plain
+          `ValueError` of `MultiInterval(nan)`
+        * no limit on an exponent's size: `1e999999999` builds the exact power, slowly, as
+          `Fraction('1e999999999')` does; the fuzz property assumes away exponents of 4 digits or
+          more
+        * `isNaI` is in `OPS` as an op with no counterpart (all 16 vectors rows), not as
+          `lambda a: False`, which would match 15 of them with an op the package does not have
+    * adapter (`tests/itf1788/test_itf1788.py`): `b-textToInterval`, `b-numsToInterval`, `isNaI`
+      in `OPS`; the **signal rule** (`::SIGNALLED`, `::_signalled`: (closed hull, signal) pairs,
+      a raise read as `[empty]` with `UndefinedOperation`, the warning as
+      `PossiblyUndefinedOperation`), `::test_signals_are_checked` (every op whose vectors carry a
+      signal is in `SIGNALLED`, so `d-textToInterval`, `setDec`, `intervalPart` join it when
+      built), `::test_signalled_reads_both_signals` (the warning's branch, which no vector reaches);
+      `REASONS` gains "no NaI: invalid input raises" (D16) and, **PROPOSED, not approved: an owner
+      question**, "exact parsing decides validity" for the 4 `b-textToInterval` vectors that expect
+      `PossiblyUndefinedOperation` (`::_EXACT_VALID`, `::_EXACT_INVALID`); `::_NAI` moved to the
+      new category and `::_NO_IS_NAI` added. `tools/itf1788_census.py` matches a reason to its
+      `REASONS` entry, since the new one holds a colon
+    * tests (`tests/test_literals.py`, 122 items in 1.5 s, 2026-09-26): 8 `@given`:
+      `nums_to_interval` against 1788's definition at probe points (raises iff invalid, else exactly
+      the reals between the bounds: soundness and maximality); every spelling of a value (a
+      float's exact decimal expansion, `float.hex`, `p/q`, `inf`) reads back exactly, through `[x]`
+      and `[l, u]`, with an empty side as an infinity; the uncertain form against a
+      `decimal.Decimal` oracle, with soundness (the midpoint and the radius's ends inside) and
+      maximality (a tenth of a unit past an end outside); white space and case inside the brackets
+      do not matter and outside they do; decorations read iff they fit and always refused by the
+      bare constructor; any text over the literal alphabet is one interval under the input rule or
+      raises `UndefinedOperationError`, nothing else. `@example`s: `class.itl:30`-`33`, `:50`,
+      `:120`, `:123`, `:125`, `:127`, `:165`, `:227`, `exceptions.itl:16`, `constructors.itl:17`,
+      `3.56?1`, `-10?u`, `0.0??u`, `2.500?5de-5`, `10?3e380`. plus 32 examples, 55 invalid texts,
+      the fitting and unfitting decorations of `parse_literal`, and the signals' classes. under
+      `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=20` the file ran green in 57 s (2026-09-26, 91
+      items then)
+* evidence, measured 2026-09-26 at part 1 (`tools/itf1788_census.py`): the 101 vectors of the two
+  bare constructors (`libieeep1788_class.itl` 76, `ieee1788-constructors.itl` 22,
+  `ieee1788-exceptions.itl` 3; 33 with a signal) all match with their signal except the 4 rows
+  above; `isNaI` 16, all rows. all ops: 7431 vectors of 86 ops, 6301 interval-valued; 132
+  divergence keys: 66 "no NaI: invalid input raises" (68 vectors: the 52 former "decoration
+  expectations" rows, `isNaI [nai]` and 15 more `isNaI`), 4 "exact parsing decides validity"
+  (PROPOSED), 47 cancellation, 10 degenerate infinities, 5 cut-based relations, 0 decoration
+  expectations; 0 unknown failures; skipped 2111 statements of 25 ops. `tests/itf1788`: 14120
+  passed in 46 s. the gate, in two runs: `tests/itf1788` 14120 and the rest 3471 in 450 s, 17591
+  in all (2026-09-26)
+* sabotage (section 2), 28 breaks by a throwaway harness, each file restored from a copy and
+  byte-compared, results appended as they landed; targets `tests/test_literals.py`, the doctests
+  of `literals.py` and the itf1788 vectors (all of them for an adapter break). red, library: `nums`
+  accepting `lo > hi` 3 (`class.itl:31`); accepting `lo = +inf`/`hi = -inf` 3 (`:32`, `:33`); `nan`
+  as a plain `ValueError` 2 (`:30`); text accepting `lo > hi` 8 (`:136`-`138`, the exact-parsing
+  rows going stale); accepting `[inf, inf]` 4 (`:130`); an infinite point 5 (`:129`,
+  `exceptions.itl:15`); infinite ends closed 15; an omitted radius a full unit 17; `u` and `d`
+  swapped 21; the exponent not scaling the radius 5 (`:102`-`104`, `constructors.itl:34`); the unit
+  from the whole digits 32; the bare constructor accepting a decoration 8 (`:50`, `:52`, `:55`,
+  `:57`, `:60`); `[nai]` read as empty 3 (`:114`); hex fraction digits as 1 bit 8
+  (`constructors.itl:31`); no zero-denominator check 2 (a `ZeroDivisionError` escapes); case
+  sensitive 18; the decimal exponent's sign dropped 6 (`:104`, `constructors.itl:30`). **4 were
+  thin, 1 red each, only `test_decorations` or the white-space property saw them**: the empty set
+  decorated other than `trv`, `com` on an unbounded interval, an unknown decoration accepted,
+  outer white space stripped. no vector can see the first three through the bare constructor, which
+  refuses every decoration; `test_parse_literal_reads_a_fitting_decoration`,
+  `test_parse_literal_refuses_a_decoration_that_does_not_fit` and four outer-space texts in
+  `test_invalid` were added, and the four breaks then turned 3, 6, 3 and 5 red. adapter: the
+  expected signal ignored 30; a raise read as no signal 30; the constructors not routed to the
+  signal rule 33; `b-numsToInterval` out of `SIGNALLED` 16 (`test_signals_are_checked` among
+  them); the `isNaI` rows dropped 15; `isNaI` answered `False` 15; **the warning never read 1,
+  only `test_signalled_reads_both_signals`**: no vector reaches it, since the library never warns,
+  which is why that test was added before the run
 
 **M13h reductions (done 2026-09-26)**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`,
 `dot_nearest`, 1 each as counted 2026-09-25 by the old parser, which saw only the first statement of

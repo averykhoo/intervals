@@ -31,14 +31,20 @@ and lists them). the adapter's rules:
   decorations are not in the core (v2-plan.md "ieee 1788"), so no vector checks one, and a
   divergence row is keyed on the statement with its decorations stripped (the fork has many
   statements twice, `atanh [1.0,1.0]_def = [empty]_trv` beside `atanh [1.0,1.0] = [empty]`).
-  NaI has no counterpart, so a vector with a `[nai]` in it is a row until M13g, generated below
+  there is no NaI (D16, owner 2026-09-26), so a vector with a `[nai]` in it, and every `isNaI`, is
+  a row under "no NaI: invalid input raises", generated below
 * **cancellation** (`cancelMinus`, `cancelPlus`): ours is the Minkowski difference (D13), a real set
   wherever 1788 answers entire as "no answer"; those vectors are rows under "cancellation as a
   Minkowski difference". the others match in both passes, the outward one included: like 1788, an
   `OutwardMultiInterval` encloses the exact difference
 * **power** (`pow`): run as `a ** b`, an interval exponent, which D11 makes 1788's pow (never pown,
   even for `[2.0, 2.0]`); all its vectors match in both passes, as do those of M13d's other functions
-* a `signal` clause is kept on the vector and not checked yet (M13g). `NaN` equals `NaN` here
+* **signals** (M13g): for an op in `SIGNALLED` (the constructors), ours and 1788's are compared as
+  (value, signal) pairs: an `UndefinedOperationError` raised is 1788's bare answer to invalid input,
+  `[empty]` with `signal UndefinedOperation`, and a `PossiblyUndefinedOperationWarning` emitted is
+  `signal PossiblyUndefinedOperation`. a constructor has no interval operand to give as floats, so it
+  is not in the outward pass. `test_signals_are_checked` keeps every op with a signal in `SIGNALLED`.
+  `NaN` equals `NaN` here
 * the library's warnings are ignored inside a vector (`1/[0]` is `∅` + `IndeterminateResultWarning`,
   and 1788's answer is also empty); they are pinned by their own tests elsewhere
 
@@ -61,10 +67,14 @@ from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import REALS
 from intervals import dot
+from intervals import nums_to_interval
 from intervals import sum_
 from intervals import sum_abs
 from intervals import sum_sqr
+from intervals import text_to_interval
 from intervals.errors import IntervalWarning
+from intervals.errors import PossiblyUndefinedOperationWarning
+from intervals.errors import UndefinedOperationError
 from intervals.relations import Allen
 from tests.itf1788.itl import Interval
 from tests.itf1788.itl import parse_file
@@ -154,6 +164,10 @@ OPS = {
     # cancellation (D13): the Minkowski difference, a real set where 1788 has no answer
     'cancelMinus': lambda a, b: a.cancel_minus(b),
     'cancelPlus': lambda a, b: a.cancel_plus(b),
+    # M13g: 1788's bare constructors (SIGNALLED), and isNaI, which has no counterpart: no NaI (D16)
+    'b-textToInterval': lambda text: text_to_interval(text.value),
+    'b-numsToInterval': nums_to_interval,
+    'isNaI': lambda a: _no_nai(),
 }
 REDUCTIONS = frozenset({'sum_nearest', 'sum_abs_nearest', 'sum_sqr_nearest', 'dot_nearest'})
 NUMERIC = frozenset({'mid', 'rad', 'wid', 'mag', 'mig', 'midRad'})
@@ -174,14 +188,25 @@ def _overlap(a, b):
 
 # the plan's residual categories (v2-plan.md "ieee 1788"); a row's reason starts with one of them
 REASONS = ('degenerate infinities', 'domain-clipped functions', 'decoration expectations',
-           'cut-based relations', 'cancellation as a Minkowski difference')
+           'cut-based relations', 'cancellation as a Minkowski difference',
+           # M13g: approved with D16 (owner 2026-09-26)
+           'no NaI: invalid input raises',
+           # M13g, PROPOSED, not approved: needs the owner (v2-implementation-plan.md M13g)
+           'exact parsing decides validity')
 
 _LOG = ('degenerate infinities: the operand meets the domain [0, inf] only at 0, and log(0) is '
         '-inf here (the limit from the one side the domain has); 1788 drops 0 from the domain')
 _ATANH = ('degenerate infinities: the operand meets the domain [-1, 1] only at an end, and atanh(±1) '
           'is ±inf here (the limit from inside); 1788 drops ±1 from the domain')
-_NAI = ('decoration expectations: NaI is not a set, so the undecorated core has no counterpart for it '
-        '(D16: it arrives with the decorated wrapper type, M13g)')
+_NAI = ('no NaI: invalid input raises: NaI is not a set, and the package has none (D16, owner '
+        '2026-09-26): a 1788 constructor given invalid input raises, so nothing makes a NaI')
+_NO_IS_NAI = ('no NaI: invalid input raises: with no NaI (D16) there is nothing for isNaI to ask, '
+              'so it has no counterpart')
+_EXACT_VALID = ('exact parsing decides validity: the literal is valid as rationals, so ours returns it '
+                'and emits nothing; 1788 lets a parser that rounds first signal PossiblyUndefinedOperation')
+_EXACT_INVALID = ('exact parsing decides validity: the lower bound exceeds the upper as rationals, so '
+                  'ours raises UndefinedOperationError; 1788 lets a parser that rounds first return the '
+                  'hull of the rounded bounds with PossiblyUndefinedOperation')
 _MEETS = ('cut-based relations: two closed intervals that share an end share that point, so they '
           'overlap (relations.Allen, on cuts); 1788 calls touching closed intervals meets or metBy')
 _CANCEL = ('cancellation as a Minkowski difference: 1788 answers entire as "no answer" (A narrower '
@@ -264,6 +289,17 @@ _CANCELLATION_ROWS = (
     'cancelMinus [-0X1P+0,0X1.FFFFFFFFFFFFEP-53] [-0X1.FFFFFFFFFFFFFP-53,0X1P+0] = [entire]',
 )
 DIVERGENCES.update({text: _CANCEL for text in _CANCELLATION_ROWS})
+# M13g: the vectors expecting PossiblyUndefinedOperation, decided exactly here (PROPOSED category)
+DIVERGENCES.update({
+    'b-textToInterval "[1.0000000000000001, 1.0000000000000002]" = [1.0, 0x1.0000000000001p+0] '
+    'signal PossiblyUndefinedOperation': _EXACT_VALID,
+    'b-textToInterval "[1.0000000000000002,1.0000000000000001]" = [1.0,0x1.0000000000001p+0] '
+    'signal PossiblyUndefinedOperation': _EXACT_INVALID,
+    'b-textToInterval "[10000000000000001/10000000000000000,10000000000000002/10000000000000001]" = '
+    '[1.0,0x1.0000000000001p+0] signal PossiblyUndefinedOperation': _EXACT_INVALID,
+    'b-textToInterval "[0x1.00000000000002p0,0x1.00000000000001p0]" = [1.0,0x1.0000000000001p+0] '
+    'signal PossiblyUndefinedOperation': _EXACT_INVALID,
+})
 LISTED = dict(DIVERGENCES)
 
 
@@ -289,6 +325,10 @@ VECTORS, SKIPPED = _load()
 INTERVAL_VECTORS = tuple(v for v in VECTORS if isinstance(v.expected, Interval))
 NUMERIC_VECTORS = tuple(v for v in VECTORS if v.op in NUMERIC)
 DIVERGENCES.update({key(v): _NAI for v in VECTORS if _has_nai(v)})
+# M13g: every isNaI is a row; the constructors, which have no interval operand, are not run outward
+SIGNALLED = frozenset({'b-textToInterval', 'b-numsToInterval'})
+DIVERGENCES.update({key(v): _NO_IS_NAI for v in VECTORS if v.op == 'isNaI' and not _has_nai(v)})
+INTERVAL_VECTORS = tuple(v for v in INTERVAL_VECTORS if v.op not in SIGNALLED)
 
 
 # THE ADAPTER
@@ -406,8 +446,29 @@ def _numbers(value):
     return value if isinstance(value, tuple) else (value,)
 
 
+def _no_nai():
+    raise NoCounterpart('isNaI: there is no NaI')
+
+
+def _signalled(vector):
+    """(ours, expected) as (closed hull, signal) pairs, for an op in SIGNALLED (M13g): a raised
+    UndefinedOperationError is 1788's bare answer to invalid input, empty with UndefinedOperation"""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        try:
+            result = OPS[vector.op](*[to_ours(a) for a in vector.args])
+        except UndefinedOperationError:
+            ours = None, 'UndefinedOperation'
+        else:
+            possibly = any(issubclass(w.category, PossiblyUndefinedOperationWarning) for w in caught)
+            ours = closed_hull_of_ours(result), 'PossiblyUndefinedOperation' if possibly else None
+    return ours, (closed_hull_of_expected(vector.expected), vector.signal)
+
+
 def run(vector):
     """(ours, expected), both through the adapter"""
+    if vector.op in SIGNALLED:
+        return _signalled(vector)
     if vector.op in NUMERIC:
         return _numeric(vector, [to_ours(a) for a in vector.args]), _numbers_as_floats(vector.expected)
     if vector.op in REDUCTIONS:
@@ -511,6 +572,28 @@ def test_parser_reads_every_statement(name):
     assert not skipped
     assert Counter(v.op for v in everything) == Counter(
         _STATEMENT_LINE.findall((HERE / name).read_text(encoding='utf-8')))
+
+
+def test_signals_are_checked():
+    """every op whose vectors carry a 1788 signal has it compared (M13g)"""
+    assert {v.op for v in VECTORS if v.signal} <= SIGNALLED
+
+
+def test_signalled_reads_both_signals(monkeypatch):
+    """the adapter's reading of ours, pinned apart from the library, which never warns today"""
+    vector = next(v for v in VECTORS if v.op == 'b-numsToInterval' and v.signal is None)
+
+    def possibly(*args):
+        warnings.warn('possibly', PossiblyUndefinedOperationWarning)
+        return nums_to_interval(*args)
+
+    def undefined(*args):
+        raise UndefinedOperationError('undefined')
+
+    monkeypatch.setitem(OPS, vector.op, possibly)
+    assert _signalled(vector)[0] == (closed_hull_of_expected(vector.expected), 'PossiblyUndefinedOperation')
+    monkeypatch.setitem(OPS, vector.op, undefined)
+    assert _signalled(vector)[0] == (None, 'UndefinedOperation')
 
 
 def test_every_op_has_vectors():

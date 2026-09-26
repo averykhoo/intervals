@@ -461,6 +461,13 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
     * **reduction rule** (added at M13h): a reduction's result must already be the double 1788
       specifies (rounded to nearest) and is compared as it is; a `ValueError` from it is 1788's
       `NaN` (`tests/itf1788/test_itf1788.py::REDUCTIONS`, `::_reduce`)
+    * **signal rule** (added at M13g): for the ops in `tests/itf1788/test_itf1788.py::SIGNALLED`
+      (today `b-textToInterval`, `b-numsToInterval`) ours and 1788's are compared as (closed hull,
+      signal) pairs (`::_signalled`). an `UndefinedOperationError` raised is 1788's bare answer to
+      invalid input, `[empty]` with `signal UndefinedOperation`; a `PossiblyUndefinedOperationWarning`
+      emitted is `signal PossiblyUndefinedOperation`. the constructors have no interval operand, so
+      they are not in the outward pass. `::test_signals_are_checked` fails if an op whose vectors
+      carry a signal is not in `SIGNALLED`
     * residual divergence table: degenerate infinities, domain-clipped functions, decoration
       expectations, (added at M12) cut-based relations, and (added at M13f, approved with D13)
       **cancellation as a Minkowski difference**: where 1788's `cancelMinus`/`cancelPlus` answer
@@ -489,6 +496,18 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       1788 and `overlaps` here, since the two share the point 2). counted and skipped: `pow` (real
       exponents, open), `less`, `strictLess`, `interior`, `isNaI`, `mid`, `rad`, `wid`, `mag`, `mig`;
       the reverse-op and cancel files are not vendored
+    * (added at M13g, approved with D16, owner 2026-09-26) **no NaI: invalid input raises**: the
+      package has no NaI, since a 1788 constructor given invalid input raises
+      (`UndefinedOperationError`) and nothing else makes one. every statement that needs a NaI is a
+      row: a `[nai]` operand or result (the 52 generated rows that were under "decoration
+      expectations" until M13g, now 53 with `isNaI [nai]`) and every `isNaI` (generated,
+      `tests/itf1788/test_itf1788.py::_NO_IS_NAI`); measured 2026-09-26, 66 keys, 68 vectors
+    * (M13g, **PROPOSED, not approved: an owner question**) **exact parsing decides validity**: 1788
+      lets a text constructor that rounds each bound first answer a literal whose bounds are within an
+      ulp with `PossiblyUndefinedOperation`; ours reads the bounds exactly, so it returns the valid
+      one with no warning (`ieee1788-exceptions.itl:18`) and raises on the three whose lower bound
+      exceeds the upper as rationals (`libieeep1788_class.itl:136`-`138`). 4 keys, 4 vectors
+      (`::_EXACT_VALID`, `::_EXACT_INVALID`); the three `d-textToInterval` twins will need the same
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
   community test framework and its `itl` vector DSL. all 19 `.itl` files of the maintained fork,
   oheim/ITF1788 at `b6ee1e2`, are vendored unmodified with its `LICENSE`, `NOTICE` and
@@ -527,6 +546,8 @@ imports only point downward.
         functions.py       the elementary functions and atan2 over cut tuples
         reductions.py      sum_ sum_abs sum_sqr dot over numbers: exact, rounded once (M13h)
         numeric.py         mid rad wid mag mig mid_rad of a set: exact, or rounded as 1788 (M13b)
+        literals.py        1788's interval literals, parse_literal; text_to_interval and
+                           nums_to_interval, 1788's bare constructors (M13g); above the class
         multi_interval.py  the class and OutwardMultiInterval: immutable cut tuple; _coerce
                            (numbers and intervals only — strings go through an explicit
                            parse()); one-line dunders. arithmetic
@@ -701,6 +722,19 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
 * **H3**: numpy interop and a gmpy2/mpfr backend are recorded, not built now ("later (not in
   v2.0)" above). the session's suggested first pick when the solver stack starts: Newton's
   method with forward-mode autodiff, the demonstration of what multi-intervals are for
+
+### 2026-09-26 revision: M13g part 1, signals and bare constructors, built
+
+built and measured 2026-09-26 on branch `m13g`; details in v2-implementation-plan.md (M13g, "part 1").
+the signals as the owner chose them (Q1): `UndefinedOperationError(ValueError)` raises,
+`PossiblyUndefinedOperationWarning(IntervalWarning)` would warn and return. `intervals/literals.py`
+reads 1788's interval literals, a syntax separate from `MultiInterval.parse`, **exactly**: a decimal
+is the rational it spells, so validity is decided exactly and the warning is never emitted today.
+`text_to_interval` and `nums_to_interval` give a bare `MultiInterval` with an infinite end open.
+"no NaI: invalid input raises" is in `REASONS` (D16) with the 52 former `[nai]` rows and every
+`isNaI`; **a new category, "exact parsing decides validity", is PROPOSED for the owner** (the 4
+vectors expecting `PossiblyUndefinedOperation`, "ieee 1788" above). the decorated type is still to
+come
 
 ### 2026-09-26 revision: M13d, power and the rest of the elementary functions, built
 

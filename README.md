@@ -85,6 +85,11 @@ Size(rays=0, length=2, points=0)
 * **reductions**: `sum_()`, `sum_abs()`, `sum_sqr()`, `dot()` over sequences of numbers (1788's
   reductions): the exact value, rounded once to a float, to nearest by default or
   `rounding='down'` / `'up'`, so the order of the operands never matters
+* **1788 constructors** (M13g): `text_to_interval()` reads 1788's interval literals (`[1, 2]`,
+  `[1,]`, `[entire]`, `3.56?1e2`, hex and `p/q` numbers), a syntax separate from
+  `MultiInterval.parse`; `nums_to_interval()` takes two bounds. both give the exact set with an
+  infinite end open, as 1788 reads one, and raise `UndefinedOperationError` (a `ValueError`) on
+  invalid input, where 1788 signals `UndefinedOperation`
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`
@@ -105,7 +110,8 @@ Size(rays=0, length=2, points=0)
   `fmt` (printing and parsing), `multi_interval` (the two classes), `relations`, `applicator` and
   `ops` (arithmetic), `modulo`, `steps` (floor, ceil, round, sign), `functions` and `elementary`
   (the elementary functions over sets, and at one point), `numeric` (midpoint, radius, width,
-  magnitude, mignitude), `reductions` (sums and dot products of numbers), `rounding`, `errors`
+  magnitude, mignitude), `reductions` (sums and dot products of numbers), `literals` (1788's
+  interval literals and constructors), `rounding`, `errors`
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)

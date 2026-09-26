@@ -18,11 +18,18 @@ from tests.itf1788 import test_itf1788 as t  # noqa: E402
 print('files', len(t.FILES))
 print('vectors', len(t.VECTORS), 'interval-valued', len(t.INTERVAL_VECTORS), 'test items', len(t.VECTORS) + len(t.INTERVAL_VECTORS))
 print('ops in OPS', len(t.OPS), 'ops with vectors', len({v.op for v in t.VECTORS}))
-cats = Counter(r.split(':')[0] for r in t.DIVERGENCES.values())
+
+
+def category(reason):
+    """the REASONS entry a row's reason starts with (a category may hold a colon: 'no NaI: ...')"""
+    return next(c for c in t.REASONS if reason.startswith(c))
+
+
+cats = Counter(category(r) for r in t.DIVERGENCES.values())
 print('rows (keys) by category', dict(cats), 'total', len(t.DIVERGENCES), 'listed', len(t.LISTED))
-hit = Counter(t.DIVERGENCES[t.key(v)].split(':')[0] for v in t.VECTORS if t.key(v) in t.DIVERGENCES)
+hit = Counter(category(t.DIVERGENCES[t.key(v)]) for v in t.VECTORS if t.key(v) in t.DIVERGENCES)
 print('vectors under a row by category', dict(hit))
-hito = Counter(t.DIVERGENCES[t.key(v)].split(':')[0] for v in t.INTERVAL_VECTORS if t.key(v) in t.DIVERGENCES)
+hito = Counter(category(t.DIVERGENCES[t.key(v)]) for v in t.INTERVAL_VECTORS if t.key(v) in t.DIVERGENCES)
 print('interval vectors under a row by category', dict(hito))
 per_file = Counter(v.source.split(':')[0] for v in t.VECTORS)
 print('vectors per file', dict(per_file))

@@ -18,6 +18,11 @@ from intervals.reductions import sum_abs
 from intervals.reductions import sum_sqr
 from intervals.relations import Allen
 from intervals.relations import TruthSet
+# M13g: ieee 1788's signals and bare constructors
+from intervals.errors import PossiblyUndefinedOperationWarning
+from intervals.errors import UndefinedOperationError
+from intervals.literals import nums_to_interval
+from intervals.literals import text_to_interval
 
 EMPTY = MultiInterval()
 REALS = MultiInterval(-_math.inf, _math.inf)  # the affine extended reals, both infinities included
@@ -42,4 +47,9 @@ __all__ = [
     'sum_abs',
     'sum_sqr',
     'dot',
+    # M13g: ieee 1788's signals and bare constructors
+    'UndefinedOperationError',
+    'PossiblyUndefinedOperationWarning',
+    'text_to_interval',
+    'nums_to_interval',
 ]
