@@ -528,7 +528,8 @@ M13b, M13c, M13d, M13e, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       entire as "no answer", ours is the real set of the fitting `x`, and for `[empty] [empty]` the
       whole line where 1788 answers `∅`. (`1/[0]` is not a row: both give empty.) keyed on the
       statement with its decorations stripped (`tests/itf1788/test_itf1788.py::key`) since M13a.
-      measured 2026-09-26 (M13d), the current count: 19 files, 9542 statements; 7314 vectors of 83
+      measured 2026-09-26 (M13d; the current count, at M13e, is the "counts at M13e" bullet
+      below): 19 files, 9542 statements; 7314 vectors of 83
       ops (every op in `OPS` has vectors), 6301 of them interval-valued and run twice, the 167
       numeric ones run twice more with float operands (13949 vector test items); 114 keys and 0
       unknown failures: 10 degenerate infinities (11 vectors), 5 cut-based relations (7 vectors),
@@ -593,6 +594,13 @@ M13b, M13c, M13d, M13e, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       (generated rows, M13g's). until M13's exit asserts `SKIPPED` empty,
       `tests/itf1788/test_itf1788.py::test_only_m13g_ops_are_skipped` holds every skipped
       statement to M13g's 9 ops, so a reverse op dropped from `OPS` goes red
+    * (M13e, 2026-09-27) **counts at M13e**, the current count (`tools/itf1788_census.py`): 19
+      files; 9269 vectors of 102 ops (every op in `OPS` has vectors), 8256 of them interval-valued
+      and run twice, the 167 numeric ones run twice more with float operands (17525 vector test
+      items); 157 keys and 0 unknown failures: 58 decoration expectations (58 vectors), 47
+      cancellations (94 vectors), 36 degenerate infinities (63 vectors), 11 tighter than the vector
+      (PROPOSED; 18 vectors), 5 cut-based relations (7 vectors). skipped: 273 statements of 9 ops,
+      the text constructors and the decoration ops (M13g's), the only ones left
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
   community test framework and its `itl` vector DSL. all 19 `.itl` files of the maintained fork,
   oheim/ITF1788 at `b6ee1e2`, are vendored unmodified with its `LICENSE`, `NOTICE` and
@@ -866,7 +874,9 @@ design too:
 * **a bug found while building**: `MultiInterval(2).log(4)` hung, since `elementary._exact_log`
   looked only for an int k with `4 ** k == 2` and ziv's loop never settles on the rational 1/2.
   `log_b x` is now exact wherever rational, through each operand's perfect-power decomposition
-  (`elementary._perfect_power`); `pow_rev2` needs it, as every `powRev2` vector's ends are rational
+  (`elementary._perfect_power`; since M13e's review, 2026-09-27, euclid on the exponents,
+  `elementary._log_ratio`, as the root search took minutes on `3 ** 20000 + 1`); `pow_rev2` needs it,
+  as every `powRev2` vector's ends are rational
 * **a proposed category gains rows**: two `powRev2` vectors expect a hull far looser than the
   tightest (`[entire]` and `[-infinity, 0.0]` where it is `[-inf, -0.5]`); they are rows under
   "tighter than the vector", PROPOSED at part 1 and still awaiting the owner

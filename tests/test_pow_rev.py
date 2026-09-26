@@ -612,6 +612,17 @@ def test_pow_rev_float_operands(b, c, x, which):
     assert rev(M.from_cuts(b), M.from_cuts(c), M.from_cuts(x)) == nearest_all & M.from_cuts(x)
 
 
+@pytest.mark.parametrize('a, lo, hi', [(8.0, 2.0, 4.0), (8.0, 0.5, 2.0), (0.125, 2.0, 32.0), (27.0, 3.0, 9.0)])
+def test_pow_rev2_nearest_keeps_the_flag_of_a_moved_log(a, lo, hi):
+    """to nearest, a rational log that rounding moved (`log_8 2` = 1/3) keeps its flag, as the forward
+    log to a base: `pow_rev2(a, c)` is `c.log(a)` for a point a > 0 and c > 0, closed; outward it is open
+    (M13e's review, 2026-09-27: part 4's pin, `log_8 2` from [8.0] and [2.0], saw only the outward side)"""
+    nearest, outward = pow_rev2(M(a), M(lo, hi)), pow_rev2(O(a), O(lo, hi))
+    assert nearest == M(lo, hi).log(a)
+    assert nearest.inf_closed and nearest.sup_closed
+    assert not outward.inf_closed and not outward.sup_closed
+
+
 # SOUND AT SAMPLED POINTS, WITH THE LIBRARY'S POW
 
 def inner(r: MultiInterval) -> MultiInterval:

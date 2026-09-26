@@ -118,12 +118,12 @@ Size(rays=0, length=2, points=0)
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)
-* **ieee 1788**: not a runtime mode. the test suite runs 7314 vectors of 83 ops from all 19 files
-  of the ITF1788 suite through an adapter, the 6301 interval-valued ones a second time through
+* **ieee 1788**: not a runtime mode. the test suite runs 9269 vectors of 102 ops from all 19 files
+  of the ITF1788 suite through an adapter, the 8256 interval-valued ones a second time through
   `OutwardMultiInterval`, the 167 numeric ones twice more with float operands, and all of them
-  match except 114 listed divergences where the semantics
-  differ on purpose or the vector needs decorations (`tests/itf1788/`, measured 2026-09-26). the
-  statements of ops not built yet (reverse ops, the text constructors, decorations) are counted
+  match except 157 listed divergences where the semantics
+  differ on purpose or the vector needs decorations (`tests/itf1788/`, measured 2026-09-27, M13e). the
+  273 statements of ops not built yet (the text constructors, decorations) are counted
   and skipped
 
 ## layout
@@ -132,7 +132,8 @@ Size(rays=0, length=2, points=0)
   `fmt` (printing and parsing), `multi_interval` (the two classes), `relations`, `applicator` and
   `ops` (arithmetic), `modulo`, `steps` (floor, ceil, round, sign), `functions` and `elementary`
   (the elementary functions over sets, and at one point), `numeric` (midpoint, radius, width,
-  magnitude, mignitude), `reductions` (sums and dot products of numbers), `rounding`, `errors`
+  magnitude, mignitude), `reductions` (sums and dot products of numbers), `reverse` (the reverse
+  ops), `rounding`, `errors`
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)

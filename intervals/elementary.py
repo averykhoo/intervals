@@ -586,48 +586,76 @@ def _exact_rootn(x, n: int):
 def _exact_log(x: Fraction, b: Fraction):
     """
     `log_b x` where it is rational (an int or a Fraction), None where it is not (b > 0, b != 1, x > 0).
-    write x = r ** h and b = s ** g with r, s > 1 and h, g as large as they can be (`_perfect_power`):
-    `log_b x` = (h / g) log_s r is rational iff r == s. (if r ** m == s ** n in lowest terms, the prime
-    exponents give r = u ** n and s = u ** m, so m = n = 1 since neither is a perfect power.) so
-    `log_4 2` = 1/2 and `log_8 1/4` = -2/3, which a search for an int k with b**k == x missed (M13e:
-    ziv's loop then never settled, `MultiInterval(2).log(4)` hung)
+    with x, b > 1 (an operand below 1 is inverted and the sign flipped), `log_b x` = e > 0 is rational
+    iff `x ** q == b ** p` for e = p/q, which in lowest terms is `num(x) ** q == num(b) ** p` and
+    `den(x) ** q == den(b) ** p`: so e is the rational log of the two numerators (`::_log_ratio`),
+    and the two denominators must have the same one (or both be 1). so `log_4 2` = 1/2 and
+    `log_8 1/4` = -2/3, which a search for an int k with b**k == x missed (M13e: ziv's loop then never
+    settled, `MultiInterval(2).log(4)` hung)
 
     >>> _exact_log(Fraction(2), Fraction(4)), _exact_log(Fraction(1, 4), Fraction(8)), _exact_log(Fraction(3), Fraction(2))
     (Fraction(1, 2), Fraction(-2, 3), None)
     """
     if x == 1:
         return 0
-    r, h = _perfect_power(x)
-    s, g = _perfect_power(b)
-    if r != s:
+    sign = 1
+    if x < 1:
+        x, sign = 1 / x, -sign
+    if b < 1:
+        b, sign = 1 / b, -sign
+    e = _log_ratio(x.numerator, b.numerator)
+    if e is None:
         return None
-    k = Fraction(h, g)
+    if x.denominator != 1 or b.denominator != 1:
+        if x.denominator == 1 or b.denominator == 1 or _log_ratio(x.denominator, b.denominator) != e:
+            return None
+    k = sign * e
     return k.numerator if k.denominator == 1 else k
 
 
-def _perfect_power(x: Fraction) -> Tuple[Fraction, int]:
-    """`(r, h)` with `x = r ** h`, r > 1 and |h| as large as it can be (h < 0 for x < 1), for x > 0, x != 1"""
-    sign = 1 if x > 1 else -1
-    r, h = (x if sign > 0 else 1 / x), 1
-    for p in _primes_below(r.numerator.bit_length()):
-        # r = u ** p needs r's numerator (> its denominator >= 1) to be at least 2 ** p
-        while p < r.numerator.bit_length():
-            root = _exact_root(r, p)
-            if root is None:
-                break
-            r, h = root, h * p
-    return r, sign * h
+def _log_ratio(a: int, b: int) -> Optional[Fraction]:
+    """
+    the rational e with `a ** q == b ** p` (e = p/q), for ints a, b >= 2, or None if there is none.
+    euclid on the exponents: if a = u ** h and b = u ** g, the larger is the smaller times a power of
+    the smaller (`::_divide_out`) times `u ** (h mod g)`, so `a = b ** t * a'` and `log_b a = t +
+    log_b a'`, down to a' = 1; a step where the larger is not divisible by the smaller shows there is
+    no such u. each step is a few big-int divisions and multiplications, O(log) steps in all (M13e's
+    review: the per-prime root search it replaces took minutes on `3 ** 20000 + 1`)
+    """
+    # log_{b} a as a continued fraction: a = b ** t0 * a1, b = a1 ** t1 * a2, ... until some a_i is 1
+    quotients = []
+    while True:
+        if a == b:
+            quotients.append(1)
+            break
+        if a < b:
+            a, b = b, a
+            quotients.append(0)
+        rest, t = _divide_out(a, b)
+        if t == 0:
+            return None
+        quotients.append(t)
+        if rest == 1:
+            break
+        a, b = b, rest
+    # fold the continued fraction [q0; q1, q2, ...] back up (a 0 swaps: log_b a = 1 / log_a b)
+    e = Fraction(quotients[-1])
+    for q in reversed(quotients[:-1]):
+        e = q + 1 / e
+    return e
 
 
-@lru_cache(maxsize=None)
-def _primes_below(n: int) -> Tuple[int, ...]:
-    """the primes p < n"""
-    sieve = bytearray([1]) * max(n, 2)
-    sieve[:2] = b'\x00\x00'
-    for i in range(2, math.isqrt(n - 1) + 1 if n > 1 else 0):
-        if sieve[i]:
-            sieve[i * i::i] = bytearray(len(sieve[i * i::i]))
-    return tuple(i for i in range(n) if sieve[i])
+def _divide_out(a: int, b: int) -> Tuple[int, int]:
+    """`(a', t)` with `a == b ** t * a'` and b not dividing a', for ints a >= 1, b >= 2 (t in binary)"""
+    powers = [b]
+    while powers[-1] ** 2 <= a:
+        powers.append(powers[-1] ** 2)
+    t = 0
+    for i in reversed(range(len(powers))):  # b ** t | a with t < 2 ** len(powers), so each bit once
+        q, r = divmod(a, powers[i])
+        if r == 0:
+            a, t = q, t + (1 << i)
+    return a, t
 
 
 def _log_at_infinity(x, base):

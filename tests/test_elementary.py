@@ -10,6 +10,7 @@ every rational value returned exactly.
 """
 import math
 import random
+import time
 from decimal import Decimal
 from decimal import localcontext
 from fractions import Fraction
@@ -475,6 +476,22 @@ def test_log_to_a_base_at_a_rational_value():
         assert rounded('log', x, DOWN, base) <= Fraction(p, q) <= rounded('log', x, UP, base)
     assert MultiInterval(2).log(4) == MultiInterval(Fraction(1, 2))
     assert MultiInterval(0.25, 0.5).log(0.25) == MultiInterval(0.5, 1.0)
+
+
+def test_rational_log_of_large_operands_is_fast():
+    # M13e's review (2026-09-27): the per-prime root search of part 4's `_exact_log` took 44 s on
+    # `MultiInterval(3 ** 10000 + 1).log2()` and 356 s on 3 ** 20000 + 1 (786e62d's int search: 0.02 s).
+    # `elementary._log_ratio` runs euclid on the exponents instead, a few big-int steps each
+    for x, base, value in [
+        (3 ** 10000 + 1, 2, None), (3 ** 20000 + 1, 3 ** 19999 + 7, None), (2 ** 6001, 2 ** 6000, Fraction(6001, 6000)),
+        (6 ** 10000, Fraction(1, 36 ** 3), Fraction(-5000, 3)),
+        (Fraction(3 ** 2000, 2 ** 62000), Fraction(3 ** 8, 2 ** 248), 250),
+        (Fraction(3 ** 2000, 2 ** 6200), Fraction(3 ** 8, 2 ** 248), None),  # the numerators agree, not the dens
+        (3 ** 2000, Fraction(3 ** 8, 2), None),
+    ]:
+        start = time.perf_counter()
+        assert exact('log', Fraction(x), base) == value
+        assert time.perf_counter() - start < 5, (x, base)
 
 
 def test_exact_values_round_like_any_other():

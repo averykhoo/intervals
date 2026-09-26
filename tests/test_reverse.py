@@ -478,6 +478,20 @@ def test_float_operands(op, cut_tuples_c, cut_tuples_x):
         assert nearest
 
 
+@pytest.mark.parametrize('lo, hi', [(3.0, 7.0), (0.1, 10.0), (1e-300, 3.0)])
+def test_nearest_keeps_the_flag_of_a_moved_end(lo, hi):
+    """to nearest, an end that rounding moved keeps its flag, as the forward ops' (`functions._Function.end`):
+    `pown_rev(c, -1)` is `c ** -1` for c > 0, closed. outward it is open. rootn with n < 0 is the one
+    branch taking a double to a rational non-double (M13e's review, 2026-09-27: no test saw this flag;
+    `test_float_operands` checks values and the outward closure, and a point hides it by the squeeze)"""
+    nearest, outward = pown_rev(M(lo, hi), -1), pown_rev(O(lo, hi), -1)
+    assert nearest == M(lo, hi) ** -1
+    assert nearest.inf_closed and nearest.sup_closed
+    assert not outward.inf_closed and not outward.sup_closed
+    even = pown_rev(M(4.0, 9.0), -2)  # ±[1/3, 1/2], 1/3 moved
+    assert even == M.parse('[-0.5, -0.3333333333333333] | [0.3333333333333333, 0.5]')
+
+
 @settings(max_examples=100)
 @given(op=ops, cut_tuples_c=cut_tuples(), cut_tuples_x=cut_tuples(), seed=st.integers(0, 2 ** 32 - 1))
 @example(op=('sqr', 2), cut_tuples_c=one(0.0, 25.0), cut_tuples_x=one(-4.1, 6.0), seed=0)
@@ -945,6 +959,13 @@ def test_trig_rev_hull_past_the_cap():
     later = sin_rev(c, M(8, 3000)) | sin_rev(c, M(3000, 6300))
     assert len(first.pieces) == 2 and len(later.pieces) == 1002
     assert split == first | later.hull and len(split.pieces) == 3
+    # the count runs across the pieces of x (M13e's review, 2026-09-27: the case above passes 1000 in
+    # one piece, so a count per piece of x went unseen): 478 then 525 pieces, each under the cap
+    with pytest.warns(HullWarning):
+        both = sin_rev(c, M(0, 3000) | M(3001, 6300))
+    one_, two = sin_rev(c, M(0, 3000)), sin_rev(c, M(3001, 6300))
+    assert len(one_.pieces) + len(two.pieces) > ENUMERATION_CAP > len(two.pieces) > len(one_.pieces)
+    assert both == one_ | two.hull and len(both.pieces) == len(one_.pieces) + 1
 
 
 def test_trig_rev_hull_of_a_wide_x():

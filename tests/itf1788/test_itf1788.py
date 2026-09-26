@@ -691,6 +691,13 @@ def test_only_m13g_ops_are_skipped():
     assert skipped <= _M13G_OPS, sorted(skipped - _M13G_OPS)
 
 
+def test_the_pair_vectors_run_outward():
+    """M13e's review (2026-09-27): a pair vector's expected value is no `Interval`, so only `or v.op in
+    PAIRS` puts it in `INTERVAL_VECTORS`, the outward pass; dropping that removed 347 items, none red"""
+    pairs = {v.source for v in VECTORS if v.op in PAIRS}
+    assert pairs and pairs <= {v.source for v in INTERVAL_VECTORS}
+
+
 # THE ADAPTER'S OWN RULES
 
 def test_input_rule():

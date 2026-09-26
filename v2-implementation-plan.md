@@ -883,7 +883,8 @@ M12; each checked against the D14 oracle (M14)
 * each result is `{x ∈ X : f(x) ∈ C}` (for the binary ones, `∃` over the other operand) as an exact
   multi-interval: `mulRevToPair`'s two intervals are one value here, compared by the adapter as a
   union (our closed pieces against the pair's). ends that are irrational are tightest float
-  enclosures, open
+  enclosures, open (for exact operands; float operands round to nearest, closed, in `MultiInterval`
+  and outward, open, in `OutwardMultiInterval`: part 1's choice, the library's rule)
 * periodic answers per D12: exact pieces up to 1000, past that their hull with `HullWarning`
 * **part 1 done 2026-09-26 (branch `m13e`): `sqr_rev`, `abs_rev`, `pown_rev`,
   `cosh_rev`** (476 statements); sin, cos, tan, mul and pow in parts 2 to 4 and the close-out
@@ -1244,7 +1245,8 @@ M12; each checked against the D14 oracle (M14)
       does the coercion, class, empty-operand warning and `∩` the domain after rounding
     * `intervals/elementary.py::_exact_log` rewritten, with `::_perfect_power` and `::_primes_below`:
       `log_b x` is rational iff x and b are powers of one rational, found by writing each as `r **
-      h` with h as large as it can be (then `log_b x` = h/g iff the two roots agree)
+      h` with h as large as it can be (then `log_b x` = h/g iff the two roots agree). both helpers
+      were replaced at the review (2026-09-27) by `::_log_ratio` and `::_divide_out`, below
     * **a bug found while building**: `MultiInterval(2).log(4)` hung (killed after 60 s): the old
       `_exact_log` searched only for an int k with `b ** k == x`, so `log_4 2` = 1/2 was taken as
       irrational and ziv's loop never settled. every `powRev2` vector's ends are rational (the file
@@ -1404,6 +1406,51 @@ M12; each checked against the D14 oracle (M14)
   counts a dropped op's statements as skips, and `test_every_op_has_vectors` checks `OPS` against
   the vectors, not the skips); the README's `sqr_rev` line expecting 1788's hull `[-2, 2]` 1 red, its
   `sin_rev` line with pi closed 1 red (the README doctest)
+* review (2026-09-27, three read-only reviewers over c6a3b3d: math against an independent oracle,
+  sabotage, spec), each finding reproduced on `m13e` before acting. **one library bug, a
+  performance regression**: part 4's `_exact_log` took a root for every prime below the operand's
+  bit length, so a large exact operand that is not a perfect power was very slow (measured
+  2026-09-27 at c6a3b3d: `MultiInterval(3 ** 5000 + 1).log2()` 1.51 s, `.log10()` 1.69 s,
+  `pow_rev2(M(2), M(3 ** 5000 + 1))` 3.08 s; the reviewers had 356 s for `3 ** 20000 + 1`). fixed:
+  `intervals/elementary.py::_exact_log` now reduces to the numerators and the denominators, each by
+  `::_log_ratio`, euclid on the exponents (`a = b ** t * a'`, `log_b a = t + 1 / log_a' b`, t by
+  `::_divide_out` in binary); `_perfect_power` and `_primes_below` are gone. the same cases now
+  0.00 s, `3 ** 20000 + 1` 0.01 s, `2 ** 60000 + 1` 0.02 s; on 19859 random operands the value and
+  its type agree with c6a3b3d's. (`MultiInterval(10 ** 6000 + 1).log10()` still takes 27 s: ziv's
+  loop at that size, not the exact test, and not new.) pinned by
+  `tests/test_elementary.py::test_rational_log_of_large_operands_is_fast` (7 cases, 5 s each).
+  **three unpinned clauses, now pinned**: to nearest, a moved end keeps its flag in
+  `intervals/reverse.py::_end` (pinned by `tests/test_reverse.py::test_nearest_keeps_the_flag_of_a_moved_end`:
+  `pown_rev(c, -1)` is `c ** -1`, closed, for 3 float c) and in `::_log_corner` (by
+  `tests/test_pow_rev.py::test_pow_rev2_nearest_keeps_the_flag_of_a_moved_log`: `pow_rev2([a], c)`
+  is `c.log(a)`, closed, 4 cases); D12's count running across the pieces of x in
+  `::_periodic_preimage` (a case added to `tests/test_reverse.py::test_trig_rev_hull_past_the_cap`:
+  `[0, 3000] ∪ [3001, 6300]` has 478 then 525 pieces, so the second piece is hulled). **one
+  unpinned adapter clause, now pinned**: `INTERVAL_VECTORS`' `or v.op in PAIRS`
+  (`tests/itf1788/test_itf1788.py::test_the_pair_vectors_run_outward`). sabotage, 2026-09-27, each
+  file restored from a copy and `cmp`-checked (equal), the hypothesis database cleared first:
+  the flag in `_end` dropped 3 red (0 before), in `_log_corner` 4 red (0 before), the running count
+  dropped 1 red (0 before), `or v.op in PAIRS` dropped 1 red (0 before; 17565 passed, 347 items fewer); the
+  rational log: c6a3b3d's `elementary.py` 1 red (5.4 s on `3 ** 10000 + 1`), the denominators' check
+  dropped 4 red, `_divide_out` adding 1 per bit 33, the continued fraction folded without `1 / e`
+  20, a swap not recorded 17, a denominator of 1 on one side accepted **hangs** (`_divide_out` by
+  1; the guard keeps `_log_ratio`'s operands at 2 or more), `_divide_out`'s powers stopping one
+  square short 0 red, an equivalent mutant (a leftover factor gives a 0 quotient, and `[..., t, 0,
+  t', ...]` folds to `[..., t + t', ...]`). **docs**: the README's "ieee 1788" bullet and a
+  "counts at M13e" bullet in `v2-plan.md` "ieee 1788" now carry this branch's census (they said
+  the reverse ops were not built; the every-sub-task rule asks for them, and the merge with M13g
+  re-measures them again); the README's layout names `reverse`; the spec line on irrational ends
+  now says it is the rule for exact operands. **not changed**: the offsets `Fraction(-1, 2)` of
+  `_SIN` and `_TAN` are an equivalent mutant (the one-branch padding absorbs a half-period shift),
+  and `_operands`' `not isinstance(a, bool)` is redundant with `MultiInterval(True)` raising, left
+  as a guard; the category "tighter than the vector" has its line in `v2-plan.md` "ieee 1788" (the
+  reverse-op bullets) but is still PROPOSED, awaiting the owner; the M13 heading's status line,
+  `HANDOFF.md` and the two skip pins (`::_REVERSE_OPS` is defined on both branches, with the same
+  value) are the merge's. part 4's "11 `@given`" is a miscount the close-out already notes (10), and
+  the close-out's measurements dated 2026-09-26 were taken after part 4's, on 2026-09-27 (+0800).
+  the census after the fix (2026-09-27) is unchanged from the close-out's (9269 vectors, 157 keys,
+  273 skipped). the gate, two runs on 2026-09-27: `tests/itf1788` 17913 passed in 47.3 s (one more,
+  the pair pin), the rest 3543 passed in 464.6 s (8 more: the rational-log pin and the 7 flag cases)
 
 **M13f cancellation (done 2026-09-26)** (D13). `cancelPlus` 116, `cancelMinus` 126
 * `A.cancel_minus(B)`: the largest `X` with `B + X ⊆ A` (the Minkowski difference);
