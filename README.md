@@ -100,6 +100,11 @@ Size(rays=0, length=2, points=0)
   past 1000 pieces, or over an unbounded `x` (the default), their hull with a `HullWarning`. ±inf
   and tan's poles have no value, so they are in no preimage. their 136 ITF1788 vectors run through
   the adapter (M13e, 2026-09-26)
+* **power reverse ops**: `pow_rev1(b, c, x)` is the bases `{t ∈ x : t ** y ∈ c for some y ∈ b}` and
+  `pow_rev2(a, c, y)` the exponents `{s ∈ y : t ** s ∈ c for some t ∈ a}`, with the library's pow
+  (`pow_rev1(MI(-1, 1), MI(2))` is `(0, 1/2] ∪ [2, inf)`, `pow_rev2(MI(4), MI(2))` is `[1/2]`);
+  exact where rational, else the tightest float enclosure, open. their 804 ITF1788 vectors run
+  through the adapter (M13e, 2026-09-26)
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`

@@ -2,7 +2,7 @@
 reverse ops (ieee 1788's reverse-mode elementary functions; M13e, D12): the preimage of a set
 
 `sqr_rev(c, x)`, `abs_rev(c, x)`, `pown_rev(c, n, x)` and `cosh_rev(c, x)` (and `sin_rev`, `cos_rev`,
-`tan_rev`, `mul_rev`, below) are each
+`tan_rev`, `mul_rev`, `pow_rev1`, `pow_rev2`, below) are each
 
     {t in x : f(t) has a value and f(t) in c}
 
@@ -50,6 +50,11 @@ the branches meeting each piece of `x` (one more on each side) are listed, and D
 piece of `x` as `steps.step` applies it per piece of its operand (`_periodic_preimage`). sin, cos and
 tan have no value at ±inf, nor tan at its poles, so neither is in any preimage
 
+**the power's reverse ops** (`pow_rev1`, `pow_rev2`, M13e part 4) are two-variable, like `mul_rev`: a
+case per special point of the library's pow (a base 0, 1 or inf; an exponent 0 or ±inf), and for the
+rest the set of `v ** (1/w)` (the bases) or of `log_t v` (the exponents) over boxes of `c` and the other
+operand, each box monotone in both, so its ends are two corners (`_power_box`'s rule; `_log_box`)
+
 >>> from intervals import MultiInterval as M
 >>> sqr_rev(M(1, 4))
 MultiInterval.parse('{ [-2, -1] , [1, 2] }')
@@ -69,6 +74,7 @@ from typing import Optional
 from typing import Tuple
 
 from intervals import elementary
+from intervals import functions
 from intervals import kernel
 from intervals import ops
 from intervals.applicator import warn
@@ -82,6 +88,7 @@ from intervals.multi_interval import OutwardMultiInterval
 from intervals.rounding import DOWN
 from intervals.rounding import NEAREST
 from intervals.rounding import UP
+from intervals.rounding import has_finite_float
 from intervals.rounding import is_float
 from intervals.rounding import is_infinite
 from intervals.rounding import round_rational
@@ -488,3 +495,202 @@ def _periodic(fn: _Periodic) -> Callable[[Cuts, Cuts, bool], Cuts]:
     """the preimage function `_reverse` calls: x comes first, as the periodic ops' `given`, since which
     branches to list depends on it"""
     return lambda x, c, outward: _periodic_preimage(fn, x, c, outward)
+
+
+# POWER (M13e: ieee 1788's powRev1 and powRev2, the reverse ops of pow, D11)
+#
+# the library's pow (`functions.pow_`) at a point: `0 ** y` = 0 for y in (0, inf], and nothing for
+# y <= 0; `1 ** y` = 1 for a finite y, nothing at ±inf; `inf ** y` = inf for y in (0, inf], 0 for y in
+# [-inf, 0), nothing at 0; `x ** 0` = 1 for a finite x > 0; for x in (0, 1) ∪ (1, inf), `x ** inf` is 0
+# below 1 and inf above, `x ** -inf` the reverse; a negative base has no value. every other `x ** y`
+# (x in (0, 1) ∪ (1, inf) finite, y finite and not 0) is finite, positive and not 1
+
+_OPEN_UNIT = _one(0, 1, False, False)  # (0, 1)
+_ABOVE_ONE = _one(1, INF, False, False)  # (1, inf)
+_BASES = kernel.union(_OPEN_UNIT, _ABOVE_ONE)  # the finite x > 0 but 1, and the values x ** y there
+_BASE_PARTS = ((-1, _OPEN_UNIT), (1, _ABOVE_ONE))  # by the side of 1 (ln's sign)
+_EXPONENT_PARTS = ((-1, _NEGATIVE), (1, _POSITIVE))  # the finite y != 0, by sign
+_UP_TO_INF = _one(0, INF, False, True)  # (0, inf]: the y with `0 ** y` = 0 and `inf ** y` = inf
+_FROM_MINUS_INF = _one(-INF, 0, True, False)  # [-inf, 0): the y with `inf ** y` = 0
+_BELOW_ONE_FROM_0 = _one(0, 1, True, False)  # [0, 1): the x with `x ** inf` = 0
+_ABOVE_ONE_TO_INF = _one(1, INF, False, True)  # (1, inf]: the x with `x ** inf` = inf and `x ** -inf` = 0
+
+
+def pow_rev1(b, c, x=_REALS) -> MultiInterval:
+    """
+    `{t in x : t ** y in c for some y in b}`, `**` being the library's pow (`functions.pow_`, D11:
+    ieee 1788's pow, with ±inf as points where it has a limit); ieee 1788's powRev1
+
+    `t` is in the result iff `{t} ** b` meets `c`. by the kind of `t` (the derivation, for `_pow1_preimage`):
+
+    * `t = 0`: iff `0 ∈ c` and `b` meets `(0, inf]`; `t = 1`: iff `1 ∈ c` and `b` has a finite point;
+      `t = inf`: iff `inf ∈ c` and `b` meets `(0, inf]`, or `0 ∈ c` and `b` meets `[-inf, 0)`
+    * a finite `t > 0` other than 1: from `y = 0`, all of them if `0 ∈ b` and `1 ∈ c`; from `y = inf`,
+      those below 1 if `0 ∈ c` and those above 1 if `inf ∈ c` (`y = -inf` the other way round); from a
+      finite `y != 0`, `t = v ** (1/y)` for `v` in `c ∩ ((0, 1) ∪ (1, inf))`: the library's pow of those
+      `v` by those `1/y`, box by box (`functions._power_box`), so an end is exact where rational and
+      rounded where not exactly as `**` rounds `v ** (1/y)` (to nearest in a `MultiInterval` with a
+      float operand, flags kept; outward in an `OutwardMultiInterval`, a moved end open; for exact
+      operands, an irrational end is its tightest float enclosure, open)
+
+    1788 answers the hull and has no infinite points. then `∩ x`
+
+    >>> from intervals import MultiInterval as M
+    >>> pow_rev1(M(2), M(4, 9))
+    MultiInterval.parse('[2, 3]')
+    >>> pow_rev1(M(-1, 1), M(2))  # t = 2 ** (1/y): [2, inf) for y in (0, 1], (0, 1/2] for y in [-1, 0)
+    MultiInterval.parse('{ (0, 1/2] , [2, inf) }')
+    >>> pow_rev1(M(0), M(1))  # t ** 0 = 1 for a finite t > 0; 0 ** 0 and inf ** 0 have no value
+    MultiInterval.parse('(0, inf)')
+    >>> pow_rev1(M(-2), M(0, 1))  # inf ** -2 = 0; 0 ** -2 has no value
+    MultiInterval.parse('[1, inf]')
+    >>> print(pow_rev1(M(2), M(2)))
+    (1.414213562373095, 1.4142135623730951)
+    """
+    return _reverse('pow_rev1', c, x, _pow1_preimage, given=(b,))
+
+
+def _pow1_preimage(b: Cuts, c: Cuts, outward: bool) -> Cuts:
+    """`{t : t ** y in c for some y in b}` for non-empty `b` and `c` (the cases: `pow_rev1`)"""
+    has, meets = kernel.contains_point, _meets
+    parts = []
+    if has(c, 0) and meets(b, _UP_TO_INF):  # 0 ** y = 0 for y > 0
+        parts.append(_one(0, 0))
+    if has(c, 1) and meets(b, _REAL_LINE):  # 1 ** y = 1 for a finite y
+        parts.append(_one(1, 1))
+    if (has(c, INF) and meets(b, _UP_TO_INF)) or (has(c, 0) and meets(b, _FROM_MINUS_INF)):  # inf ** y
+        parts.append(_one(INF, INF))
+    if has(b, 0) and has(c, 1):  # t ** 0 = 1
+        parts.append(_BASES)
+    for y, small, large in ((INF, 0, INF), (-INF, INF, 0)):  # t ** ±inf: by the side of 1, 0 or inf
+        if has(b, y):
+            if has(c, small):
+                parts.append(_OPEN_UNIT)
+            if has(c, large):
+                parts.append(_ABOVE_ONE)
+    as_float = has_finite_float(b) or has_finite_float(c)
+    for sv, v_part in _BASE_PARTS:  # finite t and y != 0: t = v ** (1/y), v = t ** y in (0, 1) ∪ (1, inf)
+        for sw, w_part in _EXPONENT_PARTS:
+            for v in kernel.pieces(kernel.intersection(c, v_part)):
+                for w in kernel.pieces(kernel.intersection(b, w_part)):
+                    lo, lo_closed, hi, hi_closed = functions._power_box(v, _reciprocal(w, sw), sv, sw, as_float, outward)
+                    parts.append(_one(lo, hi, lo_closed, hi_closed))
+    return kernel.union(*parts)
+
+
+def _reciprocal(w, sign: int):
+    """`{1/y : y in w}` for a piece w of one sign, exactly: its ends swapped, 1/0 the signed infinity"""
+    lo, lo_closed, hi, hi_closed = w
+
+    def inverse(y):
+        return sign * INF if y == 0 else 0 if is_infinite(y) else 1 / Fraction(y)
+    return inverse(hi), hi_closed, inverse(lo), lo_closed
+
+
+def _meets(cuts: Cuts, part: Cuts) -> bool:
+    return bool(kernel.intersection(cuts, part))
+
+
+def pow_rev2(a, c, y=_REALS) -> MultiInterval:
+    """
+    `{s in y : t ** s in c for some t in a}`, `**` being the library's pow (`functions.pow_`, D11);
+    ieee 1788's powRev2
+
+    `s` is in the result iff `a ** {s}` meets `c`. by the kind of `s` (the derivation, for `_pow2_preimage`):
+
+    * `s = 0`: iff `1 ∈ c` and `a` meets `(0, inf)`; `s = inf`: iff `0 ∈ c` and `a` meets `[0, 1)`, or
+      `inf ∈ c` and `a` meets `(1, inf]`; `s = -inf`: iff `inf ∈ c` and `a` meets `(0, 1)`, or `0 ∈ c` and
+      `a` meets `(1, inf]`
+    * a finite `s != 0`: from `t = 0`, every `s > 0` if `0 ∈ a` and `0 ∈ c`; from `t = 1`, every `s` if
+      `1 ∈ a` and `1 ∈ c`; from `t = inf`, every `s > 0` if `inf ∈ c` and every `s < 0` if `0 ∈ c`;
+      from a finite `t` in `(0, 1) ∪ (1, inf)`, `s = log_t v` for `v` in `c ∩ ((0, 1) ∪ (1, inf))`,
+      box by box (`_log_box`), each end `elementary`'s correctly rounded `log(v, t)`: exact where
+      rational (`log_4 2` = 1/2), else rounded as `pow_rev1` rounds
+
+    1788 answers the hull and has no infinite points. then `∩ y`
+
+    >>> from intervals import MultiInterval as M
+    >>> pow_rev2(M(2), M(4, 8))
+    MultiInterval.parse('[2, 3]')
+    >>> pow_rev2(M(1, 4), M(2))  # log_t 2 for t in (1, 4]: [1/2, inf); 1 ** s is never 2
+    MultiInterval.parse('[1/2, inf)')
+    >>> pow_rev2(M(0), M(0))  # 0 ** s = 0 for s in (0, inf]
+    MultiInterval.parse('(0, inf]')
+    >>> print(pow_rev2(M(3), M(2)))
+    (0.6309297535714574, 0.6309297535714575)
+    """
+    return _reverse('pow_rev2', c, y, _pow2_preimage, given=(a,))
+
+
+def _pow2_preimage(a: Cuts, c: Cuts, outward: bool) -> Cuts:
+    """`{s : t ** s in c for some t in a}` for non-empty `a` and `c` (the cases: `pow_rev2`)"""
+    has, meets = kernel.contains_point, _meets
+    parts = []
+    if has(c, 1) and meets(a, _POSITIVE):  # t ** 0 = 1 for a finite t > 0
+        parts.append(_one(0, 0))
+    if (has(c, 0) and meets(a, _BELOW_ONE_FROM_0)) or (has(c, INF) and meets(a, _ABOVE_ONE_TO_INF)):  # t ** inf
+        parts.append(_one(INF, INF))
+    if (has(c, INF) and meets(a, _OPEN_UNIT)) or (has(c, 0) and meets(a, _ABOVE_ONE_TO_INF)):  # t ** -inf
+        parts.append(_one(-INF, -INF))
+    if has(a, 0) and has(c, 0):  # 0 ** s = 0 for s > 0
+        parts.append(_POSITIVE)
+    if has(a, 1) and has(c, 1):  # 1 ** s = 1
+        parts.append(_NONZERO)
+    if has(a, INF):  # inf ** s: inf for s > 0, 0 for s < 0
+        if has(c, INF):
+            parts.append(_POSITIVE)
+        if has(c, 0):
+            parts.append(_NEGATIVE)
+    as_float = has_finite_float(a) or has_finite_float(c)
+    for st, t_part in _BASE_PARTS:  # finite t and s != 0: s = log_t v, v = t ** s in (0, 1) ∪ (1, inf)
+        for sv, v_part in _BASE_PARTS:
+            for t in kernel.pieces(kernel.intersection(a, t_part)):
+                for v in kernel.pieces(kernel.intersection(c, v_part)):
+                    lo, lo_closed, hi, hi_closed = _log_box(v, t, sv, st, as_float, outward)
+                    parts.append(_one(lo, hi, lo_closed, hi_closed))
+    return kernel.union(*parts)
+
+
+def _log_box(v, t, sv: int, st: int, as_float: bool, outward: bool):
+    """
+    `{log_r u : u in v, r in t}` as a piece, for pieces v and t on sides `sv` and `st` of 1: `log_r u =
+    ln u / ln r` rises with u iff `st > 0` and with r iff `sv < 0`, so the least value is at v's low end
+    iff `st > 0` and t's low end iff `sv < 0`, the greatest at the other two
+    """
+    ends = []
+    for want, other in ((DOWN, False), (UP, True)):
+        v_hi, t_hi = (st < 0) != other, (sv > 0) != other
+        u, u_closed = (v[2], v[3]) if v_hi else (v[0], v[1])
+        r, r_closed = (t[2], t[3]) if t_hi else (t[0], t[1])
+        ends.append(_log_corner(u, r, sv, st, want, u_closed and r_closed, as_float, outward))
+    (lo, lo_closed), (hi, hi_closed) = ends
+    if lo == hi:  # rounding to nearest squeezed the piece to one point: keep it, closed
+        return lo, True, hi, True
+    return lo, lo_closed, hi, hi_closed
+
+
+def _log_corner(u, r, sv: int, st: int, want: int, attained: bool, as_float: bool, outward: bool):
+    """
+    `(log_r u, closed)` at a corner, the limit where the corner is an open end at 0, 1 or inf (an extreme
+    corner never pairs 1 with 1, nor 0 or inf with 0 or inf), rounded as `functions._power_corner` rounds
+    a power
+    """
+    direction = (want if outward else NEAREST) if as_float else want
+    if u == 1:
+        value = 0
+    elif r == 1:  # ln r -> 0 from st's side
+        value = sv * st * INF
+    elif u == 0:
+        value = -st * INF
+    elif u == INF:
+        value = st * INF
+    elif r == 0 or r == INF:
+        value = 0
+    else:
+        value = elementary.exact('log', Fraction(u), Fraction(r))
+        if value is None:  # irrational
+            return elementary.rounded('log', Fraction(u), direction, Fraction(r)), attained and direction == NEAREST
+    if is_infinite(value) or not as_float:
+        return value, attained
+    rounded = round_rational(value, direction)
+    return rounded, attained and (direction == NEAREST or rounded == value)

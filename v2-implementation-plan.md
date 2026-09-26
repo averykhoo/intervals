@@ -1222,6 +1222,135 @@ M12; each checked against the D14 oracle (M14)
   rows dropped 24 (each vector in both passes). **green, as argued**: `rounded_inverse_trig`'s
   extra bits for k removed, 0 red: they save ziv doublings for a branch far out, and ziv doubles the
   precision itself without them
+* **part 4 done 2026-09-26 (branch `m13e`): `pow_rev1`, `pow_rev2`** (powRev1 429, powRev2 375
+  statements, all in `pow_rev.itl`, all with the domain given; none in `libieeep1788_rev.itl`).
+  built:
+    * `intervals/reverse.py::pow_rev1(b, c, x=REALS)`, the bases `{t ∈ x : t ** y ∈ c for some y ∈
+      b}`, and `::pow_rev2(a, c, y=REALS)`, the exponents `{s ∈ y : t ** s ∈ c for some t ∈ a}`,
+      `**` the library's pow (`functions.pow_`, D11) at a point; exported from `intervals`
+      (`test_package_exports_unchanged` lists them). no branch engine, as for `mul_rev`: pow is not
+      a function of one variable. `::_pow1_preimage` and `::_pow2_preimage` take a case per special
+      point of pow (the derivations are in the two docstrings): a base 0 (`0 ** y` = 0 for y in `(0,
+      inf]`), 1 (`1 ** y` = 1 for a finite y) or inf (inf for y > 0, 0 for y < 0), an exponent 0
+      (`t ** 0` = 1 for a finite t > 0) or ±inf (0 or inf by the side of 1); the rest, a finite
+      base in `(0, 1) ∪ (1, inf)` with a finite exponent other than 0, has values in `(0, 1) ∪ (1,
+      inf)` and comes from boxes of `c` and the other operand cut at 1 and at 0, monotone in both
+      variables, so each box's ends are two corners. the bases are `v ** (1/w)`, run through pow's
+      own box rule, `functions._power_box`, on `(v, 1/w)` (`::_reciprocal` inverts a piece of `b`
+      exactly, 1/0 the signed infinity), so an end is rounded exactly as `**` rounds `v ** (1/w)`;
+      the exponents are `log_t v`, `::_log_box` and `::_log_corner` (the extreme corners by the
+      signs of `ln t` and `ln v`, the limits at 0, 1 and inf, never 1 with 1 nor 0 or inf with 0 or
+      inf), each end `elementary.rounded('log', v, direction, t)`. `::_reverse` with `given=(b,)`
+      does the coercion, class, empty-operand warning and `∩` the domain after rounding
+    * `intervals/elementary.py::_exact_log` rewritten, with `::_perfect_power` and `::_primes_below`:
+      `log_b x` is rational iff x and b are powers of one rational, found by writing each as `r **
+      h` with h as large as it can be (then `log_b x` = h/g iff the two roots agree)
+    * **a bug found while building**: `MultiInterval(2).log(4)` hung (killed after 60 s): the old
+      `_exact_log` searched only for an int k with `b ** k == x`, so `log_4 2` = 1/2 was taken as
+      irrational and ziv's loop never settled. every `powRev2` vector's ends are rational (the file
+      picks operands whose binary logs are exact), so `pow_rev2` needs the fix; pinned by
+      `tests/test_elementary.py::test_exact_log_to_a_base_is_rational_where_it_is` (13 cases) and
+      `::test_log_to_a_base_at_a_rational_value` (300 random powers of one root, and the two
+      `MultiInterval` calls)
+    * **choices the plan left open** (conservative, flagged in `v2-plan.md` "2026-09-26 revision:
+      M13e, fourth part"):
+        * **the library's own pow defines them**, ±inf as points, so `pow_rev1([-2], [0, 1])` is
+          `[1, inf]` (`inf ** -2` = 0) and the points with no value (`0 ** y` for y <= 0, `1 **
+          ±inf`, `inf ** 0`, a negative base) solve nothing; no 1788 vector sees it, since each gives
+          the domain through the input rule and no operand has an infinite point
+        * the operand order is 1788's, the domain last, named `x` for `pow_rev1` and `y` for
+          `pow_rev2` (the plan's names), defaulting to `[-inf, inf]`
+        * **the float rule is pow's, per operand** (any finite float end of either operand makes
+          every end float), not part 1's per end of `c`: "built on the library's own pow". so
+          `pow_rev1([n], c)` is `pown_rev(c, n)` on `[0, inf]` exactly when `c`'s ends are all
+          exact or all float (`tests/test_pow_rev.py::test_pow_rev1_by_an_int_is_pown_rev_on_the_bases`
+          draws only those)
+        * to nearest, an end past the largest double rounds to inf and stays closed, the library's
+          nearest rule (`MultiInterval(1e200) ** MultiInterval(1000.0)` is `[inf]`, and so is
+          `pow_rev1([1e-3], [1e200])`); `OutwardMultiInterval` keeps it open. the float test widens
+          through ±inf for it (`::widened`)
+        * the class, the coercion, the warnings (only an empty operand warns) and `∩` the domain
+          after rounding are part 1's
+    * adapter (`tests/itf1788/test_itf1788.py`): `powRev1`, `powRev2` in `OPS`, one labelled
+      block, the calls with the domain given. rows: `::_POW_REV_LOOSE_ROWS` (2 keys, reason
+      `::_POW_REV_LOOSE`) under the **proposed category "tighter than the vector"** of part 1, not
+      yet approved by the owner. no other row, no new category
+    * **a finding: two 1788 vectors are far from tight.** `powRev2 [0.25, 0.5] [2.0, infinity]
+      [entire] = [entire]` (`pow_rev.itl:609`) and `powRev2 [0.25, 1.0] [2.0, infinity] [entire] =
+      [-infinity, 0.0]` (`:642`): for t in `[1/4, 1)`, `t ** s >= 2` iff `s <= log_t 2 <= -1/2`
+      (`(1/4) ** -1/2` is exactly 2; `1 ** s` is never 2), so the tightest hull is `[-inf, -0.5]`,
+      which ours is; the vectors just above them with `c = [2, 4]` (`:608`, `:640`) answer -0.5 at
+      that end. decided exactly, no rounding, by `tests/test_pow_rev.py::test_pow_rev2_is_tighter_than_the_vector`
+    * tests (`tests/test_pow_rev.py`, a new module, 50 items in 38.6 s under the shared laptop's
+      load, 2026-09-27): 11 `@given`, all
+      `deadline=None`. the oracle is written from the definitions (`::special`, `::cmp_value`,
+      `::fits1`, `::fits2`): the other operand's pieces map monotonically onto intervals whose ends
+      are compared with `c`'s, `t ** (p/q)` against `v` exactly as `t ** p` against `v ** q` where
+      that is small, else by arb at a growing precision (`::cmp_pow`).
+      `::test_pow_rev1_is_exactly_the_points_that_fit`, `::test_pow_rev2_is_exactly_the_points_that_fit`
+      (150 examples each, exact non-empty operands; at the ends of the operands and of the result,
+      one double either side of every float end, a float approximation of every `v ** (1/w)` or
+      `log_t v` of the ends with its neighbours, a point between each two, one beyond, ±inf, -1, 0,
+      1: a point fitting is in the result, a point in it fits or lies in a rounded end's slack, the
+      double inward from a rounded end therefore fitting), `::test_pow_rev1_the_largest_set`,
+      `::test_pow_rev2_the_largest_set` (`T ⊆ pow_rev1(B, T ** B ∪ more)` with the library's pow on
+      sets, in the outward class, the t with `{t} ** B` empty aside; likewise `S`),
+      `::test_pow_rev_isotone_and_distributive` (both ops: isotone in each operand, distributing
+      over unions of each, the domain only intersecting), `::test_pow_rev_symmetry` (`pow_rev1(-B,
+      1/C)` is `pow_rev1(B, C)` but at 0; `pow_rev2(A, 1/C)` is `-pow_rev2(A, C)` for A without 0),
+      `::test_pow_rev1_by_an_int_is_pown_rev_on_the_bases` (both classes, rounding included),
+      `::test_pow_rev2_of_a_point_is_the_log` (`pow_rev2([t], c)` is `c.log(t)`, both classes),
+      `::test_pow_rev_float_operands` (outward holds the exact result of the same doubles, adds no
+      double strictly inside, closes only exact points; nearest within one double, inside the
+      outward closure, not empty when the exact result is not; then the domain only intersects),
+      `::test_pow_rev_sound_at_sampled_points` (the library's `{t} ** B` and `A ** {s}` on sampled
+      points, float operands and ±inf included: a point whose image surely meets `c` is in the exact
+      and the outward results, a point of the exact result has an image meeting `c` or lies in a
+      slack). `@example`s: `pow_rev.itl:35`, `:45`, `:47`, `:61`, `:86`, `:96`, `:107`, `:173`,
+      `:504`, `:544`, `:554`, `:559`, `:573`, `:591`, `:608`, `:609`, `:642`, the special points (`[inf]`,
+      `[-inf]`, `[0]` against `[0]`, `[1]`, `[0, inf]`), `log_3 2`, overflow past max float and
+      underflow below the least subnormal, `log_8 2` = 1/3 from float operands and a squeezed
+      piece (the last two added for sabotage, below). plus 37 parametrized examples,
+      `::test_irrational_ends_are_open_one_ulp_enclosures`, `::test_class_coercion_and_warnings`,
+      `::test_pow_rev2_is_tighter_than_the_vector`
+* evidence, measured 2026-09-26 (`tools/itf1788_census.py`): the 804 vectors of the two ops (all in
+  `pow_rev.itl`, all interval-valued, none with `[nai]`): 802 match in both passes; 2 (2 keys) are
+  rows under the proposed category. all ops: 9269 vectors of 102 ops, 8256 interval-valued, 157
+  divergence keys (36 degenerate infinities, 11 proposed, 58 decoration expectations), 0 unknown
+  failures; skipped 273 statements of 9 ops, all M13g's (`b-textToInterval` and `d-textToInterval` 91
+  each, `setDec` 22, `isNaI` 16, `intervalPart` 15, `newDec` 13, `b-numsToInterval` 10,
+  `d-numsToInterval` 9, `decorationPart` 6). the gate, as two runs on 2026-09-27: `tests/itf1788`
+  17911 passed in 68.7 s, the rest 3535 passed in 676.9 s under the shared laptop's load (21446 in
+  all; 19771 at part 3)
+* sabotage (section 2), 2026-09-26/27: 40 breaks by a throwaway harness, each file restored from a
+  copy and byte-compared (`filecmp`, all equal), the hypothesis database cleared before every run
+  (so no replayed failure of an earlier break counts), results appended as they landed. the
+  library breaks run against `tests/test_pow_rev.py`, the log tests of `tests/test_elementary.py`
+  (`-k 'pow_rev or log'`, 107 items) and the doctests of `reverse.py` and `elementary.py`, and
+  against every itf1788 item matching `pow_rev` (1610); counts as lib / vector items. pow_rev1: `t
+  = 0` for any finite y 7 / 40; `t = 0` dropped 5 / 12; `t = 1` dropped 7 / 12; `t = 1` by `y =
+  ±inf` too 1 / 0 at first (the defining property's `@example`), then 3 with a pinning example
+  (`pow_rev1([inf], [1])` is `∅`); `inf ** y` = 0 by y > 0 8 / 0; `t = inf` dropped 9 / 0; `y = 0`
+  dropped 5 / 118; `y = 0` without `1 ∈ c` 6 / 138; `y = ±inf` with the sides of 1 swapped 5 / 0;
+  `y = ±inf` dropped 6 / 0; `1/y` with its ends not swapped 9 / 518; `1/0` of the wrong sign 8 / 530;
+  the float rule from `c` only 1 / 0 (`::test_irrational_ends_are_open_one_ulp_enclosures`); outward
+  ignored 3 / 35; the main part dropped 15 / 296. pow_rev2: `s = 0` dropped 6 / 26; `s = 0` by `t =
+  0` and inf too 4 / 2; `0 ** inf` dropped 4 / 0; `0 ** -inf` taken as inf 1 / 0; `t = 0` dropped 5 /
+  18; `t = 1` dropped 4 / 124; `_log_box`'s u end chosen wrong 14 / 478, its r end 11 / 204; the
+  corner at `r = 1` with its sign flipped 9 / 498, at `u = 0` 7 / 44; `log_r 1` taken as 1 4 / 30; an
+  irrational end kept closed 4 / 0; outward ignored 2 / 0; the float rule from `c` only 1 / 0. the
+  rational log: the fraction inverted 35 / 36; unrelated roots taken as one 22 / 0; one root per
+  prime in `_perfect_power` 3 / 0; ints only, the old behaviour, **hung** in both runs (killed after
+  600 s: every `powRev2` vector's ends are rational). the wiring: `powRev1` with `b` and `c` swapped
+  418, `powRev2` run as `pow_rev1` 638, `powRev1` ignoring `x` 396, the 2 loose rows dropped 4.
+  **no vector sees** any clause at an infinite point (the input rule gives no operand one) nor the
+  float rule, the outward rule of the logs or a closed irrational end (the closed hull hides a
+  flag): the properties hold those. **first green, now pinned**: `inf ** s` with its signs swapped
+  (0 red: `[inf]` against `[0, inf]` gives the same set either way; now 2, `pow_rev2([inf], [inf])`
+  is `(0, inf]` and against `[0]` it is `[-inf, 0)`), a moved rational log end kept closed outward
+  (0 red: hypothesis never drew a rational non-double log from float operands; now 1, `log_8 2` from
+  `[8.0]` and `[2.0]`), and `_log_box`'s squeeze rule removed (0 red: no drawn open piece of `c` was
+  narrow enough; now 1, `log_3` of `(1e300, 1e300 + ulp)` is one double to nearest)
 
 **M13f cancellation (done 2026-09-26)** (D13). `cancelPlus` 116, `cancelMinus` 126
 * `A.cancel_minus(B)`: the largest `X` with `B + X ⊆ A` (the Minkowski difference);

@@ -583,29 +583,51 @@ def _exact_rootn(x, n: int):
     return None if r is None else r if n > 0 else 1 / r
 
 
-def _exact_log(x: Fraction, b: Fraction) -> Optional[int]:
-    """the int k with b**k == x, if there is one (b > 0, b != 1, x > 0)"""
+def _exact_log(x: Fraction, b: Fraction):
+    """
+    `log_b x` where it is rational (an int or a Fraction), None where it is not (b > 0, b != 1, x > 0).
+    write x = r ** h and b = s ** g with r, s > 1 and h, g as large as they can be (`_perfect_power`):
+    `log_b x` = (h / g) log_s r is rational iff r == s. (if r ** m == s ** n in lowest terms, the prime
+    exponents give r = u ** n and s = u ** m, so m = n = 1 since neither is a perfect power.) so
+    `log_4 2` = 1/2 and `log_8 1/4` = -2/3, which a search for an int k with b**k == x missed (M13e:
+    ziv's loop then never settled, `MultiInterval(2).log(4)` hung)
+
+    >>> _exact_log(Fraction(2), Fraction(4)), _exact_log(Fraction(1, 4), Fraction(8)), _exact_log(Fraction(3), Fraction(2))
+    (Fraction(1, 2), Fraction(-2, 3), None)
+    """
     if x == 1:
         return 0
-    # b**k in lowest terms is num(b)**k / den(b)**k (or its inverse), and one of those is >= 2, so an
-    # exact k is no longer than x's numerator or denominator in bits
-    bound = max(x.numerator.bit_length(), x.denominator.bit_length()) + 1
-    p = _START_PRECISION
-    while True:
-        try:
-            lo, hi = _fractions(_div(_log_rational(x, p), _log_rational(b, p), p), p)
-        except _Retry:
-            p *= 2
-            continue
-        if lo > bound or hi < -bound:
-            return None
-        if hi - lo < 2:
-            break
-        p *= 2
-    for k in range(math.floor(lo), math.ceil(hi) + 1):
-        if b ** k == x:
-            return k
-    return None
+    r, h = _perfect_power(x)
+    s, g = _perfect_power(b)
+    if r != s:
+        return None
+    k = Fraction(h, g)
+    return k.numerator if k.denominator == 1 else k
+
+
+def _perfect_power(x: Fraction) -> Tuple[Fraction, int]:
+    """`(r, h)` with `x = r ** h`, r > 1 and |h| as large as it can be (h < 0 for x < 1), for x > 0, x != 1"""
+    sign = 1 if x > 1 else -1
+    r, h = (x if sign > 0 else 1 / x), 1
+    for p in _primes_below(r.numerator.bit_length()):
+        # r = u ** p needs r's numerator (> its denominator >= 1) to be at least 2 ** p
+        while p < r.numerator.bit_length():
+            root = _exact_root(r, p)
+            if root is None:
+                break
+            r, h = root, h * p
+    return r, sign * h
+
+
+@lru_cache(maxsize=None)
+def _primes_below(n: int) -> Tuple[int, ...]:
+    """the primes p < n"""
+    sieve = bytearray([1]) * max(n, 2)
+    sieve[:2] = b'\x00\x00'
+    for i in range(2, math.isqrt(n - 1) + 1 if n > 1 else 0):
+        if sieve[i]:
+            sieve[i * i::i] = bytearray(len(sieve[i * i::i]))
+    return tuple(i for i in range(n) if sieve[i])
 
 
 def _log_at_infinity(x, base):

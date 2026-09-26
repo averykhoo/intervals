@@ -16,6 +16,7 @@ from fractions import Fraction
 
 import pytest
 
+from intervals import MultiInterval
 from intervals import elementary
 from intervals.elementary import compare
 from intervals.elementary import exact
@@ -449,6 +450,31 @@ def test_exact(name, x, value):
 ])
 def test_exact_log_to_a_base(x, base, value):
     assert exact('log', x, base) == value
+
+
+# M13e (pow_rev2's ends are `log_t v`): `log_b x` is rational iff x and b are powers of one rational. the
+# old search for an int k with b**k == x missed `log_4 2` = 1/2, and ziv's loop then never settled
+# (`MultiInterval(2).log(4)` hung)
+@pytest.mark.parametrize('x, base, value', [
+    (2, 4, Fraction(1, 2)), (Fraction(1, 4), 8, Fraction(-2, 3)), (Fraction(1, 2), Fraction(1, 4), Fraction(1, 2)),
+    (8, 4, Fraction(3, 2)), (27, Fraction(1, 9), Fraction(-3, 2)), (Fraction(9, 4), Fraction(27, 8), Fraction(2, 3)),
+    (2 ** 60, 2 ** 36, Fraction(5, 3)), (Fraction(1, 2 ** 1074), 2 ** 6, -179), (6, 36, Fraction(1, 2)),
+    (12, 18, None), (3, 4, None), (2, 6, None), (Fraction(4, 9), Fraction(3, 2), -2),
+])
+def test_exact_log_to_a_base_is_rational_where_it_is(x, base, value):
+    assert exact('log', Fraction(x), base) == value
+
+
+def test_log_to_a_base_at_a_rational_value():
+    rng = random.Random(1788)
+    for _ in range(300):
+        root = Fraction(rng.choice([2, 3, Fraction(2, 3), 10, Fraction(1, 5), 6]))
+        p, q = rng.randint(-40, 40), rng.choice([-6, -4, -3, -2, -1, 1, 2, 3, 5, 7])
+        x, base = root ** p, root ** q
+        assert exact('log', x, base) == Fraction(p, q)
+        assert rounded('log', x, DOWN, base) <= Fraction(p, q) <= rounded('log', x, UP, base)
+    assert MultiInterval(2).log(4) == MultiInterval(Fraction(1, 2))
+    assert MultiInterval(0.25, 0.5).log(0.25) == MultiInterval(0.5, 1.0)
 
 
 def test_exact_values_round_like_any_other():

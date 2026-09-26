@@ -447,6 +447,18 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       poles leave a gap in every period, so no `c` escapes the hull there. an irrational end is its
       tightest float enclosure, open; a pole cannot be cut out of a piece, the two ends'
       enclosures around it overlapping
+    * **`pow_rev1(b, c, x=REALS)`, `pow_rev2(a, c, y=REALS)`** (M13e, fourth part, built
+      2026-09-26; D11): the bases `{t ∈ x : t ** y ∈ c for some y ∈ b}` and the exponents `{s ∈ y :
+      t ** s ∈ c for some t ∈ a}`, `**` the library's pow at a point (`functions.pow_`: 0 for `0 **
+      y`, y > 0; 1 for `1 ** y`, y finite, and `t ** 0`, t finite and > 0; inf or 0 for `inf ** y`,
+      y != 0, and for `t ** ±inf`, t not 1; nothing for a negative base, `0 ** y` with y <= 0, `1 **
+      ±inf`, `inf ** 0`). a case per special point (a base 0, 1 or inf; an exponent 0 or ±inf,
+      `reverse._pow1_preimage`, `::_pow2_preimage`), and the rest from boxes monotone in both
+      variables, ends at two corners: `v ** (1/w)` through pow's own box rule
+      (`functions._power_box`), so an end is rounded exactly as `**` rounds `v ** (1/w)`, and
+      `log_t v` (`reverse._log_box`), `elementary`'s correctly rounded log to a base, exact where
+      rational (`log_4 2` = 1/2). the float rule is pow's, per operand: any finite float end of
+      either operand makes every end float. the class, warnings and `∩ x` after rounding as above
 
 ### empties and warnings
 
@@ -563,6 +575,14 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       category "tighter than the vector"**: one end of 1788's hull is one or two doubles outside
       the tightest enclosure of `k pi ± asin/acos/atan(v)`, which ours is (arb, in
       `tests/test_reverse.py::test_trig_rev_is_tighter_than_the_vector`)
+    * **power reverse ops** (added at M13e, fourth part, 2026-09-26): `powRev1` and `powRev2` are
+      `pow_rev1(b, c, x)` and `pow_rev2(a, c, y)`, every vector giving the domain, compared by the
+      output rule. of the 804 vectors (`pow_rev.itl`), 802 match in both passes; 2
+      (`tests/itf1788/test_itf1788.py::_POW_REV_LOOSE_ROWS`, `pow_rev.itl:609`, `:642`) are rows
+      under the **proposed category "tighter than the vector"**: for `a` in `[1/4, 1]` and `c = [2,
+      inf)` the tightest hull is `[-inf, -0.5]`, which ours is, and 1788 answers `[entire]` and
+      `[-infinity, 0.0]`, far looser, though its own vectors with `c = [2, 4]` answer -0.5 at that
+      end (decided exactly in `tests/test_pow_rev.py::test_pow_rev2_is_tighter_than_the_vector`)
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
   community test framework and its `itl` vector DSL. all 19 `.itl` files of the maintained fork,
   oheim/ITF1788 at `b6ee1e2`, are vendored unmodified with its `LICENSE`, `NOTICE` and
@@ -775,6 +795,37 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
 * **H3**: numpy interop and a gmpy2/mpfr backend are recorded, not built now ("later (not in
   v2.0)" above). the session's suggested first pick when the solver stack starts: Newton's
   method with forward-mode autodiff, the demonstration of what multi-intervals are for
+
+### 2026-09-26 revision: M13e, fourth part (pow_rev1, pow_rev2), built
+
+built and measured 2026-09-26; details in v2-implementation-plan.md (M13e, part 4). `pow_rev1` and
+`pow_rev2` moved into "current design" (elementary and step functions: reverse ops; ieee 1788: power
+reverse ops). the choices the plan left open, each the most conservative reading, are now current
+design too:
+* **the library's own pow defines them**, ±inf as points: `pow_rev1([-2], [0, 1])` is `[1, inf]`
+  (`inf ** -2` = 0), `pow_rev1([inf], [0])` is `[0, 1)` and `pow_rev2([0], [0])` is `(0, inf]` (`0 **
+  inf` = 0); `0 ** y` for y <= 0, `1 ** ±inf` and `inf ** 0` have no value, so they solve nothing.
+  1788 has no infinite points and every 1788 vector gives the domain through the input rule, so no
+  vector sees the difference
+* **the operand order is 1788's** (`b` or `a` first, then `c`, then the domain), and the domain is
+  named `x` for the bases and `y` for the exponents, defaulting to `[-inf, inf]`
+* **the float rule is pow's, per operand**: a finite float end in either operand makes every end
+  float (to nearest, flags kept; outward, a moved end open), as `**` does; part 1's ops take each
+  end of `c` on its own (the functions' rule). so `pow_rev1([n], c)` equals `pown_rev(c, n)` on `[0,
+  inf]` when `c`'s ends are all exact or all float, not when they mix
+* to nearest, an end past the largest double is inf, closed, the library's nearest rule (`M(1e200)
+  ** M(1000.0)` is `[inf]` too); `OutwardMultiInterval` keeps it open
+* the class, the coercion of a number, the warnings (an empty operand only; a negative base or a
+  point with no value warns nothing) and `∩` the domain after rounding are part 1's
+* **a bug found while building**: `MultiInterval(2).log(4)` hung, since `elementary._exact_log`
+  looked only for an int k with `4 ** k == 2` and ziv's loop never settles on the rational 1/2.
+  `log_b x` is now exact wherever rational, through each operand's perfect-power decomposition
+  (`elementary._perfect_power`); `pow_rev2` needs it, as every `powRev2` vector's ends are rational
+* **a proposed category gains rows**: two `powRev2` vectors expect a hull far looser than the
+  tightest (`[entire]` and `[-infinity, 0.0]` where it is `[-inf, -0.5]`); they are rows under
+  "tighter than the vector", PROPOSED at part 1 and still awaiting the owner
+* the 804 vectors: 802 match in both passes, 2 are those rows. itf1788 now 9269 vectors of 102 ops;
+  273 statements of 9 ops skipped, all M13g's (2026-09-26, `tools/itf1788_census.py`)
 
 ### 2026-09-26 revision: M13e, third part (sin_rev, cos_rev, tan_rev), built
 

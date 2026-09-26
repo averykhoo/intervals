@@ -68,6 +68,8 @@ from intervals import cos_rev
 from intervals import cosh_rev
 from intervals import dot
 from intervals import mul_rev
+from intervals import pow_rev1
+from intervals import pow_rev2
 from intervals import pown_rev
 from intervals import sin_rev
 from intervals import sqr_rev
@@ -192,6 +194,11 @@ OPS = {
     'cosRevBin': cos_rev,
     'tanRev': tan_rev,
     'tanRevBin': tan_rev,
+    # powRev1, powRev2 (M13e): the bases, `{x in X : x ** y in C for some y in B}`, and the exponents,
+    # `{y in Y : x ** y in C for some x in A}`, with the library's pow (D11), the operands in 1788's order;
+    # every 1788 vector gives the domain, so none is the call with it omitted
+    'powRev1': pow_rev1,
+    'powRev2': pow_rev2,
 }
 REDUCTIONS = frozenset({'sum_nearest', 'sum_abs_nearest', 'sum_sqr_nearest', 'dot_nearest'})
 NUMERIC = frozenset({'mid', 'rad', 'wid', 'mag', 'mig', 'midRad'})
@@ -370,6 +377,19 @@ _TRIG_REV_LOOSE_ROWS = (
     'tanRevBin [0X1.72CECE675D1FCP-52,0X1.72CECE675D1FDP-52] [-3.15,3.15] = [-0X1.921FB54442D19P+1,0X1.921FB54442D1aP+1]',
 )
 DIVERGENCES.update({text: _TRIG_REV_LOOSE for text in _TRIG_REV_LOOSE_ROWS})
+# powRev2 (M13e): two vectors whose expected hull is far outside the tightest. for t in A (< 1) and C = [2, inf),
+# t ** s >= 2 iff s <= log_t 2, and log_t 2 is at most -1/2 over t in [1/4, 1) (at t = 1/4, where (1/4) ** -1/2
+# is exactly 2; 1 ** s is never 2), so the answer is (-inf, -1/2]: the neighbouring vectors with C = [2, 4]
+# (`pow_rev.itl:608`, `:640`) answer -1/2 there, and C = [2, inf) only adds points that s -> -inf reaches.
+# checked exactly, with no rounding, by tests/test_pow_rev.py::test_pow_rev2_is_tighter_than_the_vector
+_POW_REV_LOOSE = ('tighter than the vector (PROPOSED): for A in [1/4, 1] and C = [2, inf), t ** s >= 2 iff '
+                  's <= log_t 2 <= -1/2, so the tightest hull is [-inf, -0.5], which ours is; 1788 answers '
+                  '[entire] and [-infinity, 0.0], though its own vectors with C = [2, 4] answer -0.5 at that end')
+_POW_REV_LOOSE_ROWS = (
+    'powRev2 [0.25, 0.5] [2.0, infinity] [entire] = [entire]',
+    'powRev2 [0.25, 1.0] [2.0, infinity] [entire] = [-infinity, 0.0]',
+)
+DIVERGENCES.update({text: _POW_REV_LOOSE for text in _POW_REV_LOOSE_ROWS})
 LISTED = dict(DIVERGENCES)
 
 

@@ -425,7 +425,8 @@ def test_package_exports_unchanged():
         # M13e: the reverse ops (intervals/reverse.py)
         'sqr_rev', 'abs_rev', 'pown_rev', 'cosh_rev',
         'mul_rev',
-        'sin_rev', 'cos_rev', 'tan_rev'}
+        'sin_rev', 'cos_rev', 'tan_rev',
+        'pow_rev1', 'pow_rev2'}
     for name in ('add', 'mul', 'OpDescriptor', 'apply_binary', 'mod', 'floordiv', 'floor', 'sqrt', 'sign',
                  'fma', 'apply', 'step'):
         assert not hasattr(intervals, name), name
