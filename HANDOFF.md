@@ -11,12 +11,13 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-09-26)
 
-* branch `v2`, last commit the M13d commit (2026-09-26, after `ed2a300`). `origin/v2` is at
-  `d232b78` (2026-09-25): the 17 commits `d897d77` to M13d (M12, the M13/M14 plan, M13a/b/c/d/f/h,
-  M14's fuzz job and flint oracle, this file) are **not pushed**, so CI has not run on any of them.
-  the last CI run is 36091651163 at `d232b78`, all 8 jobs green (plan section 1)
+* branch `v2`, pushed 2026-09-26 with the owner's permission (H2): the 18 commits `d897d77` to
+  the owner-answers commit (M12, the M13/M14 plan, M13a/b/c/d/f/h, M14's fuzz job and flint
+  oracle, this file). CI's first run on them is being watched; its result is recorded in the
+  session log when it lands. the previous CI run is 36091651163 at `d232b78`, all 8 jobs green
+  (plan section 1)
 * gate: `C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q` from the repo root.
-  last recorded 17346 passed in 373 s (2026-09-26, at M13d; plan M13d "evidence"). the laptop is
+  last recorded 17346 passed in 380 s (2026-09-26, at `db52ad7`, M13d, the pre-push run). the laptop is
   shared with other repos' jobs: the same gate took 6-10 min on the night of 2026-09-26, so a slow
   run is load, not a regression
 * M13: a, b, c, d, f, h done; e, g open. M14: fuzz job and flint oracle built, never run on GitHub.
@@ -33,56 +34,47 @@ each ending with a green gate and a commit.
 | 1 | M13e | reverse ops in a new `intervals/reverse.py` (1955 statements) | ready | plan §2 M13 "**M13e reverse ops**"; D12 |
 | 2 | M13g | decorated wrapper type, NaI, 1788 constructors, signals; the 52 generated `[nai]` rows go stale | blocked on Q1 | plan §2 M13 "**M13g decorations, NaI, constructors and signals**"; D16 |
 | 3 | M13-exit | `SKIPPED` empty and asserted (`tests/itf1788/test_itf1788.py::SKIPPED`) | after M13e, g | plan §2 M13 "**exit for M13**" and "**every sub-task**" |
-| 4 | H2 | push `v2` (17 commits), so CI runs on M12 and M13 | owner's permission | plan §1 (CI) |
-| 5 | M14-run | the fuzz workflow's first green run on GitHub; record its example count and time, dated. `multiplier=10` is the cheap first `workflow_dispatch`; ×100 was extrapolated to 2.2-3.4 h, under the 350-min timeout | after H2. caveat: `.github/workflows/fuzz.yml` is not on `origin/master` (no workflows there at all), and GitHub runs `schedule` and `workflow_dispatch` only for workflows on the default branch (GitHub docs; not tried here), so a push to `v2` alone may not make it runnable | plan §2 M14 "exit" and "**the fuzz job, built 2026-09-26**" |
-| 6 | M14-breadth | fuzz where it is thin: `tests/test_extreme_floats.py` extended to the functions, `minimum`/`maximum`/`fma`, `%`, `//` and `OutwardMultiInterval`; more `@given` in `test_outward`, `test_steps`, `test_fmt`, `test_applicator` | ready | plan §2 M14 "**breadth where fuzz is thin**" |
-| 7 | H1 | release 2.0.0 (`pyproject.toml` is now `2.0.0.dev0`) | owner's call; not blocked by M13, no hurry (D17) | plan §2 M11; D5, D17 |
-| 8 | M8 | the time layer on the v2 class | deferred (D4); Q5 | plan §2 "M8 `time_interval.py`"; D4 |
-| 9 | H3 | solver stack: direction tag on a degenerate zero (only if a solver needs `1/(1/[inf])` back), thin `ieee1788.py`, autodiff, Newton as a test (buildable: the functions exist since M12), numpy interop (today `__array_ufunc__ = None`), per-piece Allen matrix, gmpy2/mpfr backend | not v2.0; owner's call | `v2-plan.md` "later (not in v2.0)"; the Allen matrix and `ieee1788.py`: `v2-plan.md` decision log "v2 consolidated decisions (2026-08-16)", "comparisons" and "ieee 1788 conformance: test adapter, not a runtime flag" |
-| 10 | H4 | delete `archive/v1/` | owner decision only, once v2 works: after release, and after M8 if the time layer is wanted | plan §2 M10 (last bullet before "done") |
-| 11 | H5 | old README leftovers: the reading list (arxiv 1111.0167, Hickey) and "redo illustrations with negative and positive bits" (modulo) | if still wanted | `archive/v1/README.md` |
+| 4 | M14-run | the fuzz workflow's first green run on GitHub; record its example count and time, dated. `multiplier=10` is the cheap first `workflow_dispatch`; ×100 was extrapolated to 2.2-3.4 h, under the 350-min timeout | H2 done (pushed 2026-09-26). caveat: `.github/workflows/fuzz.yml` is not on `origin/master` (no workflows there at all), and GitHub runs `schedule` and `workflow_dispatch` only for workflows on the default branch (GitHub docs; not tried here), so a push to `v2` alone may not make it runnable | plan §2 M14 "exit" and "**the fuzz job, built 2026-09-26**" |
+| 5 | M14-breadth | fuzz where it is thin: `tests/test_extreme_floats.py` extended to the functions, `minimum`/`maximum`/`fma`, `%`, `//` and `OutwardMultiInterval`; more `@given` in `test_outward`, `test_steps`, `test_fmt`, `test_applicator` | ready | plan §2 M14 "**breadth where fuzz is thin**" |
+| 6 | Q6-shift | port v1's `<<` and `>>` (owner 2026-09-26: "for sure"); choose the meaning on real sets when built (`A * 2**n`; `>>` exact or floored) | ready | plan §4 (the `<<`, `>>` row); `v2-plan.md` "2026-09-26 revision: owner answers" |
+| 7 | Q6-rest | `random_multi_interval`, a public `apply()`: to-do, undecided whether to port | owner's call, later | plan §4 (their rows) |
+| 8 | H1 | release 2.0.0 (`pyproject.toml` is now `2.0.0.dev0`) | when everything is fully done (owner 2026-09-26) | plan §2 M11; D5, D17 |
+| 9 | M8 | the time layer on the v2 class | on hold, no rush (owner 2026-09-26); D4 recommends (a), Fraction seconds under a thin wrapper | plan §2 "M8 `time_interval.py`"; D4 |
+| 10 | H3 | solver stack: direction tag on a degenerate zero (only if a solver needs `1/(1/[inf])` back), thin `ieee1788.py`, autodiff, Newton as a test (buildable: the functions exist since M12), numpy interop (today `__array_ufunc__ = None`), per-piece Allen matrix, gmpy2/mpfr backend | not v2.0; owner's call | `v2-plan.md` "later (not in v2.0)"; the Allen matrix and `ieee1788.py`: `v2-plan.md` decision log "v2 consolidated decisions (2026-08-16)", "comparisons" and "ieee 1788 conformance: test adapter, not a runtime flag" |
+| 11 | H4 | delete `archive/v1/` | after v2 is stable (owner 2026-09-26) | plan §2 M10 (last bullet before "done") |
 
 ## open questions for the owner
 
-Q2-Q4 and Q7 were built on the conservative reading, each recorded in its decision-log entry; only
-Q1 blocks a sub-task. Q5 and Q6 are scope calls with nothing built.
+Q3-Q7 were answered on 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers to the open
+questions"). two remain; the owner asked what 1788 does before choosing.
 
-* **Q1** (blocks M13g) 1788's signals `UndefinedOperation`, `PossiblyUndefinedOperation`,
-  `IntvlPartOfNaI` (`ieee1788-exceptions.itl`, the constructors' `signal` clauses): `IntervalWarning`
-  subclasses or exceptions? no default taken. recorded: plan §0 D16, M13g; `v2-plan.md` decision
-  log "2026-09-25 revision: M13 and M14 planned (not built)"
-* **Q2** (M13h) where 1788 answers NaN (a `nan` operand, `inf + -inf`, `0 * inf` in `dot`) the
-  reductions raise `ValueError`. returning `nan`, as 1788 and python's float `sum` do, would be a
-  looser, compatible change. recorded: `v2-plan.md` "2026-09-26 revision: M13h, the reductions, built"
-* **Q3** (M13c) two readings: "equal infinite ends count" as 1788 writes it (two starts at -inf or
-  two ends at +inf, so `[inf]` is not strictly less than itself); `.interior` in the reals
-  (`[5, inf]` gives `(5, inf)`, not `(5, inf]`). recorded: `v2-plan.md` "2026-09-26 revision: M13c"
-* **Q4** (M13f) rounding is outward in `OutwardMultiInterval` and to nearest in `MultiInterval`
-  (the vectors require it), so `B + X ⊆ A` can miss by one ulp on float operands. an inward
-  variant (a method or type giving a certified inner answer) is not built; today exact operands
-  (`Fraction(f)`) give one. recorded: `v2-plan.md` "2026-09-26 revision: M13f"; plan M13f record
-* **Q5** (M8) whether and when to build the time layer; D4 recommends (a), Fraction seconds under a
-  thin wrapper. recorded: plan §0 D4, §2 M8
-* **Q6** v1 surface with no v2 counterpart: port or record as gone: `<<` / `>>`,
-  `random_multi_interval` (the tests use hypothesis instead), a public `apply()` (`applicator` and
-  `OpDescriptor` are not exported). recorded: plan §4 (the three "open" rows)
-* **Q7** (M13d) the readings D11 left open: `0 ** y` for y <= 0 dropped as outside the domain
-  (`[0, 1] ** [-1]` = `[1, inf)`, where pown's `[0, 1] ** -1` = `[1, inf]` attains the limit);
-  `1 ** ±inf` and `inf ** 0` indeterminate (empty and a warning, as atan2's); an integral Fraction
-  exponent is pown; `acot` continuous in (0, pi) rather than `atan(1/x)`. recorded: `v2-plan.md`
-  "2026-09-26 revision: M13d"; plan M13d record
+* **Q1** (blocks M13g) 1788's signals `UndefinedOperation` (a constructor given invalid input:
+  `numsToInterval(2, 1)`, bad text), `PossiblyUndefinedOperation` (text whose validity the
+  implementation cannot decide; an exact parser always can) and `IntvlPartOfNaI` (`intervalPart`
+  of NaI). in 1788 each still returns a result (empty for bare, NaI for decorated) and carries on,
+  like an IEEE 754 flag. `IntervalWarning` subclasses (returns the result; the user can make it
+  an error with a warnings filter, as for the existing warnings) or exceptions (stops)? the
+  session's recommendation: warnings. recorded: plan §0 D16, M13g
+* **Q2** (M13h) the reductions (`sum_`, `sum_abs`, `sum_sqr`, `dot`) are 1788's operations on
+  lists of floats, not intervals, so the answer is a float. where 1788 answers the float `nan` (a
+  `nan` operand, `inf + -inf`, `0 * inf` in `dot`), ours raises `ValueError`. python itself is
+  split: `sum([inf, -inf])` is `nan`, `math.fsum([inf, -inf])` raises `ValueError` (and
+  `math.fsum([1.0, nan])` is `nan`). recorded: `v2-plan.md` "2026-09-26 revision: M13h"
 
 ## still owed
 
 * the M12 taylor loops' error bounds are argued in docstrings, not pinned: removing them keeps every
   test green (plan §2 M12 "evidence", sabotage bullet). recorded, not scheduled
-* CI has not run since `d232b78`: M12's and M13's commits are green locally only (H2)
 * M13d's extra working bits near 0 for expm1 and log1p (`elementary.py::_tiny_bits`) are a speed
   measure only: removing them keeps every test green, since ziv then doubles the precision itself
   (plan §2 M13d sabotage). recorded, not scheduled
 
 ## session log (newest first)
 
+* **2026-09-26** the owner answered Q3-Q7 and H1-H5 (`v2-plan.md` "2026-09-26 revision: owner
+  answers to the open questions"); Q1 and Q2 got 1788's context and stay open. Q6's `<<`/`>>`
+  became an open item; the v1 README's leftovers moved to `references/todo-from-v1-readme.md`
+  (H5 done). gate green (17346 in 380 s), then `v2` pushed (H2 done)
 * **2026-09-26** M13d: 1788 `pow` through `**` (D11), `__rpow__`, and expm1, log1p, cbrt,
   rootn, hypot, cot, sec, csc, acot, coth, csch, sech, acoth, correctly rounded in pure python, with
   the decimal and arb oracles and set-level properties. the 1939 vectors of those 14 ops, already

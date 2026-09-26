@@ -656,6 +656,28 @@ imports only point downward.
 
 ## decision log
 
+### 2026-09-26 revision: owner answers to the open questions
+
+the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
+* **Q3 and Q7 confirmed**: the readings of M13c (equal infinite ends as 1788 writes them;
+  `.interior` in the reals) and M13d (`0 ** y` for y <= 0 outside the domain, `1 ** ±inf` and
+  `inf ** 0` indeterminate, an integral Fraction exponent is pown, acot continuous) stand as
+  recorded in their entries below
+* **Q4 closed, no inward variant.** 1788 has none either: `cancelMinus` at level 2 is the hull of
+  the exact level-1 answer, an outer enclosure, which `OutwardMultiInterval` already gives.
+  reopen if a solver needs a certified inner answer; exact operands give one today
+* **Q5 on hold** (the time layer, M8): no rush
+* **Q6: `<<` and `>>` will be ported**; `random_multi_interval` and a public `apply()` are kept as
+  to-dos, undecided. v1 applied python's int shifts endpoint-wise (`archive/v1/multi_interval.py::__lshift__`),
+  so floats raised; the meaning on real sets (`A << n` as `A * 2**n`, and `>>` as exact division
+  or as python's floor) is chosen when built
+* **H1**: release 2.0.0 when everything is fully done, which narrows D17's "whenever"
+* **H4**: delete `archive/v1/` after v2 is stable
+* **H5**: the v1 README's reading list and illustration to-do are kept, moved to
+  `references/todo-from-v1-readme.md` so they outlive `archive/v1/`
+* **H2**: push `v2` approved
+* Q1 (signals) and Q2 (NaN in the reductions) stay open: the owner asked what 1788 does first
+
 ### 2026-09-26 revision: M13d, power and the rest of the elementary functions, built
 
 built and measured 2026-09-26; details in v2-implementation-plan.md (M13d). D11 moved into "current

@@ -1218,6 +1218,6 @@ point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6
 | `exp()`, `log(base)` | `exp()`, `log(base=None)`, and the rest of `functions.py` (M12) |
 | `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | the same dunders, returning the set of values attained (`steps.py`, M12) |
 | `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | an integral number exponent is pown; any other real or interval exponent is 1788 `pow`, and `b ** A` works (M13d, D11); `pow(A, n, m)` dropped (D11) |
-| `<<`, `>>` | open: port or record as gone (`HANDOFF.md` Q6) |
-| `random_multi_interval` | open: port or record as gone (`HANDOFF.md` Q6); the tests use hypothesis strategies instead |
-| public `apply()` | open: port or record as gone (`HANDOFF.md` Q6); `applicator` and `OpDescriptor` are not exported |
+| `<<`, `>>` | to port (owner 2026-09-26, `HANDOFF.md` Q6-shift); the meaning on real sets is chosen when built |
+| `random_multi_interval` | to-do, undecided (owner 2026-09-26, `HANDOFF.md` Q6); the tests use hypothesis strategies instead |
+| public `apply()` | to-do, undecided (owner 2026-09-26, `HANDOFF.md` Q6); `applicator` and `OpDescriptor` are not exported |
