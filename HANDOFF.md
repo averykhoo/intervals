@@ -13,9 +13,8 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 * branch `v2`, pushed 2026-09-26 with the owner's permission (H2): the 18 commits `d897d77` to
   the owner-answers commit (M12, the M13/M14 plan, M13a/b/c/d/f/h, M14's fuzz job and flint
-  oracle, this file). CI's first run on them is being watched; its result is recorded in the
-  session log when it lands. the previous CI run is 36091651163 at `d232b78`, all 8 jobs green
-  (plan section 1)
+  oracle, this file). CI run 36219282601 at `2f3a895`: all 8 jobs green (gate on python
+  3.11-3.14, 2m38s-3m48s; the three exhaustive grids and sabotage, longest 8m23s; 2026-09-26)
 * gate: `C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q` from the repo root.
   last recorded 17346 passed in 380 s (2026-09-26, at `db52ad7`, M13d, the pre-push run). the laptop is
   shared with other repos' jobs: the same gate took 6-10 min on the night of 2026-09-26, so a slow
@@ -74,7 +73,8 @@ questions"). two remain; the owner asked what 1788 does before choosing.
 * **2026-09-26** the owner answered Q3-Q7 and H1-H5 (`v2-plan.md` "2026-09-26 revision: owner
   answers to the open questions"); Q1 and Q2 got 1788's context and stay open. Q6's `<<`/`>>`
   became an open item; the v1 README's leftovers moved to `references/todo-from-v1-readme.md`
-  (H5 done). gate green (17346 in 380 s), then `v2` pushed (H2 done)
+  (H5 done). gate green (17346 in 380 s), then `v2` pushed (H2 done); CI run 36219282601 at
+  `2f3a895` all 8 jobs green, the first CI on M12 and M13
 * **2026-09-26** M13d: 1788 `pow` through `**` (D11), `__rpow__`, and expm1, log1p, cbrt,
   rootn, hypot, cot, sec, csc, acot, coth, csch, sech, acoth, correctly rounded in pure python, with
   the decimal and arb oracles and set-level properties. the 1939 vectors of those 14 ops, already
