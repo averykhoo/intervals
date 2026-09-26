@@ -1078,6 +1078,9 @@ def test_trig_rev_is_tighter_than_the_vector():
             name, (c, x) = v.op[:3], v.args
             ours, theirs = t.run(v)
             assert t.run_outward(v)[0] == ours
+            if t.is_decorated(v):  # M13's merge: a decorated copy is (hull, decoration), trv on both sides
+                assert ours[1] == theirs[1] == 'trv', v.text
+                ours, theirs = ours[0], theirs[0]
             lo, hi = _true_hull_1788(name, (c.lo, c.hi), (x.lo, x.hi), flint)
             assert flint.arb(ours[0]) < lo < flint.arb(math.nextafter(ours[0], INF)), v.text
             assert flint.arb(math.nextafter(ours[1], -INF)) < hi < flint.arb(ours[1]), v.text
