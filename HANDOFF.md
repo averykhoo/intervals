@@ -31,7 +31,7 @@ green gate and a commit.
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
 | 1 | M13e | reverse ops in a new `intervals/reverse.py` (1955 statements) | ready | plan §2 M13 "**M13e reverse ops**"; D12 |
-| 2 | M13g | decorated wrapper type, NaI, 1788 constructors, signals; the 52 generated `[nai]` rows go stale | ready: signals settled 2026-09-26 (D16); `IntvlPartOfNaI` as a warning is the owner's lean, may switch to raising before it is built | plan §2 M13 "**M13g decorations, NaI, constructors and signals**"; D16 |
+| 2 | M13g | decorated wrapper type, NaI, 1788 constructors, signals; the 52 generated `[nai]` rows go stale | signals settled 2026-09-26 (D16); whether to build NaI at all: Q8 | plan §2 M13 "**M13g decorations, NaI, constructors and signals**"; D16 |
 | 3 | M13-exit | `SKIPPED` empty and asserted (`tests/itf1788/test_itf1788.py::SKIPPED`) | after M13e, g | plan §2 M13 "**exit for M13**" and "**every sub-task**" |
 | 4 | M14-run | the fuzz workflow's first green run on GitHub; record its example count and time, dated. `multiplier=10` is the cheap first `workflow_dispatch`; ×100 was extrapolated to 2.2-3.4 h, under the 350-min timeout | H2 done (pushed 2026-09-26). caveat: `.github/workflows/fuzz.yml` is not on `origin/master` (no workflows there at all), and GitHub runs `schedule` and `workflow_dispatch` only for workflows on the default branch (GitHub docs; not tried here), so a push to `v2` alone may not make it runnable | plan §2 M14 "exit" and "**the fuzz job, built 2026-09-26**" |
 | 5 | M14-breadth | fuzz where it is thin: `tests/test_extreme_floats.py` extended to the functions, `minimum`/`maximum`/`fma`, `%`, `//` and `OutwardMultiInterval`; more `@given` in `test_outward`, `test_steps`, `test_fmt`, `test_applicator` | ready | plan §2 M14 "**breadth where fuzz is thin**" |
@@ -44,9 +44,16 @@ green gate and a commit.
 
 ## open questions for the owner
 
-none (2026-09-26): Q1-Q7 answered, recorded in `v2-plan.md` "2026-09-26 revision: owner answers to
-the open questions". the one soft spot: `IntvlPartOfNaI` as a warning, which the owner may switch
-to raising before M13g builds it (the case is in that entry).
+Q1-Q7 answered 2026-09-26, recorded in `v2-plan.md` "2026-09-26 revision: owner answers to the
+open questions".
+
+* **Q8** (M13g) drop NaI altogether? with `UndefinedOperation` and `IntvlPartOfNaI` raising, a
+  constructor never makes NaI, so it exists only if made on purpose. dropping it: the decorated
+  type has com/dac/def/trv, no `isNaI`/`intervalPart` signal, and the ~100 itf1788 statements
+  with a NaI (16 `isNaI`, the `[nai]` operands of the booleans and `mulRev`, the `d-` constructors'
+  `[nai]`, now errors) become rows under a new divergence category. the case for keeping it: a
+  per-element "invalid" in batch work (numpy later), where one bad value should not kill the
+  whole array. the session recommends dropping it now, and adding it back with numpy if needed
 
 ## still owed
 
@@ -59,8 +66,8 @@ to raising before M13g builds it (the case is in that entry).
 ## session log (newest first)
 
 * **2026-09-26** the owner answered Q3-Q7 and H1-H5 (`v2-plan.md` "2026-09-26 revision: owner
-  answers to the open questions"); then, after 1788's context, Q1 (`UndefinedOperation` raises,
-  the other two warn) and Q2 (keep `ValueError`), so M13g is unblocked. Q6's `<<`/`>>`
+  answers to the open questions"); then, after 1788's context, Q1 (`UndefinedOperation` and `IntvlPartOfNaI` raise,
+  `PossiblyUndefinedOperation` warns) and Q2 (keep `ValueError`), so M13g is unblocked. Q6's `<<`/`>>`
   became an open item; the v1 README's leftovers moved to `references/todo-from-v1-readme.md`
   (H5 done). gate green (17346 in 380 s), then `v2` pushed (H2 done); CI run 36219282601 at
   `2f3a895` all 8 jobs green, the first CI on M12 and M13

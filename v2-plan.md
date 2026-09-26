@@ -686,10 +686,11 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
     * **`PossiblyUndefinedOperation` warns** (an `IntervalWarning` subclass) and returns 1788's
       result. an exact parser can always decide validity, so it may never fire; the one vector
       that expects it (`ieee1788-exceptions.itl:18`) is settled when M13g is built
-    * **`IntvlPartOfNaI` warns** and returns `∅`, the owner's lean. the session's note: NaI does
-      propagate like NaN through decorated ops, but `intervalPart` is the one place it stops,
-      turning "invalid" into `∅`, which then reads as a real "no values". raising here too would
-      match `UndefinedOperation`; the owner may still switch it before M13g builds it
+    * **`IntvlPartOfNaI` raises** (owner, 2026-09-26, after first leaning to a warning): NaI
+      propagates like NaN through decorated ops, but `intervalPart` is the one place it stops,
+      turning "invalid" into `∅`, which then reads as a real "no values"
+    * **open: drop NaI altogether?** with both raising, NaI can only be made on purpose. the
+      owner asked why keep it; `HANDOFF.md` Q8
 * **Q2 settled: the reductions keep raising `ValueError`** where 1788 answers the float `nan`
   (they are operations on floats, not intervals, so an empty interval is no answer either);
   `math.fsum` raises on `inf + -inf` too
