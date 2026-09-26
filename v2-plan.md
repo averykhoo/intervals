@@ -3,6 +3,8 @@
 two parts. **current design** is normative: if the code and that section disagree, one of them is a
 bug. the **decision log** below it is history, kept verbatim, with a marker wherever a later decision
 superseded it.
+open work and open questions for the owner (including the ones raised in the decision log's
+2026-09-25/26 entries) live in `HANDOFF.md`; the milestones are in `v2-implementation-plan.md`.
 
 ## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a,
 M13b, M13c, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)

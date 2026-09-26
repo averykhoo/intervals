@@ -106,7 +106,9 @@ Size(rays=0, length=2, points=0)
   all-permissive per file; see its README)
 * `v2-plan.md` — the design. its "current design" section is normative: where it and the code
   disagree, one of them is a bug
-* `v2-implementation-plan.md` — milestones, decisions D1–D17, and what is still open
+* `v2-implementation-plan.md` — milestones (each one's spec and, once built, its record), decisions
+  D1–D17
+* `HANDOFF.md` — what is open now: ranked items, questions for the owner, a session log
 * `references/` — papers and the modulo derivations
 * `archive/v1/` — the previous implementation, kept unchanged as a reference: `multi_interval.py`,
   `interval.py`, `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`), `compare.py`, and

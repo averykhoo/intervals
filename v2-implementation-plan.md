@@ -7,6 +7,9 @@ were settled 2026-09-25 for M13 and M14: they go into "current design" as each i
 then they are in `v2-plan.md`'s decision log. D14 (the flint oracle) and D15 (vendoring) were built
 with M13a and M14's first two items (2026-09-26) and are in "current design" now.
 
+**open work and open questions live in `HANDOFF.md`** (since 2026-09-26): ranked items, questions for
+the owner, loose ends, session log. this file keeps the spec (what to build, exits) and the records.
+
 ## 0. decisions (D1–D8 from the 2026-09-23 reviews; D9–D17 for M13 and M14, 2026-09-25)
 
 | # | question | recommended default | blocks |
@@ -26,7 +29,7 @@ with M13a and M14's first two items (2026-09-26) and are in "current design" now
 | D13 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13f), now in `v2-plan.md` "arithmetic" and "ieee 1788".** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
 | D14 | **decided 2026-09-25 by owner: recommended default.** the independent oracle for the elementary functions is **`python-flint`** (Arb: every result is a ball proven to contain the true value), a test-only dependency in the `[test]` extra, installed into the `intervals` env and in CI. `mpmath` was the alternative (pure python, but its values carry no proven bound). python-flint 0.9.0 has Windows wheels for 3.10 and later (abi3), 3.13 and 3.14 included (checked on PyPI 2026-09-25) | python-flint | M14 |
 | D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library. **corrected 2026-09-26 at M13a**, from every file's header: five files carry the all-permissive notice, not two (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`); the eleven `libieeep1788_*` are Apache 2.0 | vendor unmodified, with the licence files | M13a |
-| D16 | **decided 2026-09-25 by owner: recommended default.** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. still open, for M13g: whether 1788's signals (`UndefinedOperation`, `PossiblyUndefinedOperation`, `IntvlPartOfNaI`) become `IntervalWarning` subclasses or exceptions | wrapper type; signals open | M13g |
+| D16 | **decided 2026-09-25 by owner: recommended default.** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. 1788's signals (`UndefinedOperation`, `PossiblyUndefinedOperation`, `IntvlPartOfNaI`) as warnings or exceptions: open, `HANDOFF.md` Q1 | wrapper type; signals: `HANDOFF.md` Q1 | M13g |
 | D17 | **decided 2026-09-25 by owner**: M13 does **not** block the 2.0.0 release, and there is no hurry to release either ("I have zero users and this is a yak shaving pet project"). M13 only adds methods and a type and gives a meaning to exponents that raise `TypeError` today, so nothing that works now changes | release whenever; not blocked | — |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
@@ -408,10 +411,9 @@ not a milestone with an exit criterion: the open work left after M10, from a swe
 the old README (`archive/v1/README.md`), v1's public surface and the code (no TODO, FIXME, skip or
 xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owner decision first,
 **(b)** ready to build, **(c)** housekeeping. items become milestones when picked up
-* **release** (a, then c): merge `v2` into `master` (`v2` pushed 2026-09-25), `version =
-  "2.0.0"` in `pyproject.toml`, tag. D5's blocker (M7b) is met. CI exists since 2026-09-25 and
-  is green on `v2` (section 1). owner 2026-09-25 (D17): no hurry, and M13 does not block it
-* **M8, the time layer** (a: whether and when; 1½ days): see M8. D4 is still open, (a) recommended
+* **release** (a, then c): merge `v2` into `master`, `version = "2.0.0"` in `pyproject.toml`, tag.
+  D5's blocker (M7b) is met; D17: no hurry. status: `HANDOFF.md` H1
+* **M8, the time layer** (a: whether and when; 1½ days): see M8; open, `HANDOFF.md` M8 and Q5
 * **functions**, **rounding functions**, **the other 1788 ops** and **outward float rounding**, the
   four (b) items: built at M12 (below), done 2026-09-25
 * **reverse ops** (a): `mulRevToPair` and friends, for the reverse-op itf1788 files and for a solver.
@@ -426,18 +428,11 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
   (for a multi-interval, of the hull or per piece?). their vectors are counted and skipped in
   `tests/itf1788/test_itf1788.py::SKIPPED`; `isNaI` has no counterpart. owner 2026-09-25: add
   every one, as M13b, M13c and M13g (D9, D10, D16)
-* **solver stack** (a; `v2-plan.md` "later (not in v2.0)"): the direction tag on a degenerate zero
-  piece (only if a solver needs `1/(1/[inf])` back), a decorated type (com/dac/def/trv/ill; brought
-  forward to M13g by D16) and an
-  optional thin `ieee1788.py`, forward-mode autodiff, Newton's method as a test (b: the functions
-  exist since M12), numpy interop (array API vs `__array_ufunc__`; today `__array_ufunc__ = None`), the
-  optional per-piece Allen matrix
-* **v1 surface with no v2 row in section 4** (a: port or record as gone): `<<` / `>>`,
-  `random_multi_interval`, a public `apply()` (the applicator and `OpDescriptor` are not exported
-  from `intervals`). the rows are added to section 4 as "open (M11)"
-* **smaller** (c): the old README's reading list (arxiv 1111.0167) and its "redo the modulo
-  illustrations" item, if still wanted
-* **archive deletion** (a): `archive/v1/` goes only by owner decision, after release and M8
+* **solver stack** (a; `v2-plan.md` "later (not in v2.0)"): its decorated type was brought forward
+  to M13g by D16; the rest is open, `HANDOFF.md` H3
+* **v1 surface with no v2 row in section 4** (a: port or record as gone): open, `HANDOFF.md` Q6
+* **smaller** (c): the old README's leftovers, `HANDOFF.md` H5
+* **archive deletion** (a): `HANDOFF.md` H4
 * done 2026-09-25, from the backlog: the M6 differential and the M6 review's extreme-float fuzz,
   restored from the Recycle Bin by the owner, are tracked again. evidence, at `6d4851f` plus the
   two files:
@@ -520,8 +515,8 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
 ### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a, M13b, M13c, M13f and M13h done 2026-09-26)
 
 owner request 2026-09-25: "implement all these ops and get all these tests vendored and passing".
-this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how;
-the one question still open is D16's signals, for M13g. sub-tasks M13a to M13h: **M13a goes
+this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how,
+except D16's signals (open, `HANDOFF.md` Q1). sub-tasks M13a to M13h: **M13a goes
 first**, the rest are independent of each other. the release is not waiting on any of it (D17)
 
 **the source.** the vendored files today are 7 of the 12 at nehmeier/ITF1788 `e0e0d7e` (that
@@ -807,7 +802,7 @@ M12; each checked against the D14 oracle (M14)
           computed exactly and rounded once like `fma`: outward in `OutwardMultiInterval` (every
           `x` that fits is in it; `B + X ⊆ A` can fail by an ulp at a moved end), to nearest in
           `MultiInterval`. a certified inner answer comes from exact operands (`Fraction(f)`);
-          an inward variant is **open to the owner**
+          an inward variant: open, `HANDOFF.md` Q4
         * `cancel_minus(∅, ∅)` is `[-inf, inf]`, not 1788's `∅`: every `X` fits the empty `B`, and
           "the largest `X`" leaves no choice. the two `[empty] [empty]` vectors are rows under the
           new category with their own reason (`test_itf1788.py::_CANCEL_EMPTY`)
@@ -878,9 +873,9 @@ operands of implemented ops and a decoration check on every decorated vector
   `decorationPart` 6, `isNaI` 16 on the wrapper
 * the adapter stops dropping decorations: a decorated vector runs through the wrapper and its
   expected decoration is checked
-* **open, ask the owner before building**: 1788's signals (`UndefinedOperation`,
-  `PossiblyUndefinedOperation`, `IntvlPartOfNaI`, from `ieee1788-exceptions.itl` and the
-  constructors' `signal` clauses): `IntervalWarning` subclasses or exceptions
+* 1788's signals (`UndefinedOperation`, `PossiblyUndefinedOperation`, `IntvlPartOfNaI`, from
+  `ieee1788-exceptions.itl` and the constructors' `signal` clauses): open, ask the owner before
+  building, `HANDOFF.md` Q1
 
 **M13h reductions (done 2026-09-26)**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`,
 `dot_nearest`, 1 each as counted 2026-09-25 by the old parser, which saw only the first statement of
@@ -938,23 +933,8 @@ each of the file's 4 testcases; M13a's parser reads the 11 it dropped (2026-09-2
 **exit for M13: no statement of the 19 files is skipped.** `SKIPPED` is empty and a test asserts
 it, so a file that gains an op cannot quietly add skips
 
-**suggested sessions** (a guide, not a rule; each ends with a green gate and a commit): (1) M13a
-with M14's fuzz job and oracle; (2) M13b, M13c, M13f and M13h, the small ones; (3) M13d; (4) M13e;
-(5) M13g, starting with the signals question. **(1) and (2) done 2026-09-26**, in one session
-(`814b302` to `d09ead3`, none pushed); M13d, M13e and M13g remain, and with them the M13 exit.
-
-**open for the owner after that session** (each built on the conservative reading and recorded in
-its decision-log entry; none blocks the next sub-task):
-* M13h: where 1788 answers NaN (a `nan` operand, `inf + -inf`, `0 * inf` in `dot`) the reductions
-  raise `ValueError`; returning `nan`, as 1788 and python's float `sum` do, would be looser and
-  compatible
-* M13c: "equal infinite ends count" read as 1788 writes it (two starts at -inf or two ends at
-  inf, so `[inf]` is not strictly less than itself), and `.interior` taken in the reals (`[5, inf]`
-  gives `(5, inf)`, not `(5, inf]`)
-* M13f: rounding is outward (the vectors require it), so `B + X ⊆ A` can fail by one ulp for float
-  operands; an inward variant is not built
-* M14: the fuzz workflow's first green GitHub run needs a push (a `workflow_dispatch` with
-  `multiplier=10` is the cheap first check); the exit records its count and time
+the order of the remaining sub-tasks, and the owner's open questions on the built ones (M13c,
+M13f, M13h): `HANDOFF.md`.
 
 ### M14 fuzzing (open, added 2026-09-25; the fuzz job and the flint oracle built 2026-09-26)
 
@@ -1044,8 +1024,7 @@ land with M13a so that every later M13 op arrives with them
       a to-nearest result with the exact value where it is rational (`exp10(-1.0)` = 1/10, below
       the double 0.1 that ends the result) instead of with the nearest double the docstring promises.
       it now always uses `rounded(..., NEAREST)`, which rounds the rational value itself
-    * **still owed for the exit: the workflow has never run on GitHub** (nothing is pushed), so no
-      green `workflow_dispatch` run, example count or time is recorded yet
+    * the exit's green GitHub run: not yet, `HANDOFF.md` M14-run
 * **the flint oracle, built 2026-09-26** (`tests/test_oracle_flint.py`, 9 test functions, 122
   tests parametrised; python-flint 0.9.0 in the env and `python-flint>=0.9` in the `[test]` extra;
   `intervals/` unchanged):
@@ -1088,17 +1067,16 @@ land with M13a so that every later M13 op arrives with them
       tests; monkeypatches: an irrational set-level end kept closed (75 failed), `exact('log2')` one
       too high ("log2(16) is not the rational 5"), `rounded_angle` 1 ulp inward (atan2 and
       rounded_angle fail on soundness), `floor_over_pi` off by one (the floor test fails)
-* still open in M14: the breadth items (`tests/test_extreme_floats.py` not yet extended) and every
-  M13 op's properties as it lands
+* what is still open in M14: `HANDOFF.md` (M14-run, M14-breadth; each remaining M13 sub-task brings
+  its own properties)
 
 ## 3. order and parallelism
 
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
-the backlog, and M12 built its (b) items the same day. M13 (full itf1788) and M14 (fuzzing) are
-open: M13a is done (2026-09-26), then M13b to M13h in any order, each with its M14 properties
-(M13b, M13c, M13f and M13h done 2026-09-26; M13d, M13e and M13g open);
-M14's fuzz job and flint oracle are built (2026-09-26), the job's first green GitHub run still
-owed. M4 depends on M3 (the class's
+the backlog, and M12 built its (b) items the same day. M13 (full itf1788) and M14 (fuzzing): M13a
+first, then M13b to M13h in any order, each with its M14 properties; each sub-task's record says
+whether it is done (the M13 and M14 headings list them); what is open, and in what order, is in
+`HANDOFF.md`. M4 depends on M3 (the class's
 `parse`, `__str__` and `__repr__` come from `fmt`); M7a and M9 are independent after M6. total ≈ 12
 working days (the per-milestone sum without M8) plus the M7b session. the first internally usable
 point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6; release needs M7b.
@@ -1129,5 +1107,6 @@ point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6
 | `exp()`, `log(base)` | `exp()`, `log(base=None)`, and the rest of `functions.py` (M12) |
 | `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | the same dunders, returning the set of values attained (`steps.py`, M12) |
 | `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | int exponents only; interval and real exponents planned as 1788 `pow` (M13d, D11); `pow(A, n, m)` dropped (D11) |
-| `<<`, `>>` | open (M11): port or record as gone |
-| `random_multi_interval` | open (M11): the tests use hypothesis strategies instead |
+| `<<`, `>>` | open: port or record as gone (`HANDOFF.md` Q6) |
+| `random_multi_interval` | open: port or record as gone (`HANDOFF.md` Q6); the tests use hypothesis strategies instead |
+| public `apply()` | open: port or record as gone (`HANDOFF.md` Q6); `applicator` and `OpDescriptor` are not exported |
