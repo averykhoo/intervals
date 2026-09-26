@@ -64,9 +64,10 @@ and lists them). the adapter's rules:
   and 1788's answer is also empty); they are pinned by their own tests elsewhere
 
 every vector of an op in `OPS` either matches through the adapter or is a row of `DIVERGENCES`, whose
-reason is one of the plan's residual categories. a row that starts matching fails as stale. the other
-ops' statements are counted in `SKIPPED`, and every statement of every file is parsed by
-`test_parser_reads_every_statement`, so the parser already reads what later ops will need.
+reason is one of the plan's residual categories. a row that starts matching fails as stale. an op not
+in `OPS` would have its statements counted in `SKIPPED`, which M13's exit keeps empty
+(`test_nothing_is_skipped`), and every statement of every file is parsed by
+`test_parser_reads_every_statement`.
 """
 import math
 import re
@@ -1044,21 +1045,6 @@ def test_decorated_reverse_vectors_are_checked():
             assert ours[1] in names and expected[1] in names, v.text
 
 
-# M13g close-out: once M13g is done, every statement still skipped is a reverse op's (M13e). when
-# M13e lands, SKIPPED is empty and this still holds; M13's exit then asserts it empty
-_REVERSE_OPS = frozenset({
-    'sqrRev', 'sqrRevBin', 'absRev', 'absRevBin', 'pownRev', 'pownRevBin', 'sinRev', 'sinRevBin', 'cosRev',
-    'cosRevBin', 'tanRev', 'tanRevBin', 'coshRev', 'coshRevBin', 'mulRev', 'mulRevTen', 'mulRevToPair',
-    'powRev1', 'powRev2'})
-
-
-def test_only_the_reverse_ops_are_skipped():
-    """M13g: no constructor, decoration op or NaI statement (`isNaI`) is skipped; they are ops in OPS,
-    matched or rows"""
-    skipped = set().union(*SKIPPED.values())
-    assert skipped <= _REVERSE_OPS, sorted(skipped - _REVERSE_OPS)
-
-
 def test_every_op_has_vectors():
     """a parser that finds nothing for an op would pass every vector of it vacuously"""
     assert {v.op for v in VECTORS} == set(OPS)
@@ -1071,20 +1057,12 @@ def test_every_file_is_used():
         assert any(v.source.startswith(f'{name}:') for v in VECTORS) or SKIPPED[name], name
 
 
-# M13e done (2026-09-26): every reverse op runs, and what is still skipped is M13g's alone, so an op
-# dropped from OPS, or a file gaining an op, cannot quietly add skips. M13's exit replaces this with
-# `SKIPPED` empty
-_REVERSE_OPS = frozenset({'sqrRev', 'sqrRevBin', 'absRev', 'absRevBin', 'pownRev', 'pownRevBin', 'coshRev',
-                          'coshRevBin', 'sinRev', 'sinRevBin', 'cosRev', 'cosRevBin', 'tanRev', 'tanRevBin',
-                          'mulRev', 'mulRevTen', 'mulRevToPair', 'powRev1', 'powRev2'})
-_M13G_OPS = frozenset({'b-textToInterval', 'd-textToInterval', 'b-numsToInterval', 'd-numsToInterval',
-                       'setDec', 'newDec', 'intervalPart', 'decorationPart', 'isNaI'})
-
-
-def test_only_m13g_ops_are_skipped():
-    assert _REVERSE_OPS <= set(OPS)
-    skipped = {op for counts in SKIPPED.values() for op in counts}
-    assert skipped <= _M13G_OPS, sorted(skipped - _M13G_OPS)
+def test_nothing_is_skipped():
+    """M13's exit: no statement of the 19 files is skipped. every op of every file is in OPS, so an op
+    dropped from OPS, or a file gaining one, goes red here (`test_parser_drops_nothing` only checks that
+    an op in OPS is not skipped, and `test_every_op_has_vectors` checks OPS against the vectors)"""
+    assert set(SKIPPED) == set(FILES)
+    assert not {name: counts for name, counts in SKIPPED.items() if counts}
 
 
 def test_the_pair_vectors_run_outward():
