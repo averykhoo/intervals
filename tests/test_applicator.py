@@ -424,7 +424,8 @@ def test_package_exports_unchanged():
         'IndeterminateResultWarning', 'HullWarning', 'sum_', 'sum_abs', 'sum_sqr', 'dot',
         # M13e: the reverse ops (intervals/reverse.py)
         'sqr_rev', 'abs_rev', 'pown_rev', 'cosh_rev',
-        'mul_rev'}
+        'mul_rev',
+        'sin_rev', 'cos_rev', 'tan_rev'}
     for name in ('add', 'mul', 'OpDescriptor', 'apply_binary', 'mod', 'floordiv', 'floor', 'sqrt', 'sign',
                  'fma', 'apply', 'step'):
         assert not hasattr(intervals, name), name

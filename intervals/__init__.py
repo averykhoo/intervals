@@ -24,6 +24,10 @@ from intervals.reverse import cosh_rev
 from intervals.reverse import mul_rev
 from intervals.reverse import pown_rev
 from intervals.reverse import sqr_rev
+# periodic reverse ops (M13e)
+from intervals.reverse import cos_rev
+from intervals.reverse import sin_rev
+from intervals.reverse import tan_rev
 
 EMPTY = MultiInterval()
 REALS = MultiInterval(-_math.inf, _math.inf)  # the affine extended reals, both infinities included
@@ -54,4 +58,8 @@ __all__ = [
     'pown_rev',
     'cosh_rev',
     'mul_rev',
+    # periodic reverse ops (M13e)
+    'sin_rev',
+    'cos_rev',
+    'tan_rev',
 ]

@@ -64,14 +64,17 @@ from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import REALS
 from intervals import abs_rev
+from intervals import cos_rev
 from intervals import cosh_rev
 from intervals import dot
 from intervals import mul_rev
 from intervals import pown_rev
+from intervals import sin_rev
 from intervals import sqr_rev
 from intervals import sum_
 from intervals import sum_abs
 from intervals import sum_sqr
+from intervals import tan_rev
 from intervals.errors import IntervalWarning
 from intervals.kernel import pieces
 from intervals.relations import Allen
@@ -180,6 +183,15 @@ OPS = {
     'mulRev': mul_rev,
     'mulRevTen': mul_rev,
     'mulRevToPair': mul_rev,
+    # sinRev, cosRev, tanRev (M13e, D12): as the unary reverse ops above. the unary form's x is the
+    # whole line, so any c with a solution has infinitely many pieces: their hull, (-inf, inf), with a
+    # HullWarning (ignored here), which is 1788's entire; a *Bin form's bounded x gives the exact pieces
+    'sinRev': sin_rev,
+    'sinRevBin': sin_rev,
+    'cosRev': cos_rev,
+    'cosRevBin': cos_rev,
+    'tanRev': tan_rev,
+    'tanRevBin': tan_rev,
 }
 REDUCTIONS = frozenset({'sum_nearest', 'sum_abs_nearest', 'sum_sqr_nearest', 'dot_nearest'})
 NUMERIC = frozenset({'mid', 'rad', 'wid', 'mag', 'mig', 'midRad'})
@@ -343,6 +355,21 @@ _POWN_REV_LOOSE_ROWS = (
     'pownRev [-0X0.0000000000001P-1022,-0X0P+0] -7 = [-infinity,-0x1.588cea3f093bcp+153]',
 )
 DIVERGENCES.update({text: _POWN_REV_LOOSE for text in _POWN_REV_LOOSE_ROWS})
+# sinRev, cosRev, tanRev (M13e): six *Bin vectors (and their decorated copies, 7 keys) whose expected hull has one
+# end one or two doubles outside the tightest enclosure of k pi ± asin, acos or atan of an end of c; ours is
+# the tightest, the other end matches, and arb agrees (tests/test_reverse.py::test_trig_rev_is_tighter_than_the_vector)
+_TRIG_REV_LOOSE = ('tighter than the vector (PROPOSED): one end of 1788\'s hull is one or two doubles outside '
+                   'the tightest enclosure of k pi ± asin/acos/atan(v), which ours is (arb)')
+_TRIG_REV_LOOSE_ROWS = (
+    'sinRevBin [0X1.FFFFFFFFFFFFFP-1,0X1P+0] [1.57,1.58 ] = [0x1.921fb50442d18p+0,0x1.921fb58442d1ap+0]',
+    'sinRevBin [0X1.FFFFFFFFFFFFFP-1,0X1P+0] [1.57,1.58] = [0x1.921fb50442d18p+0,0x1.921fb58442d1ap+0]',  # decorated copy, no space
+    'cosRevBin [-1.0,-1.0] [3.14,3.15] = [0x1.921fb54442d18p+1,0x1.921fb54442d1ap+1]',
+    'cosRevBin [-0X1P+0,-0X1.FFFFFFFFFFFFFP-1] [3.14,3.15] = [0x1.921fb52442d18p+1,0x1.921fb56442d1ap+1]',
+    'cosRevBin [-0X1P+0,-0X1.FFFFFFFFFFFFFP-1] [-3.15,-3.14] = [-0x1.921fb56442d1ap+1,-0x1.921fb52442d18p+1]',
+    'tanRevBin [0X1.D02967C31CDB4P+53,0X1.D02967C31CDB5P+53] [-1.5708,1.5708] = [-0x1.921fb54442d1bp+0,0x1.921fb54442d19p+0]',
+    'tanRevBin [0X1.72CECE675D1FCP-52,0X1.72CECE675D1FDP-52] [-3.15,3.15] = [-0X1.921FB54442D19P+1,0X1.921FB54442D1aP+1]',
+)
+DIVERGENCES.update({text: _TRIG_REV_LOOSE for text in _TRIG_REV_LOOSE_ROWS})
 LISTED = dict(DIVERGENCES)
 
 

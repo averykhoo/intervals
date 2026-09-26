@@ -95,6 +95,11 @@ Size(rays=0, length=2, points=0)
   `(-inf, -1] ∪ [1, inf)`, where 1788's `mulRev` gives entire and `mulRevToPair` the two pieces);
   `0 * inf` has no value, as in `*`. its 539 ITF1788 vectors run through the adapter (M13e,
   2026-09-26)
+* **periodic reverse ops**: `sin_rev(c, x)`, `cos_rev(c, x)`, `tan_rev(c, x)` are `{t ∈ x : f(t) ∈
+  c}`, the exact pieces over a bounded `x` (`sin_rev(MI(Fraction(1, 2), 1), MI(0, 20))` has 4);
+  past 1000 pieces, or over an unbounded `x` (the default), their hull with a `HullWarning`. ±inf
+  and tan's poles have no value, so they are in no preimage. their 136 ITF1788 vectors run through
+  the adapter (M13e, 2026-09-26)
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`

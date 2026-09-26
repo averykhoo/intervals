@@ -830,6 +830,47 @@ def floor_over_pi(x, offset: Fraction) -> Tuple[int, bool]:
         p *= 2
 
 
+def rounded_inverse_trig(name: str, v, sign: int, k: int, direction: int) -> float:
+    """
+    `k pi + sign * f(v)` rounded to a double (DOWN, NEAREST or UP), f one of asin, acos, atan at an exact
+    v in its domain (atan also at ±inf, where it is ±pi/2), sign ±1 and k an int: the ends of the
+    periodic reverse ops' branches (`sin_rev`'s k-th is `k pi + (-1)**k asin`). `acos(-1)` is pi, taken
+    into k; then the value is rational only where k = 0 and f(v) = 0, so ziv's loop ends everywhere
+    else: `k pi + r` for a rational r != 0 would make v the transcendental sin, cos or tan of a
+    rational, and asin(±1), atan(±inf) are odd multiples of pi/2. the working precision grows with k's
+    bits, since the value's size does
+
+    >>> rounded_inverse_trig('asin', 1, 1, 0, UP) == math.nextafter(math.pi / 2, INF)
+    True
+    >>> rounded_inverse_trig('atan', INF, 1, -1, NEAREST) == -math.pi / 2
+    True
+    >>> rounded_inverse_trig('acos', 1, -1, 10 ** 20, DOWN)  # 1e20 pi, below it
+    3.141592653589793e+20
+    """
+    if name == 'acos' and v == -1:  # pi: missed, the value (k + sign) pi = 0 would never settle
+        v, k = 1, k + sign
+    value = None if is_infinite(v) else exact(name, v)
+    if value is not None and k == 0:
+        return round_rational(sign * value, direction)
+    extra = abs(k).bit_length() + 4
+
+    def enclose(p):
+        q = p + extra
+        if value is not None:
+            lo = hi = Fraction(sign * value)
+        elif is_infinite(v):  # atan(±inf) = ±pi/2
+            lo, hi = _fractions(_shift(_pi(q), -1), q)
+            if sign * v < 0:
+                lo, hi = -hi, -lo
+        else:
+            lo, hi = _enclose(name, Fraction(v), q)
+            if sign < 0:
+                lo, hi = -hi, -lo
+        k_lo, k_hi = _fractions(_scale(_pi(q), k), q)
+        return lo + k_lo, hi + k_hi
+    return _ziv(enclose, direction)
+
+
 def compare(name: str, x, y) -> int:
     """the sign of f(x) - f(y) for exact x, y where the two values are known to differ"""
     p = _START_PRECISION

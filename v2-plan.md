@@ -434,6 +434,19 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       inf)`, not `[-inf, inf]`. the quotients are the library's division (`ops.div`), so an end is
       rounded exactly where `c / w` would round it, and a point `b = [w]` (finite, nonzero) gives
       `c / w` in both classes. the class, warnings and `∩ x` after rounding as above
+    * **`sin_rev(c, x=REALS)`, `cos_rev`, `tan_rev`** (M13e, third part, built 2026-09-26; D12):
+      `{t ∈ x : f(t) ∈ c}` for the library's sin, cos, tan at a point, which have no value at ±inf
+      and tan none at its poles, so neither is ever in a preimage (`tan_rev([inf])` is `∅`). the
+      engine's branches, one per k (`reverse._Periodic`): sin `k pi + (-1)^k asin v`, cos `k pi +
+      acos v` or `(k + 1) pi - acos v` by parity, tan `k pi + atan v`, each end correctly rounded by
+      `elementary.rounded_inverse_trig`. a bounded `x` gets the exact pieces (`sin_rev([1/2, 1], [0,
+      20])` has 4); per piece of `x`, as `steps.step` per piece of its operand, a part past
+      `steps.ENUMERATION_CAP` pieces or an unbounded part is its hull, with one `HullWarning`, so
+      the unary form over the default `x` answers `(-inf, inf)` wherever `c` has a solution. a `c`
+      holding sin's or cos's whole image `[-1, 1]` is every finite t, one piece, never hulled; tan's
+      poles leave a gap in every period, so no `c` escapes the hull there. an irrational end is its
+      tightest float enclosure, open; a pole cannot be cut out of a piece, the two ends'
+      enclosures around it overlapping
 
 ### empties and warnings
 
@@ -542,6 +555,14 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       piece, which is stricter than comparing the unions. the pair vectors run in the outward pass
       too (`INTERVAL_VECTORS` includes them). all 539 vectors of the three ops match in both passes
       but the 6 with a `[nai]` operand (generated rows); no new row, no new category (2026-09-26)
+    * **periodic reverse ops** (added at M13e, third part, 2026-09-26): `sinRev`, `cosRev`, `tanRev`
+      are the call with `x` omitted, whose answer where `c` has a solution is the hull `(-inf, inf)`
+      with a `HullWarning` (ignored in a vector), 1788's entire; the `*Bin` forms pass `x`. compared
+      by the output rule. of the 136 vectors, 124 match in both passes; 12 (7 keys,
+      `tests/itf1788/test_itf1788.py::_TRIG_REV_LOOSE_ROWS`) are rows under the **proposed
+      category "tighter than the vector"**: one end of 1788's hull is one or two doubles outside
+      the tightest enclosure of `k pi ± asin/acos/atan(v)`, which ours is (arb, in
+      `tests/test_reverse.py::test_trig_rev_is_tighter_than_the_vector`)
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
   community test framework and its `itl` vector DSL. all 19 `.itl` files of the maintained fork,
   oheim/ITF1788 at `b6ee1e2`, are vendored unmodified with its `LICENSE`, `NOTICE` and
@@ -754,6 +775,33 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
 * **H3**: numpy interop and a gmpy2/mpfr backend are recorded, not built now ("later (not in
   v2.0)" above). the session's suggested first pick when the solver stack starts: Newton's
   method with forward-mode autodiff, the demonstration of what multi-intervals are for
+
+### 2026-09-26 revision: M13e, third part (sin_rev, cos_rev, tan_rev), built
+
+built and measured 2026-09-26; details in v2-implementation-plan.md (M13e, part 3). D12 for the
+periodic ops moved into "current design" (elementary and step functions: reverse ops; ieee 1788:
+periodic reverse ops). the choices the plan left open, each the most conservative reading, are now
+current design too:
+* **a `c` holding `[-1, 1]` is not hulled** for sin and cos: every finite t is a solution, one
+  piece, so `sin_rev([-1, 1])` is `(-inf, inf)` with no warning; D12 hulls only answers with too
+  many pieces. tan has no such `c` (its poles), so `tan_rev((-inf, inf))` warns
+* **the poles and ±inf are in no preimage**, part 1's rule for a point with no value, although the
+  set op `tan` attains ±inf around a pole inside a piece: `tan_rev([inf])` is `∅`. a piece around a
+  pole keeps it, since it is irrational and the enclosures of the two branches' ends overlap
+* **the cap per piece of `x`**, as `steps.step` has it: earlier pieces stay exact, the piece that
+  would pass 1000 pieces and every unbounded piece are hulled, one `HullWarning` per call; the
+  hull stays inside its piece of `x`
+* **the result is the union of every branch's enclosure, then `∩ x`**, so one branch more is listed
+  on each side of a piece of `x`, for an `x` that starts inside a neighbour's rounding slack
+* a `c` whose gaps are single irrational points (`[-1, 1)` for sin) counts as having gaps: a wide
+  `x` is hulled with the warning even though listing would give the same set
+* far out, where the doubles are coarser than a period (above about 1.8e16), neighbouring
+  enclosures merge into one piece; still an enclosure
+* **a proposed category gains rows**: six more `*Bin` vectors (12 with decorated copies) expect an
+  end one or two doubles outside the tightest enclosure; ours is the tightest (arb). they are rows
+  under "tighter than the vector", PROPOSED at part 1 and still awaiting the owner
+* the 136 vectors: 124 match in both passes, 12 are those rows. itf1788 now 8465 vectors of 100
+  ops; 1077 statements of 11 ops skipped (`powRev1`, `powRev2`, and M13g's)
 
 ### 2026-09-26 revision: M13e, second part (mul_rev), built
 

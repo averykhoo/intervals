@@ -783,3 +783,539 @@ def test_mul_rev_class_coercion_and_warnings():
     # no solution, and the 0 * inf corner, warn nothing (the suite turns warnings into errors)
     assert mul_rev(M(INF), M(0)) == EMPTY and mul_rev(M(0), M(1, 2)) == EMPTY
     assert mul_rev(M(0) | M(INF), M(0)) == M.parse('(-inf, inf)')
+
+
+# PERIODIC: sin_rev, cos_rev, tan_rev (M13e, third part; D12)
+#
+# `{t in x : f(t) in c}` with f the library's sin, cos or tan at a point: no value at ±inf, none at
+# tan's poles. f(t) at an exact t comes from `intervals.elementary` (its own oracles:
+# tests/test_elementary.py, tests/test_oracle_flint.py), as cosh's does above; the ends' own
+# rounding, `elementary.rounded_inverse_trig`, is checked against arb below. a bounded x gets the
+# exact pieces; a piece of x unbounded in the reals (or past ENUMERATION_CAP pieces) gets the hull of
+# its part and a HullWarning, which `trev` requires exactly where `trig_hulls` says
+
+from intervals import HullWarning  # noqa: E402
+from intervals import cos_rev  # noqa: E402
+from intervals import sin_rev  # noqa: E402
+from intervals import tan_rev  # noqa: E402
+from intervals.rounding import NEAREST  # noqa: E402
+from intervals.steps import ENUMERATION_CAP  # noqa: E402
+from intervals.cuts import Cut  # noqa: E402
+from intervals.cuts import Side  # noqa: E402
+from intervals.reverse import negate  # noqa: E402
+
+TRIG = {'sin': sin_rev, 'cos': cos_rev, 'tan': tan_rev}
+trig_names = st.sampled_from(sorted(TRIG))
+FINITE = one(-INF, INF, False, False)
+_TRIG_IMAGE = {'sin': one(-1, 1), 'cos': one(-1, 1), 'tan': FINITE}
+BOX = M(-21, 21)  # holds every finite value the exact strategies draw, and more than six periods
+
+
+def trig_hulls(name, c: MultiInterval, x: MultiInterval) -> bool:
+    """whether the op hulls (and warns), for operands drawn from the strategies (never past the cap):
+    c has a solution but not every finite t is one (sin, cos: c holds [-1, 1]; tan never, its poles),
+    and x's finite part has a piece unbounded in the reals"""
+    image = _TRIG_IMAGE[name]
+    if not intersection(c.cuts, image) or (name != 'tan' and is_subset(image, c.cuts)):
+        return False
+    return any(lo == -INF or hi == INF for lo, _, hi, _ in pieces(intersection(x.cuts, FINITE)))
+
+
+def trev(name, c, x=REALS):
+    """the op on MultiIntervals: an empty operand warns and gives ∅, a HullWarning is emitted exactly
+    where `trig_hulls` says, and nothing else warns (the suite turns the library's warnings into errors)"""
+    if not c or not x:
+        with pytest.warns(EmptySetPropagationWarning):
+            result = TRIG[name](c, x)
+        assert result == EMPTY
+        return result
+    if trig_hulls(name, c, x):
+        with pytest.warns(HullWarning):
+            return TRIG[name](c, x)
+    return TRIG[name](c, x)
+
+
+def trig_at(name, t):
+    """f(t) for an exact t: None at ±inf (no value there), the exact value where rational (0 at 0, cos 1),
+    else the two adjacent doubles strictly around it"""
+    if t in (INF, -INF):
+        return None
+    t = Fraction(t)
+    v = elementary.exact(name, t)
+    if v is not None:
+        return v
+    return elementary.rounded(name, t, DOWN), elementary.rounded(name, t, UP)
+
+
+def trig_value_in(name, t, c) -> bool:
+    """True if f(t) is in c, False if not (or no value), None if an end of c lies inside f(t)'s enclosure"""
+    v = trig_at(name, t)
+    if v is None:
+        return False
+    if not isinstance(v, tuple):
+        return contains_point(c, v)
+    enclosure = one(*v, False, False)
+    if is_subset(enclosure, c):
+        return True
+    if not intersection(enclosure, c):
+        return False
+    return None
+
+
+def trig_in_slack(t, result: MultiInterval) -> bool:
+    """t is in a piece of the result and strictly between an open double end of it and the next double
+    inward (`in_slack`, but t may be the piece's other end: x can start inside a rounded end's slack)"""
+    for p in result.pieces:
+        if t not in p:
+            continue
+        lo, hi = p.inf, p.sup
+        if not p.inf_closed and isinstance(lo, float) and lo < t < math.nextafter(lo, INF):
+            return True
+        if not p.sup_closed and isinstance(hi, float) and math.nextafter(hi, -INF) < t < hi:
+            return True
+    return False
+
+
+def _bounded_part(x: MultiInterval) -> MultiInterval:
+    """the pieces of x's finite part that are bounded: where the result is exact"""
+    return M.from_pieces((lo, hi, lc, hc) for lo, lc, hi, hc in pieces(intersection(x.cuts, FINITE))
+                         if lo != -INF and hi != INF)
+
+
+def _arb_of(v, flint):
+    """an exact value (int, Fraction, float) as an arb, exactly"""
+    v = Fraction(v)
+    return flint.arb(flint.fmpq(v.numerator, v.denominator))
+
+
+# EXAMPLES
+
+@pytest.mark.parametrize('name, c, x, want', [
+    ('sin', '[0]', '[-1, 4]', '[0] | (3.141592653589793, 3.1415926535897936)'),
+    ('sin', '[1]', '[0, 2]', '(1.5707963267948966, 1.5707963267948968)'),  # pi/2: the extremum, one point
+    ('sin', '[-1, 1]', None, '(-inf, inf)'),  # every finite t: no hull, no warning; ±inf have no value
+    ('sin', '[-2, 2]', '[-inf, 5]', '(-inf, 5]'),
+    ('sin', '[2]', None, '{}'),
+    ('sin', '[1/2, 1]', '[0, 2]', '(0.5235987755982988, 2]'),  # sin(2) > 1/2; the branches meet at pi/2
+    ('cos', '[1]', '[-1, 7]', '[0] | (6.283185307179586, 6.283185307179587)'),
+    ('cos', '[-1]', '[0, 4]', '(3.141592653589793, 3.1415926535897936)'),
+    ('cos', '[-1, 1]', '[2, inf)', '[2, inf)'),
+    ('cos', '(1/2, 1]', '[-2, 2]', '(-1.0471975511965979, 1.0471975511965979)'),
+    ('tan', '[0]', '[-4, 4]',
+     '(-3.1415926535897936, -3.141592653589793) | [0] | (3.141592653589793, 3.1415926535897936)'),
+    ('tan', '[1]', '[0, 4]', '(0.7853981633974483, 0.7853981633974484) | (3.9269908169872414, 3.926990816987242)'),
+    ('tan', '[inf]', None, '{}'),  # the poles have no value: nothing reaches ±inf
+    ('tan', '[-inf, inf]', '[1, 2]', '[1, 2]'),  # the pole pi/2 is inside both branches' enclosures
+    ('tan', '(-inf, 0]', '[0, 3]', '[0] | (1.5707963267948966, 3]'),  # tan(3) < 0
+])
+def test_trig_rev_examples(name, c, x, want):
+    x = REALS if x is None else M.parse(x)
+    assert trev(name, M.parse(c), x) == M.parse(want)
+    assert trev(name, O.parse(c), x) == O.parse(want)  # exact operands: the same in both classes
+
+
+def test_d12_example():
+    """sin_rev([1/2, 1], [0, 20]) has 4 pieces (D12): [pi/6, 5pi/6] + 2k pi for k = 0, 1, 2, and the
+    last cut at 20"""
+    r = sin_rev(M(Fraction(1, 2), 1), M(0, 20))
+    assert len(r.pieces) == 4
+    for k, p in enumerate(r.pieces):
+        lo, hi = 2 * k * math.pi + math.pi / 6, 2 * k * math.pi + 5 * math.pi / 6
+        assert not p.inf_closed and abs(p.inf - lo) <= 2 * math.ulp(lo)
+        if k < 3:
+            assert not p.sup_closed and abs(p.sup - hi) <= 2 * math.ulp(hi)
+    assert r.pieces[-1].sup == 20 and r.pieces[-1].sup_closed  # sin(20) = 0.91...
+
+
+def test_trig_rev_hull_past_the_cap():
+    """1000 pieces are listed; the 1001st makes it their hull and a HullWarning (steps.py's cap).
+    [0, 6280] holds [pi/6, 5pi/6] + 2k pi for k = 0..999, and [0, 6284] one piece more"""
+    c = M(Fraction(1, 2), 1)
+    listed = sin_rev(c, M(0, 6280))
+    assert len(listed.pieces) == ENUMERATION_CAP == 1000
+    with pytest.warns(HullWarning):
+        hulled = sin_rev(c, M(0, 6284))
+    halves = sin_rev(c, M(0, 3000)) | sin_rev(c, M(3000, 6284))
+    assert len(halves.pieces) == 1001 and hulled == halves.hull
+    # per piece of x, as steps.py: [0, 7] is listed (2 pieces, a gap between), then [8, 6300] (1002
+    # more) is hulled alone, the gap in [0, 7] kept
+    with pytest.warns(HullWarning):
+        split = sin_rev(c, M(0, 7) | M(8, 6300))
+    first = sin_rev(c, M(0, 7))
+    later = sin_rev(c, M(8, 3000)) | sin_rev(c, M(3000, 6300))
+    assert len(first.pieces) == 2 and len(later.pieces) == 1002
+    assert split == first | later.hull and len(split.pieces) == 3
+
+
+def test_trig_rev_hull_of_a_wide_x():
+    """past `_BRANCH_LIMIT` branches the hull's ends come from walking inward from x's ends: the same as
+    the exact results on windows of a period and more at each end; per piece of x, as steps.py does"""
+    c = M(Fraction(1, 2), 1)
+    for name in ('sin', 'cos', 'tan'):
+        with pytest.warns(HullWarning):
+            wide = TRIG[name](c, M(0, 10 ** 6))
+        low, high = TRIG[name](c, M(0, 7)), TRIG[name](c, M(10 ** 6 - 7, 10 ** 6))
+        assert wide == M.from_pieces([(low.inf, high.sup, low.inf_closed, high.sup_closed)])
+        with pytest.warns(HullWarning):
+            mixed = TRIG[name](c, M(0, 1) | M.parse('[10, inf)'))
+        start = TRIG[name](c, M(10, 17))
+        assert mixed == TRIG[name](c, M(0, 1)) | M.from_pieces([(start.inf, INF, start.inf_closed, False)])
+
+
+def test_trig_rev_far_out_against_arb():
+    """branches far from 0 (k near 3e5, where a double's ulp is still far below pi): each piece is the
+    tightest open enclosure of k pi ± asin(1/2). near 1e20 the ulp (16384) is wider than a period, so the
+    enclosures of all the solutions in a window merge into one piece, which must still hold them"""
+    flint = pytest.importorskip('flint')
+    far = sin_rev(M(Fraction(1, 2)), M(10 ** 20, 10 ** 20 + 7))
+    assert far == M.from_pieces([(1e20, 10 ** 20 + 7, False, True)])  # sin(1e20) is not 1/2: open there
+    start = 10 ** 6
+    r = sin_rev(M(Fraction(1, 2)), M(start, start + 7))
+    old = flint.ctx.prec
+    flint.ctx.prec = 300
+    try:
+        pi = flint.arb.pi()
+        a = pi / 6  # asin(1/2)
+        k0 = int((flint.arb(start) / pi).floor().unique_fmpz())
+        truths = [t for k in range(k0 - 1, k0 + 4) for t in [k * pi + (a if k % 2 == 0 else -a)]
+                  if flint.arb(start) < t < flint.arb(start + 7)]
+        assert len(r.pieces) == len(truths) >= 2
+        for p, t in zip(r.pieces, sorted(truths, key=lambda t: float(t.mid()))):
+            assert not p.inf_closed and not p.sup_closed
+            assert p.sup == math.nextafter(p.inf, INF) and flint.arb(p.inf) < t < flint.arb(p.sup)
+    finally:
+        flint.ctx.prec = old
+
+
+def test_trig_rev_class_coercion_and_warnings():
+    assert type(sin_rev(O(0.5), M(0, 1))) is O and type(cos_rev(M(0), O(0.0, 2.0))) is O
+    assert type(tan_rev(M(1), M(0, 1))) is M
+    assert sin_rev(0, 0) == M(0) and cos_rev(1, 0) == M(0) and tan_rev(1, 0) == EMPTY
+    for fn in TRIG.values():
+        with pytest.raises(TypeError):
+            fn('[0, 1]')
+        with pytest.raises(TypeError):
+            fn(M(0), None)
+        for args in ((EMPTY,), (M(0), EMPTY), (O(), O(0.0, 1.0))):
+            with pytest.warns(EmptySetPropagationWarning):
+                assert fn(*args) == EMPTY
+    # no solution warns nothing (the suite turns warnings into errors); neither does a whole-line answer
+    assert sin_rev(M(2, 3)) == EMPTY and tan_rev(M(INF)) == EMPTY
+    assert cos_rev(M(-1, 1)) == M.parse('(-inf, inf)')
+    with pytest.warns(HullWarning):
+        assert tan_rev(M.parse('(-inf, inf)')) == M.parse('(-inf, inf)')  # the poles: infinitely many pieces
+
+
+def test_trig_rev_unary_forms_do_not_see_the_infinities():
+    """the unary vectors run with x = [-inf, inf]; the trig functions have no value at ±inf, so each
+    gives what 1788's entire as x gives: no row hides a difference there"""
+    from tests.itf1788 import test_itf1788 as t
+    unary = [v for v in t.VECTORS if v.op in ('sinRev', 'cosRev', 'tanRev')]
+    assert len(unary) == 34
+    for v in unary:
+        c = t.to_ours(v.args[0])
+        name = v.op[:3]
+        assert _quiet(TRIG[name], c) == _quiet(TRIG[name], c, M.from_cuts(ENTIRE_1788)), v.text
+
+
+def _true_hull_1788(name, c, x, flint):
+    """arb's hull of `{t in x : f(t) in c}` for a *Bin vector with bounded operands, as (lo, hi) arbs:
+    every branch meeting x, its inverse at c's ends, then intersected with x"""
+    pi = flint.arb.pi()
+    lo_c, hi_c = (max(c[0], -1), min(c[1], 1)) if name != 'tan' else c
+    lo_x, hi_x = (_arb_of(v, flint) for v in x)
+    found = []
+    for k in range(math.floor(float(x[0]) / math.pi) - 2, math.floor(float(x[1]) / math.pi) + 3):
+        if name == 'sin':
+            g, rising = (lambda v, k=k: k * pi + (-1) ** k * v.asin()), k % 2 == 0
+        elif name == 'cos':
+            g, rising = ((lambda v, k=k: k * pi + v.acos()), False) if k % 2 == 0 else \
+                ((lambda v, k=k: (k + 1) * pi - v.acos()), True)
+        else:
+            g, rising = (lambda v, k=k: k * pi + v.atan()), True
+        a, b = g(_arb_of(lo_c, flint)), g(_arb_of(hi_c, flint))
+        a, b = (a, b) if rising else (b, a)
+        if b < lo_x or a > hi_x:
+            continue
+        assert (a > lo_x or a < lo_x) and (b > hi_x or b < hi_x), 'arb cannot decide'
+        found.append((a if a > lo_x else lo_x, b if b < hi_x else hi_x))
+    return min((f[0] for f in found), key=lambda z: float(z.mid())), max((f[1] for f in found), key=lambda z: float(z.mid()))
+
+
+def test_trig_rev_is_tighter_than_the_vector():
+    """the rows `_TRIG_REV_LOOSE_ROWS` (tests/itf1788, the proposed category "tighter than the vector"):
+    arb puts each true end of the hull strictly inside our end's double and the next one inward, so ours
+    is the tightest; 1788's hull holds ours, equal at one end and one or two doubles outside at the other"""
+    flint = pytest.importorskip('flint')
+    from tests.itf1788 import test_itf1788 as t
+    rows = [v for v in t.VECTORS if t.key(v) in t._TRIG_REV_LOOSE_ROWS]
+    assert len(rows) == 12 and {t.key(v) for v in rows} == set(t._TRIG_REV_LOOSE_ROWS)
+    old = flint.ctx.prec
+    flint.ctx.prec = 300
+    try:
+        for v in rows:
+            name, (c, x) = v.op[:3], v.args
+            ours, theirs = t.run(v)
+            assert t.run_outward(v)[0] == ours
+            lo, hi = _true_hull_1788(name, (c.lo, c.hi), (x.lo, x.hi), flint)
+            assert flint.arb(ours[0]) < lo < flint.arb(math.nextafter(ours[0], INF)), v.text
+            assert flint.arb(math.nextafter(ours[1], -INF)) < hi < flint.arb(ours[1]), v.text
+            assert theirs[0] <= ours[0] and ours[1] <= theirs[1] and (theirs[0] == ours[0]) != (theirs[1] == ours[1])
+            gap = [e for e in (theirs[0], ours[0]) if theirs[0] != ours[0]] or [ours[1], theirs[1]]
+            steps = 0
+            while gap[0] < gap[1]:
+                gap[0], steps = math.nextafter(gap[0], INF), steps + 1
+            assert steps in (1, 2), (v.text, steps)
+    finally:
+        flint.ctx.prec = old
+
+
+# THE DEFINING PROPERTY: exactly the t of x with f(t) in c, where x is bounded; the hull where not
+
+@settings(max_examples=150, deadline=None)
+@given(name=trig_names, c=exact_cut_tuples, x=exact_cut_tuples)
+@example(name='sin', c=v1788(H('0X1.FFFFFFFFFFFFFP-1'), 1.0), x=v1788(1.57, 1.58))  # rev.itl:555, a row
+@example(name='sin', c=v1788(0.0, 0.0), x=v1788(3.0, 3.5))  # :554
+@example(name='sin', c=v1788(-H('0X1.72CECE675D1FDP-52'), 1.0), x=v1788(-0.1, 3.15))  # :563
+@example(name='sin', c=v1788(H('0X1.1A62633145C06P-53'), H('0X1.1A62633145C07P-53')),
+         x=v1788(-INF, 3.15))  # :569, a hull
+@example(name='cos', c=v1788(-1.0, -1.0), x=v1788(3.14, 3.15))  # :633, a row
+@example(name='cos', c=v1788(-1.0, -H('0X1.FFFFFFFFFFFFFP-1')), x=v1788(9.42, 9.45))  # :644
+@example(name='cos', c=v1788(-H('0X1.AA22657537205P-2'), H('0X1.14A280FB5068CP-1')), x=v1788(0.0, 2.1))  # :647
+@example(name='cos', c=v1788(H('0X1.87996529F9D92P-1'), 1.0), x=v1788(-1.0, 0.1))  # :646
+@example(name='cos', c=v1788(-H('0X1.72CECE675D1FDP-52'), -H('0X1.72CECE675D1FCP-52')),
+         x=v1788(-1.5, INF))  # :652, a hull
+@example(name='tan', c=v1788(H('0X1.D02967C31CDB4P+53'), H('0X1.D02967C31CDB5P+53')),
+         x=v1788(-1.5708, 1.5708))  # :711, a row
+@example(name='tan', c=v1788(-INF, INF), x=v1788(-1.5708, 1.5708))  # :708, the poles inside x
+@example(name='tan', c=v1788(-H('0X1.D02967C31CDB5P+53'), H('0X1.D02967C31CDB5P+53')),
+         x=v1788(-1.5707965, 1.5707965))  # :718
+@example(name='tan', c=v1788(-H('0X1.D02967C31p+53'), H('0X1.D02967C31p+53')), x=v1788(-INF, 1.5707965))  # :715
+@example(name='tan', c=one(INF, INF), x=ALL)  # ±inf: no pole is a solution
+@example(name='sin', c=one(-1, 1, True, False), x=one(0, 20))  # the gaps are single points, 1 at pi/2 + 2k pi
+@example(name='tan', c=one(0, INF, True, False), x=one(Fraction(1.5707963267948968) - Fraction(1, 2 ** 60), 2))  # slack
+@example(name='tan', c=one(-INF, 0, False, True), x=one(1, Fraction(1.5707963267948966) + Fraction(1, 2 ** 60)))
+def test_trig_rev_exactly_the_points_with_f_in_c(name, c, x):
+    """over the bounded pieces of x: soundness and the converse at every point where membership could
+    change, and tightness at each rounded end (the next double inward is a true point). over an
+    unbounded piece: soundness, and the part is the hull of the exact result on a window of more than a
+    period at its finite end (or the whole piece): D12's hull. ±inf are never in it"""
+    C, X = M.from_cuts(c), M.from_cuts(x)
+    result = trev(name, C, X)
+    assert result.issubset(X) and INF not in result and -INF not in result
+    bounded = _bounded_part(X)
+    for t in probes(c, x, result.cuts):
+        truth = trig_value_in(name, t, c)
+        if truth and t in X:
+            assert t in result, (t, result)
+        if t in result and truth is False and t in bounded:
+            assert trig_in_slack(t, result), (t, result)
+    for lo, lo_closed, hi, hi_closed in pieces(result.cuts):
+        for end, closed, toward in ((lo, lo_closed, INF), (hi, hi_closed, -INF)):
+            if not closed and isinstance(end, float) and math.isfinite(end) and end in _widened(bounded):
+                inward = math.nextafter(end, toward)
+                if lo < inward < hi and inward in bounded:
+                    assert trig_value_in(name, inward, c) is not False, (end, result)
+    if not trig_hulls(name, C, X):
+        return
+    for lo, lo_closed, hi, hi_closed in pieces(intersection(x, FINITE)):
+        if lo != -INF and hi != INF:
+            continue
+        got = result & M.from_pieces([(lo, hi, lo_closed, hi_closed)])
+        if lo == -INF and hi == INF:
+            assert got == M.from_cuts(FINITE)
+        elif lo == -INF:
+            window = trev(name, C, M.from_pieces([(hi - 7, hi, True, hi_closed)]))
+            assert got == M.from_pieces([(-INF, window.sup, False, window.sup_closed)])
+        else:
+            window = trev(name, C, M.from_pieces([(lo, lo + 7, lo_closed, True)]))
+            assert got == M.from_pieces([(window.inf, INF, window.inf_closed, False)])
+
+
+# SET LEVEL
+
+def trig_forward(name, a: MultiInterval) -> MultiInterval:
+    """the library's f on a set"""
+    return _quiet(lambda: getattr(a, name)())
+
+
+@settings(max_examples=100, deadline=None)
+@given(name=trig_names, t=exact_cut_tuples, more=exact_cut_tuples, x=exact_cut_tuples)
+@example(name='tan', t=one(1, 2), more=(), x=ALL)  # a pole inside T: tan(T) holds ±inf
+@example(name='sin', t=one(-1, 20), more=(), x=one(0, 3))
+def test_trig_rev_the_largest_set(name, t, more, x):
+    """any T of reals whose image lies in C is inside rev(C, BOX), and T ∩ X inside rev(C, X). in the
+    outward class, since f(T) has float ends (its enclosures), as for cosh above"""
+    T = O.from_cuts(t) & O.from_cuts(BOX.cuts)
+    C = trig_forward(name, T) | O.from_cuts(more)
+    assert T.issubset(trev(name, C, O.from_cuts(BOX.cuts)))
+    X = O.from_cuts(x)
+    assert (T & X).issubset(trev(name, C, X))
+
+
+@settings(max_examples=100, deadline=None)
+@given(name=trig_names, c=exact_cut_tuples, more=exact_cut_tuples, x=exact_cut_tuples, x_more=exact_cut_tuples)
+def test_trig_rev_isotone(name, c, more, x, x_more):
+    """in c and in x, the hulls included (a larger set has a larger hull)"""
+    C, X = M.from_cuts(c), M.from_cuts(x)
+    bigger_c, bigger_x = C | M.from_cuts(more), X | M.from_cuts(x_more)
+    assert trev(name, C, X).issubset(trev(name, bigger_c, X))
+    assert trev(name, C, X).issubset(trev(name, C, bigger_x))
+
+
+# rationals just past and just before the pole pi/2, inside the slack of branch 0's end enclosure (the
+# double above pi/2) and of branch 1's start enclosure (the double below pi/2)
+_PAST_THE_POLE = Fraction(1.5707963267948968) - Fraction(1, 2 ** 60)
+_BEFORE_THE_POLE = Fraction(1.5707963267948966) + Fraction(1, 2 ** 60)
+
+
+@settings(max_examples=100, deadline=None)
+@given(name=trig_names, c=exact_cut_tuples, d=exact_cut_tuples, x=exact_cut_tuples)
+@example(name='tan', c=one(0, INF, True, False), d=(), x=one(_PAST_THE_POLE, 2))  # x starts in a neighbour's slack
+@example(name='tan', c=one(-INF, 0, False, True), d=(), x=one(1, _BEFORE_THE_POLE))  # x ends in one
+def test_trig_rev_union_and_x(name, c, d, x):
+    """over a bounded x, a preimage distributes over a union of c, and x only intersects: the result is
+    the union of every branch's enclosure, then ∩ x, whichever branches x starts in (hence one branch
+    more on each side: x may start inside the slack of the branch before it)"""
+    C, D = M.from_cuts(c), M.from_cuts(d)
+    assert trev(name, C | D, BOX) == trev(name, C, BOX) | trev(name, D, BOX)
+    X = M.from_cuts(x) & BOX
+    assert trev(name, C, X) == trev(name, C, BOX) & X
+
+
+@settings(deadline=None)
+@given(name=trig_names, c=cut_tuples(), x=cut_tuples())
+@example(name='sin', c=(Cut(0, Side.BELOW), Cut(0.0, Side.ABOVE)), x=one(-INF, -2, False, False))  # a mixed point
+def test_trig_rev_symmetry(name, c, x):
+    """sin and tan are odd, cos is even: `rev(-c, -x) = -rev(c, x)` and `cos_rev(c, -x) = -cos_rev(c, x)`,
+    hulls and float operands included (a branch's mirror is a branch, and rounding is symmetric). the
+    mirror is taken cut by cut (`reverse.negate`), which keeps each end's type: the class's `-` rebuilds a
+    point whose ends differ in type (`[0, 0.0]`) with one value, so an end would change from float to exact
+    and round differently"""
+    C, X = M.from_cuts(c), M.from_cuts(x)
+    neg = lambda a: M.from_cuts(negate(a.cuts))  # noqa: E731
+    r = _quiet(TRIG[name], C, X)
+    if name == 'cos':
+        assert _quiet(TRIG[name], C, neg(X)) == neg(r)
+    else:
+        assert _quiet(TRIG[name], neg(C), neg(X)) == neg(r)
+
+
+# FLOAT OPERANDS
+
+@settings(max_examples=100, deadline=None)
+@given(name=trig_names, c=float_cut_tuples, x=float_cut_tuples)
+@example(name='sin', c=one(H('0X1.FFFFFFFFFFFFFP-1'), 1.0), x=one(1.57, 1.58))  # rev.itl:555
+@example(name='cos', c=one(-1.0, -1.0), x=one(3.14, 3.15))  # :633
+@example(name='tan', c=one(H('0X1.D02967C31CDB4P+53'), H('0X1.D02967C31CDB5P+53')), x=one(-1.5708, 1.5708))  # :711
+@example(name='sin', c=one(0.5, 1.0), x=one(0.0, 20.0))  # nearest: float ends, closed
+@example(name='sin', c=one(-5.614185657941294e-24, 0.0, False, False),
+         x=one(-INF, -5.614185657941294e-24, False, False))  # x's end in the half ulp nearest moves asin(c)
+def test_trig_rev_float_operands(name, c, x):
+    """over a bounded x: outward holds the exact result of the same doubles, adds no double strictly inside
+    what it adds, and closes only exact points. to nearest, x taken as the whole box (an end of x can
+    fall in the half ulp a rounded end moved, as mul_rev's test says: asin(-5.6e-24) rounds onto the
+    double -5.6e-24 itself, so x = (-inf, -5.6e-24) loses the exact sliver between them): float ends
+    within one double of the exact result, inside the outward closure, not empty when it is not; and
+    x only intersects, after the rounding"""
+    box = lambda cls: cls.from_cuts(BOX.cuts)  # noqa: E731
+    exact = trev(name, M.from_cuts(exact_cuts(c)), M.from_cuts(exact_cuts(x)) & BOX)
+    outward = trev(name, O.from_cuts(c), O.from_cuts(x) & box(O))
+    assert exact.issubset(outward)
+    for lo, _, hi, _ in pieces(outward.difference(exact).cuts):
+        assert hi <= _first_double_above(lo), (lo, hi)
+    for lo, lo_closed, hi, hi_closed in pieces(outward.cuts):
+        for end, closed in ((lo, lo_closed), (hi, hi_closed)):
+            if closed:
+                assert end in exact, (end, outward)
+    exact_all = trev(name, M.from_cuts(exact_cuts(c)), BOX)
+    nearest_all = trev(name, M.from_cuts(c), BOX)
+    outward_all = trev(name, O.from_cuts(c), box(O))
+    for r in (outward, nearest_all):
+        assert all(isinstance(cut.value, float) or cut.value == float(cut.value) for cut in r.cuts), r
+    assert exact_all.issubset(_widened(nearest_all))
+    assert nearest_all.issubset(M.from_pieces((lo, hi) for lo, _, hi, _ in pieces(outward_all.cuts)))
+    if exact_all:
+        assert nearest_all
+    X = M.from_cuts(x) & BOX
+    assert trev(name, M.from_cuts(c), X) == nearest_all & X
+
+
+@settings(max_examples=100, deadline=None)
+@given(name=trig_names, c=cut_tuples(), x=cut_tuples(), seed=st.integers(0, 2 ** 32 - 1))
+@example(name='cos', c=one(-1.0, -1.0), x=one(3.14, 3.15), seed=0)  # rev.itl:633
+def test_trig_rev_sound_at_sampled_points(name, c, x, seed):
+    """M14's soundness: a sampled t of x with f(t) in c is in the exact result and in the outward one,
+    hulls included (float operands read as the rationals they are); a sampled t of the exact result's
+    bounded part has f(t) in c, or lies in a rounded end's slack"""
+    rng = random.Random(seed)
+    exact_c, exact_x = exact_cuts(c), exact_cuts(x)
+    X = M.from_cuts(exact_x)
+    exact = trev(name, M.from_cuts(exact_c), X)
+    outward = trev(name, O.from_cuts(c), O.from_cuts(x))
+    for t in sample(exact_x, 20, rng):
+        t = _exact(t)
+        if trig_value_in(name, t, exact_c):
+            assert t in exact and t in outward, t
+    bounded = _bounded_part(X)
+    for t in sample(exact.cuts, 20, rng):
+        t = _exact(t)
+        if t in bounded:
+            assert trig_value_in(name, t, exact_c) is not False or trig_in_slack(t, exact), t
+
+
+# THE ROUNDING OF THE ENDS
+
+def test_rounded_inverse_trig_exact_case():
+    assert elementary.rounded_inverse_trig('asin', 0, -1, 0, DOWN) == 0.0
+    assert elementary.rounded_inverse_trig('acos', 1, 1, 0, UP) == 0.0
+    assert elementary.rounded_inverse_trig('atan', 0, 1, 0, NEAREST) == 0.0
+    # acos(-1) = pi: k pi - pi is 0 at k = 1 (the fuzz profile found this one hanging in ziv's loop)
+    assert elementary.rounded_inverse_trig('acos', -1, -1, 1, DOWN) == 0.0
+    assert elementary.rounded_inverse_trig('acos', -1, 1, -1, UP) == 0.0
+
+
+@settings(max_examples=200, deadline=None)
+@given(name=st.sampled_from(['asin', 'acos', 'atan']),
+       v=st.one_of(st.fractions(-1, 1, max_denominator=10 ** 6), st.sampled_from([-1, 0, 1]),
+                   st.floats(-1, 1).map(Fraction)),
+       big=st.one_of(st.fractions(-10 ** 6, 10 ** 6, max_denominator=100), st.sampled_from([INF, -INF])),
+       sign=st.sampled_from([1, -1]),
+       k=st.one_of(st.integers(-10, 10), st.integers(-2 ** 70, 2 ** 70), st.integers(-2 ** 400, 2 ** 400)),
+       direction=st.sampled_from([DOWN, NEAREST, UP]))
+@example(name='asin', v=1, big=0, sign=1, k=0, direction=UP)
+@example(name='acos', v=-1, big=0, sign=-1, k=3, direction=NEAREST)
+@example(name='atan', v=0, big=INF, sign=-1, k=-7, direction=DOWN)
+@example(name='acos', v=1, big=0, sign=-1, k=2 ** 400, direction=UP)  # acos(1) = 0: the value is k pi
+@example(name='acos', v=-1, big=0, sign=-1, k=2, direction=DOWN)  # acos(-1) = pi: the value is pi
+@example(name='asin', v=Fraction(7.2701979378291835e-245), big=0, sign=1, k=0, direction=UP)  # just above v
+def test_rounded_inverse_trig_against_arb(name, v, big, sign, k, direction):
+    """`k pi + sign * f(v)` rounded against arb (atan over the reals and ±inf, asin and acos over
+    [-1, 1]): DOWN is the largest double below the value, UP the smallest above, NEAREST within half an
+    ulp (the value is irrational off the exact case, so never a double nor a tie)"""
+    flint = pytest.importorskip('flint')
+    if name == 'atan':
+        v = big
+    if (k == 0 and v == (1 if name == 'acos' else 0)) or (name == 'acos' and v == -1 and k == -sign):
+        return  # the exact cases, above
+    got = elementary.rounded_inverse_trig(name, v, sign, k, direction)
+    assert math.isfinite(got)
+    below, above = math.nextafter(got, -INF), math.nextafter(got, INF)
+    lo, hi = {DOWN: (got, above), UP: (below, got), NEAREST: (None, None)}[direction]
+    old = flint.ctx.prec
+    try:
+        # arb's precision is relative: a tiny v needs more of it, asin(v) - v being about v**3 / 6
+        for prec in (abs(k).bit_length() + 200 * 4 ** i for i in range(6)):
+            flint.ctx.prec = prec
+            fv = flint.arb.pi() / 2 * (1 if v > 0 else -1) if v in (INF, -INF) else getattr(_arb_of(v, flint), name)()
+            true = k * flint.arb.pi() + sign * fv
+            if direction == NEAREST:  # within half an ulp: between the midpoints with the neighbours
+                lo_arb, hi_arb = (flint.arb(below) + flint.arb(got)) / 2, (flint.arb(got) + flint.arb(above)) / 2
+            else:
+                lo_arb, hi_arb = flint.arb(lo), flint.arb(hi)
+            if lo_arb < true < hi_arb:
+                return
+            assert not (true <= lo_arb or true >= hi_arb), (got, true)  # decided, and wrong
+        raise AssertionError(f'arb never decided: {got!r}')
+    finally:
+        flint.ctx.prec = old

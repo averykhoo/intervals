@@ -1071,6 +1071,157 @@ M12; each checked against the D14 oracle (M14)
   pairs agreed, values and warnings). the wiring: `mulRev` with `b` and `c` swapped 134 red,
   `mulRevTen` ignoring `x` 20, the pair rule as one hull 64 (the 32 two-piece pairs, both
   passes), `mulRevToPair` without the pair rule 344
+* **part 3 done 2026-09-26 (branch `m13e`): `sin_rev`, `cos_rev`, `tan_rev`** (sinRev 12, sinRevBin
+  40, cosRev 12, cosRevBin 42, tanRev 10, tanRevBin 20 statements). built:
+    * `intervals/reverse.py::sin_rev(c, x=REALS)`, `::cos_rev`, `::tan_rev`, exported from
+      `intervals` (`test_package_exports_unchanged` lists them): `{t ∈ x : f(t) ∈ c}` for the
+      library's sin, cos, tan at a point, which have no value at ±inf (`functions.domain`) and tan
+      none at its poles. part 1's engine: `::_Periodic` names an op's branches and
+      `::_trig_branch` makes the k-th, a `Branch` whose inverse is `m pi + sign g(v)`, g being
+      `elementary`'s asin, acos or atan: sin `k pi + (-1)^k asin v` on `[k pi - pi/2, k pi +
+      pi/2]`, rising for an even k; cos `k pi + acos v`, falling, for an even k and `(k + 1) pi -
+      acos v`, rising, for an odd k; tan `k pi + atan v`, rising, its image `(-inf, inf)` open.
+      `::_periodic_preimage` takes each piece of `x ∩ (-inf, inf)`, the branches from
+      `elementary.floor_over_pi` at its ends plus one on each side, and unions `branch_preimage` over
+      them. D12's cap follows `steps.step` (its `ENUMERATION_CAP` reused): a piece of `x` whose part
+      would take the count past 1000 pieces, or that spans more than `::_BRANCH_LIMIT` branches, or
+      is unbounded, gives its part's hull, and the call emits one `HullWarning`. the hull of a wide
+      or unbounded piece comes from `::_periodic_hull`, walking inward from the piece's finite ends
+      to the first branch with a solution (every branch has one). `::_BRANCH_LIMIT` is 2 × 1000 + 8:
+      past it, a `c` that is not the whole image has more than 1000 pieces, since each period holds
+      a solution and a point that is not one. `::_reverse` is reused with `given=(x,)`
+      (`::_periodic`): the preimage needs `x` to know which branches to list
+    * `intervals/elementary.py::rounded_inverse_trig(name, v, sign, k, direction)`: `k pi + sign
+      f(v)` correctly rounded by ziv's loop, the working precision grown by k's bits so that a branch
+      far out needs no extra doublings; `acos(-1)` = pi is folded into k, since `(k + sign) pi` is 0
+      at `k = -sign`
+    * **choices the plan left open** (conservative, flagged in `v2-plan.md` "2026-09-26 revision:
+      M13e, third part"):
+        * **a `c` holding sin's or cos's whole image `[-1, 1]` is not hulled**: every finite t is a
+          solution, one piece whatever `x` is, so `sin_rev([-1, 1])` is `(-inf, inf)` with no
+          warning (D12 hulls only an answer with too many pieces). tan has no such `c`: its poles
+          leave a gap in every period, so `tan_rev((-inf, inf))` is `(-inf, inf)` with a `HullWarning`
+        * **the poles are in no preimage**, part 1's rule for 0 in `pown_rev(c, -1)`, although the set
+          op `tan` attains ±inf around a pole inside a piece: `tan_rev([inf])` is `∅`, no warning. a
+          pole is irrational, so a piece around it cannot leave it out: the enclosures of the two
+          branches' ends overlap and merge (`tan_rev([-inf, inf], [1, 2])` is `[1, 2]`)
+        * **±inf are in no preimage**, so the default `x = [-inf, inf]` gives what 1788's entire gives
+          (pinned by `tests/test_reverse.py::test_trig_rev_unary_forms_do_not_see_the_infinities`)
+        * **the cap per piece of `x`**, as `steps.step` has it per piece of its operand: earlier
+          pieces stay exact, the piece that would pass 1000 and every unbounded piece become their
+          part's hull, one warning per call. a hull lies inside its piece of `x`, so the result never
+          leaves `x`
+        * a `c` whose gaps are single irrational points (`sin_rev([-1, 1))`, without 1 at `pi/2 + 2k
+          pi`) has gaps, so a wide or unbounded `x` is hulled with the warning, although the ends'
+          enclosures around each gap overlap and listing would give the same set
+        * **one branch more on each side of a piece of `x`**, so that the result is the union of every
+          branch's enclosure, then `∩ x`, even where `x` starts or ends inside the one-double slack of
+          a neighbouring branch's end (just past or before a pole of tan). without it the result would
+          depend on which branches were listed. pinned by two `@example`s
+        * **far out, the doubles are coarser than a period** (their spacing passes pi above about
+          1.8e16), so the enclosures of neighbouring solutions merge: `sin_rev([1/2], [1e20, 1e20 +
+          7])` is `(1e20, 1e20 + 7]`, still an enclosure (pinned in
+          `::test_trig_rev_far_out_against_arb`)
+        * a float end of `c` is a float operand, rounded to nearest (flags kept) or outward (a moved end
+          open), part 1's rule; the class, the coercion and the warnings are part 1's too
+    * adapter (`tests/itf1788/test_itf1788.py`): `sinRev`, `sinRevBin`, `cosRev`, `cosRevBin`,
+      `tanRev`, `tanRevBin` in `OPS`, one labelled block; the unary form is the call with `x` omitted,
+      whose answer is the hull `(-inf, inf)` with a `HullWarning` (ignored in a vector), 1788's entire.
+      rows: `::_TRIG_REV_LOOSE_ROWS` (7 keys, the undecorated `rev.itl:555` and its decorated copy
+      `:595` differ by a space), reason `::_TRIG_REV_LOOSE`, under the **proposed category "tighter
+      than the vector"** of part 1, not yet approved by the owner. no other row, no new category
+    * **a finding: six more 1788 vectors are not tight** (12 with their decorated copies, all
+      `*Bin` in `libieeep1788_rev.itl`): one end of 1788's hull is outside the tightest double
+      enclosure of `k pi ± asin/acos/atan(v)`, the other end equal; ours is the tightest.
+      `sinRevBin` `:555`/`:595` (pi/2, high end one double out), `cosRevBin` `:633`/`:675` (pi, high
+      end one), `:642`/`:684` (high end one), `:643`/`:685` (low end one), `tanRevBin` `:711`/`:735`
+      (-pi/2, low end two doubles out), `:713`/`:737` (-pi, low end one). checked with arb at 300 bits
+      by `tests/test_reverse.py::test_trig_rev_is_tighter_than_the_vector`: the true end lies
+      strictly between our double and the next one inward. a throwaway arb census over every
+      bounded `*Bin` vector (2026-09-26) found ours the tightest hull for all of them
+    * **a bug found while building**, by the fuzz profile at ×2: `rounded_inverse_trig('acos', -1,
+      -1, 1, ...)` hung in ziv's loop, since the value `pi - pi` is 0, a rational it cannot settle.
+      `cos_rev` never asks for it (its branches give `k pi` there, k odd), but the helper was wrong:
+      acos(-1) is now folded into k, pinned by `::test_rounded_inverse_trig_exact_case` and an
+      `@example`. the fuzz run also found a test-oracle weakness: arb's relative precision was too
+      low to separate `asin(7.27e-245)` from its argument, so the oracle now raises its precision
+      until the comparison is decided (an `@example` keeps that input)
+    * **a test bug found by the first sabotage run**: `::test_trig_rev_float_operands` asked the
+      nearest result with `x` to hold the exact one within a double, and hypothesis found `c =
+      (-5.6e-24, 0.0)`, `x = (-inf, -5.6e-24)`: asin of the double -5.6e-24 rounds to nearest onto
+      that double, so `x`'s open end cuts off the exact sliver between them, part 2's recorded
+      nearest rule ("an end of `x` inside the half ulp a rounded end moved can be lost"). the
+      assertion now takes the whole box as `x`, as mul_rev's does; the example is kept. that run's
+      red counts all held this one replayed failure, so the harness was run again (below). the
+      second run found another in `::test_trig_rev_symmetry`: the class's `-` rebuilds a point
+      whose ends differ in type (`[0, 0.0]`, from the strategies) with one value, `[0, 0]`, so an end
+      changed from float to exact and rounded differently. the test now mirrors cut by cut
+      (`reverse.negate`, which keeps each end's type), with the point as an `@example`; the `-` on
+      such a point is the library's own behaviour, not this op's, and is left as it is
+    * tests (`tests/test_reverse.py`, its periodic section, 31 items in 66 s under the shared
+      laptop's load, 2026-09-26): 8 `@given`, all with `deadline=None`:
+      `::test_trig_rev_exactly_the_points_with_f_in_c` (150 examples, exact operands; over the bounded
+      pieces of `x`, at every end, between each two, beyond, ±inf and a fraction of an ulp around
+      every float end: soundness, the converse except inside a rounded end's one-double slack
+      (`::trig_in_slack`), and tightness, the next double inward from a rounded end being a true
+      point; over an unbounded piece, soundness and the part equal to the hull built from the exact
+      result on a window of 7 at its finite end; ±inf never in it; `f(t)` from `elementary`, as for
+      cosh; `::trev` requires a `HullWarning` exactly where `::trig_hulls` says, and nothing else to
+      warn), `::test_trig_rev_the_largest_set` (`T ⊆ rev(f(T) ∪ more)`, tan's poles inside `T`
+      included, in the outward class), `::test_trig_rev_isotone` (in `c` and `x`, hulls included),
+      `::test_trig_rev_union_and_x` (over a bounded `x`, distributes over `∪` of `c`, and `x` only
+      intersects), `::test_trig_rev_symmetry` (sin and tan odd, cos even, float operands and hulls
+      included), `::test_trig_rev_float_operands` (outward holds the exact result of the same doubles,
+      adds no double strictly inside, closes only exact points; nearest, over the whole box, within
+      one double and inside the outward closure, then `x` only intersects, as mul_rev's test has
+      it), `::test_trig_rev_sound_at_sampled_points`,
+      `::test_rounded_inverse_trig_against_arb` (200 examples: asin, acos over `[-1, 1]`, atan over
+      the reals and ±inf, k up to 2**400, each direction, arb deciding at a growing precision).
+      `@example`s: `rev.itl:554`, `:555`, `:563`, `:569`, `:633`, `:644`, `:646`, `:647`, `:652`,
+      `:708`, `:711`, `:715`, `:718`, `[inf]` for tan, `[-1, 1)` for sin, the two slack cases at tan's
+      pole, `asin(-5.6e-24)`'s nearest rounding. plus 15 parametrized examples,
+      `::test_d12_example`, `::test_trig_rev_hull_past_the_cap` (1000 pieces over `[0, 6280]`
+      listed, 1001 over `[0, 6284]` hulled, equal to the hull of two halves; over `[0, 7] ∪ [8,
+      6300]` the first piece listed with its gap, the second hulled alone), `::test_trig_rev_hull_of_a_wide_x` (`[0, 1e6]` and `[0, 1] ∪ [10, inf)`, all three
+      ops, against windows), `::test_trig_rev_far_out_against_arb`,
+      `::test_trig_rev_class_coercion_and_warnings`,
+      `::test_trig_rev_unary_forms_do_not_see_the_infinities`,
+      `::test_trig_rev_is_tighter_than_the_vector`, `::test_rounded_inverse_trig_exact_case`. under
+      `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=3` the section ran green in 87 s (2026-09-26), after
+      the two catches above
+* evidence, measured 2026-09-26 (`tools/itf1788_census.py`): the 136 vectors of the six ops (all
+  in `libieeep1788_rev.itl`, all interval-valued, none with `[nai]`): 124 match in both passes, the
+  34 unary ones and the 16 `*Bin` ones over an unbounded `x` through the hull; 12 (7 keys) are rows
+  under the proposed category. all ops: 8465 vectors of 100 ops, 7452 interval-valued, 155
+  divergence keys (36 degenerate infinities, 9 proposed, 58 decoration expectations), 0 unknown
+  failures; skipped 1077 statements of 11 ops. the gate, as two runs on 2026-09-26: `tests/itf1788`
+  16303 passed in 55.4 s, the rest 3468 passed in 564.1 s under the shared laptop's load (19771 in
+  all; 19464 at part 2)
+* sabotage (section 2), 2026-09-26: 24 breaks by a throwaway harness, each file restored from a
+  copy and byte-compared (`filecmp`, all equal), results appended as they landed; the library
+  breaks against the periodic section of `tests/test_reverse.py` with the doctests of
+  `reverse.py` and `elementary.py` (32 items), and against every itf1788 item matching `rev.itl`
+  (2310). the counts are from the clean runs, after the two test bugs above (the first runs'
+  counts each held a replayed failure of the buggy test). red: sin's branches all rising with
+  `+asin` 8 and 44 vector items; sin's direction flags inverted 10 and 52; cos's odd branch shifted
+  by `k pi` 7 and 40; cos's even branch rising 9 and 44; tan's image closed (a pole a solution for
+  ±inf) 3 (**no vector**: the input rule never gives `c` an infinity); no whole-image case 8 (no
+  vector: the hull of every finite t is the same set, only the warning differs); tan taken as whole
+  2 (the warnings); ±inf of `x` kept 5 (no vector: the closed hull hides them); no extra branch
+  below 1, above 1 (`::test_trig_rev_union_and_x`, the slack `@example`s, **added for this**:
+  before them both were green); the cap off by one 1 (`::test_trig_rev_hull_past_the_cap`); no
+  `HullWarning` 7; a wide `x`'s hull taking its low end for its high end 5 and 16 vector items;
+  an unbounded hull closed at inf 4 (no vector); the branch limit at 10 (small `x` hulled) 6; no
+  exact end (0 enclosed) 4 (no vector: the closed hull hides it); the hull over all of `x`, not per
+  piece, 1 (`::test_trig_rev_hull_past_the_cap`'s `[0, 7] ∪ [8, 6300]`, **added for this**: the
+  first run was green, since the final `∩ x` hid it for a first piece without a gap); atan(±inf)'s
+  sign flipped 10 and 4 vector items; the sign of `f(v)` ignored 14 and 84; acos(-1) not folded
+  into k **hung**, killed after 900 s (the new `::test_rounded_inverse_trig_exact_case` line; as at
+  M13d, a missed exact case costs minutes before `_MAX_PRECISION`'s `ArithmeticError`). the
+  wiring: `sinRevBin` run as `cos_rev` 56 vector items, `tanRevBin` ignoring `x` 28, the 7 loose
+  rows dropped 24 (each vector in both passes). **green, as argued**: `rounded_inverse_trig`'s
+  extra bits for k removed, 0 red: they save ziv doublings for a branch far out, and ziv doubles the
+  precision itself without them
 
 **M13f cancellation (done 2026-09-26)** (D13). `cancelPlus` 116, `cancelMinus` 126
 * `A.cancel_minus(B)`: the largest `X` with `B + X ⊆ A` (the Minkowski difference);

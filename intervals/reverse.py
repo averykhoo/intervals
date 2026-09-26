@@ -1,7 +1,8 @@
 """
 reverse ops (ieee 1788's reverse-mode elementary functions; M13e, D12): the preimage of a set
 
-`sqr_rev(c, x)`, `abs_rev(c, x)`, `pown_rev(c, n, x)` and `cosh_rev(c, x)` are each
+`sqr_rev(c, x)`, `abs_rev(c, x)`, `pown_rev(c, n, x)` and `cosh_rev(c, x)` (and `sin_rev`, `cos_rev`,
+`tan_rev`, `mul_rev`, below) are each
 
     {t in x : f(t) has a value and f(t) in c}
 
@@ -43,6 +44,12 @@ ordinary answer (no solution there), with no warning
 * D12's cap (1000 pieces, then the hull and a `HullWarning`) is for the periodic ones, which have
   infinitely many branches; none of the four here has more than two pieces per piece of `c`
 
+**the periodic ops** (`sin_rev`, `cos_rev`, `tan_rev`, M13e part 3) are built so: one branch per k
+(`_Periodic`), whose inverse `k pi ± asin/acos/atan` is rounded by `elementary.rounded_inverse_trig`;
+the branches meeting each piece of `x` (one more on each side) are listed, and D12's cap applies per
+piece of `x` as `steps.step` applies it per piece of its operand (`_periodic_preimage`). sin, cos and
+tan have no value at ±inf, nor tan at its poles, so neither is in any preimage
+
 >>> from intervals import MultiInterval as M
 >>> sqr_rev(M(1, 4))
 MultiInterval.parse('{ [-2, -1] , [1, 2] }')
@@ -68,6 +75,7 @@ from intervals.applicator import warn
 from intervals.cuts import Value
 from intervals.cuts import mirror
 from intervals.errors import EmptySetPropagationWarning
+from intervals.errors import HullWarning
 from intervals.kernel import Cuts
 from intervals.multi_interval import MultiInterval
 from intervals.multi_interval import OutwardMultiInterval
@@ -77,6 +85,7 @@ from intervals.rounding import UP
 from intervals.rounding import is_float
 from intervals.rounding import is_infinite
 from intervals.rounding import round_rational
+from intervals.steps import ENUMERATION_CAP
 
 INF = math.inf
 
@@ -326,3 +335,156 @@ def _mul_preimage(b: Cuts, c: Cuts, outward: bool) -> Cuts:
             if kernel.intersection(b, _SIDE[y_sign]):  # t = ±inf with a nonzero y of this sign
                 parts.append(_one(c_sign * y_sign * INF, c_sign * y_sign * INF))
     return kernel.union(*parts)
+
+
+# PERIODIC FUNCTIONS (M13e: ieee 1788's sinRev, cosRev, tanRev and their *Bin forms; D12)
+
+class _Periodic(NamedTuple):
+    """
+    a periodic f as its branches: the k-th holds the finite t with `floor(t / pi - offset) = k` (its
+    ends aside), and `branch(k)` is it, with the inverse `m pi + sign * g(v)` for g `elementary`'s
+    asin, acos or atan
+    """
+    name: str
+    image: Cuts
+    offset: Fraction
+    branch: Callable[[int], Branch]
+    gapless: bool  # whether a c holding the whole image has every finite t in its preimage (no poles)
+
+
+def _trig_branch(g: str, image: Cuts, sign: int, m: int, increasing: bool) -> Branch:
+    """the branch whose inverse is `m pi + sign * g(v)`: rational only at m = 0 where g(v) = 0"""
+    return Branch(image, lambda v: 0 if m == 0 and elementary.exact(g, v) == 0 else None,
+                  lambda v, direction: elementary.rounded_inverse_trig(g, v, sign, m, direction), increasing)
+
+
+_UNIT = _one(-1, 1)
+# sin on [k pi - pi/2, k pi + pi/2]: `k pi + (-1)**k asin v`, rising for an even k
+_SIN = _Periodic('sin_rev', _UNIT, Fraction(-1, 2),
+                 lambda k: _trig_branch('asin', _UNIT, 1 if k % 2 == 0 else -1, k, k % 2 == 0), True)
+# cos on [k pi, (k + 1) pi]: `k pi + acos v`, falling, for an even k; `(k + 1) pi - acos v`, rising, for an odd k
+_COS = _Periodic('cos_rev', _UNIT, Fraction(0),
+                 lambda k: _trig_branch('acos', _UNIT, 1, k, False) if k % 2 == 0
+                 else _trig_branch('acos', _UNIT, -1, k + 1, True), True)
+# tan on (k pi - pi/2, k pi + pi/2): `k pi + atan v`, rising over all the reals; the poles between the
+# branches have no value (as 0 for `1/x`), so they are in no preimage, and ±inf is not in the image
+_TAN = _Periodic('tan_rev', _REAL_LINE, Fraction(-1, 2),
+                 lambda k: _trig_branch('atan', _REAL_LINE, 1, k, True), False)
+
+# over more branches than this, the preimage of a c that is not the whole image has more than
+# ENUMERATION_CAP pieces: each period (two branches) holds a solution and a point that is not one
+_BRANCH_LIMIT = 2 * ENUMERATION_CAP + 8
+
+
+def _periodic_preimage(fn: _Periodic, x: Cuts, c: Cuts, outward: bool) -> Cuts:
+    """
+    `{t in x : f(t) in c}` as the union of the branches' preimages meeting each piece of x, D12's cap
+    as `steps.step` has it: a piece of x whose part would take the count of pieces past
+    `ENUMERATION_CAP`, or holds infinitely many (unbounded), gives its part's hull, and one
+    `HullWarning` is emitted. f has no value at ±inf, so they are in no preimage
+    """
+    c = kernel.intersection(c, fn.image)
+    x = kernel.intersection(x, _REAL_LINE)
+    if not c or not x:
+        return kernel.EMPTY
+    if fn.gapless and kernel.is_subset(fn.image, c):  # every finite t: one piece, however wide x is
+        return x
+    out, count, hulled = [], 0, False
+    for lo, lo_closed, hi, hi_closed in kernel.pieces(x):
+        part = _one(lo, hi, lo_closed, hi_closed)
+        # one branch more on each side: x may start inside the one-double slack of the enclosure of the
+        # branch before it (just past a pole or an extremum), which the union of every branch holds
+        first = None if lo == -INF else elementary.floor_over_pi(lo, fn.offset)[0] - 1
+        last = None if hi == INF else elementary.floor_over_pi(hi, fn.offset)[0] + 1
+        if first is not None and last is not None and last - first < _BRANCH_LIMIT:
+            p = kernel.intersection(
+                kernel.union(*(branch_preimage(c, fn.branch(k), outward) for k in range(first, last + 1))), part)
+            if count + len(p) // 2 <= ENUMERATION_CAP:
+                count += len(p) // 2
+                out.append(p)
+                continue
+            out.append(kernel.hull(p))
+        else:
+            out.append(_periodic_hull(fn, c, part, first, last, outward))
+        hulled = True
+    if hulled:
+        warn(HullWarning, f'{fn.name}: more than {ENUMERATION_CAP} pieces, or infinitely many, so their hull '
+                          f'was returned')
+    return kernel.union(*out)
+
+
+def _periodic_hull(fn: _Periodic, c: Cuts, part: Cuts, first: Optional[int], last: Optional[int],
+                   outward: bool) -> Cuts:
+    """
+    the hull of the preimage in one piece of x spanning more than `_BRANCH_LIMIT` branches or unbounded
+    (`first`/`last` None): every branch holds a solution, so the preimage is unbounded where the piece
+    is (never reaching ±inf, open there), and elsewhere its end is in one of the first branches met
+    walking inward from the piece's end
+    """
+    def walk(k: int, step: int) -> Cuts:
+        while True:
+            found = kernel.intersection(branch_preimage(c, fn.branch(k), outward), part)
+            if found:
+                return found
+            k += step
+
+    lo, lo_closed = (-INF, False) if first is None else next(kernel.pieces(walk(first, 1)))[:2]
+    hi, hi_closed = (INF, False) if last is None else next(kernel.pieces(walk(last, -1)[-2:]))[2:]
+    return _one(lo, hi, lo_closed, hi_closed)
+
+
+def sin_rev(c, x=_REALS) -> MultiInterval:
+    """
+    `{t in x : sin(t) in c}` (ieee 1788's sinRev; with `x`, sinRevBin), sin having no value at ±inf
+
+    the exact pieces over a bounded `x`, where 1788 answers their hull: every end is `k pi ± asin v`,
+    irrational but where it is 0, so its tightest float enclosure, open (a float `c` rounds as the
+    other reverse ops do). past `steps.ENUMERATION_CAP` pieces, or infinitely many (an unbounded `x`,
+    the default among them), their hull and a `HullWarning` (D12). a `c` holding [-1, 1] needs no
+    hull: every finite t is a solution
+
+    >>> from intervals import MultiInterval as M
+    >>> len(sin_rev(M(0.5, 1), M(0, 20)).pieces)  # D12's example
+    4
+    >>> sin_rev(M(0), M(-1, 4))
+    MultiInterval.parse('{ [0] , (3.141592653589793, 3.1415926535897936) }')
+    >>> sin_rev(M(-1, 1))
+    MultiInterval.parse('(-inf, inf)')
+    >>> sin_rev(M(2))
+    MultiInterval.parse('{}')
+    """
+    return _reverse('sin_rev', c, x, _periodic(_SIN), given=(x,))
+
+
+def cos_rev(c, x=_REALS) -> MultiInterval:
+    """
+    `{t in x : cos(t) in c}` (ieee 1788's cosRev; with `x`, cosRevBin): as `sin_rev`, the ends
+    `2k pi ± acos v`
+
+    >>> from intervals import MultiInterval as M
+    >>> cos_rev(M(1), M(-1, 7))
+    MultiInterval.parse('{ [0] , (6.283185307179586, 6.283185307179587) }')
+    """
+    return _reverse('cos_rev', c, x, _periodic(_COS), given=(x,))
+
+
+def tan_rev(c, x=_REALS) -> MultiInterval:
+    """
+    `{t in x : tan(t) in c}` (ieee 1788's tanRev; with `x`, tanRevBin): as `sin_rev`, the ends
+    `k pi + atan v`. the poles `pi/2 + k pi` have no value, so they are in no preimage (as 0 is in none
+    of `pown_rev(c, -1)`), even for a `c` holding ±inf, which is therefore no solution at all; since
+    every branch has one, any `c` with a finite point over an unbounded `x` gives a hull
+
+    >>> from intervals import MultiInterval as M
+    >>> tan_rev(M(1), M(0, 4))
+    MultiInterval.parse('{ (0.7853981633974483, 0.7853981633974484) , (3.9269908169872414, 3.926990816987242) }')
+    >>> tan_rev(M.parse('[inf]'))
+    MultiInterval.parse('{}')
+    """
+    return _reverse('tan_rev', c, x, _periodic(_TAN), given=(x,))
+
+
+def _periodic(fn: _Periodic) -> Callable[[Cuts, Cuts, bool], Cuts]:
+    """the preimage function `_reverse` calls: x comes first, as the periodic ops' `given`, since which
+    branches to list depends on it"""
+    return lambda x, c, outward: _periodic_preimage(fn, x, c, outward)
