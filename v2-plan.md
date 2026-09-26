@@ -7,7 +7,7 @@ open work and open questions for the owner (including the ones raised in the dec
 2026-09-25/26 entries) live in `HANDOFF.md`; the milestones are in `v2-implementation-plan.md`.
 
 ## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a,
-M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
+M13b, M13c, M13d, M13e, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
 
 ### domain and semantics
 
@@ -328,7 +328,7 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       result class is the receiver's, as for `fma`; no warning is emitted, since `∅` and
       `[-inf, inf]` are real answers
 
-### elementary and step functions (M12, M13d)
+### elementary and step functions (M12, M13d, M13e)
 
 * `functions.py`: sqrt, exp, exp2, exp10, log (with an optional base), log2, log10, sin, cos, tan,
   asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh, and atan2 (M12); expm1, log1p (1788's
@@ -402,10 +402,11 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
 * `ops.minimum/maximum` (the class's `minimum()`, `maximum()`; builtin `min` needs a bool from `<`):
   descriptors with their own attainment, since min is flat where the other operand is out of reach.
   `ops.fma`: `add(mul(a, b), c)` computed exactly, rounded once
-* **reverse ops** (M13e, D12; `intervals/reverse.py`, exported from `intervals`; built 2026-09-26
-  for `sqr_rev(c, x=REALS)`, `abs_rev(c, x=REALS)`, `pown_rev(c, n, x=REALS)`, `cosh_rev(c,
-  x=REALS)`; sin, cos, tan, mul and pow to come): each is `{t ∈ x : f(t) has a value and f(t) ∈ c}`
-  for the library's own f at a point, an exact multi-interval, where 1788 answers its hull. `x`
+* **reverse ops** (M13e, D12; `intervals/reverse.py`, exported from `intervals`; built 2026-09-26:
+  `sqr_rev(c, x=REALS)`, `abs_rev(c, x=REALS)`, `pown_rev(c, n, x=REALS)`, `cosh_rev(c,
+  x=REALS)` here, `mul_rev`, `sin_rev`, `cos_rev`, `tan_rev`, `pow_rev1`, `pow_rev2` below): each
+  is `{t ∈ x : f(t) has a value and f(t) ∈ c}` for the library's own f at a point,
+  an exact multi-interval, where 1788 answers its hull. `x`
   defaults to `[-inf, inf]`, so ±inf are points with f's value there: `inf ** -2` = 0, so
   `pown_rev([0], -2)` = `[-inf] ∪ [inf]`; a point with no value (0 for n < 0, as `1/[0]` is empty)
   is in no preimage; `t ** 0` = 1 everywhere, so `pown_rev(c, 0, x)` is `x` or `∅`
@@ -477,7 +478,10 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
   modulo by a divisor touching zero). this is the cheap stand-in for 1788 decorations
 * `IndeterminateResultWarning` as in "domain and semantics"
 * `HullWarning` where an exact answer is replaced by its hull (floor/floordiv over the cap or an
-  unbounded piece); shown by default, like `IndeterminateResultWarning`. all four subclass
+  unbounded piece, and per D12 `sin_rev`, `cos_rev`, `tan_rev` past 1000 pieces or over an
+  unbounded piece of `x`, so their unary form warns wherever `c` has a solution, but for a `c`
+  holding sin's or cos's whole image `[-1, 1]`, one piece); shown by default, like
+  `IndeterminateResultWarning`. all four subclass
   `IntervalWarning`, which the suite's `filterwarnings` entry turns into errors. one warning per
   call, attributed to the caller's frame (`applicator.py::warn`)
 * no op raises on well-typed operands: empty, indeterminate and clipped cases warn. exceptions are
@@ -583,6 +587,12 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       inf)` the tightest hull is `[-inf, -0.5]`, which ours is, and 1788 answers `[entire]` and
       `[-infinity, 0.0]`, far looser, though its own vectors with `c = [2, 4]` answer -0.5 at that
       end (decided exactly in `tests/test_pow_rev.py::test_pow_rev2_is_tighter_than_the_vector`)
+    * **all the reverse ops** (M13e done 2026-09-26; D12): the 1955 vectors of the 19 ops run, none
+      skipped: 1879 match in both passes, 52 (26 keys) are the degenerate infinities of the unary
+      `pownRev`, 18 (11 keys) the proposed "tighter than the vector", 6 have a `[nai]` operand
+      (generated rows, M13g's). until M13's exit asserts `SKIPPED` empty,
+      `tests/itf1788/test_itf1788.py::test_only_m13g_ops_are_skipped` holds every skipped
+      statement to M13g's 9 ops, so a reverse op dropped from `OPS` goes red
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
   community test framework and its `itl` vector DSL. all 19 `.itl` files of the maintained fork,
   oheim/ITF1788 at `b6ee1e2`, are vendored unmodified with its `LICENSE`, `NOTICE` and
@@ -619,6 +629,8 @@ imports only point downward.
         steps.py           floor ceil trunc round round_ties_away sign: enumerate or hull
         elementary.py      correctly rounded elementary functions at one exact point
         functions.py       the elementary functions and atan2 over cut tuples
+        reverse.py         the reverse ops, {t in x : f(t) in c}: sqr_rev abs_rev pown_rev cosh_rev
+                           mul_rev sin_rev cos_rev tan_rev pow_rev1 pow_rev2 (M13e, D12)
         reductions.py      sum_ sum_abs sum_sqr dot over numbers: exact, rounded once (M13h)
         numeric.py         mid rad wid mag mig mid_rad of a set: exact, or rounded as 1788 (M13b)
         multi_interval.py  the class and OutwardMultiInterval: immutable cut tuple; _coerce
@@ -730,6 +742,18 @@ imports only point downward.
   1788's formula; float operands: outward encloses the exact `X` tightly, nearest is `X` rounded
   once; soundness at sampled points in both classes. no vector has an open finite end or a
   multi-piece operand, so those are held by the properties alone
+* the reverse ops (M13e, 2026-09-26; `tests/test_reverse.py`, `tests/test_pow_rev.py`): the
+  defining property decided on exact operands, `t` in the result iff `t ∈ x` and `f(t) ∈ c` (for
+  the binary ones, `{t} * b` or `{t} ** b` meets `c`, the library's op), at every end, the
+  inverses of the ends, a point between each two, beyond, ±inf and around every float end, which
+  is soundness and maximality at once, a rounded end's one-double slack aside; the largest set
+  (`T ⊆ rev(f(T) ∪ more)`); isotone in every operand, distributing over unions, `x` only
+  intersecting; symmetry (even, odd, `-b`, `1/c`); the relations between the ops (`sqr_rev` is
+  `pown_rev(., 2)`, `pow_rev1([n], c)` is `pown_rev` on the bases, `pow_rev2([t], c)` is
+  `c.log(t)`, `mul_rev([w], c)` is `c / w`); float operands in both classes; soundness at
+  sampled points; D12's cap and hull for the periodic ones; arb for the irrational ends, and arb or
+  exact arithmetic for every row under "tighter than the vector". no vector has an infinite point
+  in an operand, an open end or a multi-piece operand, so those are held by the properties alone
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
   every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 100) times its
   own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
@@ -795,6 +819,28 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
 * **H3**: numpy interop and a gmpy2/mpfr backend are recorded, not built now ("later (not in
   v2.0)" above). the session's suggested first pick when the solver stack starts: Newton's
   method with forward-mode autodiff, the demonstration of what multi-intervals are for
+
+### 2026-09-26 revision: M13e, the reverse ops, built
+
+M13e is complete (2026-09-26; details in v2-implementation-plan.md, M13e, parts 1 to 4 and the
+close-out). D12 is now in "current design" whole: elementary and step functions (the reverse ops,
+their exact pieces and D12's cap for the periodic ones), empties and warnings (`HullWarning` for
+the periodic ones past the cap or over an unbounded piece of `x`) and ieee 1788 (the reverse ops,
+reverse multiplication, the periodic and the power reverse ops, and all of them together). the
+choices the plan left open are the four parts' entries below; the close-out made none. in short:
+* **ten functions in `intervals/reverse.py`**, exported from `intervals`, each the exact set
+  `{t ∈ x : f(t) ∈ c}` (for `mul_rev`, `pow_rev1`, `pow_rev2`, `∃` over the other operand) with the
+  library's own f, ±inf points like any other, where 1788 answers its hull; an irrational end is its
+  tightest float enclosure, open, and the domain is intersected after rounding
+* **the itf1788 vectors**: all 1955 of the 19 ops run in both passes; 1879 match, 52 are
+  degenerate infinities (the unary `pownRev` with n < 0 and 0 in `c`), 6 `[nai]` rows move with
+  M13g, and 18 (11 keys) are under **"tighter than the vector", still PROPOSED and awaiting the
+  owner**: 1788's hull is looser than the tightest, which ours is
+* **a pin until M13's exit**: `tests/itf1788/test_itf1788.py::test_only_m13g_ops_are_skipped`, since
+  dropping a reverse op from `OPS` turned no test red before it (its statements only become skips)
+* itf1788 now 9269 vectors of 102 ops; 273 statements of 9 ops skipped, all M13g's (2026-09-26,
+  `tools/itf1788_census.py`). the totals in "ieee 1788" above are M13d's until the merge with
+  M13g's branch re-measures them
 
 ### 2026-09-26 revision: M13e, fourth part (pow_rev1, pow_rev2), built
 
@@ -1056,6 +1102,8 @@ in short:
   `pow`, negative bases dropped with `DomainClippedWarning` (so `MI(-3,1) ** MI(2)` = `[0, 1]`);
   `b ** A` through `__rpow__`; 3-argument `pow` dropped
 * **D12** reverse ops with periodic answers: exact pieces up to 1000, else the hull + `HullWarning`
+  (built 2026-09-26 at M13e; now in "current design", elementary and step functions, empties and
+  warnings, ieee 1788)
 * **D13** `cancel_minus` is the Minkowski difference (the largest `X` with `B + X ⊆ A`); where 1788
   answers "no answer" with entire, ours is a real set, under a new residual category
   "cancellation as a Minkowski difference"

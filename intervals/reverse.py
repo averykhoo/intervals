@@ -21,7 +21,8 @@ is taken as the point it is; an empty operand gives the empty set and an
 `EmptySetPropagationWarning`, as the functions do. an empty result from non-empty operands is an
 ordinary answer (no solution there), with no warning
 
-**design, for the reverse ops still to come** (sin, cos, tan, mul, pow; plan §2 M13e):
+**design** (plan §2 M13e): the engine of the one-variable ops (these four and the periodic ones below;
+`mul_rev`, `pow_rev1` and `pow_rev2` have two variables and take cases instead):
 
 * a **branch** is a piece of f's domain on which f is continuous and strictly monotone, described
   from the value side as `Branch(image, exact, rounded, increasing)`: `image` is the set of values f
@@ -34,8 +35,8 @@ ordinary answer (no solution there), with no warning
   rounded down for a low end and up for a high end, open (`_end`, the rule of
   `functions._Function.end`); `named(name, image, ...)` makes a branch whose inverse is one of
   `intervals.elementary`'s correctly rounded functions (`sqrt`, `rootn`, `acosh` here; `asin`,
-  `acos`, `atan` shifted by k pi for the periodic ones would be written the same way, with their
-  own `exact` and `rounded`)
+  `acos`, `atan` shifted by k pi for the periodic ones are written the same way, with their own
+  `exact` and `rounded`: `_trig_branch`)
 * an op is the union of its branches' preimages, **then** the intersection with `x`, after the
   rounding: an end of `x` inside an enclosure's slack is kept as it is, so the result never leaves `x`
   and is never looser than rounding then intersecting would make it

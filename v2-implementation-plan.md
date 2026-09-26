@@ -25,7 +25,7 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D9 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13b), now in `v2-plan.md` "set operations and size".** 1788's numeric ops on a multi-interval. `mid`, `rad`, `wid` (and `midRad`) are **of the hull**: a midpoint outside the set (`mid([0,1] ∪ [9,10])` = 5) is still a valid bisection point, a per-piece form would return a tuple, and `size.length` already gives the width without the gaps. `mag` and `mig` are **of the set**, as `sup` and `inf` of `{abs(x) : x ∈ A}`: `mig([-3,-2] ∪ [2,3])` = 2, where the hull would give 0; on a connected set the two readings agree. unbounded operands follow 1788 (`mid` of entire is 0, of a half-bounded set ±max float; `rad` and `wid` are inf); the empty set raises `ValueError`, as `.inf` does today, and the adapter maps it to 1788's `NaN` | hull for mid/rad/wid, set for mag/mig | M13b |
 | D10 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13c), now in `v2-plan.md` "comparisons" and "set operations and size".** names for 1788's interval orders, since `<` and `<=` are pointwise and return a `TruthSet` (`MI(1,3) < MI(2,4)` is `BOTH`): `A.weakly_less(B)` for `less` (both of A's ends ≤ B's; 1788's own wording, "weakly less than"), `A.strictly_less(B)` for `strictLess`. `interior` is not a method: a new property `B.interior` (the set with every end opened, a set operation in its own right) and the existing `A.within(B.interior)` | `weakly_less`, `strictly_less`, `.interior` | M13c |
 | D11 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13d), now in `v2-plan.md` "arithmetic" and "elementary and step functions".** power. an `int` exponent, or a float with an integral value, is `pown` as today, like python's scalars (`(-3.0) ** 2.0` = 9.0; `MI(-3,1) ** 2.0` = `[0, 9]`). a non-integral float or a `MultiInterval` exponent is 1788's `pow`: domain `x > 0`, plus `x = 0` where `y > 0` (`0 ** y` = 0); negative bases are dropped with `DomainClippedWarning`. so `MI(-3,1) ** MI(2)` = `[0, 1]`, not `[0, 9]`: an interval exponent means `pow`, never `pown`. `b ** A` for a scalar base is `MultiInterval(b) ** A` through `__rpow__`. exact where the value is rational, as `log` is. 3-argument `pow(A, n, m)` is dropped (not 1788; v1 had it on integers only) | pown for integral, else 1788 pow; 3-arg dropped | M13d |
-| D12 | **decided 2026-09-25 by owner: recommended default.** a reverse op whose answer has infinitely many or very many pieces (`sinRev`, `cosRev`, `tanRev` and their `*Bin` forms over an unbounded or wide `x`): the exact pieces up to the step functions' cap of 1000, past it their hull with a `HullWarning`, the rule `steps.py` already follows. a bounded `x` gets the exact union (`sinRev([0.5, 1], [0, 20])` has 4 pieces), which 1788 cannot give. ends are irrational, so each is its tightest float enclosure, open | exact to 1000 pieces, else hull + warning | M13e |
+| D12 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13e), now in `v2-plan.md` "elementary and step functions", "empties and warnings" and "ieee 1788".** a reverse op whose answer has infinitely many or very many pieces (`sinRev`, `cosRev`, `tanRev` and their `*Bin` forms over an unbounded or wide `x`): the exact pieces up to the step functions' cap of 1000, past it their hull with a `HullWarning`, the rule `steps.py` already follows. a bounded `x` gets the exact union (`sinRev([0.5, 1], [0, 20])` has 4 pieces), which 1788 cannot give. ends are irrational, so each is its tightest float enclosure, open | exact to 1000 pieces, else hull + warning | M13e |
 | D13 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13f), now in `v2-plan.md` "arithmetic" and "ieee 1788".** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
 | D14 | **decided 2026-09-25 by owner: recommended default.** the independent oracle for the elementary functions is **`python-flint`** (Arb: every result is a ball proven to contain the true value), a test-only dependency in the `[test]` extra, installed into the `intervals` env and in CI. `mpmath` was the alternative (pure python, but its values carry no proven bound). python-flint 0.9.0 has Windows wheels for 3.10 and later (abi3), 3.13 and 3.14 included (checked on PyPI 2026-09-25) | python-flint | M14 |
 | D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library. **corrected 2026-09-26 at M13a**, from every file's header: five files carry the all-permissive notice, not two (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`); the eleven `libieeep1788_*` are Apache 2.0 | vendor unmodified, with the licence files | M13a |
@@ -873,7 +873,7 @@ M12; each checked against the D14 oracle (M14)
   and log1p's extra bits near 0 (`_tiny_bits`) removed, 0 red: they save ziv iterations, and
   without them ziv doubles the precision until the ends agree, so the value is the same
 
-**M13e reverse ops** (D12). 1955 statements
+**M13e reverse ops (done 2026-09-26)** (D12). 1955 statements
 * a new module `intervals/reverse.py`, the functions exported from `intervals`, each taking the
   constraint first and the domain `x` last, defaulting to the whole line: `sqr_rev(c, x=REALS)`,
   `abs_rev(c, x=REALS)`, `pown_rev(c, n, x=REALS)`, `sin_rev`, `cos_rev`, `tan_rev`, `cosh_rev`
@@ -885,9 +885,9 @@ M12; each checked against the D14 oracle (M14)
   union (our closed pieces against the pair's). ends that are irrational are tightest float
   enclosures, open
 * periodic answers per D12: exact pieces up to 1000, past that their hull with `HullWarning`
-* **in progress. part 1 done 2026-09-26 (branch `m13e`): `sqr_rev`, `abs_rev`, `pown_rev`,
-  `cosh_rev`** (476 statements); sin, cos, tan, mul and pow still to come (later builders add
-  their parts below). built:
+* **part 1 done 2026-09-26 (branch `m13e`): `sqr_rev`, `abs_rev`, `pown_rev`,
+  `cosh_rev`** (476 statements); sin, cos, tan, mul and pow in parts 2 to 4 and the close-out
+  below. built:
     * `intervals/reverse.py`: `::sqr_rev`, `::abs_rev`, `::pown_rev`, `::cosh_rev`, exported from
       `intervals` (`tests/test_applicator.py::test_package_exports_unchanged` lists them). the
       engine, for the later reverse ops (the design is in the module docstring): `::Branch` (a
@@ -1351,6 +1351,59 @@ M12; each checked against the D14 oracle (M14)
   (0 red: hypothesis never drew a rational non-double log from float operands; now 1, `log_8 2` from
   `[8.0]` and `[2.0]`), and `_log_box`'s squeeze rule removed (0 red: no drawn open piece of `c` was
   narrow enough; now 1, `log_3` of `(1e300, 1e300 + ulp)` is one double to nearest)
+* **the close-out, done 2026-09-26 (branch `m13e`): M13e is complete**, all 1955 statements of the
+  19 reverse ops run and none is skipped. built, over the four parts:
+    * `intervals/reverse.py`: ten functions, exported from `intervals`, the constraint first and the
+      domain last, defaulting to `[-inf, inf]`: `::sqr_rev`, `::abs_rev`, `::pown_rev`, `::cosh_rev`
+      (part 1), `::mul_rev` (part 2), `::sin_rev`, `::cos_rev`, `::tan_rev` (part 3), `::pow_rev1`,
+      `::pow_rev2` (part 4). the one-variable ops share the branch engine (`::Branch`,
+      `::branch_preimage`, `::_trig_branch` for the periodic ones), the two-variable ones take a case
+      per special point; all go through `::_reverse` (coercion, class, the empty-operand warning,
+      `∩` the domain after rounding). two library helpers came with them:
+      `intervals/elementary.py::rounded_inverse_trig` (part 3) and the rational `::_exact_log`
+      (part 4, fixing a hang of `MultiInterval(2).log(4)`)
+    * the close-out: the module docstring no longer calls the engine's later users "still to come";
+      three reverse-op lines in the README's doctest block (`sqr_rev`, `mul_rev`, `sin_rev` over a
+      bounded `x`, no warning); and a pin, below
+* **choices the plan left open**: each part's, listed in its record above and in `v2-plan.md`'s four
+  "2026-09-26 revision: M13e" entries; the close-out made none. still awaiting the owner: the
+  category **"tighter than the vector", PROPOSED at part 1**, now 11 keys (18 vectors: `pownRev` 4,
+  `sinRevBin` 2, `cosRevBin` 6, `tanRevBin` 4, `powRev2` 2), each where 1788's hull is looser than
+  the tightest one, which ours is (arb, or exactly for `powRev2`)
+* adapter (`tests/itf1788/test_itf1788.py`): the 19 ops in `OPS` in four labelled blocks, the pair
+  rule for `mulRevToPair` (`::PAIRS`), and the rows `::_POWN_REV_ROWS`, `::_POWN_REV_LOOSE_ROWS`,
+  `::_TRIG_REV_LOOSE_ROWS`, `::_POW_REV_LOOSE_ROWS`. the close-out adds
+  `::test_only_m13g_ops_are_skipped` (with `::_REVERSE_OPS`, `::_M13G_OPS`): every reverse op is in
+  `OPS` and every skipped statement belongs to one of M13g's 9 ops, so an op dropped from `OPS`, or
+  a file gaining one, cannot quietly add skips before M13's exit asserts `SKIPPED` empty
+* tests, measured 2026-09-26: `tests/test_reverse.py` 112 items (24 `@given`: 9 of part 1, 7 of
+  part 2, 8 of part 3) and `tests/test_pow_rev.py` 50 (10 `@given`; part 4's record says 11, a
+  miscount: the ten it lists are all there are), 162 passed in 122.0 s under the shared laptop's
+  load; plus part 4's two rational-log tests in `tests/test_elementary.py`
+* evidence, measured 2026-09-26 (`tools/itf1788_census.py`, and a throwaway per-op count running
+  each vector through `::run` and `::run_outward`): the 1955 vectors of the 19 ops, all
+  interval-valued, 0 unknown failures, 0 stale rows: 1879 match in both passes; 52 (26 keys, all
+  unary `pownRev`) are degenerate infinities; 18 (11 keys) the proposed category; 6 (6 keys, 3
+  `mulRev` and 3 `mulRevToPair`) have a `[nai]` operand, generated rows under "decoration
+  expectations" that M13g moves. by op: `sqrRev` 20, `sqrRevBin` 22, `absRev` 18, `absRevBin` 38,
+  `pownRev` 285, `pownRevBin` 73, `coshRev` 10, `coshRevBin` 10, `sinRev` 12, `sinRevBin` 40,
+  `cosRev` 12, `cosRevBin` 42, `tanRev` 10, `tanRevBin` 20, `mulRev` 182, `mulRevTen` 10,
+  `mulRevToPair` 347, `powRev1` 429, `powRev2` 375. all ops: 19 files, 9269 vectors of 102 ops,
+  8256 interval-valued (17525 vector test items), 157 divergence keys (36 degenerate infinities, 5
+  cut-based relations, 47 cancellations, 11 proposed, 58 decoration expectations), 0 unknown
+  failures; skipped 273 statements of 9 ops, all M13g's. the gate, as two runs on 2026-09-26: `tests/itf1788` 17912
+  passed in 67.4 s, the rest 3535 passed in 667.7 s under the shared laptop's load (21447 in all;
+  21446 at part 4, the one more being the pin). **not updated here**:
+  the shared totals in the README's "ieee 1788" bullet and `v2-plan.md`'s residual-divergence
+  paragraph still carry M13d's (7314 vectors, 2228 skipped), left for the merge with the parallel
+  M13g branch, as parts 1 to 4 left them
+* sabotage (section 2): the four parts ran 22, 18, 24 and 40 breaks (104), recorded above. the
+  close-out, 2026-09-26, by a throwaway harness, each file restored from a copy and `cmp`-checked
+  against a reference copy (equal): `powRev1` dropped from `OPS` 1 red and `mid` dropped from `OPS`
+  1 red, both only `::test_only_m13g_ops_are_skipped` (**0 red without it**: `test_parser_drops_nothing`
+  counts a dropped op's statements as skips, and `test_every_op_has_vectors` checks `OPS` against
+  the vectors, not the skips); the README's `sqr_rev` line expecting 1788's hull `[-2, 2]` 1 red, its
+  `sin_rev` line with pi closed 1 red (the README doctest)
 
 **M13f cancellation (done 2026-09-26)** (D13). `cancelPlus` 116, `cancelMinus` 126
 * `A.cancel_minus(B)`: the largest `X` with `B + X ⊆ A` (the Minkowski difference);

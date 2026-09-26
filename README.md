@@ -36,6 +36,13 @@ Size(rays=0, length=2, points=0)
 [0, 3]
 >>> print(MI(1, 2).tan())            # a pole inside the piece: both sides, both infinities
 { [-inf, -2.185039863261519) , (1.557407724654902, inf] }
+>>> from intervals import sqr_rev, mul_rev, sin_rev
+>>> print(sqr_rev(MI(1, 4)))         # reverse ops: the t with t ** 2 in [1, 4], not 1788's hull
+{ [-2, -1] , [1, 2] }
+>>> print(mul_rev(MI(-1, 1), MI(1, 2)))   # the t with t * y in [1, 2] for some y in [-1, 1]
+{ (-inf, -1] , [1, inf) }
+>>> print(sin_rev(MI(0), MI(-1, 7)))  # the t in [-1, 7] with sin t = 0: 0 exact, pi and 2 pi enclosed
+{ [0] , (3.141592653589793, 3.1415926535897936) , (6.283185307179586, 6.283185307179587) }
 >>> import math
 >>> print(math.floor(MI(-1.5, 1.5)))
 { [-2.0] , [-1.0] , [0.0] , [1.0] }

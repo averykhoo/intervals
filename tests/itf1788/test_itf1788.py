@@ -675,6 +675,22 @@ def test_every_file_is_used():
         assert any(v.source.startswith(f'{name}:') for v in VECTORS) or SKIPPED[name], name
 
 
+# M13e done (2026-09-26): every reverse op runs, and what is still skipped is M13g's alone, so an op
+# dropped from OPS, or a file gaining an op, cannot quietly add skips. M13's exit replaces this with
+# `SKIPPED` empty
+_REVERSE_OPS = frozenset({'sqrRev', 'sqrRevBin', 'absRev', 'absRevBin', 'pownRev', 'pownRevBin', 'coshRev',
+                          'coshRevBin', 'sinRev', 'sinRevBin', 'cosRev', 'cosRevBin', 'tanRev', 'tanRevBin',
+                          'mulRev', 'mulRevTen', 'mulRevToPair', 'powRev1', 'powRev2'})
+_M13G_OPS = frozenset({'b-textToInterval', 'd-textToInterval', 'b-numsToInterval', 'd-numsToInterval',
+                       'setDec', 'newDec', 'intervalPart', 'decorationPart', 'isNaI'})
+
+
+def test_only_m13g_ops_are_skipped():
+    assert _REVERSE_OPS <= set(OPS)
+    skipped = {op for counts in SKIPPED.values() for op in counts}
+    assert skipped <= _M13G_OPS, sorted(skipped - _M13G_OPS)
+
+
 # THE ADAPTER'S OWN RULES
 
 def test_input_rule():
