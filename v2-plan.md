@@ -689,8 +689,12 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
     * **`IntvlPartOfNaI` raises** (owner, 2026-09-26, after first leaning to a warning): NaI
       propagates like NaN through decorated ops, but `intervalPart` is the one place it stops,
       turning "invalid" into `∅`, which then reads as a real "no values"
-    * **open: drop NaI altogether?** with both raising, NaI can only be made on purpose. the
-      owner asked why keep it; `HANDOFF.md` Q8
+    * **no NaI at all** (owner, 2026-09-26, Q8): with both raising, nothing in the library makes
+      NaI. its only other uses, a per-element "invalid" in batch work and reading another 1788
+      library's `[nai]`, come with numpy or data import, if ever, and it can be added back then.
+      the decorated type has com/dac/def/trv, no `ill`, so `IntvlPartOfNaI` cannot arise; the
+      statements needing a NaI become rows under a new divergence category, "no NaI: invalid
+      input raises", approved with the decision (details: v2-implementation-plan.md M13g)
 * **Q2 settled: the reductions keep raising `ValueError`** where 1788 answers the float `nan`
   (they are operations on floats, not intervals, so an empty interval is no answer either);
   `math.fsum` raises on `inf + -inf` too
