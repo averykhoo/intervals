@@ -536,7 +536,7 @@ M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-
       entire as "no answer", ours is the real set of the fitting `x`, and for `[empty] [empty]` the
       whole line where 1788 answers `∅`. (`1/[0]` is not a row: both give empty.) keyed on the
       statement with its decorations stripped (`tests/itf1788/test_itf1788.py::key`) since M13a.
-      measured 2026-09-26 (M13d; the current counts, at M13e and at M13g, are the "counts at M13e" and "counts at M13g" bullets
+      measured 2026-09-26 (M13d; the current count, at M13's merge, is the "counts at M13's merge" bullet
       below): 19 files, 9542 statements; 7314 vectors of 83
       ops (every op in `OPS` has vectors), 6301 of them interval-valued and run twice, the 167
       numeric ones run twice more with float operands (13949 vector test items); 114 keys and 0
@@ -601,14 +601,21 @@ M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-
       `pownRev`, 18 (11 keys) the proposed "tighter than the vector", 6 have a `[nai]` operand
       (generated rows, M13g's). until M13's exit asserts `SKIPPED` empty,
       `tests/itf1788/test_itf1788.py::test_only_m13g_ops_are_skipped` holds every skipped
-      statement to M13g's 9 ops, so a reverse op dropped from `OPS` goes red
-    * (M13e, 2026-09-27) **counts at M13e**, the current count (`tools/itf1788_census.py`): 19
-      files; 9269 vectors of 102 ops (every op in `OPS` has vectors), 8256 of them interval-valued
-      and run twice, the 167 numeric ones run twice more with float operands (17525 vector test
-      items); 157 keys and 0 unknown failures: 58 decoration expectations (58 vectors), 47
-      cancellations (94 vectors), 36 degenerate infinities (63 vectors), 11 tighter than the vector
-      (PROPOSED; 18 vectors), 5 cut-based relations (7 vectors). skipped: 273 statements of 9 ops,
-      the text constructors and the decoration ops (M13g's), the only ones left
+      statement to M13g's 9 ops, so a reverse op dropped from `OPS` goes red (removed at M13's
+      merge, 2026-09-27, with M13g's pin: `::test_nothing_is_skipped` asserts `SKIPPED` empty)
+    * (M13's merge, 2026-09-27) **decorated reverse ops**: given a `DecoratedInterval` operand, each
+      reverse op is 1788's decorated one, the core's set on the intervals decorated trv
+      (`intervals/reverse.py::_decorated`); every interval operand is then a `DecoratedInterval` or a
+      number, a bare `MultiInterval` a `TypeError`. the 19 reverse ops are in
+      `tests/itf1788/test_itf1788.py::PROPAGATED` (`::REVERSE`), so every decorated reverse vector
+      (481, 2026-09-27) runs on `DecoratedInterval` operands with its decoration compared in both
+      passes, but the 4 with a `[nai]` operand (rows, D16). a decorated pair is (pieces,
+      decoration) on both sides, 1788's decoration being its non-empty intervals'
+      (`::_pair_outcome`). 1788 decorates mulRevToPair's first interval as the decorated division
+      `c / b` where `0 ∉ b`, though mulRev, the same set's hull, is trv there; ours is one op,
+      `mul_rev`, trv: 52 rows under **decoration expectations** on a decoration alone, in both
+      passes (`::DECORATION_ONLY`, keyed with the decorations; the set must match, only the
+      decoration differs, `::check`)
     * (added at M13g, approved with D16, owner 2026-09-26) **no NaI: invalid input raises**: the
       package has no NaI, since a 1788 constructor given invalid input raises
       (`UndefinedOperationError`) and nothing else makes one. every statement that needs a NaI is a
@@ -636,17 +643,19 @@ M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-
       bounded as a rational but past the doubles (`libieeep1788_class.itl:165`, `:201`, `:204`:
       com here, 1788's `dac` for its binary64 hull `[max, inf]` or entire) are rows under
       **decoration expectations** (`::_BOUNDED_EXACTLY`)
-    * (M13g, 2026-09-26) **counts at M13g**, the current count (`tools/itf1788_census.py`): 19
-      files; 7587 vectors of 92 ops (every op in `OPS` has vectors), 6351 of them interval-valued
-      and run twice, the 167 numeric ones run twice more with float operands (14272 vector test
-      items); 1040 vectors carry a decoration: 624 of 44 propagating ops, checked with it in both
-      passes, 398 of `BARE_PART` ops (their interval parts), 18 of the decorated ops, whose 156
-      vectors are all compared with their decoration. 142 keys and 0 unknown failures: 70 no NaI
-      (73 vectors), 47 cancellations (94 vectors), 10 degenerate infinities (11 vectors), 7 exact
-      parsing (PROPOSED; 7 vectors), 5 cut-based relations (7 vectors), 3 decoration expectations
-      (3 vectors); plus 12 rows on a decoration alone in the plain pass (`::PLAIN_ONLY`, decoration
-      expectations). skipped: 1955 statements of the 19 reverse ops (M13e), the only ones left
-      (`::test_only_the_reverse_ops_are_skipped`)
+    * (M13's merge, 2026-09-27) **counts at M13's merge**, the current count, replacing the counts at
+      M13e and at M13g (`tools/itf1788_census.py`): 19 files; 9542 vectors of 111 ops, every
+      statement of the 19 files (every op in `OPS` has vectors), 8306 of them interval-valued and
+      run twice, the 167 numeric ones run twice more with float operands (17848 vector test items,
+      plus 334 float items); 1521 vectors carry a decoration: 1105 of 61 propagating ops (481 of them
+      the reverse ops', 174 pairs), checked with it in both passes, 398 of `BARE_PART` ops (their
+      interval parts), 18 of the decorated ops. 185 keys (109 listed, the rest generated) with 271
+      vectors, and 0 unknown failures: 76 no NaI (79 vectors), 47 cancellations (94 vectors), 36
+      degenerate infinities (63 vectors), 11 tighter than the vector (PROPOSED; 18 vectors), 7 exact
+      parsing (PROPOSED; 7 vectors), 5 cut-based relations (7 vectors), 3 decoration expectations (3
+      vectors); plus 64 rows on a decoration alone, under decoration expectations: 12 in the plain
+      pass only (`::PLAIN_ONLY`) and 52 in both passes (`::DECORATION_ONLY`). skipped: none, which
+      `tests/itf1788/test_itf1788.py::test_nothing_is_skipped` asserts (M13's exit)
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
   community test framework and its `itl` vector DSL. all 19 `.itl` files of the maintained fork,
   oheim/ITF1788 at `b6ee1e2`, are vendored unmodified with its `LICENSE`, `NOTICE` and
@@ -730,7 +739,8 @@ imports only point downward.
         elementary.py      correctly rounded elementary functions at one exact point
         functions.py       the elementary functions and atan2 over cut tuples
         reverse.py         the reverse ops, {t in x : f(t) in c}: sqr_rev abs_rev pown_rev cosh_rev
-                           mul_rev sin_rev cos_rev tan_rev pow_rev1 pow_rev2 (M13e, D12)
+                           mul_rev sin_rev cos_rev tan_rev pow_rev1 pow_rev2 (M13e, D12); on
+                           decorated operands trv (M13's merge); above decorated
         reductions.py      sum_ sum_abs sum_sqr dot over numbers: exact, rounded once (M13h)
         numeric.py         mid rad wid mag mig mid_rad of a set: exact, or rounded as 1788 (M13b)
         literals.py        1788's interval literals, parse_literal; text_to_interval and
@@ -870,6 +880,10 @@ imports only point downward.
   (domain, continuity, jumps), float operands against the exact values of the same doubles, the min
   law and antitonicity in the box. no vector has a multi-piece operand or an attained infinity, so
   the set reading of decorations is held by these properties alone
+* the decorated reverse ops (M13's merge, 2026-09-27; `tests/test_propagation.py`): each of the ten
+  ops on decorated grid sets, `x` omitted or given, is the core op's set on the intervals, in its
+  class, decorated trv (`::test_each_reverse_op_is_trv`); a bare set beside a decorated one is
+  refused, a number is a point, the class is kept, the core's warning reaches the caller once
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
   every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 100) times its
   own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
@@ -891,6 +905,26 @@ imports only point downward.
   owner 2026-09-26: numpy and gmpy2/mpfr recorded, not now
 
 ## decision log
+
+### 2026-09-27 revision: M13 merged, M13's exit met
+
+M13e (the reverse ops) and M13g (decorations, constructors and signals), built in parallel on
+branches `m13e` and `m13g`, are merged on `m13-merge` (details in v2-implementation-plan.md, "exit
+for M13"). M13 is done: every statement of the 19 files is a vector of an op in `OPS`, and
+`tests/itf1788/test_itf1788.py::test_nothing_is_skipped` asserts `SKIPPED` empty. what the merge
+itself decided, each the conservative reading:
+* **the reverse ops take decorated operands** ("ieee 1788" above, decorated reverse ops): the
+  core's set, decorated trv, as 1788 decorates a reverse op's result
+  (`intervals/reverse.py::_decorated`); a bare `MultiInterval` beside a `DecoratedInterval` is a
+  `TypeError`, as for the wrapper's other ops
+* **mulRevToPair's better decoration is not built**: 1788 decorates the pair's first interval as
+  the decorated division `c / b` where `0 ∉ b`, but its mulRev, the same set's hull, trv. ours is
+  one op, `mul_rev`, which cannot be both; it is trv (sound: trv claims nothing). 52 vectors are
+  rows under "decoration expectations", on the decoration alone (the set must match). whether to
+  add a pair op with 1788's decoration is an owner question
+* the counts at M13e and at M13g are replaced by one re-measurement ("counts at M13's merge");
+  the two PROPOSED categories, "tighter than the vector" (M13e) and "exact parsing decides
+  validity" (M13g), stay PROPOSED, awaiting the owner
 
 ### 2026-09-26 revision: owner answers to the open questions
 

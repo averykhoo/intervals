@@ -37,6 +37,12 @@ dec = [v for v in t.VECTORS if t.is_decorated(v)]
 print('decorated vectors', len(dec), 'propagated', sum(v.op in t.PROPAGATED for v in dec),
       'bare part', sum(v.op in t.BARE_PART for v in dec), 'decorated ops', sum(v.op in t.DECORATED for v in dec),
       'propagated ops with one', len({v.op for v in dec if v.op in t.PROPAGATED}))
+# M13's merge: the rows on a decoration alone in both passes (their set must match), and the reverse
+# ops' decorated vectors, run on DecoratedInterval operands (those with a [nai] operand are rows)
+print('decoration-only rows by category', dict(Counter(category(r) for r in t.DECORATION_ONLY.values())))
+rev = [v for v in dec if v.op in t.REVERSE]
+print('decorated reverse vectors', len(rev), 'with a [nai] operand', sum(t._has_nai(v) for v in rev),
+      'pairs', sum(v.op in t.PAIRS for v in rev))
 per_file = Counter(v.source.split(':')[0] for v in t.VECTORS)
 print('vectors per file', dict(per_file))
 sk = Counter()

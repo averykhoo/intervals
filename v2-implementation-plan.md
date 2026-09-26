@@ -513,7 +513,7 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
 * not built, and why: `pow` with a real exponent (a: scope, M11); `less`, `strictLess`, `interior`,
   `mid`, `rad`, `wid`, `mag`, `mig` (a: see M11); reverse ops (a). all now M13
 
-### M13 full itf1788: every vector vendored, every op built (open, added 2026-09-25; M13a, M13b, M13c, M13d, M13f and M13h done 2026-09-26)
+### M13 full itf1788: every vector vendored, every op built (done 2026-09-27: M13a to M13h, M13e and M13g merged; two proposed divergence categories await the owner)
 
 owner request 2026-09-25: "implement all these ops and get all these tests vendored and passing".
 this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how,
@@ -2150,6 +2150,62 @@ each of the file's 4 testcases; M13a's parser reads the 11 it dropped (2026-09-2
 
 **exit for M13: no statement of the 19 files is skipped.** `SKIPPED` is empty and a test asserts
 it, so a file that gains an op cannot quietly add skips
+
+**exit (done 2026-09-27, on branch `m13-merge`: `m13e` at `6453703` merged with `m13g` at `7e6681c`)**
+* the merge: the conflicts were insertion points, resolved keeping both sides, M13e's first
+  (`intervals/__init__.py` and `tests/test_applicator.py::test_package_exports_unchanged`, the union
+  of the exports; `tests/itf1788/test_itf1788.py`'s `OPS`, `REASONS`, `DIVERGENCES`, docstring;
+  README and `v2-plan.md`). the one semantic conflict, as M13g's review predicted: the textual merge
+  put M13e's `PAIRS` branch of `run_outward` inside `::_outward_hull`, where there is no `vector`;
+  it is back in `::run_outward`. at the merge commit `tests/itf1788` had 2 red by design, M13g's
+  reminders `::test_decorated_vectors_run_decorated` and `::test_no_decorated_pair_goes_unchecked`
+* **the decorated reverse ops** (M13g's hook): given a `DecoratedInterval` operand, each reverse op
+  is the core's set on the intervals, decorated trv (`intervals/reverse.py::_reverse`,
+  `::_decorated`, `decorated.py::_trivial`); a bare `MultiInterval` beside a decorated operand is
+  a `TypeError`, but for the omitted `x`. in the adapter `::REVERSE` joins `::PROPAGATED`, and
+  `::_pair_outcome` compares a decorated pair as (pieces, decoration), 1788's decoration being its
+  non-empty intervals'. every decorated reverse vector runs through the wrapper, its decoration
+  compared in both passes: 481 (2026-09-27), 174 of them `mulRevToPair` pairs; the 4 with a `[nai]`
+  operand are rows (D16). pinned by `::test_decorated_reverse_vectors_are_checked` and the rewritten
+  `::test_no_decorated_pair_goes_unchecked` (172 checkable pairs, both passes)
+* **new rows, 52, under "decoration expectations"** (approved category): 1788 decorates
+  mulRevToPair's first interval as the decorated division `c / b` where `0 ∉ b` (6 com, 41 dac, 5
+  def in `libieeep1788_mul_rev.itl`), while its mulRev, the same set's hull, is trv there
+  (`libieeep1788_rev.itl:988`); M13g's "all 459 decorated results are trv" missed these. ours is
+  one op, `mul_rev`, trv. the rows are on the decoration alone, in both passes
+  (`::DECORATION_ONLY`, generated, keyed with the decorations since each bare twin matches);
+  `::check` requires the set to match and only the decoration to differ, and
+  `::test_divergence_rows` pins 52, each a pair vector with `0 ∉ b`. **owner question**: a pair op
+  with 1788's decoration, or the rows as they are
+* M14: `tests/test_propagation.py::test_each_reverse_op_is_trv` (the 10 ops, x omitted or given,
+  decorated grid sets: the core's set, its class, trv), `::test_a_reverse_op_keeps_the_class_and_refuses_a_bare_set`,
+  `::test_a_reverse_op_warns_once`; a doctest in `reverse.py`
+* **the exit test**: `tests/itf1788/test_itf1788.py::test_nothing_is_skipped` asserts `SKIPPED`
+  has no statement in any of the 19 files. it replaces the two interim pins, which the merge had
+  combined silently (M13e's `test_only_m13g_ops_are_skipped` with `_M13G_OPS`, M13g's
+  `test_only_the_reverse_ops_are_skipped`, each with its own `_REVERSE_OPS`); both removed
+* one merge artefact outside the conflicts: `tests/test_reverse.py::test_trig_rev_is_tighter_than_the_vector`
+  read the adapter's result for its 6 decorated copies as a hull, now (hull, decoration); it checks
+  both trv and compares the hulls
+* census, measured 2026-09-27 (`tools/itf1788_census.py`, which now also prints the
+  decoration-only rows and the decorated reverse vectors): 19 files; 9542 vectors of 111 ops, 8306
+  interval-valued (17848 vector test items, plus 334 float items); 1521 decorated vectors (1105 of
+  61 propagating ops, 398 `BARE_PART`, 18 decorated ops); 185 keys (109 listed) with 271 vectors,
+  0 unknown failures: 76 no NaI (79 vectors), 47 cancellations (94), 36 degenerate infinities
+  (63), 11 tighter than the vector (PROPOSED; 18), 7 exact parsing decides validity (PROPOSED; 7),
+  5 cut-based relations (7), 3 decoration expectations (3); plus 12 plain-only and 52
+  decoration-only rows, all decoration expectations. skipped: 0 statements
+* sabotage (section 2), 2026-09-27, a throwaway harness, each file restored from a copy and
+  `cmp`-checked (equal), `HYPOTHESIS_PROFILE=ci`: the exit test: `powRev1` dropped from `OPS` 2 red
+  (`::test_nothing_is_skipped`, and `::test_decorated_vectors_run_decorated`, as `PROPAGATED` holds
+  `REVERSE`), `isNaI` dropped 1 and `mid` dropped 1 (`::test_nothing_is_skipped` alone). the
+  decorated reverse ops: each of the 10 decorated newDec instead of trv 1 red (`mul_rev` 2), the
+  dispatch in `_reverse` dropped 12, a bare set accepted 1, `x` ignored 7; the adapter: `REVERSE`
+  dropped from `PROPAGATED` 107, a pair's decoration dropped on both sides 107
+* the two PROPOSED categories, "tighter than the vector" (M13e) and "exact parsing decides
+  validity" (M13g), stay PROPOSED and in `REASONS`, awaiting the owner
+* the gate, two runs on 2026-09-27: `tests/itf1788` 18245 passed in 45.5 s; the rest 3920 passed
+  in 498.2 s (22165 in all), on a shared, loaded laptop
 
 the order of the remaining sub-tasks, and the owner's open questions on the built ones (M13c,
 M13f, M13h): `HANDOFF.md`.

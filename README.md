@@ -136,32 +136,27 @@ intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]'
   decorated constructors. the core `MultiInterval` stays undecorated; a `DecoratedInterval`'s own
   arithmetic, functions, step functions, `%`, `//` and set operations compute the core's set and
   propagate the decoration as 1788 does (the weakest of the operands' and the op's own on the
-  operands' sets: `DecoratedInterval(MI(1, 2)) / DecoratedInterval(MI(0, 1))` is `[1, inf]_trv`)
+  operands' sets: `DecoratedInterval(MI(1, 2)) / DecoratedInterval(MI(0, 1))` is `[1, inf]_trv`).
+  the reverse ops take `DecoratedInterval` operands too and decorate the result trv, as 1788 does
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)
-* **ieee 1788**: not a runtime mode. the test suite runs 9269 vectors of 102 ops from all 19 files
-  of the ITF1788 suite through an adapter, the 8256 interval-valued ones a second time through
-  `OutwardMultiInterval`, the 167 numeric ones twice more with float operands, and all of them
-  match except 157 listed divergences where the semantics
-  differ on purpose or the vector needs decorations (`tests/itf1788/`, measured 2026-09-27, M13e). the
-  273 statements of ops not built yet (the text constructors, decorations) are counted
-  and skipped
 * **1788's signals** (M13g): `UndefinedOperation` raises `UndefinedOperationError`, a `ValueError`,
   so a 1788 constructor or `DecoratedInterval` given invalid input stops, as `MI(2, 1)` does; hence
   there is no NaI. `PossiblyUndefinedOperation` would be `PossiblyUndefinedOperationWarning`, an
   `IntervalWarning`, with the result returned; the exact parser can always decide validity, so it
   is never emitted today
-* **ieee 1788**: not a runtime mode. the test suite runs 7587 vectors of 92 ops from all 19 files
-  of the ITF1788 suite through an adapter, the 6351 interval-valued ones a second time through
-  `OutwardMultiInterval`, the 167 numeric ones twice more with float operands, a decorated vector
-  through `DecoratedInterval` with its decoration checked, and all of them match except the 195
-  vectors under 142 listed divergences where the semantics differ on purpose or the vector needs a
-  NaI, and 12 on a decoration alone in the exact pass (`tests/itf1788/`, measured 2026-09-26 at M13g). the
-  statements of ops not built yet (the reverse ops) are counted and skipped
+* **ieee 1788**: not a runtime mode. the test suite runs every statement of all 19 files of the
+  ITF1788 suite, 9542 vectors of 111 ops, through an adapter, the 8306 interval-valued ones a second
+  time through `OutwardMultiInterval`, the 167 numeric ones twice more with float operands, and the
+  1521 decorated ones through `DecoratedInterval` with their decoration checked; all of them match
+  except the 271 vectors under 185 listed divergences where the semantics differ on purpose or the
+  vector needs a NaI, and 64 on a decoration alone (12 in the exact pass only; 52 `mulRevToPair`
+  pairs whose set matches) (`tests/itf1788/`, measured 2026-09-27 at M13's merge). no statement is
+  skipped
 
 ## layout
 
