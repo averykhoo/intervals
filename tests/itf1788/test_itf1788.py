@@ -238,8 +238,10 @@ _CANCEL_EMPTY = ('cancellation as a Minkowski difference: with B = ∅ every X h
 
 # (statement text, whitespace collapsed and decorations stripped) -> reason. as of 2026-09-26 every
 # listed row is a degenerate infinity of a function at the end of its domain, a touching pair that
-# shares a point, or a cancellation where 1788 has no answer (or ∅ for ∅ and ∅); the NaI rows are
-# generated once the vectors are loaded
+# shares a point, or a cancellation where 1788 has no answer (or ∅ for ∅ and ∅); M13g adds, below,
+# the literals decided exactly (PossiblyUndefinedOperation, PROPOSED) and bounded exactly (com). the
+# NaI and isNaI rows are generated once the vectors are loaded, and PLAIN_ONLY holds the rows on a
+# decoration alone
 DIVERGENCES = {
     'log [-infinity,0.0] = [empty]': _LOG,
     'log [-infinity,-0.0] = [empty]': _LOG,
@@ -803,6 +805,21 @@ def test_signalled_reads_both_signals(monkeypatch):
     assert _signalled(vector)[0] == (closed_hull_of_expected(vector.expected), 'PossiblyUndefinedOperation')
     monkeypatch.setitem(OPS, vector.op, undefined)
     assert _signalled(vector)[0] == (None, 'UndefinedOperation')
+
+
+# M13g close-out: once M13g is done, every statement still skipped is a reverse op's (M13e). when
+# M13e lands, SKIPPED is empty and this still holds; M13's exit then asserts it empty
+_REVERSE_OPS = frozenset({
+    'sqrRev', 'sqrRevBin', 'absRev', 'absRevBin', 'pownRev', 'pownRevBin', 'sinRev', 'sinRevBin', 'cosRev',
+    'cosRevBin', 'tanRev', 'tanRevBin', 'coshRev', 'coshRevBin', 'mulRev', 'mulRevTen', 'mulRevToPair',
+    'powRev1', 'powRev2'})
+
+
+def test_only_the_reverse_ops_are_skipped():
+    """M13g: no constructor, decoration op or NaI statement (`isNaI`) is skipped; they are ops in OPS,
+    matched or rows"""
+    skipped = set().union(*SKIPPED.values())
+    assert skipped <= _REVERSE_OPS, sorted(skipped - _REVERSE_OPS)
 
 
 def test_every_op_has_vectors():

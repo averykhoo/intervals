@@ -29,7 +29,7 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D13 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13f), now in `v2-plan.md` "arithmetic" and "ieee 1788".** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
 | D14 | **decided 2026-09-25 by owner: recommended default.** the independent oracle for the elementary functions is **`python-flint`** (Arb: every result is a ball proven to contain the true value), a test-only dependency in the `[test]` extra, installed into the `intervals` env and in CI. `mpmath` was the alternative (pure python, but its values carry no proven bound). python-flint 0.9.0 has Windows wheels for 3.10 and later (abi3), 3.13 and 3.14 included (checked on PyPI 2026-09-25) | python-flint | M14 |
 | D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library. **corrected 2026-09-26 at M13a**, from every file's header: five files carry the all-permissive notice, not two (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`); the eleven `libieeep1788_*` are Apache 2.0 | vendor unmodified, with the licence files | M13a |
-| D16 | **decided 2026-09-25 by owner: recommended default.** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. 1788's signals, owner 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers"): `UndefinedOperation` **raises** (a `ValueError` subclass, so it reads like `MultiInterval(2, 1)`'s `ValueError`); `PossiblyUndefinedOperation` is an **`IntervalWarning` subclass** (the result is returned); names chosen when built. **no NaI** and no `ill` (owner 2026-09-26): its statements are rows under a new category, M13g | wrapper type; signals as the owner chose | M13g |
+| D16 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13g), now in `v2-plan.md` "ieee 1788" (`DecoratedInterval`, `UndefinedOperationError`, `PossiblyUndefinedOperationWarning`).** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. 1788's signals, owner 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers"): `UndefinedOperation` **raises** (a `ValueError` subclass, so it reads like `MultiInterval(2, 1)`'s `ValueError`); `PossiblyUndefinedOperation` is an **`IntervalWarning` subclass** (the result is returned); names chosen when built. **no NaI** and no `ill` (owner 2026-09-26): its statements are rows under a new category, M13g | wrapper type; signals as the owner chose | M13g |
 | D17 | **decided 2026-09-25 by owner**: M13 does **not** block the 2.0.0 release, and there is no hurry to release either ("I have zero users and this is a yak shaving pet project"). M13 only adds methods and a type and gives a meaning to exponents that raise `TypeError` today, so nothing that works now changes | release whenever; not blocked | — |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
@@ -972,7 +972,7 @@ M12; each checked against the D14 oracle (M14)
   clause. now pinned by a `test_examples` row and an `@example` on
   `tests/test_cancel.py::test_exactly_the_points_that_fit`; dropping the clause turns 2 red
 
-**M13g decorations, constructors and signals** (D16; no NaI, owner 2026-09-26). 273 statements,
+**M13g decorations, constructors and signals (done 2026-09-26)** (D16; no NaI, owner 2026-09-26). 273 statements,
 plus a decoration check on every decorated vector
 * a decorated wrapper type around a `MultiInterval` (name chosen when built, recorded in the
   decision log): a decoration per 1788's com/dac/def/trv, propagated through every op the core
@@ -1002,8 +1002,8 @@ plus a decoration check on every decorated vector
   adapter takes the raised error as a vector's expected result with `signal UndefinedOperation`
   (the `b-` flavour's `[empty]`, the `d-` flavour's `[nai]`), as the reduction rule takes
   `ValueError` as `NaN`
-* **in progress. part 1 built 2026-09-26 (branch `m13g`): the signals, the 1788 text parser, the
-  bare constructors, the new category.** still open for M13g: the decorated wrapper type,
+* **part 1 built 2026-09-26 (branch `m13g`): the signals, the 1788 text parser, the
+  bare constructors, the new category.** left for parts 2 and 3 then (both built, below): the decorated wrapper type,
   `d-textToInterval`, `d-numsToInterval`, `setDec`, `newDec`, `intervalPart`, `decorationPart`, and
   the adapter checking decorations. built:
     * signals (`intervals/errors.py`): `UndefinedOperationError(ValueError)` and
@@ -1391,6 +1391,61 @@ plus a decoration check on every decorated vector
   `floor` out of `PROPAGATED`: 1, that test alone (every floor vector matches on the interval part).
   those two first ran green: the harness's `-k 'not vector'` had excluded the pin test by its name,
   so they were rerun with it
+* **done 2026-09-26 (branch `m13g`; parts 1 to 3 above, then a close-out).** M13g's spec is met:
+  every statement of its ops is a vector that matches or is a row, every decorated vector's
+  decoration is checked, and nothing of M13g is skipped. built, over the three parts:
+    * the signals, `intervals/errors.py::UndefinedOperationError` (a `ValueError`) and
+      `::PossiblyUndefinedOperationWarning` (an `IntervalWarning`); 1788's literals,
+      `intervals/literals.py::parse_literal`, and the bare constructors `::text_to_interval`,
+      `::nums_to_interval` (part 1)
+    * the decorated type, `intervals/decorated.py::Decoration` and `::DecoratedInterval` (newDec,
+      `.interval`, `.decoration`), `::set_dec`, `::text_to_decorated_interval`,
+      `::nums_to_decorated_interval` (part 2); decoration propagation through every point function of
+      the core and trv for its set operations, `::_propagate`, `::_trivial` (part 3). the core
+      `MultiInterval` stays undecorated (D16), with one fix, `is_finite`/`finite` on an exact end past
+      the doubles (part 2)
+    * the close-out: `tests/itf1788/test_itf1788.py::test_only_the_reverse_ops_are_skipped` (with
+      `::_REVERSE_OPS`, the 19 reverse ops' names); the stale comment above `::DIVERGENCES` now
+      names M13g's rows; README (a doctest-checked example of the constructors, the raise and
+      propagation; a signals bullet; the `ieee 1788` counts re-measured); `v2-plan.md` "ieee 1788"
+      (D16 as current design, the counts at M13g, the signal rule's list), "package layout",
+      "testing", "later", and "2026-09-26 revision: M13g, decorations, constructors and signals,
+      done"
+* **choices the plan left open** (conservative; each part's own are in its record above and in its
+  `v2-plan.md` revision entry):
+    * the close-out pin checks that the skipped ops are a **subset** of the 19 reverse ops, named in
+      the test rather than derived, so it holds before and after M13e's merge (which empties
+      `SKIPPED`); M13's exit, `SKIPPED` empty and asserted, stays M13-exit's to add
+    * the README and `v2-plan.md` counts are re-measured on this branch (M13e's merge changes them
+      again, and they are to be re-measured then with `tools/itf1788_census.py`); the M13 heading's
+      status line is left to the session that merges
+    * three owner questions stay open, each built as the conservative reading: the PROPOSED category
+      "exact parsing decides validity" (7 rows); the 15 rows where an exact value past the doubles
+      keeps com (`::_BOUNDED_EXACTLY` 3, `::PLAIN_ONLY` 12) under "decoration expectations" or a
+      category of their own; `set_dec` demoting as 1788's `setDec` does rather than raising
+* M14: no new op landed in the close-out, so no new property; the M13g ops have theirs from their
+  parts (`tests/test_literals.py`, `tests/test_decorated.py`, `tests/test_propagation.py`)
+* tests, measured 2026-09-26: `tests/test_literals.py` 122 passed in 1.1 s,
+  `tests/test_decorated.py` 40 in 4.7 s, `tests/test_propagation.py` 115 in 15.1 s; `tests/itf1788`
+  14331 passed in 35.1 s (the one new pin added to part 3's 14330)
+* evidence, measured 2026-09-26 at the close-out (`tools/itf1788_census.py`, and the adapter
+  imported): the 273 statements of M13g's ops are all vectors: `b-textToInterval` and
+  `b-numsToInterval` 101, the six decorated ops 156, `isNaI` 16. every decorated vector's
+  decoration is checked: 1040 vectors carry one, 624 of 44 propagating ops (with it, both passes),
+  398 of `BARE_PART` ops (each operand built as a `DecoratedInterval`, so its decoration must fit,
+  then its interval part), 18 of the decorated ops, whose 156 vectors are all compared with their
+  decoration or raise. all ops: 7587 vectors of 92 ops, 6351 interval-valued, 167 numeric run twice
+  more, 14272 vector test items; 142 keys (70 no NaI with 73 vectors, 47 cancellation, 10 degenerate
+  infinities, 7 exact parsing PROPOSED, 5 cut-based relations, 3 decoration expectations) plus 12
+  plain-only rows; 0 unknown failures. skipped: 1955 statements of 19 ops, all M13e's reverse ops.
+  the gate, in two runs: `tests/itf1788` 14331 passed in 35 s; the rest 3636 passed in 459 s;
+  17967 in all (2026-09-26)
+* sabotage (section 2) of the close-out, each file restored from a copy and `cmp`-checked: `isNaI`
+  dropped from `OPS` 1 red, **only the new pin**: before it, its 16 statements would have become
+  silent skips with every test green (`test_parser_drops_nothing` only checks that an op in `OPS`
+  is not skipped), which is why the pin was added; `setDec` dropped from `OPS` 2
+  (`::test_decorated_ops_are_checked` and the pin); the README's `_trv` example expected as `_dac`
+  1 (the README doctest, so the example is collected). the parts' own: 28, 31 and 45 breaks, above
 
 **M13h reductions (done 2026-09-26)**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`,
 `dot_nearest`, 1 each as counted 2026-09-25 by the old parser, which saw only the first statement of
