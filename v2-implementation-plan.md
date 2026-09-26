@@ -981,6 +981,96 @@ M12; each checked against the D14 oracle (M14)
   `sqr_rev` of `(2, 2 + ulp)` to nearest is `±sqrt 2`), a new clause of `test_float_operands` (an
   outward end is closed only if it is a point of the exact result; the nearest result is not
   empty when the exact one is not) and two `@example`s on it; re-run, each now turns 2 red
+* **part 2 done 2026-09-26 (branch `m13e`): `mul_rev`** (mulRev 182, mulRevTen 10, mulRevToPair
+  347 statements). built:
+    * `intervals/reverse.py::mul_rev(b, c, x=REALS)`, `{t ∈ x : t * y ∈ c for some y ∈ b}` with the
+      library's `*`, exported from `intervals` (`test_package_exports_unchanged` lists it). `*` is
+      the set of the values of the defined pairs, so `t` is in iff `{t} * b` meets `c`;
+      `::_mul_preimage` takes the cases by the kind of `t` (the derivation is in `mul_rev`'s
+      docstring): `t = 0` iff `0 ∈ c` and `b` has a finite point (`0 * ±inf` has no value); a
+      finite `t != 0` from `ops.div(c ∩ R*, b ∩ R*)` (`R*` the finite nonzero reals, `::_NONZERO`),
+      from `y = 0` (every finite `t` if `0 ∈ b` and `0 ∈ c`) and from `y = ±inf` (the finite `t` of
+      the sign that makes an infinity of `c`, `::_FINITE_OF_SIGN`); `t = ±inf` where `c` holds the
+      infinity it makes with a nonzero `y` of `b` (`::_SIDE`). no branch engine: `*` is not a
+      function of one variable. `::_reverse` gained `given=()`, a binary op's other operand, so its
+      coercion, class, empty-operand warning and `∩ x` after rounding are shared (pow_rev1/2 can
+      reuse it)
+    * **choices the plan left open** (conservative, flagged in `v2-plan.md` "2026-09-26 revision:
+      M13e, second part"):
+        * **the library's own `*` defines it**, so `mul_rev([inf], [0])` is `∅`, `mul_rev([0],
+          [0])` is `(-inf, inf)` (not `[-inf, inf]`) and `mul_rev([1, inf], [3], [0, 10])` is `(0,
+          3]`; 1788's reals have `0 * y = 0` for every `y`, but no 1788 vector has an infinite
+          point in `b`, so none sees the difference
+        * **rounding is the division's**: the quotients come from `ops.div`, so an end is exact
+          for int and Fraction ends and rounded (to nearest, flags kept; outward, a moved end
+          open) exactly where `c / w` would round it, and `mul_rev([w], c) = c / w` for a finite
+          `w != 0` in both classes. the first draft rounded the whole result once when an operand
+          had a finite float end, as `fma` and `cancel_minus` do; `test_mul_rev_by_a_point` found
+          `mul_rev([3], (-2, 0.0))` = `(-0.6666666666666666, 0.0)` against `(-2, 0.0) / 3` =
+          `(-2/3, 0.0)`, and parity with the division (and with part 1's per-end rule) won
+        * `x` defaults to `[-inf, inf]`; the class, the coercion of a number, the warnings (an
+          empty `b`, `c` or `x`: `EmptySetPropagationWarning`; nothing else, the `0 * inf` corner
+          included) and `∩ x` after rounding are part 1's. the operand order is 1788's, `b` first
+        * to nearest, flags kept, an end of `x` inside the half ulp a rounded end moved can be
+          lost (`b = [10.0]`, `c = (1.0, 2.0)`, `x = [0.1]`: exactly `[0.1]`, since the double 0.1
+          is above 1/10; to nearest `(0.1, 0.2) ∩ [0.1]` = `∅`), the library's nearest rule, not a
+          promise; `OutwardMultiInterval` keeps it
+    * adapter (`tests/itf1788/test_itf1788.py`): `mulRev`, `mulRevTen`, `mulRevToPair` in `OPS`
+      (one labelled block), all `mul_rev`; **the pair rule** (`::PAIRS`, `::_pair`,
+      `::_pair_of_expected`, hooks in `::run` and `::run_outward`): each of our pieces closed
+      (rounded outward in the first pass; in the outward pass taken as they are, asserted doubles)
+      and compared in order with the pair's non-empty intervals, **piece by piece**, stricter than
+      the union the plan allowed. `INTERVAL_VECTORS` includes the pair vectors, so they run in
+      the outward pass too. no rule changed, no new row beyond the 6 generated `[nai]` ones
+    * tests (`tests/test_reverse.py`, its `mul_rev` section, 31 items in 75.5 s under load,
+      2026-09-26): 7 `@given`, all with `deadline=None` (the shared laptop's load made the default
+      200 ms deadline flake in the first sabotage run): `::test_mul_rev_is_exactly_the_points_that_fit`
+      (300 examples; `t ∈ result` iff `t ∈ x` and `{t} * b` meets `c`, the library's `*`, at every
+      quotient of an end of `c` by a nonzero end of `b`, every end of `x`, 0, a point between each
+      two, one beyond each end and ±inf: soundness and maximality at once, as
+      `tests/test_cancel.py::test_exactly_the_points_that_fit`), `::test_mul_rev_the_largest_set`
+      (`T ⊆ mul_rev(B, T * B ∪ more)`, the `t` with `{t} * B` empty aside, and with `x`),
+      `::test_mul_rev_isotone_and_distributive` (in `b`, `c`, `x`; over unions of `b` and of `c`;
+      `x` only intersects), `::test_mul_rev_symmetry` (`-b`, `-c`, both classes),
+      `::test_mul_rev_by_a_point` (`[w]` is `c / w`, `[0]` is every finite `t` or nothing, both
+      classes), `::test_mul_rev_float_operands` (outward holds the exact result of the same
+      doubles, adds no double strictly inside what it adds, closes only exact points; nearest,
+      `x` omitted, within one double of the exact result and inside the outward closure, not
+      empty when it is not; then `x` only intersects), `::test_mul_rev_sound_at_sampled_points`.
+      `@example`s: `mul_rev.itl:32`, `:34`, `:35`, `:36`, `:42`, `:102`, `:106`, `:193`,
+      `rev.itl:979`, `:980`, and the infinite points (`[inf]` against `[inf]`, `[0]`, `[-inf, 0]`;
+      `[0] ∪ [inf]`; `[0]` against `{-inf, inf}`); plus 22 parametrized examples,
+      `::test_mul_rev_1788_float_vector` (`mul_rev.itl:34`'s two doubles, open) and
+      `::test_mul_rev_class_coercion_and_warnings`
+* evidence, measured 2026-09-26 (`tools/itf1788_census.py`): the 539 vectors of the three ops
+  (`libieeep1788_mul_rev.itl` 347, all `mulRevToPair`; `libieeep1788_rev.itl` 192, `mulRev` 182 and
+  `mulRevTen` 10; all interval-valued, the pairs included): 533 match in both passes, the pairs
+  piece by piece (298 one piece, 32 two, 14 empty, besides the 3 `[nai]` ones); 6 have a `[nai]`
+  operand (generated rows, "decoration expectations", for M13g to move). no new row, no new
+  category. all ops: 8329 vectors of 94 ops, 7316 interval-valued, 148 divergence keys (58
+  decoration expectations), 0 unknown failures; skipped 1213 statements of 17 ops. the gate, as two
+  runs on 2026-09-26: `tests/itf1788` 16031 passed in 83.9 s, the rest 3433 passed in 712.6 s under
+  the shared laptop's load (19464 in all; 18354 at part 1)
+* sabotage (section 2), 2026-09-26: 18 breaks by a throwaway harness, each file restored from a
+  copy and byte-compared (`filecmp`, all equal), results appended as they landed. the library
+  breaks against the `mul_rev` tests and `reverse.py`'s doctests (red counts from a second run
+  with `deadline=None`; the first run's had deadline flakes), and against every itf1788 item
+  matching `rev` (2038 items; deterministic): `t = 0` without a finite `y` 3 red (the defining
+  property, `[inf]` by `[0]`, the warnings test; **no vector**: no 1788 `b` is infinite only);
+  `t = 0` dropped 11 and 416 vector items; dividing by `b` with its 0 and infinities 10 (**no
+  vector**: the closed hull hides the spurious ±inf and 0); `y = 0` dropped 9 and 198; `y = 0`
+  without `0 ∈ c` 10 and 168; the finite `t` by `y = ±inf` with its sign flipped 6, dropped 8;
+  `t = ±inf` with its sign flipped 9, dropped 10; `t = ±inf` also by `y = 0` 4 at first, the
+  defining property not among them, **then pinned** by an `@example` (`b = [0]`, `c = {-inf,
+  inf}`): 5; outward ignored 3 and 69 outward vector items; an empty `b` not caught 7; the class
+  from `c` and `x` only 1 (`test_mul_rev_class_coercion_and_warnings`). **no vector sees any of
+  the infinite-point clauses**: the input rule never gives `b` or `c` an infinite point, so
+  these are held by the properties alone. **green, as argued**: dividing `c` with its 0 and
+  infinities, 0 red (a 0 of `c` gives `t = 0`, which the `t = 0` clause gives too; an infinity
+  of `c` gives `t = ±inf` with a finite `y`, which the `t = ±inf` clause gives; 3000 random
+  pairs agreed, values and warnings). the wiring: `mulRev` with `b` and `c` swapped 134 red,
+  `mulRevTen` ignoring `x` 20, the pair rule as one hull 64 (the 32 two-piece pairs, both
+  passes), `mulRevToPair` without the pair rule 344
 
 **M13f cancellation (done 2026-09-26)** (D13). `cancelPlus` 116, `cancelMinus` 126
 * `A.cancel_minus(B)`: the largest `X` with `B + X ⊆ A` (the Minkowski difference);

@@ -19,6 +19,10 @@ reverse ops (M13e, D12): `sqr_rev`, `abs_rev`, `pown_rev`, `cosh_rev`, each `{t 
   double of it; soundness at sampled points in both classes
 * the itf1788 vectors of these ops run in tests/itf1788 (476, 56 of them the rows `_POWN_REV_ROWS`);
   the ones that matter are `@example`s here
+* `mul_rev(b, c, x)` (M13e, second part; its own section below): `t` is in it iff `t ∈ x` and `{t} * b`
+  meets `c`, decided exactly with the library's `*` at every quotient of an end of `c` by one of `b`;
+  the largest set; isotone, distributing over unions of `b` and of `c`; symmetric; a point `b = [w]`
+  is `c / w`; float operands, soundness at sampled points, and 1788's float vector `mul_rev.itl:34`
 """
 import math
 import random
@@ -41,6 +45,7 @@ from intervals import cosh_rev
 from intervals import pown_rev
 from intervals import sqr_rev
 from intervals import elementary
+from intervals import mul_rev
 from intervals.errors import IntervalWarning
 from intervals.kernel import contains_point
 from intervals.kernel import intersection
@@ -541,3 +546,240 @@ def test_pown_rev_is_tighter_than_the_vector():
         assert theirs.hull.issubset(M.from_pieces([(-INF, -lo), (lo, INF)]))
         assert ours.difference(theirs).issubset(M(-INF) | M(INF))
     assert tight  # the exact points ±2 ** (1074/7) sit inside these open pieces
+
+
+# MULTIPLICATION: mul_rev(b, c, x) = `{t in x : t * y in c for some y in b}` (M13e, second part)
+#
+# the defining property is decided exactly with the library's `*`, as tests/test_cancel.py decides
+# cancellation with its `+`: `t` is in the result iff `{t} * b` meets `c` (`0 * ±inf` has no value).
+# the result's ends are quotients of an end of `c` by one of `b`, 0 or ±inf, so probing every such
+# quotient, the ends of `x`, a point between each two, one beyond each end and ±inf sees all of it
+
+def mrev(b, c, x=REALS):
+    """mul_rev on MultiIntervals: an empty operand must warn and give the empty set, and nothing else
+    may warn (the 0 * ±inf corner included: no IndeterminateResultWarning)"""
+    if not b or not c or not x:
+        with pytest.warns(EmptySetPropagationWarning):
+            result = mul_rev(b, c, x)
+        assert result == EMPTY
+        return result
+    return mul_rev(b, c, x)
+
+
+def meets(t, b: MultiInterval, c: MultiInterval) -> bool:
+    """`{t} * b` meets `c`, with the library's `*`"""
+    return bool(_quiet(lambda: M(t) * b) & c)
+
+
+def mul_candidates(b, c, x):
+    """every quotient of a finite end of c by a finite nonzero end of b, every end of x, 0, a point
+    between each two, one beyond each end, and ±inf"""
+    def ends(cuts):
+        return {Fraction(cut.value) for cut in cuts if math.isfinite(cut.value)}
+    points = sorted({v / w for v in ends(c) for w in ends(b) if w} | ends(x) | {Fraction(0)})
+    between = [(p + q) / 2 for p, q in zip(points, points[1:])]
+    return [-INF, INF, points[0] - 1, points[-1] + 1, *points, *between]
+
+
+POINT_0, POINT_INF, POINT_MINUS_INF = one(0, 0), one(INF, INF), one(-INF, -INF)
+
+
+@pytest.mark.parametrize('b, c, x, want', [
+    ('[2, 4]', '[1, 8]', None, '[1/4, 4]'),
+    ('[-2, -1]', '(1, 4]', None, '[-4, -1/2)'),
+    ('[1, 2] | [4]', '[8]', None, '[2] | [4, 8]'),  # 8/[1, 2] and 8/4
+    ('[-1, 1]', '[1, 2]', None, '(-inf, -1] | [1, inf)'),  # 1788: entire (mulRev) or the two pieces (ToPair)
+    ('(0, 1]', '[1]', None, '[1, inf)'),  # 1/y for y in (0, 1]; inf * y = inf is not in [1]
+    ('[0, 1]', '[1, inf]', None, '[1, inf]'),  # inf * y = inf for y in (0, 1]
+    ('[1, 2]', '[0]', None, '[0]'),
+    ('[0]', '[1, 2]', None, '{}'),
+    ('[0]', '[0]', None, '(-inf, inf)'),  # t * 0 = 0 for finite t; inf * 0 has no value
+    ('[-1, 1]', '[0]', None, '(-inf, inf)'),  # inf * y = ±inf for y != 0, never 0
+    ('[0]', '[-inf, inf]', None, '(-inf, inf)'),
+    ('[inf]', '[1, 2]', None, '{}'),  # t * inf is ±inf or nothing
+    ('[inf]', '[0]', None, '{}'),
+    ('[inf]', '[inf]', None, '(0, inf]'),  # 0 * inf has no value
+    ('[-inf]', '[inf]', None, '[-inf, 0)'),
+    ('[-inf, inf]', '[inf]', None, '[-inf, 0) | (0, inf]'),
+    ('[0] | [inf]', '[0]', None, '(-inf, inf)'),  # y = 0 gives every finite t, y = inf nothing
+    ('[0] | [inf]', '[inf]', None, '(0, inf]'),
+    ('[-inf, -1]', '[inf]', None, '[-inf, 0)'),  # finite t < 0 by y = -inf, and -inf by any y < 0
+    ('[1, inf]', '[3]', '[0, 10]', '(0, 3]'),  # 3/y for y in [1, inf); 0 * inf has no value
+    ('[1, inf)', '[0]', None, '[0]'),
+    ('[-2, 11/10]', '[-21/10, -2/5]', '[-1, 1]', '[-1, -4/11] | [1/5, 1]'),  # rev.itl:977's shape, exactly
+])
+def test_mul_rev_examples(b, c, x, want):
+    x = REALS if x is None else M.parse(x)
+    assert mrev(M.parse(b), M.parse(c), x) == M.parse(want)
+    assert mrev(O.parse(b), O.parse(c), x) == O.parse(want)  # exact operands: the same in both classes
+
+
+@settings(max_examples=300, deadline=None)
+@given(b=exact_cut_tuples, c=exact_cut_tuples, x=st.one_of(st.just(ALL), exact_cut_tuples))
+@example(b=v1788(-2.0, 1.1), c=v1788(-2.1, -0.4), x=ALL)  # mul_rev.itl:32, two pieces
+@example(b=v1788(0.0, 0.0), c=v1788(-2.1, -0.4), x=ALL)  # :35, empty
+@example(b=v1788(-INF, -0.1), c=v1788(-2.1, -0.4), x=ALL)  # :36, (0, 21]: 1788 closes it at 0
+@example(b=ENTIRE_1788, c=v1788(-2.1, -0.4), x=ALL)  # :42, the gap at 0
+@example(b=v1788(-2.0, 1.1), c=v1788(0.0, 0.0), x=ALL)  # :102, (-inf, inf)
+@example(b=v1788(-INF, -0.1), c=v1788(0.0, 0.0), x=ALL)  # :106, [0]
+@example(b=v1788(-INF, 1.1), c=v1788(0.04, INF), x=ALL)  # :193
+@example(b=v1788(-INF, -0.1), c=v1788(0.0, 0.12), x=v1788(0.0, 0.12))  # rev.itl:979, mulRevTen = [0.0, 0.0]
+@example(b=POINT_INF, c=POINT_INF, x=ALL)  # (0, inf]: 0 * inf has no value
+@example(b=POINT_INF, c=POINT_0, x=ALL)  # nothing
+@example(b=POINT_MINUS_INF, c=one(-INF, 0), x=ALL)  # (0, inf]: t > 0 by y = -inf; 0 * -inf has no value
+@example(b=union(POINT_0, POINT_INF), c=POINT_0, x=ALL)
+@example(b=POINT_0, c=union(POINT_MINUS_INF, POINT_INF), x=ALL)  # nothing: ±inf * 0 has no value
+@example(b=one(-1, 1), c=union(POINT_MINUS_INF, POINT_INF), x=ALL)  # ±inf by y != 0; no finite t
+@example(b=one(0, INF), c=one(3, 3), x=one(0, 10))
+def test_mul_rev_is_exactly_the_points_that_fit(b, c, x):
+    """`t` is in the result iff `t` is in x and `{t} * b` meets `c`: soundness and maximality at once"""
+    B, C, X = M.from_cuts(b), M.from_cuts(c), M.from_cuts(x)
+    result = mrev(B, C, X)
+    assert result.issubset(X)
+    for t in mul_candidates(b, c, x):
+        assert (t in result) == (t in X and meets(t, B, C)), (t, result)
+
+
+def _undefined_against(b: MultiInterval) -> MultiInterval:
+    """the t with `{t} * b` empty: 0 if b has no finite point, ±inf if b has no point but 0, and
+    every t for an empty b"""
+    if not b:
+        return REALS
+    out = EMPTY if b & M.parse('(-inf, inf)') else M(0)
+    return out if b.difference(M(0)) else out | M(-INF) | M(INF)
+
+
+@settings(max_examples=150, deadline=None)
+@given(t=exact_cut_tuples, b=exact_cut_tuples, more=exact_cut_tuples, x=exact_cut_tuples)
+@example(t=one(-INF, INF), b=one(0, 0), more=(), x=ALL)
+@example(t=one(0, 1), b=one(INF, INF), more=(), x=ALL)
+def test_mul_rev_the_largest_set(t, b, more, x):
+    """any T with `T * B ⊆ C` is inside `mul_rev(B, C)` (the t with `{t} * B` empty aside), and
+    inside `mul_rev(B, C, X)` where it is in X"""
+    B = M.from_cuts(b)
+    T = M.from_cuts(t).difference(_undefined_against(B))
+    C = _quiet(lambda: T * B) | M.from_cuts(more)
+    assert T.issubset(mrev(B, C))
+    X = M.from_cuts(x)
+    assert (T & X).issubset(mrev(B, C, X))
+
+
+@settings(max_examples=150, deadline=None)
+@given(b=exact_cut_tuples, b_more=exact_cut_tuples, c=exact_cut_tuples, c_more=exact_cut_tuples,
+       x=exact_cut_tuples, x_more=exact_cut_tuples)
+def test_mul_rev_isotone_and_distributive(b, b_more, c, c_more, x, x_more):
+    """isotone in each operand, distributing over a union of b and of c (an existential preimage), and
+    x only intersects"""
+    B, B2, C, C2, X, X2 = (M.from_cuts(v) for v in (b, b_more, c, c_more, x, x_more))
+    r = mrev(B, C, X)
+    assert r.issubset(mrev(B | B2, C, X)) and r.issubset(mrev(B, C | C2, X)) and r.issubset(mrev(B, C, X | X2))
+    assert mrev(B | B2, C) == mrev(B, C) | mrev(B2, C)
+    assert mrev(B, C | C2) == mrev(B, C) | mrev(B, C2)
+    assert r == mrev(B, C) & X
+
+
+@settings(deadline=None)
+@given(b=cut_tuples(), c=cut_tuples(), cls=st.sampled_from([M, O]))
+def test_mul_rev_symmetry(b, c, cls):
+    """`t * y = (-t) * (-y)` and `-(t * y) = (-t) * y`, in both classes (rounding is symmetric)"""
+    B, C = cls.from_cuts(b), cls.from_cuts(c)
+    r = mrev(B, C)
+    neg = _quiet(lambda: -r)
+    assert mrev(_quiet(lambda: -B), C) == neg
+    assert mrev(B, _quiet(lambda: -C)) == neg
+
+
+nonzero_values = st.one_of(st.integers(-20, 20), st.fractions(-20, 20, max_denominator=6),
+                           st.floats(-1e10, 1e10, allow_nan=False, allow_infinity=False)).filter(bool)
+
+
+@settings(deadline=None)
+@given(y=nonzero_values, c=cut_tuples(), x=cut_tuples(), cls=st.sampled_from([M, O]))
+@example(y=10, c=one(1.0, 2.0, False, False), x=ALL, cls=M)  # to nearest (0.1, 0.2), 1/10 rounded up
+def test_mul_rev_by_a_point(y, c, x, cls):
+    """a finite point `b = [y]`, y != 0, is division, `t * y ∈ c` iff `t ∈ c / y` (±inf included), in
+    both classes; `b = [0]` is every finite t where 0 is in c, else nothing"""
+    C, X = cls.from_cuts(c), cls.from_cuts(x)
+    if not C or not X:
+        return
+    assert mul_rev(cls(y), C, X) == _quiet(lambda: C / y) & X
+    assert mul_rev(cls(0), C, X) == (cls.parse('(-inf, inf)') & X if 0 in C else cls())
+
+
+@settings(max_examples=150, deadline=None)
+@given(b=float_cut_tuples, c=float_cut_tuples, x=float_cut_tuples)
+@example(b=one(0.01, 1.1), c=one(-2.1, -0.4), x=ALL)  # mul_rev.itl:34, both ends rounded
+@example(b=one(10.0, 10.0), c=one(1.0, 2.0, False, False), x=one(0.1, 0.1))  # (1/10, 1/5); 0.1 > 1/10 is in it
+@example(b=one(3.0, 3.0), c=one(1.0, 1.0), x=ALL)  # 1/3, one point: outward two doubles, open
+@example(b=one(MAX, MAX), c=one(H('0x0.0000000000001p-1022'), 1.0), x=ALL)  # underflow below the least subnormal
+@example(b=one(H('0x0.0000000000001p-1022'), 1.0), c=one(MAX, MAX), x=ALL)  # past max float
+def test_mul_rev_float_operands(b, c, x):
+    """outward: the exact result of the same doubles is inside, what rounding adds holds no double
+    strictly inside it, a closed end is a point of the exact result. to nearest, x omitted (an end of
+    x can fall in the half ulp a rounded end moved, as `0.1` in `(1/10, 1/5)` rounded to `(0.1, 0.2)`):
+    the exact result within one double of each piece, inside the outward closure, not empty if it is
+    not; and x only intersects, after the rounding"""
+    B, C, X = M.from_cuts(exact_cuts(b)), M.from_cuts(exact_cuts(c)), M.from_cuts(exact_cuts(x))
+    exact = mrev(B, C, X)
+    outward = mrev(O.from_cuts(b), O.from_cuts(c), O.from_cuts(x))
+    assert exact.issubset(outward)
+    for lo, _, hi, _ in pieces(outward.difference(exact).cuts):
+        assert hi <= _first_double_above(lo), (lo, hi)
+    for lo, lo_closed, hi, hi_closed in pieces(outward.cuts):
+        for end, closed in ((lo, lo_closed), (hi, hi_closed)):
+            if closed:
+                assert end in exact, (end, outward)
+    exact_all = mrev(B, C)
+    nearest_all = mrev(M.from_cuts(b), M.from_cuts(c))
+    outward_all = mrev(O.from_cuts(b), O.from_cuts(c))
+    for r in (outward, nearest_all):  # floats, or an exact 0 or ±inf, which is a double
+        assert all(isinstance(cut.value, float) or cut.value == float(cut.value) for cut in r.cuts), r
+    assert exact_all.issubset(_widened(nearest_all))
+    assert nearest_all.issubset(M.from_pieces((lo, hi) for lo, _, hi, _ in pieces(outward_all.cuts)))
+    if exact_all:
+        assert nearest_all
+    assert mrev(M.from_cuts(b), M.from_cuts(c), M.from_cuts(x)) == nearest_all & M.from_cuts(x)
+
+
+def test_mul_rev_1788_float_vector():
+    """mul_rev.itl:34: the quotients of the doubles, rounded outward, are 1788's two doubles; nothing
+    attains a moved end"""
+    r = mul_rev(O(0.01, 1.1), O(-2.1, -0.4))
+    assert (r.inf, r.sup) == (-H('0X1.A400000000001P+7'), -H('0X1.745D1745D1745P-2'))
+    assert not r.inf_closed and not r.sup_closed
+    exact = mul_rev(M(Fraction(0.01), Fraction(1.1)), M(Fraction(-2.1), Fraction(-0.4)))
+    assert exact == M(Fraction(-2.1) / Fraction(0.01), Fraction(-0.4) / Fraction(1.1)) and exact.issubset(r)
+
+
+@settings(max_examples=100, deadline=None)
+@given(b=cut_tuples(), c=cut_tuples(), x=cut_tuples(), seed=st.integers(0, 2 ** 32 - 1))
+@example(b=one(-2.0, 1.1), c=one(0.04, INF), x=one(0.04, INF), seed=0)  # rev.itl:980
+def test_mul_rev_sound_at_sampled_points(b, c, x, seed):
+    """M14's soundness: a sampled t of x whose `{t} * b` meets c is in the exact result and in the
+    outward one (float operands read as the rationals they are); a sampled t of the exact result fits"""
+    rng = random.Random(seed)
+    B, C, X = (M.from_cuts(exact_cuts(v)) for v in (b, c, x))
+    exact = mrev(B, C, X)
+    outward = mrev(O.from_cuts(b), O.from_cuts(c), O.from_cuts(x))
+    for t in sample(X.cuts, 20, rng):
+        t = _exact(t)
+        if meets(t, B, C):
+            assert t in exact and t in outward, t
+    for t in sample(exact.cuts, 20, rng):
+        assert meets(_exact(t), B, C), t
+
+
+def test_mul_rev_class_coercion_and_warnings():
+    assert type(mul_rev(O(1.0), M(2), M(0, 5))) is O and type(mul_rev(M(1), M(2), O(0.0, 5.0))) is O
+    assert type(mul_rev(M(1), O(2.0))) is O and type(mul_rev(M(1), M(2))) is M
+    assert mul_rev(2, 4) == M(2) and mul_rev(2, 4, 0) == EMPTY and mul_rev(0, 0, 5) == M(5)
+    for args in (('[1, 2]', M(1)), (M(1), '[1, 2]'), (M(1), M(1), None)):
+        with pytest.raises(TypeError):
+            mul_rev(*args)
+    for args in ((EMPTY, M(1)), (M(1), EMPTY), (M(1), M(1), EMPTY), (O(), O())):
+        with pytest.warns(EmptySetPropagationWarning):
+            assert mul_rev(*args) == EMPTY
+    assert type(_quiet(lambda: mul_rev(O(), M(1)))) is O
+    # no solution, and the 0 * inf corner, warn nothing (the suite turns warnings into errors)
+    assert mul_rev(M(INF), M(0)) == EMPTY and mul_rev(M(0), M(1, 2)) == EMPTY
+    assert mul_rev(M(0) | M(INF), M(0)) == M.parse('(-inf, inf)')

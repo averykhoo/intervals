@@ -38,6 +38,9 @@ and lists them). the adapter's rules:
   `OutwardMultiInterval` encloses the exact difference
 * **power** (`pow`): run as `a ** b`, an interval exponent, which D11 makes 1788's pow (never pown,
   even for `[2.0, 2.0]`); all its vectors match in both passes, as do those of M13d's other functions
+* **pair rule** (`mulRevToPair`, M13e): 1788's two intervals are one multi-interval here, `mul_rev`;
+  each of our pieces, closed (rounded outward in the first pass), is compared in order with the
+  pair's non-empty intervals, piece by piece. the pairs run in the outward pass too
 * a `signal` clause is kept on the vector and not checked yet (M13g). `NaN` equals `NaN` here
 * the library's warnings are ignored inside a vector (`1/[0]` is `∅` + `IndeterminateResultWarning`,
   and 1788's answer is also empty); they are pinned by their own tests elsewhere
@@ -63,12 +66,14 @@ from intervals import REALS
 from intervals import abs_rev
 from intervals import cosh_rev
 from intervals import dot
+from intervals import mul_rev
 from intervals import pown_rev
 from intervals import sqr_rev
 from intervals import sum_
 from intervals import sum_abs
 from intervals import sum_sqr
 from intervals.errors import IntervalWarning
+from intervals.kernel import pieces
 from intervals.relations import Allen
 from tests.itf1788.itl import Interval
 from tests.itf1788.itl import parse_file
@@ -170,9 +175,15 @@ OPS = {
     'pownRevBin': lambda c, x, n: pown_rev(c, int(n), x),
     'coshRev': cosh_rev,
     'coshRevBin': cosh_rev,
+    # mulRev (M13e): `{x in X : x * y in C for some y in B}` with the library's `*`, B first as in 1788;
+    # mulRevTen is the call with x given; mulRevToPair's two intervals are one set here (PAIRS)
+    'mulRev': mul_rev,
+    'mulRevTen': mul_rev,
+    'mulRevToPair': mul_rev,
 }
 REDUCTIONS = frozenset({'sum_nearest', 'sum_abs_nearest', 'sum_sqr_nearest', 'dot_nearest'})
 NUMERIC = frozenset({'mid', 'rad', 'wid', 'mag', 'mig', 'midRad'})
+PAIRS = frozenset({'mulRevToPair'})  # a pair of intervals, compared by the pair rule (`::_pair`)
 
 _OVERLAP_NAMES = {
     Allen.BEFORE: 'before', Allen.MEETS: 'meets', Allen.OVERLAPS: 'overlaps', Allen.STARTS: 'starts',
@@ -354,7 +365,7 @@ def _load():
 
 
 VECTORS, SKIPPED = _load()
-INTERVAL_VECTORS = tuple(v for v in VECTORS if isinstance(v.expected, Interval))
+INTERVAL_VECTORS = tuple(v for v in VECTORS if isinstance(v.expected, Interval) or v.op in PAIRS)
 NUMERIC_VECTORS = tuple(v for v in VECTORS if v.op in NUMERIC)
 DIVERGENCES.update({key(v): _NAI for v in VECTORS if _has_nai(v)})
 
@@ -481,6 +492,8 @@ def run(vector):
     if vector.op in REDUCTIONS:
         return _reduce(vector, [to_ours(a) for a in vector.args]), float(vector.expected)
     result = _call(vector, [to_ours(a) for a in vector.args])
+    if vector.op in PAIRS:
+        return _pair(result, rounded=True), _pair_of_expected(vector.expected)
     if isinstance(vector.expected, Interval):
         return closed_hull_of_ours(result), closed_hull_of_expected(vector.expected)
     if isinstance(vector.expected, Fraction) or isinstance(vector.expected, float):
@@ -492,6 +505,8 @@ def run_outward(vector):
     """(ours, expected): float operands in an OutwardMultiInterval, our closed hull taken exactly"""
     result = _call(vector, [to_ours(a, OutwardMultiInterval, as_float=True) for a in vector.args])
     assert isinstance(result, OutwardMultiInterval), type(result)
+    if vector.op in PAIRS:
+        return _pair(result, rounded=False), _pair_of_expected(vector.expected)
     expected = closed_hull_of_expected(vector.expected)
     if result.is_empty:
         return None, expected
@@ -499,6 +514,26 @@ def run_outward(vector):
     # every finite end is a double already: nothing is left for the adapter to round
     assert all(isinstance(v, float) or v == round_down(v) for v in (lo, hi)), (lo, hi)
     return (lo, hi), expected
+
+
+# the pair rule (M13e, mulRevToPair): 1788 gives the preimage as two intervals, the second empty unless
+# the set has a gap; ours is the one multi-interval. each of our pieces is closed (its ends rounded
+# outward in the first pass, taken as they are in the outward pass) and compared, in order, with the
+# pair's non-empty intervals
+
+def _pair(result: MultiInterval, rounded: bool):
+    out = []
+    for lo, _, hi, _ in pieces(result.cuts):
+        if rounded:
+            lo, hi = round_down(lo), round_up(hi)
+        else:  # every finite end is a double already: nothing is left for the adapter to round
+            assert all(isinstance(v, float) or v == round_down(v) for v in (lo, hi)), (lo, hi)
+        out.append((lo, hi))
+    return tuple(out)
+
+
+def _pair_of_expected(pair):
+    return tuple(h for h in map(closed_hull_of_expected, pair) if h is not None)
 
 
 def _numbers_as_floats(value):

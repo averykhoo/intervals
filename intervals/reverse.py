@@ -63,6 +63,7 @@ from typing import Tuple
 
 from intervals import elementary
 from intervals import kernel
+from intervals import ops
 from intervals.applicator import warn
 from intervals.cuts import Value
 from intervals.cuts import mirror
@@ -183,12 +184,13 @@ def _operands(name: str, *operands):
     return out, cls
 
 
-def _reverse(name: str, c, x, preimage: Callable[[Cuts, bool], Cuts]) -> MultiInterval:
-    (c, x), cls = _operands(name, c, x)
-    if not c or not x:
+def _reverse(name: str, c, x, preimage: Callable[..., Cuts], given=()) -> MultiInterval:
+    """`preimage(*given, c, outward) ∩ x` on cut tuples; `given` holds a binary op's other operand (mul_rev's b)"""
+    (*given, c, x), cls = _operands(name, *given, c, x)
+    if not c or not x or not all(given):
         warn(EmptySetPropagationWarning, f'{name}: an operand is empty, so the result is empty')
         return cls()
-    return cls.from_cuts(kernel.intersection(preimage(c.cuts, cls._outward), x.cuts))
+    return cls.from_cuts(kernel.intersection(preimage(*(g.cuts for g in given), c.cuts, cls._outward), x.cuts))
 
 
 def sqr_rev(c, x=_REALS) -> MultiInterval:
@@ -255,3 +257,72 @@ def cosh_rev(c, x=_REALS) -> MultiInterval:
 
 
 _ACOSH = named('acosh', _one(1, INF))
+
+
+# MULTIPLICATION (M13e: ieee 1788's mulRev, mulRevTen and mulRevToPair)
+
+def mul_rev(b, c, x=_REALS) -> MultiInterval:
+    """
+    `{t in x : t * y in c for some y in b}`, `*` being the library's (ieee 1788's mulRev; with `x`,
+    mulRevTen; mulRevToPair's two intervals are the pieces of this one set)
+
+    `*` is the set of the values of the defined pairs (`intervals.ops`), so `t` is in the result iff
+    `{t} * b` meets `c`. `0 * ±inf` has no value and `±inf * y` is the signed infinity for `y != 0`,
+    so, by the kind of `t` (the derivation, for `_mul_preimage`):
+
+    * `t = 0`: `0 * y = 0` for every finite `y`, so 0 is in iff `0 ∈ c` and `b` has a finite point
+    * finite `t != 0`: from a finite `y != 0`, `t = v / y` for a finite `v != 0` of `c` (`v = 0`
+      gives `t = 0`); from `y = 0`, every such `t` if `0 ∈ b` and `0 ∈ c`; from `y = ±inf`, every
+      `t` of the sign that makes `t * y` an infinity of `c`
+    * `t = ±inf`: `t * y` is an infinity for every `y != 0` (none for `y = 0`), so `t` is in iff `c`
+      holds the infinity it makes with a nonzero point of `b`
+
+    ieee 1788 answers the hull (or two intervals, mulRevToPair) and has no infinite points: `0 * y =
+    0` for every `y` there. every end is 0, ±inf or a quotient `v / w` of an end of `c` by one of `b`,
+    computed by the library's own division (`intervals.ops.div`), so it is rounded exactly where the
+    division `c / w` would round it: exact for int and Fraction ends, and where a float is involved
+    to nearest in a `MultiInterval` (flags kept) or outward in an `OutwardMultiInterval` (a moved end
+    open). a point `b = [w]`, `w` finite and nonzero, gives `c / w` in both classes. then `∩ x`
+
+    >>> from intervals import MultiInterval as M
+    >>> mul_rev(M(2, 4), M(1, 8))
+    MultiInterval.parse('[1/4, 4]')
+    >>> mul_rev(M(-1, 1), M(1, 2))  # 1788 answers entire (mulRev) or the two pieces (mulRevToPair)
+    MultiInterval.parse('{ (-inf, -1] , [1, inf) }')
+    >>> mul_rev(M(0), M(0))  # t * 0 = 0 for every finite t; inf * 0 has no value
+    MultiInterval.parse('(-inf, inf)')
+    >>> mul_rev(M.parse('[1, inf]'), M(3), M(0, 10))  # 0 * inf has no value, so 0 is not in
+    MultiInterval.parse('(0, 3]')
+    """
+    return _reverse('mul_rev', c, x, _mul_preimage, given=(b,))
+
+
+_REAL_LINE = _one(-INF, INF, False, False)  # (-inf, inf)
+_NEGATIVE = _one(-INF, 0, False, False)
+_POSITIVE = _one(0, INF, False, False)
+_NONZERO = kernel.union(_NEGATIVE, _POSITIVE)  # the finite t != 0, and the finite y != 0
+_SIDE = {1: _one(0, INF, False, True), -1: _one(-INF, 0, True, False)}  # the y != 0 of each sign, ±inf included
+_FINITE_OF_SIGN = {1: _POSITIVE, -1: _NEGATIVE}
+
+
+def _mul_preimage(b: Cuts, c: Cuts, outward: bool) -> Cuts:
+    """`{t : t * y in c for some y in b}` for non-empty `b` and `c` (the cases: `mul_rev`); only the
+    quotients round, in `ops.div`"""
+    has = kernel.contains_point
+    parts = []
+    if has(c, 0) and kernel.intersection(b, _REAL_LINE):  # t = 0
+        parts.append(_one(0, 0))
+    b_nonzero, c_nonzero = kernel.intersection(b, _NONZERO), kernel.intersection(c, _NONZERO)
+    if b_nonzero and c_nonzero:  # finite t != 0 and finite y != 0: t = v / y, never 0 nor ±inf
+        parts.append(ops.div(c_nonzero, b_nonzero, outward))
+    if has(b, 0) and has(c, 0):  # finite t != 0 and y = 0
+        parts.append(_NONZERO)
+    for c_sign in (1, -1):  # an infinity of c, made by t * y with y = ±inf or t = ±inf
+        if not has(c, c_sign * INF):
+            continue
+        for y_sign in (1, -1):
+            if has(b, y_sign * INF):  # every finite t != 0 of the sign that makes c_sign * inf
+                parts.append(_FINITE_OF_SIGN[c_sign * y_sign])
+            if kernel.intersection(b, _SIDE[y_sign]):  # t = ±inf with a nonzero y of this sign
+                parts.append(_one(c_sign * y_sign * INF, c_sign * y_sign * INF))
+    return kernel.union(*parts)

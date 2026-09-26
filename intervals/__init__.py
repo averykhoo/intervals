@@ -21,6 +21,7 @@ from intervals.relations import TruthSet
 # reverse ops (M13e)
 from intervals.reverse import abs_rev
 from intervals.reverse import cosh_rev
+from intervals.reverse import mul_rev
 from intervals.reverse import pown_rev
 from intervals.reverse import sqr_rev
 
@@ -52,4 +53,5 @@ __all__ = [
     'abs_rev',
     'pown_rev',
     'cosh_rev',
+    'mul_rev',
 ]

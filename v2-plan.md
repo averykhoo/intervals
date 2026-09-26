@@ -424,6 +424,16 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
     * an empty operand gives `∅` and an `EmptySetPropagationWarning`, as the functions do; an empty
       answer from non-empty operands (no solution) warns nothing. a number is a point; `n` must be
       an int (not bool), else `TypeError`
+    * **`mul_rev(b, c, x=REALS)`** (M13e, second part, built 2026-09-26): `{t ∈ x : t * y ∈ c for
+      some y ∈ b}` with the library's `*`, so `t` is in iff `{t} * b` meets `c`. `0 * ±inf` has no
+      value, so 0 is in iff `0 ∈ c` and `b` has a finite point; a finite `t != 0` comes from
+      `v / y` (finite `v != 0` of `c`, finite `y != 0` of `b`), from `y = 0` if `0 ∈ b` and `0 ∈ c`
+      (every finite `t`), and from `y = ±inf` where `c` holds the infinity it makes; `t = ±inf`
+      where `c` holds the infinity it makes with a nonzero `y` (`reverse._mul_preimage`). 1788's
+      reals have `0 * y = 0` for every `y` and no infinite points; `mul_rev([0], [0])` is `(-inf,
+      inf)`, not `[-inf, inf]`. the quotients are the library's division (`ops.div`), so an end is
+      rounded exactly where `c / w` would round it, and a point `b = [w]` (finite, nonzero) gives
+      `c / w` in both classes. the class, warnings and `∩ x` after rounding as above
 
 ### empties and warnings
 
@@ -524,6 +534,14 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       than the vector", PROPOSED at M13e and not yet approved by the owner**: 1788's end for
       `2 ** (1074/7)` is one double outside the tightest enclosure, which ours is (arb, in
       `tests/test_reverse.py::test_pown_rev_is_tighter_than_the_vector`)
+    * **reverse multiplication** (added at M13e, second part, 2026-09-26): `mulRev` and
+      `mulRevTen` are `mul_rev(b, c)` and `mul_rev(b, c, x)`, compared by the output rule;
+      `mulRevToPair` is `mul_rev(b, c)` too, under **the pair rule**
+      (`tests/itf1788/test_itf1788.py::PAIRS`, `::_pair`): each of our pieces closed (rounded
+      outward in the first pass), compared in order with the pair's non-empty intervals, piece by
+      piece, which is stricter than comparing the unions. the pair vectors run in the outward pass
+      too (`INTERVAL_VECTORS` includes them). all 539 vectors of the three ops match in both passes
+      but the 6 with a `[nai]` operand (generated rows); no new row, no new category (2026-09-26)
 * naming: **ieee 1788-2015** = the standard (1788.1-2017 = simplified subset); **itf1788** = the
   community test framework and its `itl` vector DSL. all 19 `.itl` files of the maintained fork,
   oheim/ITF1788 at `b6ee1e2`, are vendored unmodified with its `LICENSE`, `NOTICE` and
@@ -736,6 +754,27 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
 * **H3**: numpy interop and a gmpy2/mpfr backend are recorded, not built now ("later (not in
   v2.0)" above). the session's suggested first pick when the solver stack starts: Newton's
   method with forward-mode autodiff, the demonstration of what multi-intervals are for
+
+### 2026-09-26 revision: M13e, second part (mul_rev), built
+
+built and measured 2026-09-26; details in v2-implementation-plan.md (M13e, part 2). `mul_rev` moved
+into "current design" (elementary and step functions: reverse ops; ieee 1788: the pair rule). the
+choices the plan left open, each the most conservative reading, are now current design too:
+* **the library's own `*` defines it**: `t` is in `mul_rev(b, c, x)` iff `{t} * b` meets `c` and
+  `t ∈ x`, so `0 * ±inf` (no value) contributes nothing: `mul_rev([inf], [0])` is `∅` and
+  `mul_rev([1, inf], [3], [0, 10])` is `(0, 3]`, 0 excluded. 1788 has no infinite points, so no
+  1788 vector sees the difference
+* **rounding is the division's**: every finite end other than 0 is a quotient of an end of `c` by one
+  of `b`, computed by `ops.div`, so it is exact for int and Fraction ends and rounded (to nearest,
+  flags kept, or outward, a moved end open) exactly where the division would round it. the other
+  candidate, `fma`'s rule (all ends rounded once if any operand has a finite float end), would
+  make `mul_rev([3], (-2, 0.0))` differ from `(-2, 0.0) / 3` in its exact end `-2/3`
+* **x defaults to `[-inf, inf]`**, as for the other reverse ops; no 1788 vector is touched, since
+  the input rule never gives `c` an infinite point and ±inf join a preimage only through one
+* **`mulRevToPair` is `mul_rev` under a pair rule** in the adapter, piece by piece (stricter than
+  as a union, which the plan allowed); the one exported function serves all three 1788 ops
+* the 539 vectors: all match in both passes but the 6 `[nai]` ones (generated rows under
+  "decoration expectations", which M13g moves). no new category
 
 ### 2026-09-26 revision: M13e, first part (sqr_rev, abs_rev, pown_rev, cosh_rev), built
 

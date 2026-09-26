@@ -90,6 +90,11 @@ Size(rays=0, length=2, points=0)
   1788's hull (`sqr_rev(MI(1, 4))` is `[-2, -1] ∪ [1, 2]`); `x` defaults to `[-inf, inf]`, and an
   irrational end is its tightest float enclosure, open. their 476 ITF1788 vectors run through the
   adapter below (M13e, 2026-09-26)
+* **reverse multiplication**: `mul_rev(b, c, x)` is `{t ∈ x : t * y ∈ c for some y ∈ b}`, the
+  values that solve `t * b ∋ c`, as an exact union (`mul_rev(MI(-1, 1), MI(1, 2))` is
+  `(-inf, -1] ∪ [1, inf)`, where 1788's `mulRev` gives entire and `mulRevToPair` the two pieces);
+  `0 * inf` has no value, as in `*`. its 539 ITF1788 vectors run through the adapter (M13e,
+  2026-09-26)
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`
