@@ -53,7 +53,10 @@ open questions".
   with a NaI (16 `isNaI`, the `[nai]` operands of the booleans and `mulRev`, the `d-` constructors'
   `[nai]`, now errors) become rows under a new divergence category. the case for keeping it: a
   per-element "invalid" in batch work (numpy later), where one bad value should not kill the
-  whole array. the session recommends dropping it now, and adding it back with numpy if needed
+  whole array; and reading `[nai]` written by another 1788 library (its text form, or 1788's
+  interchange encoding), which without NaI must raise. no other use: no 1788 operation makes NaI
+  from valid input (out-of-domain gives `trv`/empty), and python has `None` for "no value yet".
+  the session recommends dropping it now, and adding it back with numpy if needed
 
 ## still owed
 
