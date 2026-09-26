@@ -56,6 +56,17 @@ case per special point of the library's pow (a base 0, 1 or inf; an exponent 0 o
 rest the set of `v ** (1/w)` (the bases) or of `log_t v` (the exponents) over boxes of `c` and the other
 operand, each box monotone in both, so its ends are two corners (`_power_box`'s rule; `_log_box`)
 
+**decorated** (M13's merge of M13e and M13g): given a `DecoratedInterval` operand, each op is 1788's
+decorated reverse op: the same set, computed on the operands' intervals, decorated trv, as 1788
+decorates every reverse op's result (the decoration says nothing about a preimage). every interval
+operand is then a `DecoratedInterval` or a real number; a bare `MultiInterval` is a `TypeError`, as
+for the wrapper's other ops. mulRevToPair is the one op 1788 decorates better (its first interval as
+the decorated division `c / b` where `0 ∉ b`); ours is one set, `mul_rev`'s, trv
+
+>>> from intervals import DecoratedInterval as D, MultiInterval as M
+>>> print(sqr_rev(D(M(1, 4))), mul_rev(D(M(2, 4)), D(M(1, 8)), D(M(0, 1))))
+{ [-2, -1] , [1, 2] }_trv [1/4, 1]_trv
+
 >>> from intervals import MultiInterval as M
 >>> sqr_rev(M(1, 4))
 MultiInterval.parse('{ [-2, -1] , [1, 2] }')
@@ -81,6 +92,8 @@ from intervals import ops
 from intervals.applicator import warn
 from intervals.cuts import Value
 from intervals.cuts import mirror
+from intervals.decorated import DecoratedInterval
+from intervals.decorated import _trivial
 from intervals.errors import EmptySetPropagationWarning
 from intervals.errors import HullWarning
 from intervals.kernel import Cuts
@@ -203,11 +216,27 @@ def _operands(name: str, *operands):
 
 def _reverse(name: str, c, x, preimage: Callable[..., Cuts], given=()) -> MultiInterval:
     """`preimage(*given, c, outward) ∩ x` on cut tuples; `given` holds a binary op's other operand (mul_rev's b)"""
+    if any(isinstance(a, DecoratedInterval) for a in (*given, c, x)):
+        return _decorated(name, c, x, preimage, given)
     (*given, c, x), cls = _operands(name, *given, c, x)
     if not c or not x or not all(given):
         warn(EmptySetPropagationWarning, f'{name}: an operand is empty, so the result is empty')
         return cls()
     return cls.from_cuts(kernel.intersection(preimage(*(g.cuts for g in given), c.cuts, cls._outward), x.cuts))
+
+
+def _decorated(name: str, c, x, preimage: Callable[..., Cuts], given) -> DecoratedInterval:
+    """the decorated reverse op (M13's merge of M13e and M13g): the op on the operands' intervals,
+    decorated trv as 1788 decorates a reverse op's result (`decorated.py::_trivial`). an operand is a
+    DecoratedInterval or a real number (a point); a bare MultiInterval is refused, as the wrapper's
+    ops refuse it, but for the omitted `x` (the default, the affine extended reals)"""
+    def interval(a):
+        if isinstance(a, DecoratedInterval):
+            return a.interval
+        if isinstance(a, MultiInterval) and a is not _REALS:
+            raise TypeError(f'{name}: expected a DecoratedInterval or a real number, got {type(a).__name__}')
+        return a  # a number, or the default x; anything else is refused by `_operands`
+    return _trivial(_reverse(name, interval(c), interval(x), preimage, tuple(map(interval, given))))
 
 
 def sqr_rev(c, x=_REALS) -> MultiInterval:

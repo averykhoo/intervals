@@ -607,8 +607,8 @@ def _propagate(result: MultiInterval, operands, defined: bool, restricted: bool 
 
 def _trivial(result: MultiInterval) -> 'DecoratedInterval':
     """a set operation's result, trv whatever the operands (1788 decorates intersection, convexHull,
-    cancelMinus and cancelPlus so). M13e hook: 1788 decorates every reverse op's result trv too, so
-    the decorated reverse ops (not built here) are `_trivial(<reverse op on the intervals>)`"""
+    cancelMinus and cancelPlus so). 1788 decorates every reverse op's result trv too, so the decorated
+    reverse ops are `_trivial(<reverse op on the intervals>)` (`intervals.reverse._decorated`)"""
     return DecoratedInterval(result, Decoration.TRV)
 
 

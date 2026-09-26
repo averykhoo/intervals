@@ -34,7 +34,9 @@ and lists them). the adapter's rules:
   booleans, numbers and overlap) gets each operand's interval part, as 1788 defines them, after the
   operand was built with its decoration. a divergence row is keyed on the statement with its
   decorations stripped (the fork has many statements twice, `atanh [1.0,1.0]_def = [empty]_trv` beside
-  `atanh [1.0,1.0] = [empty]`), except a row on a decoration alone (`PLAIN_ONLY`), keyed with them.
+  `atanh [1.0,1.0] = [empty]`), except a row on a decoration alone (`PLAIN_ONLY`, and
+  `DECORATION_ONLY`, whose set must match), keyed with them. the reverse ops (`REVERSE`) are in
+  `PROPAGATED` since M13's merge: `intervals.reverse` decorates their results trv, as 1788 does.
   there is no NaI (D16, owner 2026-09-26), so a vector with a `[nai]` in it, and every `isNaI`, is
   a row under "no NaI: invalid input raises", generated below
 * **decorated ops** (M13g, `DECORATED`: the `d-` constructors, `newDec`, `setDec`, `intervalPart`,
@@ -49,7 +51,8 @@ and lists them). the adapter's rules:
   even for `[2.0, 2.0]`); all its vectors match in both passes, as do those of M13d's other functions
 * **pair rule** (`mulRevToPair`, M13e): 1788's two intervals are one multi-interval here, `mul_rev`;
   each of our pieces, closed (rounded outward in the first pass), is compared in order with the
-  pair's non-empty intervals, piece by piece. the pairs run in the outward pass too
+  pair's non-empty intervals, piece by piece. the pairs run in the outward pass too. a decorated pair
+  (M13's merge) is (pieces, decoration), 1788's decoration being that of its non-empty intervals
 * **signals** (M13g): for an op in `SIGNALLED` (the constructors, `setDec`, `intervalPart`), ours and 1788's are compared as
   (value, signal) pairs: an `UndefinedOperationError` raised is 1788's bare answer to invalid input,
   `[empty]` with `signal UndefinedOperation`, and a `PossiblyUndefinedOperationWarning` emitted is
@@ -503,17 +506,19 @@ DECORATED = frozenset({'d-textToInterval', 'd-numsToInterval', 'newDec', 'setDec
 # M13g part 3: the ops whose decorated vectors run on DecoratedInterval operands, the decoration
 # propagated by the op and checked (1788's decorated arithmetic, functions and set operations). any
 # other op of a decorated vector takes the interval part of each operand (BARE_PART), as 1788 defines
-# the booleans and numbers of a decorated interval. M13e hook: the reverse ops (sqrRev, mulRevToPair,
-# powRev1, ...) join PROPAGATED when they are merged; 1788 decorates all their results trv (the 459
-# decorated results in the files are `_trv`, counted 2026-09-26), `decorated.py::_trivial`. a pair
-# (mulRevToPair's 174 decorated vectors) also needs a pair-with-decoration case in `_ours` and
-# `_expected`, which have none: `test_no_decorated_pair_goes_unchecked` fails until it is written
+# the booleans and numbers of a decorated interval. the reverse ops (M13e, `REVERSE`) are in it since
+# M13's merge: `intervals.reverse` takes DecoratedInterval operands and decorates the result trv, as
+# 1788 does (`reverse.py::_decorated`); a pair (mulRevToPair) is compared with its decoration by the
+# pair rule (`_pair_outcome`)
+REVERSE = frozenset({'sqrRev', 'sqrRevBin', 'absRev', 'absRevBin', 'pownRev', 'pownRevBin', 'coshRev',
+                     'coshRevBin', 'sinRev', 'sinRevBin', 'cosRev', 'cosRevBin', 'tanRev', 'tanRevBin',
+                     'mulRev', 'mulRevTen', 'mulRevToPair', 'powRev1', 'powRev2'})
 PROPAGATED = frozenset({
     'pos', 'neg', 'abs', 'add', 'sub', 'mul', 'div', 'recip', 'sqr', 'pown', 'fma', 'min', 'max', 'floor',
     'ceil', 'trunc', 'roundTiesToEven', 'roundTiesToAway', 'sign', 'sqrt', 'exp', 'exp2', 'exp10', 'log',
     'log2', 'log10', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh',
     'atanh', 'expm1', 'cbrt', 'cot', 'sec', 'csc', 'acot', 'coth', 'csch', 'sech', 'acoth', 'logp1', 'rootn',
-    'hypot', 'pow', 'atan2', 'intersection', 'convexHull', 'cancelMinus', 'cancelPlus'})
+    'hypot', 'pow', 'atan2', 'intersection', 'convexHull', 'cancelMinus', 'cancelPlus', *REVERSE})
 BARE_PART = frozenset(OPS) - PROPAGATED - DECORATED - REDUCTIONS - {'b-textToInterval', 'b-numsToInterval'}
 # M13g part 3: rows on a decoration alone, for the plain pass only, keyed on the statement WITH its
 # decorations (`exp2 [1024.0,1024.0] = [max,infinity]` without them is also its bare twin's key,
@@ -540,6 +545,17 @@ PLAIN_ONLY = {text: _OVERFLOWS_ONLY_ROUNDED for text in (
 )}
 DIVERGENCES.update({key(v): _NO_IS_NAI for v in VECTORS if v.op == 'isNaI' and not _has_nai(v)})
 INTERVAL_VECTORS = tuple(v for v in INTERVAL_VECTORS if v.op not in CONSTRUCTORS)
+# M13's merge: rows on a decoration alone, in both passes, keyed on the statement WITH its decorations
+# (the bare twin, `mulRevToPair [-2.0, -0.1] [-2.1, -0.4] = ...`, matches). such a row's set must match
+# and only its decoration differ (`check`). 1788 decorates mulRevToPair's first interval as the
+# decorated division `c / b` where `0 ∉ b` (com, dac or def), though mulRev, the same set's hull, is
+# trv there (`mulRev [-2.0, -0.1]_dac [-2.1, -0.4]_dac = [...]_trv`); ours is the one op, `mul_rev`,
+# trv as every reverse op, which is sound (trv claims nothing) and 1788's mulRev
+_PAIR_DECORATED_AS_DIVISION = ('decoration expectations: 1788 decorates mulRevToPair\'s first interval '
+                               'as the decorated division c / b where 0 is not in b; ours is one set, '
+                               'mul_rev\'s, trv as 1788 decorates mulRev and every other reverse op')
+DECORATION_ONLY = {v.text: _PAIR_DECORATED_AS_DIVISION for v in VECTORS if v.op == 'mulRevToPair'
+                   and not _has_nai(v) and v.expected[0].decoration not in (None, 'trv')}
 
 
 # THE ADAPTER
@@ -740,7 +756,7 @@ def run(vector):
         return _reduce(vector, [to_ours(a) for a in vector.args]), float(vector.expected)
     result = _call(vector, _args(vector))
     if vector.op in PAIRS:
-        return _pair(result, rounded=True), _pair_of_expected(vector.expected)
+        return _pair_outcome(vector, result, rounded=True)
     if isinstance(vector.expected, Interval):
         return _ours(result, closed_hull_of_ours), _expected(vector)
     if isinstance(vector.expected, Fraction) or isinstance(vector.expected, float):
@@ -756,7 +772,7 @@ def run_outward(vector):
         return _ours(_call(vector, _args(vector, OutwardMultiInterval, True)), _outward_hull), _expected(vector)
     result = _call(vector, _args(vector, OutwardMultiInterval, as_float=True))
     if vector.op in PAIRS:
-        return _pair(result, rounded=False), _pair_of_expected(vector.expected)
+        return _pair_outcome(vector, result, rounded=False)
     return _ours(result, _outward_hull), _expected(vector)
 
 
@@ -774,7 +790,18 @@ def _outward_hull(result):
 # the pair rule (M13e, mulRevToPair): 1788 gives the preimage as two intervals, the second empty unless
 # the set has a gap; ours is the one multi-interval. each of our pieces is closed (its ends rounded
 # outward in the first pass, taken as they are in the outward pass) and compared, in order, with the
-# pair's non-empty intervals
+# pair's non-empty intervals. a decorated pair (M13's merge) is (pieces, decoration) on both sides: 1788's
+# decoration is its non-empty intervals' (the empty ones' if none is; each must be the same, or none matches)
+
+def _pair_outcome(vector, result, rounded: bool):
+    """(ours, expected) under the pair rule; with decorations if ours is a DecoratedInterval"""
+    if not isinstance(result, DecoratedInterval):
+        return _pair(result, rounded), _pair_of_expected(vector.expected)
+    members = vector.expected
+    decorations = {m.decoration for m in members if not m.empty} or {m.decoration for m in members}
+    decoration = decorations.pop() if len(decorations) == 1 else tuple(sorted(map(str, decorations)))
+    return (_pair(result.interval, rounded), result.decoration.value), (_pair_of_expected(members), decoration)
+
 
 def _pair(result: MultiInterval, rounded: bool):
     out = []
@@ -817,13 +844,16 @@ def outcome(runner, vector):
 
 def row(vector, outward=False):
     """the reason a vector is a divergence row in the plain or the outward pass, else None"""
-    reason = DIVERGENCES.get(key(vector))
+    reason = DIVERGENCES.get(key(vector)) or DECORATION_ONLY.get(vector.text)
     return PLAIN_ONLY.get(vector.text) if reason is None and not outward else reason
 
 
 def check(vector, runner, outward=False):
     ours, expected = outcome(runner, vector)
-    if row(vector, outward) is not None:
+    if vector.text in DECORATION_ONLY:  # (set, decoration): the set matches, the decoration does not
+        assert same(ours[0], expected[0]), vector.text
+        assert not same(ours[1], expected[1]), f'stale divergence row, it matches now: {vector.text}'
+    elif row(vector, outward) is not None:
         assert not same(ours, expected), f'stale divergence row, it matches now: {vector.text}'
     else:
         assert same(ours, expected), vector.text
@@ -857,6 +887,16 @@ def test_divergence_rows():
     for text, reason in PLAIN_ONLY.items():
         found = [v for v in INTERVAL_VECTORS if v.text == text]
         assert len(found) == 1 and key(found[0]) not in DIVERGENCES, text
+        assert reason.startswith(REASONS), reason
+    # M13's merge: a decoration-only row is one pair vector, under no other row, whose b has no 0 (so
+    # 1788's first interval is the decorated division); 52 of mulRevToPair's 174 decorated vectors
+    # (2026-09-27)
+    assert len(DECORATION_ONLY) == 52 and not set(DECORATION_ONLY) & set(PLAIN_ONLY)
+    for text, reason in DECORATION_ONLY.items():
+        found = [v for v in INTERVAL_VECTORS if v.text == text]
+        assert len(found) == 1 and key(found[0]) not in DIVERGENCES and found[0].op in PAIRS, text
+        b = found[0].args[0]
+        assert not b.empty and not b.lo <= 0 <= b.hi, text
         assert reason.startswith(REASONS), reason
 
 
@@ -973,12 +1013,35 @@ def test_signalled_reads_only_undefined_operation(monkeypatch):
 
 
 def test_no_decorated_pair_goes_unchecked():
-    """M13g review, the M13e hook: `_ours` and `_expected` have no pair-with-decoration case, so a
-    pair-valued op's decorations would pass unchecked (mulRevToPair: 174 decorated vectors, each
-    expecting a pair; 2026-09-26). until such a rule is written, no op in OPS has one"""
-    pairs = {v.op for v in VECTORS if is_decorated(v) and isinstance(v.expected, tuple)
-             and any(isinstance(e, Interval) for e in v.expected)}
-    assert not pairs, sorted(pairs)
+    """M13g's hook, wired at M13's merge: every decorated pair vector (mulRevToPair: 174, 2026-09-27)
+    runs through the decorated type, and ours and 1788's are compared as (pieces, decoration) in both
+    passes, so a pair's decoration is checked (an adapter dropping it on both sides would pass)"""
+    pairs = [v for v in VECTORS if is_decorated(v) and isinstance(v.expected, tuple)
+             and any(isinstance(e, Interval) for e in v.expected)]
+    assert {v.op for v in pairs} == PAIRS and len(pairs) == 174
+    assert PAIRS <= PROPAGATED
+    names = {d.value for d in Decoration}
+    checked = [v for v in pairs if not _has_nai(v)]
+    assert len(checked) == 172
+    for v in checked:
+        for runner in (run, run_outward):
+            ours, expected = runner(v)
+            assert ours[1] in names and expected[1] in names, v.text
+
+
+def test_decorated_reverse_vectors_are_checked():
+    """M13's merge: every decorated vector of a reverse op (481, 2026-09-27) runs through the decorated
+    type, its decoration compared in both passes, but for a `[nai]` operand (a row, D16)"""
+    decorated = [v for v in VECTORS if v.op in REVERSE and is_decorated(v)]
+    assert len(decorated) == 481 and REVERSE <= PROPAGATED
+    names = {d.value for d in Decoration}
+    for v in decorated:
+        if _has_nai(v):
+            assert key(v) in DIVERGENCES, v.text
+            continue
+        for runner in (run, run_outward):
+            ours, expected = runner(v)
+            assert ours[1] in names and expected[1] in names, v.text
 
 
 # M13g close-out: once M13g is done, every statement still skipped is a reverse op's (M13e). when

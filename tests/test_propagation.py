@@ -23,6 +23,7 @@ result). a multi-piece box is decided on the set: its pieces are apart, so on ea
   non-empty sub-box never decorates worse), the set is always the core op's (and keeps its class)
 * set operations and cancellation are trv; mixing a bare `MultiInterval` is a `TypeError`; the core's
   warnings reach the caller once and the decoration's own work warns nothing
+* the reverse ops (M13's merge): the core's set on the intervals, trv, as 1788 decorates them
 * `@example`s: the itf1788 vectors that pin each rule (`libieeep1788_elem.itl`, `set.itl`, `cancel.itl`)
 """
 import math
@@ -39,7 +40,17 @@ from intervals import DecoratedInterval
 from intervals import Decoration
 from intervals import MultiInterval
 from intervals import OutwardMultiInterval
+from intervals import abs_rev
+from intervals import cos_rev
+from intervals import cosh_rev
+from intervals import mul_rev
+from intervals import pow_rev1
+from intervals import pow_rev2
+from intervals import pown_rev
 from intervals import set_dec
+from intervals import sin_rev
+from intervals import sqr_rev
+from intervals import tan_rev
 from intervals.errors import DomainClippedWarning
 from intervals.errors import HullWarning
 from intervals.errors import IntervalWarning
@@ -649,3 +660,60 @@ def test_a_step_is_decided_on_the_exact_set(name, x):
     result = getattr(DecoratedInterval(x), name)(1)
     assert type(result.interval) is OutwardMultiInterval and result.decoration is COM
     assert result.decoration is getattr(_as_exact(DecoratedInterval(x)), name)(1).decoration
+
+
+# THE REVERSE OPS (M13's merge of M13e and M13g): given DecoratedInterval operands, each is 1788's
+# decorated reverse op, the core's set on the intervals decorated trv (`reverse.py::_decorated`)
+
+# name -> (the op, its interval operands before x, whether it takes an int exponent after them)
+REVERSE_OPS = {
+    'sqr_rev': (sqr_rev, 1, False), 'abs_rev': (abs_rev, 1, False), 'cosh_rev': (cosh_rev, 1, False),
+    'pown_rev': (pown_rev, 1, True), 'sin_rev': (sin_rev, 1, False), 'cos_rev': (cos_rev, 1, False),
+    'tan_rev': (tan_rev, 1, False), 'mul_rev': (mul_rev, 2, False), 'pow_rev1': (pow_rev1, 2, False),
+    'pow_rev2': (pow_rev2, 2, False),
+}
+
+
+def _reverse_call(name, operands, n, x):
+    """the op on `operands` (then `n`, then `x` unless None), as the positional call its signature takes"""
+    fn, _, takes_n = REVERSE_OPS[name]
+    return fn(*operands, *((n,) if takes_n else ()), *(() if x is None else (x,)))
+
+
+@quiet
+@settings(max_examples=30, deadline=None)
+@pytest.mark.parametrize('name', sorted(REVERSE_OPS))
+@given(operands=st.lists(decorated(grid_sets(max_pieces=2)), min_size=2, max_size=2),
+       x=st.one_of(st.none(), decorated(grid_sets(max_pieces=2))), n=st.integers(-3, 3))
+def test_each_reverse_op_is_trv(name, operands, x, n):
+    """libieeep1788_rev.itl, `*_dec_test`: every decorated result trv, whatever the operands'
+    decorations, the set being the core op's on the intervals (x omitted or given)"""
+    operands = operands[:REVERSE_OPS[name][1]]
+    result = _reverse_call(name, operands, n, x)
+    core = _reverse_call(name, [a.interval for a in operands], n, None if x is None else x.interval)
+    assert isinstance(result, DecoratedInterval) and result.decoration is TRV
+    assert result.interval == core and type(result.interval) is type(core)
+
+
+@quiet
+def test_a_reverse_op_keeps_the_class_and_refuses_a_bare_set():
+    c, b, x = DecoratedInterval(OutwardMultiInterval(0.1, 0.2)), DecoratedInterval(M(1, 2)), DecoratedInterval(M(-1, 1))
+    for name in REVERSE_OPS:
+        operands = (b, c)[-REVERSE_OPS[name][1]:]
+        assert type(_reverse_call(name, operands, 2, None).interval) is OutwardMultiInterval, name
+        for bare in (M(-1, 1), M(-5, 5)):  # a bare x, or a bare operand beside a decorated one
+            with pytest.raises(TypeError):
+                _reverse_call(name, operands, 2, bare)
+            if len(operands) == 2:
+                with pytest.raises(TypeError):
+                    _reverse_call(name, (bare, c), 2, x)
+    # a number is a point, as for the other ops; with no decorated operand the op is the core's
+    assert mul_rev(2, DecoratedInterval(M(1, 8))) == DecoratedInterval(M(Fraction(1, 2), 4), TRV)
+    assert sqr_rev(DecoratedInterval(M(4)), 5) == DecoratedInterval(M(), TRV)
+    assert type(sqr_rev(M(4))) is M
+
+
+def test_a_reverse_op_warns_once():
+    with pytest.warns(IntervalWarning) as caught:
+        result = sqr_rev(DecoratedInterval(M()), DecoratedInterval(M(0, 1)))
+    assert len(caught) == 1 and result == DecoratedInterval(M(), TRV)
