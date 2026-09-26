@@ -1234,6 +1234,124 @@ plus a decoration check on every decorated vector
   added (no vector with `signal UndefinedOperation`, 59 of them, is a row), then 1 red. the
   decorated outward pass run on `MultiInterval` turned 0 red, since `newDec` does no arithmetic:
   `test_outward_pass_of_a_decorated_op_is_outward` added (a spy on the operand's class), then 1
+* **part 3 built 2026-09-26 (branch `m13g`): decoration propagation through every point function
+  of the core, set operations trv, and the adapter checking the decoration of every decorated
+  vector.** left for M13g after it: the reverse ops' decorated vectors, with M13e (a parallel
+  branch; the hook below). built:
+    * `intervals/decorated.py`: `DecoratedInterval` gains the core's point functions: `+ - * /` and
+      their reflected forms, `%`, `//`, `divmod`, `**` (D11's dispatch: an integral real exponent is
+      pown, `::_pown`, anything else pow, `::_pow`) and `__rpow__`, `-x`, `+x`, `abs`, `reciprocal`,
+      `minimum`, `maximum`, `fma`, `hypot`, `atan2` (`::_atan2`), `log(base)`, `rootn(n)`, the 29
+      other elementary functions (made by `::_function` from `::_FUNCTION_DOMAINS` and `::_POLES`),
+      `floor`, `ceil`, `trunc`, `round(ndigits)`, `round_ties_away(ndigits)`, `sign` (`::_step`), and
+      `math.floor`/`ceil`/`trunc` and `round()`; and the set operations `& | ^ ~`, `difference`,
+      `complement`, `hull`, `closed_hull`, `interior`, `cancel_minus`, `cancel_plus`, all trv
+      (`::_trivial`). each computes the core's set on the intervals (so the set, its class and the
+      core's warnings are the core's) and decorates it with `::_propagate`: the local decoration on
+      the box of the operands' sets is trv unless `defined` (the box inside 1788's domain of the op,
+      a set of reals: `::_REALS`, `::_NON_ZERO`, `::_POSITIVE`, ...), def unless `restricted` (the op
+      restricted to the box is continuous), dac unless `everywhere` (continuous at each point of the
+      box) and every operand is bounded, else com; the result's decoration is `min(local, newDec of
+      the result, each operand's)`. only four kinds of op have jumps inside their domain and compute
+      `restricted` and `everywhere`: the step functions (`::_step`: constant on each piece, and no
+      closed end a jump, `::_JUMPS`), atan2 (the negative x axis), `%` and `//`
+      (`::_quotient_steps`: per pair of pieces, `floor(x / y)` one integer and `x / y` never reaching
+      it). the poles of tan, sec, cot, csc are found exactly (`::_misses_poles`, through
+      `functions.py::_inside_k` and `elementary.py::floor_over_pi`). every decision is made on the
+      exact set (`::_exact`, `rounding.py::exact_cuts`), the core's ops it needs computed quietly
+      (`::_quietly`)
+    * **choices the plan left open** (conservative, flagged in the decision log, `v2-plan.md`
+      "2026-09-26 revision: M13g part 3"):
+        * **a multi-piece box is decided on the set, not on the hull** (the reading the task asked
+          for): continuity on the set is continuity on each piece, since normalized pieces are
+          apart, so `floor` on `[1/4, 1/2] ∪ [5/4, 3/2)` is com and on `[1/4, 1/2] ∪ [1, 3/2)` dac (a
+          closed jump at 1), though it is constant on neither hull; `%` and `//` per pair of pieces
+        * **an attained ±inf is outside every domain**: 1788's functions are functions of reals, so
+          an operand holding ±inf as a point gets trv, even where the core gives it a limit
+          (`exp([0, inf])` trv, `exp([0, inf))` dac); the number `inf` as an operand is such a point
+        * **com needs the result bounded as returned**: exact for exact operands, rounded for float
+          ones. exact operands keep com where 1788's binary64 result overflows: 12 vectors, rows in
+          the plain pass only (below). `OutwardMultiInterval` rounds as 1788 does and matches them;
+          `MultiInterval` rounds `2.0 + max` to nearest (max) and keeps com
+        * continuity at a point is relative to the op's domain: `sqrt([0, 25])`, `acosh([1])` and
+          `pow([0, 1/2], [1/10])` are com, as `libieeep1788_elem.itl` has them; `pown(x, 0)` is
+          defined at 0 (`pown [-5.0,10.0]_com 0 = [1.0,1.0]_com`)
+        * a step function is at best dac on a set holding a jump (`sign([0])` from com is dac, as
+          `ceil [max,max]_com` is in 1788). `%`, `//`, `divmod` and `round(ndigits)`, which 1788
+          lacks, follow the same rule from their definitions: defined where the divisor is not 0,
+          jumps where `x / y` is an integer or at the half grid step
+        * every set operation, `hull` and `interior` included, is trv, as 1788 decorates
+          intersection, convexHull, cancelMinus and cancelPlus. the booleans, numbers and relations
+          are not on the wrapper: `.interval` first, as 1788 defines them on the interval part
+        * an operand is a `DecoratedInterval` or a real number (newDec's point, in the receiver's
+          class); a bare `MultiInterval`, a `bool` or anything else is a `TypeError`, as 1788 has no
+          implicit mix of bare and decorated intervals
+        * the core's warnings reach the caller once, attributed as before; the decoration's own core
+          calls warn nothing
+    * **M13e hook**: 1788 decorates every reverse op's result trv (the 459 decorated results in the
+      four reverse-op files are all `_trv`, counted 2026-09-26), so a decorated reverse op is
+      `decorated.py::_trivial(<the reverse op on the intervals>)`, and in the adapter each reverse
+      op joins `tests/itf1788/test_itf1788.py::PROPAGATED`. until it does,
+      `::test_decorated_vectors_run_decorated` fails after the merge (an interval-valued op with
+      decorated vectors outside `PROPAGATED`): the reminder is mechanical
+    * adapter (`tests/itf1788/test_itf1788.py`): `::PROPAGATED` (57 interval-valued ops) and
+      `::BARE_PART` (the other 23 with interval operands: booleans, numbers, overlap); `::is_decorated`;
+      `::_args` builds a decorated vector's operands as `DecoratedInterval`s (so each decoration must
+      fit its set) and gives a `BARE_PART` op their interval parts; `::run`, `::run_outward` and
+      `::run_float` all go through `::_args` and `::_ours`, and `::_expected` keeps the expected
+      decoration for `PROPAGATED`. `::PLAIN_ONLY`: rows on a decoration alone, for the plain pass
+      only, keyed on the statement with its decorations (`exp2 [1024.0,1024.0] = [max,infinity]`
+      is also the key of its bare twin, which matches), read by `::row(vector, outward)` in `::check`;
+      `::test_divergence_rows` checks each is one interval-valued vector under no other row, so its
+      outward item must match. `::test_decorated_vectors_run_decorated` pins the wiring: every
+      decorated interval-valued op in `PROPAGATED`, none in `BARE_PART`, and a decoration on both
+      sides of a propagated result in both passes (an adapter dropping it on both sides passes every
+      vector). `tools/itf1788_census.py` counts the decorated vectors and the plain-only rows
+    * tests (`tests/test_propagation.py`, 115 items, 67 s on the loaded laptop, 2026-09-26): an
+      oracle written out from 1788's definitions and decided by brute force (operands on a quarter
+      grid, so the domains' ends and the jumps are grid points, and the eighth grid plus points just
+      inside each end decides domain, constancy and jumps exactly; the poles against a 32-digit pi;
+      atan2's cut and `%`'s jumps from their definitions, `x / y` from the corners). `@given`: every
+      unary op (40) and binary op (11) against the oracle, over a mixed-op strategy with the itf1788
+      examples and per op (parametrized, 40 examples each); pown, rootn, fma, `round(ndigits)` on a
+      scaled grid; float operands, both classes and doubles up to ±max, decorate as the exact values
+      of the same doubles but for newDec of the rounded result; the min law (`f(set_dec(x, d))` is
+      `min(d, f(newDec x))`); antitone in the box (a non-empty sub-box never decorates worse). plus
+      set operations trv, the class kept, numbers as points and a bare set refused, divmod, warnings
+      once, the methods mirroring the core, `round(ndigits)` examples. `@example`s:
+      `libieeep1788_elem.itl:110`, `:111`, `:113`, `:306`, `:676`-`678`, `:708`, `:709`, `:755`,
+      `:756`, `:1403`, `:1405`, `:1588`, `:1589`, `:1596`-`1598`, `:3167`, `:3236`, `:3506`, `:3508`,
+      `:3527`, `:3554`, `:4086`, `:4087`, `:4114`, `:4141`, `:4145`, `:4167`, `:4200`, `:4203`,
+      `:4232`, `:4241`, `:4269`, `:4299`, `:4301`, `:4353`, the atan2 cut cases, the pow domain cases,
+      `libieeep1788_set.itl:33`. the first strategy gave trv in about 95% of examples; rebalanced
+      (mostly newDec's decoration, infinities mostly open, narrow pieces, ends at 0, ±1/2, ±1 often),
+      per 200 examples of the earlier rebalance floor gave trv 99, def 71, dac 8, com 22 and atan2
+      135, 20, 28, 17 (2026-09-26). under `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10` the file ran
+      green, 111 items in 304 s (2026-09-26, before the 4 `round(ndigits)` examples)
+    * **a test-oracle bug found by the gate run** (not the library): M13d's
+      `tests/test_functions.py::_hypot_holds` required an irrational value's float bracket inside
+      the result, which fails next to an exact end: `hypot((-inf, -2/3], [0, 1/2))` is `[2/3, inf)`,
+      right, and `hypot(-2/3, 2**-27)` lies in it though its lower double is below 2/3. it now
+      decides the bracket exactly on the squares, pinned by
+      `tests/test_functions.py::test_the_hypot_oracle_next_to_an_exact_end`; flipping that
+      comparison turned 2 red (restored, `cmp` ok)
+* evidence, measured 2026-09-26 at part 3 (`tools/itf1788_census.py`, and the adapter imported): of
+  the 1022 decorated vectors of the core's ops (`libieeep1788_elem.itl` 493, `bool` 210, `cancel`
+  121, `num` 87, `rec_bool` 72, `overlap` 29, `set` 10), 624 are of 44 propagating ops and now
+  checked with their decoration in both passes: 560 match in the plain pass and 572 outward; 52
+  keep the rows their bare part already had (47 cancellation, 4 no NaI, 1 degenerate infinity,
+  `atanh [1.0,1.0]_def`); **12 are new rows on the decoration alone, plain pass only**, under the
+  existing **decoration expectations** (`::_OVERFLOWS_ONLY_ROUNDED`): the exact result is bounded,
+  past the doubles, so com; 1788's binary64 result overflows and is dac. they are
+  `libieeep1788_elem.itl:111`, `:112` (add), `:161`, `:162` (sub), `:305`, `:306` (mul), `:676`
+  (div), `:731` (sqr), `:1404` (fma), `:1591`, `:1593` (pown), `:3167` (exp2, `2 ** 1024`); **an
+  owner question**, as part 2's `_BOUNDED_EXACTLY`: this category, or one for exact values past the
+  doubles. no decoration differs because of the multi-interval set semantics. the other 398 (of
+  `BARE_PART` ops) take the interval part: 358 match, 40 keep their rows (38 no NaI, 2 cut-based
+  relations). all ops: 7587 vectors of 92 ops, 6351 interval-valued; 142 keys (unchanged) plus the
+  12 plain-only rows; 0 unknown failures; skipped 1955 statements of 19 ops, all M13e's.
+  the gate, in two runs: `tests/itf1788` 14330 passed in 120 s and the rest 3636 passed in 863 s (a
+  shared, loaded laptop), 17966 in all (2026-09-26)
 
 **M13h reductions (done 2026-09-26)**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`,
 `dot_nearest`, 1 each as counted 2026-09-25 by the old parser, which saw only the first statement of

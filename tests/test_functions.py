@@ -941,7 +941,16 @@ def _hypot_holds(result, x, y) -> bool:
     value = exact('sqrt', s)
     if value is not None:
         return contains_point(result, value)
-    return is_subset(normalize([piece(rounded('sqrt', s, DOWN), rounded('sqrt', s, UP), False, False)]), result)
+    # irrational: in a piece iff its ends bracket it, decided exactly on the squares (a rational end never
+    # equals it). the value's own float bracket need not fit: next to an exact end of the result
+    # (`[2/3, inf)` from x = -2/3, y = 0) its lower double is below that end (M13g part 3's gate run,
+    # 2026-09-26, found it; the library was right)
+    def below(lo):
+        return lo == -INF or lo < 0 or Fraction(lo) ** 2 < s
+
+    def above(hi):
+        return hi == INF or (hi > 0 and Fraction(hi) ** 2 > s)
+    return any(below(lo) and above(hi) for lo, _, hi, _ in pieces(result))
 
 
 @settings(max_examples=100, deadline=None)
@@ -950,6 +959,16 @@ def test_hypot_sound_on_exact_sets(a, b, rng):
     result = hypot(a, b) if a and b else EMPTY
     for x, y in zip(sample(a, 10, rng), sample(b, 10, rng)):
         assert _hypot_holds(result, x, y), (show(a), show(b), x, y, show(result))
+
+
+def test_the_hypot_oracle_next_to_an_exact_end():
+    """the case the gate's random run found (2026-09-26): hypot(-2/3, 2**-27) is just above 2/3, inside
+    `[2/3, inf)`, though its lower double is below 2/3"""
+    result = hypot(parse('(-inf, -2/3]'), parse('[0, 1/2)'))
+    assert show(result) == '[2/3, inf)'
+    assert _hypot_holds(result, Fraction(-2, 3), Fraction(1, 2 ** 27))
+    assert not _hypot_holds(parse('(0.6666666666666667, 1]'), Fraction(-2, 3), Fraction(1, 2 ** 27))
+    assert not _hypot_holds(parse('[1, 2]'), 3, 4) and _hypot_holds(parse('[1, 2]'), 1, 1)
 
 
 @settings(max_examples=60, deadline=None)

@@ -515,8 +515,8 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
       (`::_ours`, `::_expected`); a raised `UndefinedOperationError` is the decorated flavour's
       `[nai]` with `signal UndefinedOperation`, so those vectors match and are no row
       (`::_nai_is_a_raise`). `newDec`, `setDec` and `intervalPart` run outward too, the set in an
-      `OutwardMultiInterval`; only the constructors (`::CONSTRUCTORS`) do not. the other ops still
-      drop decorations: propagation through them is not built. the three `d-textToInterval` twins
+      `OutwardMultiInterval`; only the constructors (`::CONSTRUCTORS`) do not. the other ops'
+      decorated vectors: the propagation rule below (M13g part 3). the three `d-textToInterval` twins
       are rows under the PROPOSED category above (7 keys now), and three vectors whose literal is
       bounded as a rational but past the doubles (`libieeep1788_class.itl:165`, `:201`, `:204`:
       com here, 1788's `dac` for its binary64 hull `[max, inf]` or entire) are rows under
@@ -546,8 +546,35 @@ M13b, M13c, M13d, M13f, M13h and M14's fuzz job and oracle, 2026-09-26)
   `text_to_decorated_interval` and `nums_to_decorated_interval` are the `d-` constructors, the bare
   ones plus the literal's decoration or newDec's. a decoration is a `Decoration` or its lower-case
   name; `ill` and any other name raise `UndefinedOperationError`, anything else is a `TypeError`.
-  `str` is the set in our syntax then `_com`. **not built yet**: propagation through the core's
-  ops (1788's decorated arithmetic and functions)
+  `str` is the set in our syntax then `_com`. propagation: the next bullet
+* (M13g part 3, 2026-09-26, D16) **decoration propagation** (1788-2015 §11), `intervals/decorated.py`:
+  `DecoratedInterval` has the core's point functions (`+ - * /`, `**` as D11, `reciprocal`, `abs`,
+  `minimum`, `maximum`, `fma`, `hypot`, `atan2`, the elementary functions, `log(base)`, `rootn`, the
+  step functions with `round(ndigits)`, `%`, `//`, `divmod`) and set operations (`& | ^ ~`,
+  `difference`, `complement`, `hull`, `closed_hull`, `interior`, `cancel_minus`, `cancel_plus`). each
+  computes the core's set on the intervals and decorates it (`::_propagate`): the op's local
+  decoration on the box of the operands' sets is trv unless every point is in 1788's domain of the
+  op, a set of **reals** (so an attained ±inf is outside every domain, even where the core gives it
+  a limit), def unless the op restricted to the box is continuous, dac unless it is continuous at
+  every point of the box (relative to the domain: `sqrt` at 0, `pow` at `x = 0` are com, as the
+  vectors have them) and every operand is bounded, else com; the result is the min of that, every
+  operand's decoration and newDec of the result (so com needs a bounded result). only the step
+  functions (dac iff constant on each piece, com iff moreover no closed end is a jump), atan2 (the
+  negative x axis: dac unless the box reaches it from below, then def), `%` and `//` (per pair of
+  pieces, `floor(x / y)` one integer; com iff `x / y` never reaches it) have jumps inside their
+  domains. **a multi-piece box is decided on the set**, so on each piece (pieces are apart): floor on
+  `[1/4, 1/2] ∪ [5/4, 3/2)` is com though not constant on the hull. every decision is made on the
+  exact set (float ends as the rationals they are); only newDec of the result sees rounding. set
+  operations and cancellation are trv, as 1788 decorates intersection, convexHull and cancel*; the
+  booleans and numbers are not on the wrapper (1788 defines them on the interval part:
+  `.interval`). an operand is a `DecoratedInterval` or a real number (newDec's point); a bare
+  `MultiInterval` is a `TypeError`. conformance: every decorated vector of these ops is checked with
+  its decoration in both passes (`tests/itf1788/test_itf1788.py::PROPAGATED`); the booleans' and
+  numbers' take the interval part (`::BARE_PART`). the exact plain pass keeps com where 1788's
+  binary64 result overflows (`add [1,2]_com [5,max]_com` is `[6, 2 + max]` here, bounded): 12 rows
+  under **decoration expectations** in the plain pass only (`::PLAIN_ONLY`, keyed with the
+  decorations; the outward pass matches), measured 2026-09-26. the reverse ops (M13e, not here) are
+  trv in 1788, `::_trivial`
 
 ### package layout
 
@@ -751,6 +778,30 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
 * **H3**: numpy interop and a gmpy2/mpfr backend are recorded, not built now ("later (not in
   v2.0)" above). the session's suggested first pick when the solver stack starts: Newton's
   method with forward-mode autodiff, the demonstration of what multi-intervals are for
+
+### 2026-09-26 revision: M13g part 3, decoration propagation, built
+
+built and measured 2026-09-26 on branch `m13g`; details in v2-implementation-plan.md (M13g, "part
+3") and "ieee 1788" above. `DecoratedInterval` now propagates 1788's decorations through every point
+function of the core and decorates set operations trv; the adapter checks the decoration of every
+decorated vector of those ops. the choices the plan left open, each the conservative reading, flagged:
+* **a multi-piece box is decided on the set, not on the hull**: continuity on the set is continuity
+  on each piece, the pieces being apart (the owner's task text asked for this reading)
+* **an attained ±inf is outside every domain**: 1788's functions are functions of reals, so an
+  operand holding ±inf as a point gets trv even where the core takes a limit (`exp([0, inf])` is trv,
+  `exp([0, inf))` dac)
+* **com needs the result bounded as returned**: the exact result for exact operands (so
+  `[1,2]_com + [5,max]_com` stays com here, 12 plain-pass rows under "decoration expectations"), the
+  rounded one for float operands (`OutwardMultiInterval` gives `[6.0, inf)`, dac, as 1788;
+  `MultiInterval` rounds `2.0 + max` to nearest, max, and keeps com). the owner question of part 2
+  (`_BOUNDED_EXACTLY`: this category, or an exact-values one) covers these rows too
+* continuity at a point is relative to the op's domain (`sqrt` at 0, `acosh` at 1, `pow` at `x = 0`
+  with `y > 0` are com), as the vectors require
+* `%`, `//`, `divmod` and `round(ndigits)`, not in 1788, get the same rule from their definitions;
+  `sign` and every step function at a jump point is dac at best
+* booleans, numbers and relations stay off the wrapper (`.interval` first); a bare `MultiInterval`
+  operand is a `TypeError`, a real number newDec's point
+* the core's warnings reach the caller once; the decoration's own core calls are silenced
 
 ### 2026-09-26 revision: M13g part 2, the decorated type, built
 

@@ -31,6 +31,12 @@ hit = Counter(category(t.DIVERGENCES[t.key(v)]) for v in t.VECTORS if t.key(v) i
 print('vectors under a row by category', dict(hit))
 hito = Counter(category(t.DIVERGENCES[t.key(v)]) for v in t.INTERVAL_VECTORS if t.key(v) in t.DIVERGENCES)
 print('interval vectors under a row by category', dict(hito))
+# M13g part 3: the decorated vectors, and the rows on a decoration alone (plain pass only)
+print('plain-only rows by category', dict(Counter(category(r) for r in t.PLAIN_ONLY.values())))
+dec = [v for v in t.VECTORS if t.is_decorated(v)]
+print('decorated vectors', len(dec), 'propagated', sum(v.op in t.PROPAGATED for v in dec),
+      'bare part', sum(v.op in t.BARE_PART for v in dec), 'decorated ops', sum(v.op in t.DECORATED for v in dec),
+      'propagated ops with one', len({v.op for v in dec if v.op in t.PROPAGATED}))
 per_file = Counter(v.source.split(':')[0] for v in t.VECTORS)
 print('vectors per file', dict(per_file))
 sk = Counter()

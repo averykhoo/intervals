@@ -94,8 +94,10 @@ Size(rays=0, length=2, points=0)
   (`Decoration.COM`, `DAC`, `DEF`, `TRV`; no NaI and no `ill`); `set_dec()` sets one as 1788 does,
   demoting it where it cannot fit; `.interval` and `.decoration` are its parts;
   `text_to_decorated_interval()` (`"[1, 2]_def"`) and `nums_to_decorated_interval()` are the
-  decorated constructors. the core `MultiInterval` stays undecorated, and decorations are not yet
-  carried through arithmetic
+  decorated constructors. the core `MultiInterval` stays undecorated; a `DecoratedInterval`'s own
+  arithmetic, functions, step functions, `%`, `//` and set operations compute the core's set and
+  propagate the decoration as 1788 does (the weakest of the operands' and the op's own on the
+  operands' sets: `DecoratedInterval(MI(1, 2)) / DecoratedInterval(MI(0, 1))` is `[1, inf]_trv`)
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`
