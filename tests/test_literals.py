@@ -19,6 +19,7 @@ ieee 1788's interval literals and the bare constructors (M13g): `intervals.liter
 """
 import math
 import re
+import time
 import warnings
 from decimal import Decimal
 from decimal import localcontext
@@ -324,10 +325,32 @@ def test_examples(text, expected):
     '[-inf, -inf]', '[-inf]', '[1,2]_', '[1,2]_ill', '[empty]_def', '[entire]_com', '0.0??_com', '?1', '1??1',
     '1?-1', '1?1ud', '0x1?', '1/2?', '1e2?', '[1?]', '(1, 2)', '1', '[1;2]', '[ 1 . 5 ]', '[1,2]_com_com', '[１]',
     ' [1, 2]', '[1, 2] ', '[1, 2]\n', '\t3.56?1',
+    # M13g review: ASCII only (re.ASCII): no non-ASCII white space, and no letter that folds to an ASCII one
+    '[1, 2]', '[\xa01, 2]', '[1, 2　]', '[\x1c]', '[ınf]', '[ınf, 1]', '[1,2]_Kom',
 ])
 def test_invalid(text):
     with pytest.raises(UndefinedOperationError):
         text_to_interval(text)
+
+
+# M13g review: invalid text is refused in linear time. while a run of digits or white space could be
+# split several ways (`[0-9]+\.?[0-9]*`, adjacent `\s*`), the regex tried every split: 5.4 s for two
+# runs of 400 digits, 0.8 s for two runs of 400 spaces, 8x per doubling; 4.8 s for the hex text below
+# and 5.6 s for the uncertain one, each quadratic (measured 2026-09-26). linear, all take about 10 ms
+LONG_INVALID = [
+    '[' + '1' * 600 + ' , ' + '2' * 600 + '!', '[' + '1' * 5000 + 'x]', '[' + ' ' * 1000 + 'x',
+    '[' + ' ' * 1000 + ',' + ' ' * 1000 + 'x', '1' * 20000 + '.' + '1' * 20000 + '?2x',
+    '[0x' + '1' * 20000 + '.' + '1' * 20000 + 'x]', '[' + '1' * 1000 + '.' + '1' * 1000 + 'e' + '1' * 1000 + 'x]',
+    '[' + '1' * 1000 + '/' + '1' * 1000 + ' ' * 1000 + '1]',
+]
+
+
+def test_invalid_text_is_refused_in_linear_time():
+    start = time.perf_counter()
+    for text in LONG_INVALID:
+        with pytest.raises(UndefinedOperationError):
+            text_to_interval(text)
+    assert time.perf_counter() - start < 1.0
 
 
 @pytest.mark.parametrize('text, lo, hi, decoration', [

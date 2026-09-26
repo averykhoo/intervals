@@ -56,14 +56,16 @@ INF = math.inf
 # 1788's decorations, best first; `ill` belongs to NaI, which the package does not have (D16)
 DECORATIONS = ('com', 'dac', 'def', 'trv')
 
-_DECIMAL = r'(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:e[-+]?[0-9]+)?'
-_HEX = r'0x(?:[0-9a-f]+\.?[0-9a-f]*|\.[0-9a-f]+)p[-+]?[0-9]+'
+# M13g review: every run of digits or white space splits one way only (`[0-9]+(?:\.[0-9]*)?`, not
+# `[0-9]+\.?[0-9]*`; `\s*+`), so invalid text is refused in linear time, not cubic
+_DECIMAL = r'(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:e[-+]?[0-9]+)?'
+_HEX = r'0x(?:[0-9a-f]+(?:\.[0-9a-f]*)?|\.[0-9a-f]+)p[-+]?[0-9]+'
 _RATIONAL = r'[0-9]+/[0-9]+'
 _NUMBER = rf'[-+]?(?:{_HEX}|{_RATIONAL}|{_DECIMAL}|inf(?:inity)?)'
 _FLAGS = re.IGNORECASE | re.ASCII
 _LITERAL = re.compile(
-    rf'(?:\[\s*(?:(?P<word>empty|entire|nai)|(?P<lo>{_NUMBER})?\s*(?:(?P<comma>,)\s*(?P<hi>{_NUMBER})?)?)\s*\]'
-    rf'|(?P<sign>[-+]?)(?P<m>[0-9]+\.?[0-9]*|\.[0-9]+)\?(?P<radius>[0-9]+|\?)?(?P<direction>[ud])?'
+    rf'(?:\[\s*+(?:(?P<word>empty|entire|nai)|(?P<lo>{_NUMBER})?\s*+(?:(?P<comma>,)\s*+(?P<hi>{_NUMBER})?)?)\s*+\]'
+    rf'|(?P<sign>[-+]?)(?P<m>[0-9]+(?:\.[0-9]*)?|\.[0-9]+)\?(?P<radius>[0-9]+|\?)?(?P<direction>[ud])?'
     rf'(?:e(?P<exponent>[-+]?[0-9]+))?)'
     rf'(?:_(?P<decoration>[a-z]+))?', _FLAGS)
 _HEX_PARTS = re.compile(r'([-+]?)0x([0-9a-f]*)\.?([0-9a-f]*)p([-+]?[0-9]+)', _FLAGS)

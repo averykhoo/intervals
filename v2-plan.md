@@ -569,7 +569,9 @@ M13b, M13c, M13d, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-26)
   `DecoratedInterval` has the core's point functions (`+ - * /`, `**` as D11, `reciprocal`, `abs`,
   `minimum`, `maximum`, `fma`, `hypot`, `atan2`, the elementary functions, `log(base)`, `rootn`, the
   step functions with `round(ndigits)`, `%`, `//`, `divmod`) and set operations (`& | ^ ~`,
-  `difference`, `complement`, `hull`, `closed_hull`, `interior`, `cancel_minus`, `cancel_plus`). each
+  `difference`, `complement`, `hull`, `closed_hull`, `interior`, `cancel_minus`, `cancel_plus`; and,
+  after the M13g review 2026-09-26, `union`, `intersection`, `difference`, `symmetric_difference`
+  n-ary as the core's, `positive`, `negative`, `finite`, `expand`, the restriction `x[a:b]`). each
   computes the core's set on the intervals and decorates it (`::_propagate`): the op's local
   decoration on the box of the operands' sets is trv unless every point is in 1788's domain of the
   op, a set of **reals** (so an attained ±inf is outside every domain, even where the core gives it

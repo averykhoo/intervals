@@ -311,6 +311,12 @@ def _check(name, fn, operands, extra=(), unit=Fraction(1)):
 @example('sign', set_dec(M.parse('(0, inf)'), DAC))  # constant on an unbounded piece
 @example('floor', set_dec(M.parse('{ [1/4, 1/2] , [5/4, 3/2) }'), COM))  # constant on each piece: com
 @example('floor', set_dec(M.parse('{ [1/4, 1/2] , [1, 3/2) }'), COM))  # a closed jump at 1: dac
+# M13g review: domain ends and attained infinities no random run is sure to reach (each pins a clause)
+@example('pos', set_dec(M.parse('[inf]'), DAC))  # +x is a function of reals too: trv
+@example('asin', set_dec(M(Fraction(-3, 2), 0), COM))  # past asin's domain: trv
+@example('acoth', set_dec(M(1, 2), COM))  # acoth(1) is undefined: trv
+@example('acoth', set_dec(M(-2, -1), COM))  # and acoth(-1): trv
+@example('acoth', set_dec(M(1, 2, start_closed=False), COM))  # off 1: com
 def test_unary_ops_decorate_as_1788(name, x):
     _check(name, UNARY[name], (x,))
 
@@ -350,6 +356,7 @@ def test_each_binary_op(name, a, b):
 @example('floordiv', set_dec(M(-3, -2), COM), set_dec(M(2), COM))  # x / y reaches -1: dac
 @example('mod', set_dec(M(Fraction(1, 4), 2), COM), set_dec(M(1), COM))  # across one: def
 @example('floordiv', set_dec(M(1, 2), COM), set_dec(M(0, 1), COM))  # the divisor holds 0: trv
+@example('div', set_dec(M.parse('[0, inf]'), DAC), set_dec(M(1, 2), COM))  # M13g review: an attained inf dividend, trv
 def test_binary_ops_decorate_as_1788(name, a, b):
     _check(name, BINARY[name], (a, b))
 
@@ -363,6 +370,7 @@ def test_binary_ops_decorate_as_1788(name, a, b):
 @example('pow', set_dec(M(0), COM), set_dec(M(Fraction(-5, 2), Fraction(1, 10)), COM))  # _trv
 @example('pow', set_dec(M(0, Fraction(1, 2)), COM), set_dec(M(Fraction(1, 10)), COM))  # x = 0 with y > 0: com
 @example('pow', set_dec(M(-1, Fraction(-1, 10)), DAC), set_dec(M(Fraction(-1, 10), Fraction(5, 2)), COM))  # _trv
+@example('pow', set_dec(M(1, 2), COM), set_dec(M.parse('[0, inf]'), DAC))  # M13g review: an attained inf exponent, trv
 def test_slow_binary_ops_decorate_as_1788(name, a, b):
     _check(name, BINARY[name], (a, b))
 
@@ -388,6 +396,7 @@ def test_pown_decorates_as_1788(x, n):
 @example(set_dec(M(0, 16), COM), -2)  # rootn(0, -2) has no value: trv
 @example(set_dec(M(-8, 27), COM), 3)
 @example(set_dec(M(-8, -1), COM), -3)
+@example(set_dec(M.parse('{ [-1, -1/2] , [1, 4] }'), COM), -2)  # M13g review: below 0, and 0 not in it: trv
 def test_rootn_decorates_as_1788(x, n):
     _check('rootn', lambda a: a.rootn(n), (x,), extra=(n,))
 
@@ -419,6 +428,9 @@ def test_round_to_ndigits_examples(name, ndigits, x, decoration):
 @example(set_dec(M(1, 2), COM), set_dec(M(1, 2), COM), set_dec(M(2, 5), COM))  # elem.itl:1405: _com
 @example(set_dec(M(Fraction(-1, 2), Fraction(-1, 10)), COM), set_dec(M.parse('(-inf, 3]'), DAC),
          set_dec(M(Fraction(-1, 10), Fraction(1, 10)), COM))  # :1403: _dac
+# M13g review: the addend's decoration and its attained inf count
+@example(set_dec(M(1, 2), COM), set_dec(M(1, 2), COM), set_dec(M(0, 1), DEF))  # [1, 5]_def
+@example(set_dec(M(1, 2), COM), set_dec(M(1, 2), COM), set_dec(M.parse('[0, inf]'), DAC))  # trv
 def test_fma_decorates_as_1788(a, b, c):
     _check('fma', lambda x, y, z: x.fma(y, z), (a, b, c))
 
@@ -515,6 +527,12 @@ def test_a_sub_box_never_decorates_worse(op, x, y, sx, sy):
     (lambda a, b: a & b, 2), (lambda a, b: a | b, 2), (lambda a, b: a ^ b, 2), (lambda a, b: a.difference(b), 2),
     (lambda a: a.complement(), 1), (lambda a: ~a, 1), (lambda a: a.hull, 1), (lambda a: a.closed_hull, 1),
     (lambda a: a.interior, 1), (lambda a, b: a.cancel_minus(b), 2), (lambda a, b: a.cancel_plus(b), 2),
+    # M13g review: the core's named n-ary forms and its other set-valued operations
+    (lambda a, b: a.union(b), 2), (lambda a, b: a.intersection(b), 2), (lambda a, b: a.symmetric_difference(b), 2),
+    (lambda a, b: a.union(b, 5, b), 2), (lambda a, b: a.intersection(a, b), 2), (lambda a, b: a.difference(b, 0, 1), 2),
+    (lambda a, b: a.symmetric_difference(b, 1), 2), (lambda a: a.union(), 1), (lambda a: a.positive, 1),
+    (lambda a: a.negative, 1), (lambda a: a.finite, 1), (lambda a: a.expand(1), 1), (lambda a: a.expand(0), 1),
+    (lambda a: a[0:Fraction(5, 2)], 1), (lambda a: a[:1], 1),
 ])
 @pytest.mark.parametrize('x, y', [(M(1, 3), M(2, 4)), (M(1, 3), M()), (M.parse('(-inf, inf)'), M(1, 2)),
                                   (M.parse('{ [0, 1] , [3, 4] }'), M(0, 1))])
@@ -586,3 +604,48 @@ def test_methods_mirror_the_core():
     assert (math.floor(x), math.ceil(x), math.trunc(x), round(x)) == (
         DecoratedInterval(M(1)), DecoratedInterval(M(2)), DecoratedInterval(M(1)), DecoratedInterval(M(2), DAC))
     assert x.log(2).decoration is COM and DecoratedInterval(M(0, 1)).log(2).decoration is TRV
+
+
+# M13g review: what 1788 asks of the interval part, so not on the wrapper (`.interval` first)
+NOT_ON_THE_WRAPPER = {
+    'adjoins', 'after', 'allen', 'before', 'contains', 'cuts', 'degenerate_points', 'eq_pointwise', 'from_cuts',
+    'from_pieces', 'inf', 'inf_closed', 'is_contiguous', 'is_degenerate', 'is_empty', 'is_finite', 'is_integral',
+    'is_negative', 'is_non_negative', 'is_non_positive', 'is_positive', 'isdisjoint', 'issubset', 'issuperset',
+    'mag', 'mid', 'mid_rad', 'mig', 'overlaps', 'parse', 'pieces', 'rad', 'size', 'sort_key', 'strictly_less',
+    'sup', 'sup_closed', 'weakly_less', 'wid', 'within',
+}
+
+
+def test_every_public_name_of_the_core_is_on_the_wrapper_or_asked_of_the_interval():
+    """the plan: decorations "propagated through every op the core has". a name the core gains must be
+    added to the wrapper or here, on purpose"""
+    core = {n for n in dir(MultiInterval) if not n.startswith('_')}
+    assert NOT_ON_THE_WRAPPER <= core
+    missing = {n for n in core - NOT_ON_THE_WRAPPER if not hasattr(DecoratedInterval, n)}
+    assert not missing, missing
+    assert not {n for n in NOT_ON_THE_WRAPPER if hasattr(DecoratedInterval, n)}
+    with pytest.raises(TypeError):
+        iter(DecoratedInterval(M(1, 2)))  # `x[a:b]` is the restriction, not an item: not a sequence
+
+
+def test_reflected_operators_reflect():
+    """M13g review: a number on the left is the first operand (values checked, not only the class)"""
+    d = DecoratedInterval(M(2, 4))
+    assert 1 / d == DecoratedInterval(M(Fraction(1, 4), Fraction(1, 2)))
+    assert 5 % d == DecoratedInterval(M(0, Fraction(5, 2), end_closed=False), DEF)
+    assert 5 // d == DecoratedInterval(M.parse('{ [1] , [2] }'), DEF)
+    assert 3 ** d == DecoratedInterval(M(9, 81))
+    assert 1 - d == DecoratedInterval(M(-3, -1)) and divmod(5, d) == (5 // d, 5 % d)
+    for fn in (lambda a, b: a / b, lambda a, b: a % b, lambda a, b: a // b, lambda a, b: a ** b, lambda a, b: a - b):
+        assert fn(5, d) == fn(DecoratedInterval(M(5)), d)
+
+
+@pytest.mark.parametrize('name', ['round', 'round_ties_away'])
+@pytest.mark.parametrize('x', [OutwardMultiInterval(0.12, 0.13), OutwardMultiInterval(0.15)])
+def test_a_step_is_decided_on_the_exact_set(name, x):
+    """M13g review: rounding 0.12..0.13 to one digit gives 1/10 exactly, one value, so com; the outward
+    result is the two doubles around 1/10, which is not one value. the step is decided on the exact
+    set (`decorated.py::_step`), never on a rounded one"""
+    result = getattr(DecoratedInterval(x), name)(1)
+    assert type(result.interval) is OutwardMultiInterval and result.decoration is COM
+    assert result.decoration is getattr(_as_exact(DecoratedInterval(x)), name)(1).decoration

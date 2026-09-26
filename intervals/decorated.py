@@ -155,9 +155,8 @@ class DecoratedInterval:
         best = _best(interval)
         decoration = best if decoration is None else _as_decoration(decoration)
         if decoration > best:
-            raise UndefinedOperationError(
-                f'{decoration.value} does not fit {interval}: the empty set is trv only, com needs a '
-                f'bounded set')
+            why = 'the empty set is trv only' if best is Decoration.TRV else 'com needs a bounded set'
+            raise UndefinedOperationError(f'{decoration.value} does not fit {interval}: {why}')
         object.__setattr__(self, '_interval', interval)
         object.__setattr__(self, '_decoration', decoration)
 
@@ -422,8 +421,43 @@ class DecoratedInterval:
     def __rxor__(self, other):
         return self._set_operation(other, MultiInterval.__xor__, reflected=True)
 
-    def difference(self, other) -> 'DecoratedInterval':
-        return _trivial(self._interval.difference(self._coerce_or_raise(other)._interval))
+    # the named, n-ary forms, as the core's (M13g review): every operand a DecoratedInterval or a number
+    def union(self, *others) -> 'DecoratedInterval':
+        return _trivial(self._interval.union(*self._intervals(others)))
+
+    def intersection(self, *others) -> 'DecoratedInterval':
+        return _trivial(self._interval.intersection(*self._intervals(others)))
+
+    def difference(self, *others) -> 'DecoratedInterval':
+        return _trivial(self._interval.difference(*self._intervals(others)))
+
+    def symmetric_difference(self, *others) -> 'DecoratedInterval':
+        return _trivial(self._interval.symmetric_difference(*self._intervals(others)))
+
+    def _intervals(self, others):
+        return tuple(self._coerce_or_raise(other)._interval for other in others)
+
+    # the core's other set-valued operations (M13g review): an intersection (`positive`, `negative`,
+    # `finite`, the restriction `x[a:b]`) or a widening (`expand`), trv as every set operation
+    @property
+    def positive(self) -> 'DecoratedInterval':
+        return _trivial(self._interval.positive)
+
+    @property
+    def negative(self) -> 'DecoratedInterval':
+        return _trivial(self._interval.negative)
+
+    @property
+    def finite(self) -> 'DecoratedInterval':
+        return _trivial(self._interval.finite)
+
+    def expand(self, distance) -> 'DecoratedInterval':
+        return _trivial(self._interval.expand(distance))
+
+    def __getitem__(self, item: slice) -> 'DecoratedInterval':
+        return _trivial(self._interval[item])
+
+    __iter__ = None  # not a sequence: `__getitem__` is the restriction, as the core's (pieces: `.interval`)
 
     def complement(self) -> 'DecoratedInterval':
         return _trivial(self._interval.complement())

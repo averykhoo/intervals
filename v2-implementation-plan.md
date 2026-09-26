@@ -1293,7 +1293,11 @@ plus a decoration check on every decorated vector
       `decorated.py::_trivial(<the reverse op on the intervals>)`, and in the adapter each reverse
       op joins `tests/itf1788/test_itf1788.py::PROPAGATED`. until it does,
       `::test_decorated_vectors_run_decorated` fails after the merge (an interval-valued op with
-      decorated vectors outside `PROPAGATED`): the reminder is mechanical
+      decorated vectors outside `PROPAGATED`): the reminder is mechanical. **but not for a pair**
+      (the M13g review, 2026-09-26): `mulRevToPair`'s 174 decorated vectors expect a pair, which
+      that test does not see and `::_ours`/`::_expected` do not compare with decorations, so the
+      merge also needs a pair-with-decoration case there; `::test_no_decorated_pair_goes_unchecked`
+      fails until it is written
     * adapter (`tests/itf1788/test_itf1788.py`): `::PROPAGATED` (57 interval-valued ops) and
       `::BARE_PART` (the other 23 with interval operands: booleans, numbers, overlap); `::is_decorated`;
       `::_args` builds a decorated vector's operands as `DecoratedInterval`s (so each decoration must
@@ -1391,7 +1395,9 @@ plus a decoration check on every decorated vector
   `floor` out of `PROPAGATED`: 1, that test alone (every floor vector matches on the interval part).
   those two first ran green: the harness's `-k 'not vector'` had excluded the pin test by its name,
   so they were rerun with it
-* **done 2026-09-26 (branch `m13g`; parts 1 to 3 above, then a close-out).** M13g's spec is met:
+* **done 2026-09-26 (branch `m13g`; parts 1 to 3 above, then a close-out).** M13g's spec is met,
+  but for the owner's decisions below (the PROPOSED category's 7 rows; the constructors' outward
+  pass, from the review):
   every statement of its ops is a vector that matches or is a row, every decorated vector's
   decoration is checked, and nothing of M13g is skipped. built, over the three parts:
     * the signals, `intervals/errors.py::UndefinedOperationError` (a `ValueError`) and
@@ -1446,6 +1452,82 @@ plus a decoration check on every decorated vector
   is not skipped), which is why the pin was added; `setDec` dropped from `OPS` 2
   (`::test_decorated_ops_are_checked` and the pin); the README's `_trv` example expected as `_dac`
   1 (the README doctest, so the example is collected). the parts' own: 28, 31 and 45 breaks, above
+* review (2026-09-26, three read-only reviewers over `4956c86`, lenses math, sabotage and spec; each
+  finding reproduced on this branch before any change): **no wrong result in the library** (the math
+  lens's own brute-force oracle over 39 unary and 11 binary ops, pown, rootn, fma and 75000 float
+  calls: 0 mismatches in set, decoration or warning). found and fixed:
+    * **the wrapper lacked some of the core's set operations** (math and spec lenses): the named
+      n-ary `union`, `intersection`, `symmetric_difference` were missing, `difference` took one
+      operand, and `positive`, `negative`, `finite`, `expand` were missing. now on
+      `decorated.py::DecoratedInterval`, n-ary as the core's and trv as every set operation; so is
+      the restriction `x[a:b]` (`__getitem__`), with `__iter__ = None` so that the wrapper is not
+      taken for a sequence. pinned by 15 new ops in `tests/test_propagation.py::test_set_operations_are_trv`
+      (60 items) and by `::test_every_public_name_of_the_core_is_on_the_wrapper_or_asked_of_the_interval`:
+      every public name of `MultiInterval` is on the wrapper or in `::NOT_ON_THE_WRAPPER` (the
+      booleans, numbers, relations and structure, asked of `.interval`), so a name the core gains
+      goes red until it is placed. **a choice the plan left open**: `expand`, which 1788 lacks, is
+      trv as a set operation (the weakest claim), not propagated as a point function
+    * **the literal regex backtracked in cubic time on invalid text** (math lens): a digit run
+      matched `[0-9]+\.?[0-9]*` in as many ways as it has digits, and adjacent `\s*` split white
+      space every way; measured 2026-09-26, two runs of 400 digits 5.4 s, two of 400 spaces 0.8 s,
+      8x per doubling. `literals.py::_DECIMAL`, `::_HEX` and the uncertain form's mantissa now read
+      `[0-9]+(?:\.[0-9]*)?` (the same language, one split) and `::_LITERAL`'s white space is
+      possessive (`\s*+`, python >= 3.11, as `pyproject.toml` requires): those texts now take under
+      1 ms. pinned by `tests/test_literals.py::test_invalid_text_is_refused_in_linear_time` (8 long
+      invalid texts, under 1 s together; about 10 ms, 2026-09-26)
+    * the strict constructor's message cited both rules; it now gives the one that applies
+      (`tests/test_decorated.py::test_the_constructor_refuses_what_does_not_fit` matches it)
+    * docs: README's "142 listed divergences" counted keys, and now says the 195 vectors under the
+      142 keys; "every sub-task" below now names D16's category as approved too; the done line above
+      is qualified by the owner's open decisions
+    * **unpinned clauses, each now pinned** (the sabotage lens found each at 0 red under
+      `HYPOTHESIS_PROFILE=ci`): the reflected `/ % // **` (`::test_reflected_operators_reflect`,
+      values, not only the class); the attained-inf checks on pow's exponent, div's dividend, fma's
+      addend and unary plus, fma's addend decoration, rootn's even negative domain on
+      `{[-1, -1/2], [1, 4]}`, asin's lower end and acoth's two ends (`@example`s on the per-op
+      properties); the step functions deciding constancy on the exact set
+      (`::test_a_step_is_decided_on_the_exact_set`: `OutwardMultiInterval(0.12, 0.13)` and `(0.15)`,
+      `round(1)` and `round_ties_away(1)`, com); `re.ASCII` (7 texts in `test_invalid`: white space
+      ` `, `\xa0`, `　`, `\x1c`, and `ı`, which folds to `i` without it); the adapter's
+      `::_signalled` reading only `UndefinedOperationError` as the signal
+      (`tests/itf1788/test_itf1788.py::test_signalled_reads_only_undefined_operation`)
+    * **the M13e hook missed pairs** (sabotage lens): see "M13e hook" above;
+      `tests/itf1788/test_itf1788.py::test_no_decorated_pair_goes_unchecked` fails once an op with a
+      decorated pair-valued vector joins `OPS` (its predicate over every statement of the 19 files,
+      `itl.py::parse_file`, finds `mulRevToPair` 174, 2026-09-26)
+* sabotage of the review's fixes (section 2), a throwaway harness, each file restored from a copy and
+  `cmp`-checked (all ok); targets `tests/test_propagation.py`, `tests/test_decorated.py`,
+  `tests/test_literals.py`, the doctests of `decorated.py` and `literals.py`, the adapter's own tests;
+  `HYPOTHESIS_PROFILE=ci`, 2026-09-26. every mutation the sabotage lens reported green is now red:
+  `__rtruediv__`, `__rmod__`, `__rfloordiv__`, `__rpow__` not reflected 1 each; pow's exponent
+  check 1, div's dividend check 1, fma's addend decoration 1 and its inf check 1, unary plus 1; the
+  step on the float set 4; rootn's `_POSITIVE` as `_NON_ZERO` 1; asin widened to -2 1; acoth closed
+  at 1 1, at -1 1; the lax adapter (`except ValueError`) 1; `re.ASCII` dropped 6. the new clauses:
+  newDec instead of trv for `union` 12, `symmetric_difference` 8, `positive` 4, `negative` 1,
+  `finite` 3, `expand` 8, the restriction 8; `intersection` and `difference` on their first operand
+  only 4 and 3 (`intersection` first ran green: its case `a.intersection(b, a)` equals `a ∩ b`, so
+  it became `a.intersection(a, b)`); `__iter__` not refused 1; the generic message 6; the white space
+  not possessive 1, the decimal, hex or mantissa run ambiguous again 1 each, the whole regex of
+  `4956c86` 1 (each `test_invalid_text_is_refused_in_linear_time`). **equivalent, so not kept**: an
+  atomic group around a number and possessive radius, exponent and decoration runs, 0 red: with one
+  split per run nothing is left to retry
+* **owner questions** from the review (the orchestrator carries them to `HANDOFF.md`, which this
+  branch does not edit): (1) the PROPOSED category "exact parsing decides validity" (7 rows), in
+  `REASONS` unapproved; (2) **the constructors' 201 interval-valued vectors run in the plain pass
+  only** (spec lens: `b-textToInterval` 91, `d-textToInterval` 91, `b-numsToInterval` 10,
+  `d-numsToInterval` 9), where the rule says both passes. they take text or numbers, not an interval,
+  and return the exact set, so an outward item would repeat the plain call; a class argument (an
+  `OutwardMultiInterval` result, 1788's binary64 hull) would give the pass something to check, and
+  is new API. conservative, kept as built; (3) and (4) as in the close-out: the 15 rows where an
+  exact value past the doubles keeps com, and `set_dec` demoting
+* not a defect: a trial merge with `m13e` (spec lens) puts `m13e`'s `PAIRS` branch of `run_outward`
+  inside `::_outward_hull`, which has no `vector`; the merger moves it back by hand. the other
+  conflicts are insertion points
+* tests and evidence, measured 2026-09-26 after the review: `tests/test_literals.py` 130 items,
+  `tests/test_decorated.py` 40, `tests/test_propagation.py` 181; `tools/itf1788_census.py` unchanged
+  (7587 vectors of 92 ops, 6351 interval-valued; 142 keys with 195 vectors plus 12 plain-only rows;
+  1040 decorated vectors; skipped 1955 statements of 19 ops, all reverse ops). the gate, in two
+  runs: `tests/itf1788` 14333 passed in 50 s; the rest 3710 passed in 529 s (a shared, loaded laptop); 18043 in all
 
 **M13h reductions (done 2026-09-26)**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`,
 `dot_nearest`, 1 each as counted 2026-09-25 by the old parser, which saw only the first statement of
@@ -1493,7 +1575,7 @@ each of the file's 4 testcases; M13a's parser reads the 11 it dropped (2026-09-2
 
 **every sub-task**
 * its ops' vectors pass in both passes (plain and, if interval-valued, outward) or are divergence
-  rows with a reason from `REASONS`; a new category needs an owner decision (D13's is the only one
+  rows with a reason from `REASONS`; a new category needs an owner decision (D13's and D16's are the only ones
   approved so far) and a line in `v2-plan.md` "ieee 1788"
 * its ops get the M14 properties the day they land, sabotage per section 2
 * the D rows it implements move into `v2-plan.md` "current design", the README's feature list and

@@ -105,7 +105,9 @@ def test_new_dec_is_the_best_decoration_that_fits(x):
     (M(1, INF, end_closed=False), COM), (M.parse('[inf]'), COM), (M.parse('(-inf, inf)'), COM),
 ])
 def test_the_constructor_refuses_what_does_not_fit(x, d):
-    with pytest.raises(UndefinedOperationError):
+    # M13g review: the message gives this set's reason, not both
+    why = 'the empty set is trv only' if not x else 'com needs a bounded set'
+    with pytest.raises(UndefinedOperationError, match=f'^{d.value} does not fit .*: {why}$'):
         DecoratedInterval(x, d)
     with pytest.raises(UndefinedOperationError):
         DecoratedInterval(x, d.value)

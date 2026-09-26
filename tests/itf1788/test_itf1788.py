@@ -379,7 +379,9 @@ DECORATED = frozenset({'d-textToInterval', 'd-numsToInterval', 'newDec', 'setDec
 # other op of a decorated vector takes the interval part of each operand (BARE_PART), as 1788 defines
 # the booleans and numbers of a decorated interval. M13e hook: the reverse ops (sqrRev, mulRevToPair,
 # powRev1, ...) join PROPAGATED when they are merged; 1788 decorates all their results trv (the 459
-# decorated results in the files are `_trv`, counted 2026-09-26), `decorated.py::_trivial`
+# decorated results in the files are `_trv`, counted 2026-09-26), `decorated.py::_trivial`. a pair
+# (mulRevToPair's 174 decorated vectors) also needs a pair-with-decoration case in `_ours` and
+# `_expected`, which have none: `test_no_decorated_pair_goes_unchecked` fails until it is written
 PROPAGATED = frozenset({
     'pos', 'neg', 'abs', 'add', 'sub', 'mul', 'div', 'recip', 'sqr', 'pown', 'fma', 'min', 'max', 'floor',
     'ceil', 'trunc', 'roundTiesToEven', 'roundTiesToAway', 'sign', 'sqrt', 'exp', 'exp2', 'exp10', 'log',
@@ -805,6 +807,28 @@ def test_signalled_reads_both_signals(monkeypatch):
     assert _signalled(vector)[0] == (closed_hull_of_expected(vector.expected), 'PossiblyUndefinedOperation')
     monkeypatch.setitem(OPS, vector.op, undefined)
     assert _signalled(vector)[0] == (None, 'UndefinedOperation')
+
+
+def test_signalled_reads_only_undefined_operation(monkeypatch):
+    """M13g review: only `UndefinedOperationError` is 1788's signal. a plain `ValueError` escapes, so a
+    library raising the wrong class fails the vectors instead of matching them"""
+    vector = next(v for v in VECTORS if v.op == 'b-textToInterval' and v.signal == 'UndefinedOperation')
+
+    def plain(*args):
+        raise ValueError('plain')
+
+    monkeypatch.setitem(OPS, vector.op, plain)
+    with pytest.raises(ValueError, match='plain'):
+        _signalled(vector)
+
+
+def test_no_decorated_pair_goes_unchecked():
+    """M13g review, the M13e hook: `_ours` and `_expected` have no pair-with-decoration case, so a
+    pair-valued op's decorations would pass unchecked (mulRevToPair: 174 decorated vectors, each
+    expecting a pair; 2026-09-26). until such a rule is written, no op in OPS has one"""
+    pairs = {v.op for v in VECTORS if is_decorated(v) and isinstance(v.expected, tuple)
+             and any(isinstance(e, Interval) for e in v.expected)}
+    assert not pairs, sorted(pairs)
 
 
 # M13g close-out: once M13g is done, every statement still skipped is a reverse op's (M13e). when
