@@ -29,7 +29,7 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D13 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13f), now in `v2-plan.md` "arithmetic" and "ieee 1788".** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
 | D14 | **decided 2026-09-25 by owner: recommended default.** the independent oracle for the elementary functions is **`python-flint`** (Arb: every result is a ball proven to contain the true value), a test-only dependency in the `[test]` extra, installed into the `intervals` env and in CI. `mpmath` was the alternative (pure python, but its values carry no proven bound). python-flint 0.9.0 has Windows wheels for 3.10 and later (abi3), 3.13 and 3.14 included (checked on PyPI 2026-09-25) | python-flint | M14 |
 | D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library. **corrected 2026-09-26 at M13a**, from every file's header: five files carry the all-permissive notice, not two (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`); the eleven `libieeep1788_*` are Apache 2.0 | vendor unmodified, with the licence files | M13a |
-| D16 | **decided 2026-09-25 by owner: recommended default.** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. 1788's signals (`UndefinedOperation`, `PossiblyUndefinedOperation`, `IntvlPartOfNaI`) as warnings or exceptions: open, `HANDOFF.md` Q1 | wrapper type; signals: `HANDOFF.md` Q1 | M13g |
+| D16 | **decided 2026-09-25 by owner: recommended default.** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. 1788's signals, owner 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers"): `UndefinedOperation` **raises** (a `ValueError` subclass, so it reads like `MultiInterval(2, 1)`'s `ValueError`); `PossiblyUndefinedOperation` and `IntvlPartOfNaI` are **`IntervalWarning` subclasses** (the result is returned); names chosen when built | wrapper type; signals as the owner chose | M13g |
 | D17 | **decided 2026-09-25 by owner**: M13 does **not** block the 2.0.0 release, and there is no hurry to release either ("I have zero users and this is a yak shaving pet project"). M13 only adds methods and a type and gives a meaning to exponents that raise `TypeError` today, so nothing that works now changes | release whenever; not blocked | — |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
@@ -430,7 +430,7 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
   `tests/itf1788/test_itf1788.py::SKIPPED`; `isNaI` has no counterpart. owner 2026-09-25: add
   every one, as M13b, M13c and M13g (D9, D10, D16)
 * **solver stack** (a; `v2-plan.md` "later (not in v2.0)"): its decorated type was brought forward
-  to M13g by D16; the rest is open, `HANDOFF.md` H3
+  to M13g by D16; the rest is open, `HANDOFF.md` H3 (numpy and gmpy2/mpfr recorded, not now: owner 2026-09-26)
 * **v1 surface with no v2 row in section 4** (a: port or record as gone): open, `HANDOFF.md` Q6
 * **smaller** (c): the old README's leftovers, `HANDOFF.md` H5
 * **archive deletion** (a): `HANDOFF.md` H4
@@ -517,7 +517,7 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
 
 owner request 2026-09-25: "implement all these ops and get all these tests vendored and passing".
 this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how,
-except D16's signals (open, `HANDOFF.md` Q1). sub-tasks M13a to M13h: **M13a goes
+D16's signals included (owner, 2026-09-26). sub-tasks M13a to M13h: **M13a goes
 first**, the rest are independent of each other. the release is not waiting on any of it (D17)
 
 **the source.** the vendored files today are 7 of the 12 at nehmeier/ITF1788 `e0e0d7e` (that
@@ -985,8 +985,14 @@ operands of implemented ops and a decoration check on every decorated vector
 * the adapter stops dropping decorations: a decorated vector runs through the wrapper and its
   expected decoration is checked
 * 1788's signals (`UndefinedOperation`, `PossiblyUndefinedOperation`, `IntvlPartOfNaI`, from
-  `ieee1788-exceptions.itl` and the constructors' `signal` clauses): open, ask the owner before
-  building, `HANDOFF.md` Q1
+  `ieee1788-exceptions.itl` and the constructors' `signal` clauses), owner 2026-09-26:
+  `UndefinedOperation` raises a `ValueError` subclass, so a 1788 constructor given invalid input
+  stops (as `MultiInterval(2, 1)` does) and NaI arises only when made on purpose;
+  `PossiblyUndefinedOperation` and `IntvlPartOfNaI` are `IntervalWarning` subclasses and the
+  result is returned. the adapter takes the raised error as a vector's `[empty]`/`[nai]` with
+  `signal UndefinedOperation`, as the reduction rule takes `ValueError` as `NaN`. `IntvlPartOfNaI`
+  as a warning is the owner's lean; see `v2-plan.md` "2026-09-26 revision: owner answers" for
+  the case for raising it too
 
 **M13h reductions (done 2026-09-26)**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`,
 `dot_nearest`, 1 each as counted 2026-09-25 by the old parser, which saw only the first statement of

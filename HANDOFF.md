@@ -25,13 +25,13 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## open items (ranked)
 
-the plan's suggested order (2026-09-25): one session each for M13e, then M13g starting with Q1,
-each ending with a green gate and a commit.
+the plan's suggested order (2026-09-25): one session each for M13e, then M13g, each ending with a
+green gate and a commit.
 
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
 | 1 | M13e | reverse ops in a new `intervals/reverse.py` (1955 statements) | ready | plan §2 M13 "**M13e reverse ops**"; D12 |
-| 2 | M13g | decorated wrapper type, NaI, 1788 constructors, signals; the 52 generated `[nai]` rows go stale | blocked on Q1 | plan §2 M13 "**M13g decorations, NaI, constructors and signals**"; D16 |
+| 2 | M13g | decorated wrapper type, NaI, 1788 constructors, signals; the 52 generated `[nai]` rows go stale | ready: signals settled 2026-09-26 (D16); `IntvlPartOfNaI` as a warning is the owner's lean, may switch to raising before it is built | plan §2 M13 "**M13g decorations, NaI, constructors and signals**"; D16 |
 | 3 | M13-exit | `SKIPPED` empty and asserted (`tests/itf1788/test_itf1788.py::SKIPPED`) | after M13e, g | plan §2 M13 "**exit for M13**" and "**every sub-task**" |
 | 4 | M14-run | the fuzz workflow's first green run on GitHub; record its example count and time, dated. `multiplier=10` is the cheap first `workflow_dispatch`; ×100 was extrapolated to 2.2-3.4 h, under the 350-min timeout | H2 done (pushed 2026-09-26). caveat: `.github/workflows/fuzz.yml` is not on `origin/master` (no workflows there at all), and GitHub runs `schedule` and `workflow_dispatch` only for workflows on the default branch (GitHub docs; not tried here), so a push to `v2` alone may not make it runnable | plan §2 M14 "exit" and "**the fuzz job, built 2026-09-26**" |
 | 5 | M14-breadth | fuzz where it is thin: `tests/test_extreme_floats.py` extended to the functions, `minimum`/`maximum`/`fma`, `%`, `//` and `OutwardMultiInterval`; more `@given` in `test_outward`, `test_steps`, `test_fmt`, `test_applicator` | ready | plan §2 M14 "**breadth where fuzz is thin**" |
@@ -39,26 +39,14 @@ each ending with a green gate and a commit.
 | 7 | Q6-rest | `random_multi_interval`, a public `apply()`: to-do, undecided whether to port | owner's call, later | plan §4 (their rows) |
 | 8 | H1 | release 2.0.0 (`pyproject.toml` is now `2.0.0.dev0`) | when everything is fully done (owner 2026-09-26) | plan §2 M11; D5, D17 |
 | 9 | M8 | the time layer on the v2 class | on hold, no rush (owner 2026-09-26); D4 recommends (a), Fraction seconds under a thin wrapper | plan §2 "M8 `time_interval.py`"; D4 |
-| 10 | H3 | solver stack: direction tag on a degenerate zero (only if a solver needs `1/(1/[inf])` back), thin `ieee1788.py`, autodiff, Newton as a test (buildable: the functions exist since M12), numpy interop (today `__array_ufunc__ = None`), per-piece Allen matrix, gmpy2/mpfr backend | not v2.0; owner's call | `v2-plan.md` "later (not in v2.0)"; the Allen matrix and `ieee1788.py`: `v2-plan.md` decision log "v2 consolidated decisions (2026-08-16)", "comparisons" and "ieee 1788 conformance: test adapter, not a runtime flag" |
+| 10 | H3 | solver stack: direction tag on a degenerate zero (only if a solver needs `1/(1/[inf])` back), thin `ieee1788.py`, autodiff, Newton as a test (buildable: the functions exist since M12), numpy interop (today `__array_ufunc__ = None`), per-piece Allen matrix, gmpy2/mpfr backend | not v2.0; numpy and gmpy2/mpfr recorded, not now (owner 2026-09-26); suggested first pick when it starts: Newton with autodiff | `v2-plan.md` "later (not in v2.0)"; the Allen matrix and `ieee1788.py`: `v2-plan.md` decision log "v2 consolidated decisions (2026-08-16)", "comparisons" and "ieee 1788 conformance: test adapter, not a runtime flag" |
 | 11 | H4 | delete `archive/v1/` | after v2 is stable (owner 2026-09-26) | plan §2 M10 (last bullet before "done") |
 
 ## open questions for the owner
 
-Q3-Q7 were answered on 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers to the open
-questions"). two remain; the owner asked what 1788 does before choosing.
-
-* **Q1** (blocks M13g) 1788's signals `UndefinedOperation` (a constructor given invalid input:
-  `numsToInterval(2, 1)`, bad text), `PossiblyUndefinedOperation` (text whose validity the
-  implementation cannot decide; an exact parser always can) and `IntvlPartOfNaI` (`intervalPart`
-  of NaI). in 1788 each still returns a result (empty for bare, NaI for decorated) and carries on,
-  like an IEEE 754 flag. `IntervalWarning` subclasses (returns the result; the user can make it
-  an error with a warnings filter, as for the existing warnings) or exceptions (stops)? the
-  session's recommendation: warnings. recorded: plan §0 D16, M13g
-* **Q2** (M13h) the reductions (`sum_`, `sum_abs`, `sum_sqr`, `dot`) are 1788's operations on
-  lists of floats, not intervals, so the answer is a float. where 1788 answers the float `nan` (a
-  `nan` operand, `inf + -inf`, `0 * inf` in `dot`), ours raises `ValueError`. python itself is
-  split: `sum([inf, -inf])` is `nan`, `math.fsum([inf, -inf])` raises `ValueError` (and
-  `math.fsum([1.0, nan])` is `nan`). recorded: `v2-plan.md` "2026-09-26 revision: M13h"
+none (2026-09-26): Q1-Q7 answered, recorded in `v2-plan.md` "2026-09-26 revision: owner answers to
+the open questions". the one soft spot: `IntvlPartOfNaI` as a warning, which the owner may switch
+to raising before M13g builds it (the case is in that entry).
 
 ## still owed
 
@@ -71,7 +59,8 @@ questions"). two remain; the owner asked what 1788 does before choosing.
 ## session log (newest first)
 
 * **2026-09-26** the owner answered Q3-Q7 and H1-H5 (`v2-plan.md` "2026-09-26 revision: owner
-  answers to the open questions"); Q1 and Q2 got 1788's context and stay open. Q6's `<<`/`>>`
+  answers to the open questions"); then, after 1788's context, Q1 (`UndefinedOperation` raises,
+  the other two warn) and Q2 (keep `ValueError`), so M13g is unblocked. Q6's `<<`/`>>`
   became an open item; the v1 README's leftovers moved to `references/todo-from-v1-readme.md`
   (H5 done). gate green (17346 in 380 s), then `v2` pushed (H2 done); CI run 36219282601 at
   `2f3a895` all 8 jobs green, the first CI on M12 and M13

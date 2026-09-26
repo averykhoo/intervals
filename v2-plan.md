@@ -652,7 +652,8 @@ imports only point downward.
 * a decorated wrapper type, with the solver. owner 2026-09-25: brought forward to
   `v2-implementation-plan.md` M13g, for the itf1788 decoration vectors; the core stays undecorated
 * forward-mode autodiff, newton's method as a test, numpy compat (array API / `__array_ufunc__`),
-  gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one)
+  gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one).
+  owner 2026-09-26: numpy and gmpy2/mpfr recorded, not now
 
 ## decision log
 
@@ -676,7 +677,25 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
 * **H5**: the v1 README's reading list and illustration to-do are kept, moved to
   `references/todo-from-v1-readme.md` so they outlive `archive/v1/`
 * **H2**: push `v2` approved
-* Q1 (signals) and Q2 (NaN in the reductions) stay open: the owner asked what 1788 does first
+* **Q1, after 1788's context** (in 1788 every signal is a flag, like IEEE 754's: the result is
+  returned, empty for bare and NaI for decorated, and the program goes on, since the result itself
+  carries the news: empty and NaI propagate). the owner's choice for python, where errors raise:
+    * **`UndefinedOperation` raises**, a `ValueError` subclass: a 1788 constructor given invalid
+      input (`numsToInterval(2, 1)`, `"[ foo ]"`) stops, as `MultiInterval(2, 1)` already does.
+      so NaI, which 1788 makes only from such input, arises only when made on purpose
+    * **`PossiblyUndefinedOperation` warns** (an `IntervalWarning` subclass) and returns 1788's
+      result. an exact parser can always decide validity, so it may never fire; the one vector
+      that expects it (`ieee1788-exceptions.itl:18`) is settled when M13g is built
+    * **`IntvlPartOfNaI` warns** and returns `∅`, the owner's lean. the session's note: NaI does
+      propagate like NaN through decorated ops, but `intervalPart` is the one place it stops,
+      turning "invalid" into `∅`, which then reads as a real "no values". raising here too would
+      match `UndefinedOperation`; the owner may still switch it before M13g builds it
+* **Q2 settled: the reductions keep raising `ValueError`** where 1788 answers the float `nan`
+  (they are operations on floats, not intervals, so an empty interval is no answer either);
+  `math.fsum` raises on `inf + -inf` too
+* **H3**: numpy interop and a gmpy2/mpfr backend are recorded, not built now ("later (not in
+  v2.0)" above). the session's suggested first pick when the solver stack starts: Newton's
+  method with forward-mode autodiff, the demonstration of what multi-intervals are for
 
 ### 2026-09-26 revision: M13d, power and the rest of the elementary functions, built
 
