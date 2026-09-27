@@ -68,7 +68,12 @@ vendoring.
   first run 2026-09-25 at `d232b78` (run 36091651163), all 8 jobs green:
   the gate took 71-94 s on each python, and on the runners the exhaustive jobs took 21 s
   (sabotage), 5 min (float), 6½ min (exact) and 12½ min (modulo). each harness exits nonzero on a
-  failure
+  failure. M13e/g's first run, 2026-09-27 at `dbec908` (run 36293351201): the 4 gate jobs each
+  `1 failed, 22165 passed`, `tests/test_reverse.py::test_mul_rev_float_operands` at a `b` whose
+  quotient passes the largest double, where to nearest gives the piece `[inf]` (as designed) and
+  the oracle `_widened` skipped infinite ends; the local gate missed it (randomized profile; `ci`
+  is derandomized). fixed in the oracle, the example pinned (`d7e46c2`); run 36305984327 at
+  `a1d45a9` all 8 green, the gate 272-285 s on each python
 * v1 files stay in place, untouched, until M10, then move to `archive/v1/`. **no v1 file is ever
   deleted by this plan**: the archive is the reference until v2 works. v1 is the differential
   oracle for set ops and for `A % scalar`. the package is `intervals/`, so `import multi_interval`
