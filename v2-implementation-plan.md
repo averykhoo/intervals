@@ -31,6 +31,7 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library. **corrected 2026-09-26 at M13a**, from every file's header: five files carry the all-permissive notice, not two (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`); the eleven `libieeep1788_*` are Apache 2.0 | vendor unmodified, with the licence files | M13a |
 | D16 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13g), now in `v2-plan.md` "ieee 1788" (`DecoratedInterval`, `UndefinedOperationError`, `PossiblyUndefinedOperationWarning`).** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. 1788's signals, owner 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers"): `UndefinedOperation` **raises** (a `ValueError` subclass, so it reads like `MultiInterval(2, 1)`'s `ValueError`); `PossiblyUndefinedOperation` is an **`IntervalWarning` subclass** (the result is returned); names chosen when built. **no NaI** and no `ill` (owner 2026-09-26): its statements are rows under a new category, M13g | wrapper type; signals as the owner chose | M13g |
 | D17 | **decided 2026-09-25 by owner**: M13 does **not** block the 2.0.0 release, and there is no hurry to release either ("I have zero users and this is a yak shaving pet project"). M13 only adds methods and a type and gives a meaning to exponents that raise `TypeError` today, so nothing that works now changes | release whenever; not blocked | — |
+| D18 | **decided 2026-09-27 by owner**, on M13's proposed categories and choices: (a) **"tighter than the vector"** is an approved residual category (M13e): 11 keys, 18 vectors where 1788's expected hull is looser than the tightest double enclosure and ours is the tightest, checked with arb or exactly; the two grossly loose `pow_rev.itl:609`, `:642` stay in it. (b) **"exact parsing decides validity"** is approved (M13g): the 1788 text constructors read bounds exactly, so no `PossiblyUndefinedOperation` for a near-tie literal; 7 keys. (c) the 15 rows where an exact value past the doubles keeps com (`_BOUNDED_EXACTLY` 3, `PLAIN_ONLY` 12) stay under **decoration expectations**. (d) `set_dec` **demotes** as 1788's `setDec` does; only the `DecoratedInterval` constructor raises | both categories approved; rows stay; set_dec demotes | M13e, M13g |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
 milestones below: infinite result endpoints always go through attainment (the corner-flag rule is
@@ -513,7 +514,7 @@ design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its d
 * not built, and why: `pow` with a real exponent (a: scope, M11); `less`, `strictLess`, `interior`,
   `mid`, `rad`, `wid`, `mag`, `mig` (a: see M11); reverse ops (a). all now M13
 
-### M13 full itf1788: every vector vendored, every op built (done 2026-09-27: M13a to M13h, M13e and M13g merged; two proposed divergence categories await the owner)
+### M13 full itf1788: every vector vendored, every op built (done 2026-09-27: M13a to M13h, M13e and M13g merged; their two new divergence categories approved by the owner, D18)
 
 owner request 2026-09-25: "implement all these ops and get all these tests vendored and passing".
 this settles M11's "whether to add them" for every 1788 op, and D9–D17 (section 0) settle how,
@@ -1451,6 +1452,21 @@ M12; each checked against the D14 oracle (M14)
   the census after the fix (2026-09-27) is unchanged from the close-out's (9269 vectors, 157 keys,
   273 skipped). the gate, two runs on 2026-09-27: `tests/itf1788` 17913 passed in 47.3 s (one more,
   the pair pin), the rest 3543 passed in 464.6 s (8 more: the rational-log pin and the 7 flag cases)
+* the reviewers' clean results, transcribed 2026-09-27 from their notes (gitignored, since deleted):
+  the math lens's independent oracle (exact Fractions and python-flint arb, membership decided from
+  the definitions with the library's forward ops) found no wrong result: random multi-piece `c`,
+  `x`, `b` with 0, ±1, ±inf and rationals, exact operands (sqr 300, abs 300, pown 300 with n in
+  -8..7, cosh 300, sin/cos/tan 150 each, mul 2000, pow_rev1 600, pow_rev2 600): 0 unsound, 0 not
+  tight to the double, 0 wrong exact ends, 0 stray warnings; trig near k pi/2 (k up to 10**300/7),
+  1536 cases: 0 problems; `OutwardMultiInterval` with float operands, all 10 ops: 0 problems (tan
+  on 40 seeds only, the oracle being slow there); `MultiInterval` to nearest: no member farther than
+  2 ulp from an end. the slow rational log grew about as the cube of the size in bits (5000 digits
+  2.7 s, 10000 44 s, 20000 356 s, at c6a3b3d). the sabotage lens ran 30 mutations of its own
+  beyond those above, all red (e.g. `_power_box`'s sv/sw swapped: 1 doctest, 6 library tests, 208
+  vector items; the pair rule keeping 1788's empty second interval: 624 vector items; each `*Bin`
+  adapter entry ignoring `x`: 22 to 378 vector items), and reproduced the builders' recorded counts
+  exactly (416, 518, 2, 2, 1). one mutant, `c` not cut to sin's or tan's image, hangs the trig tests
+  (900 s timeout) besides turning 2 doctests red
 
 **M13f cancellation (done 2026-09-26)** (D13). `cancelPlus` 116, `cancelMinus` 126
 * `A.cancel_minus(B)`: the largest `X` with `B + X ⊆ A` (the Minkowski difference);
@@ -2141,7 +2157,7 @@ each of the file's 4 testcases; M13a's parser reads the 11 it dropped (2026-09-2
 
 **every sub-task**
 * its ops' vectors pass in both passes (plain and, if interval-valued, outward) or are divergence
-  rows with a reason from `REASONS`; a new category needs an owner decision (D13's and D16's are the only ones
+  rows with a reason from `REASONS`; a new category needs an owner decision (D13's, D16's and D18's two are the only ones
   approved so far) and a line in `v2-plan.md` "ieee 1788"
 * its ops get the M14 properties the day they land, sabotage per section 2
 * the D rows it implements move into `v2-plan.md` "current design", the README's feature list and
@@ -2189,10 +2205,11 @@ it, so a file that gains an op cannot quietly add skips
   both trv and compares the hulls
 * census, measured 2026-09-27 (`tools/itf1788_census.py`, which now also prints the
   decoration-only rows and the decorated reverse vectors): 19 files; 9542 vectors of 111 ops, 8306
-  interval-valued (17848 vector test items, plus 334 float items); 1521 decorated vectors (1105 of
-  61 propagating ops, 398 `BARE_PART`, 18 decorated ops); 185 keys (109 listed) with 271 vectors,
+  interval-valued (17848 vector test items, plus 334 float items); 1624 decorated vectors (1105 of
+  61 propagating ops, 398 `BARE_PART`, 121 of the decorated ops; 1521 and 18 before the
+  `is_decorated` fix of D18's day, which only changed this count); 185 keys (109 listed) with 271 vectors,
   0 unknown failures: 76 no NaI (79 vectors), 47 cancellations (94), 36 degenerate infinities
-  (63), 11 tighter than the vector (PROPOSED; 18), 7 exact parsing decides validity (PROPOSED; 7),
+  (63), 11 tighter than the vector (18), 7 exact parsing decides validity (7),
   5 cut-based relations (7), 3 decoration expectations (3); plus 12 plain-only and 52
   decoration-only rows, all decoration expectations. skipped: 0 statements
 * sabotage (section 2), 2026-09-27, a throwaway harness, each file restored from a copy and
@@ -2202,8 +2219,10 @@ it, so a file that gains an op cannot quietly add skips
   decorated reverse ops: each of the 10 decorated newDec instead of trv 1 red (`mul_rev` 2), the
   dispatch in `_reverse` dropped 12, a bare set accepted 1, `x` ignored 7; the adapter: `REVERSE`
   dropped from `PROPAGATED` 107, a pair's decoration dropped on both sides 107
-* the two PROPOSED categories, "tighter than the vector" (M13e) and "exact parsing decides
-  validity" (M13g), stay PROPOSED and in `REASONS`, awaiting the owner
+* the two categories proposed at M13e and M13g, "tighter than the vector" and "exact parsing decides
+  validity", were approved by the owner on 2026-09-27 (D18), with the 15 exact-com rows kept under
+  decoration expectations and `set_dec` demoting; the `(PROPOSED)` markers are gone from `REASONS`
+  and the rows' reasons, and the historical records above keep the word as they were written
 * the gate, two runs on 2026-09-27: `tests/itf1788` 18245 passed in 45.5 s; the rest 3920 passed
   in 498.2 s (22165 in all), on a shared, loaded laptop
 

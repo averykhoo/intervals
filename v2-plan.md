@@ -534,7 +534,8 @@ M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-
       expectations, (added at M12) cut-based relations, and (added at M13f, approved with D13)
       **cancellation as a Minkowski difference**: where 1788's `cancelMinus`/`cancelPlus` answer
       entire as "no answer", ours is the real set of the fitting `x`, and for `[empty] [empty]` the
-      whole line where 1788 answers `∅`. (`1/[0]` is not a row: both give empty.) keyed on the
+      whole line where 1788 answers `∅`; and (added at M13e and M13g, approved 2026-09-27 with D18)
+      **tighter than the vector** and **exact parsing decides validity**. (`1/[0]` is not a row: both give empty.) keyed on the
       statement with its decorations stripped (`tests/itf1788/test_itf1788.py::key`) since M13a.
       measured 2026-09-26 (M13d; the current count, at M13's merge, is the "counts at M13's merge" bullet
       below): 19 files, 9542 statements; 7314 vectors of 83
@@ -569,7 +570,7 @@ M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-
       `pownRev` with n < 0 and 0 in `c`, where ±inf join (each matches with 1788's entire as `x`,
       pinned by `tests/test_reverse.py::test_the_rows_differ_only_at_the_infinities`); and 4 (2
       keys, `::_POWN_REV_LOOSE_ROWS`, `rev.itl:276`, `:277`) are under **a new category, "tighter
-      than the vector", PROPOSED at M13e and not yet approved by the owner**: 1788's end for
+      than the vector", proposed at M13e, approved by the owner 2026-09-27 (D18)**: 1788's end for
       `2 ** (1074/7)` is one double outside the tightest enclosure, which ours is (arb, in
       `tests/test_reverse.py::test_pown_rev_is_tighter_than_the_vector`)
     * **reverse multiplication** (added at M13e, second part, 2026-09-26): `mulRev` and
@@ -623,7 +624,7 @@ M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-
       expectations" until M13g, now 53 with `isNaI [nai]`) and every `isNaI` (generated,
       `tests/itf1788/test_itf1788.py::_NO_IS_NAI`); measured 2026-09-26, 66 keys, 68 vectors; at
       M13g's close (2026-09-26) 70 keys, 73 vectors, the decorated ops' `[nai]` texts and operands added
-    * (M13g, **PROPOSED, not approved: an owner question**) **exact parsing decides validity**: 1788
+    * (M13g; approved by the owner 2026-09-27, D18) **exact parsing decides validity**: 1788
       lets a text constructor that rounds each bound first answer a literal whose bounds are within an
       ulp with `PossiblyUndefinedOperation`; ours reads the bounds exactly, so it returns the valid
       one with no warning (`ieee1788-exceptions.itl:18`) and raises on the three whose lower bound
@@ -639,7 +640,7 @@ M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-
       (`::_nai_is_a_raise`). `newDec`, `setDec` and `intervalPart` run outward too, the set in an
       `OutwardMultiInterval`; only the constructors (`::CONSTRUCTORS`) do not. the other ops'
       decorated vectors: the propagation rule below (M13g part 3). the three `d-textToInterval` twins
-      are rows under the PROPOSED category above (7 keys now), and three vectors whose literal is
+      are rows under the category above (7 keys now), and three vectors whose literal is
       bounded as a rational but past the doubles (`libieeep1788_class.itl:165`, `:201`, `:204`:
       com here, 1788's `dac` for its binary64 hull `[max, inf]` or entire) are rows under
       **decoration expectations** (`::_BOUNDED_EXACTLY`)
@@ -647,12 +648,12 @@ M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-
       M13e and at M13g (`tools/itf1788_census.py`): 19 files; 9542 vectors of 111 ops, every
       statement of the 19 files (every op in `OPS` has vectors), 8306 of them interval-valued and
       run twice, the 167 numeric ones run twice more with float operands (17848 vector test items,
-      plus 334 float items); 1521 vectors carry a decoration: 1105 of 61 propagating ops (481 of them
+      plus 334 float items); 1624 vectors carry a decoration: 1105 of 61 propagating ops (481 of them
       the reverse ops', 174 pairs), checked with it in both passes, 398 of `BARE_PART` ops (their
-      interval parts), 18 of the decorated ops. 185 keys (109 listed, the rest generated) with 271
+      interval parts), 121 of the decorated ops. 185 keys (109 listed, the rest generated) with 271
       vectors, and 0 unknown failures: 76 no NaI (79 vectors), 47 cancellations (94 vectors), 36
-      degenerate infinities (63 vectors), 11 tighter than the vector (PROPOSED; 18 vectors), 7 exact
-      parsing (PROPOSED; 7 vectors), 5 cut-based relations (7 vectors), 3 decoration expectations (3
+      degenerate infinities (63 vectors), 11 tighter than the vector (18 vectors), 7 exact
+      parsing (7 vectors), 5 cut-based relations (7 vectors), 3 decoration expectations (3
       vectors); plus 64 rows on a decoration alone, under decoration expectations: 12 in the plain
       pass only (`::PLAIN_ONLY`) and 52 in both passes (`::DECORATION_ONLY`). skipped: none, which
       `tests/itf1788/test_itf1788.py::test_nothing_is_skipped` asserts (M13's exit)
@@ -906,6 +907,20 @@ imports only point downward.
 
 ## decision log
 
+### 2026-09-27 revision: owner answers on M13's proposed categories (D18)
+
+* "tighter than the vector" (M13e: 11 keys, 18 vectors, the two grossly loose `pow_rev.itl:609`,
+  `:642` included) and "exact parsing decides validity" (M13g: 7 keys) are approved residual
+  categories; the `(PROPOSED)` markers are gone from `REASONS` and from the rows' reasons
+* the 15 rows where an exact value past the doubles keeps com (`_BOUNDED_EXACTLY` 3, `PLAIN_ONLY`
+  12) stay under "decoration expectations"; `set_dec` keeps demoting as 1788's `setDec` does
+* the adapter's `tests/itf1788/test_itf1788.py::is_decorated` unpacked an `Interval` result (a
+  NamedTuple) into its fields, so a decoration on the result alone went unseen; 0 vectors were
+  affected in what runs (the 103 it missed are all of the six decorated ops, which take the decorated
+  path by op), but the census undercounted: 1624 vectors carry a decoration, not 1521 (121 of the
+  decorated ops, not 18; measured 2026-09-27). fixed and pinned by
+  `::test_is_decorated_sees_the_result_alone` (the old line: 1 red)
+
 ### 2026-09-27 revision: M13 merged, M13's exit met
 
 M13e (the reverse ops) and M13g (decorations, constructors and signals), built in parallel on
@@ -923,8 +938,7 @@ itself decided, each the conservative reading:
   rows under "decoration expectations", on the decoration alone (the set must match). whether to
   add a pair op with 1788's decoration is an owner question
 * the counts at M13e and at M13g are replaced by one re-measurement ("counts at M13's merge");
-  the two PROPOSED categories, "tighter than the vector" (M13e) and "exact parsing decides
-  validity" (M13g), stay PROPOSED, awaiting the owner
+  the two categories proposed at M13e and M13g were approved the same day (next revision up)
 
 ### 2026-09-26 revision: owner answers to the open questions
 

@@ -152,7 +152,8 @@ intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]'
 * **ieee 1788**: not a runtime mode. the test suite runs every statement of all 19 files of the
   ITF1788 suite, 9542 vectors of 111 ops, through an adapter, the 8306 interval-valued ones a second
   time through `OutwardMultiInterval`, the 167 numeric ones twice more with float operands, and the
-  1521 decorated ones through `DecoratedInterval` with their decoration checked; all of them match
+  1226 with a decorated operand or result through `DecoratedInterval` with their decoration checked
+  (398 more are booleans or numbers of a decorated interval, which take its interval part); all of them match
   except the 271 vectors under 185 listed divergences where the semantics differ on purpose or the
   vector needs a NaI, and 64 on a decoration alone (12 in the exact pass only; 52 `mulRevToPair`
   pairs whose set matches) (`tests/itf1788/`, measured 2026-09-27 at M13's merge). no statement is

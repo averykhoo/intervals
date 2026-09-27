@@ -109,6 +109,7 @@ from intervals.errors import UndefinedOperationError
 from intervals.kernel import pieces
 from intervals.relations import Allen
 from tests.itf1788.itl import Interval
+from tests.itf1788.itl import Vector
 from tests.itf1788.itl import parse_file
 from tests.itf1788.itl import strip_decorations
 
@@ -260,13 +261,13 @@ def _overlap(a, b):
 # the plan's residual categories (v2-plan.md "ieee 1788"); a row's reason starts with one of them
 REASONS = ('degenerate infinities', 'domain-clipped functions', 'decoration expectations',
            'cut-based relations', 'cancellation as a Minkowski difference',
-           # PROPOSED at M13e (2026-09-26), not yet approved by the owner: a vector whose expected end
-           # is not the tightest double enclosure, where ours is (checked against arb in
-           # tests/test_reverse.py::test_pown_rev_is_tighter_than_the_vector)
+           # M13e, approved by the owner 2026-09-27 (D18): a vector whose expected hull is looser than
+           # the tightest double enclosure, where ours is (checked against arb, or exactly, in
+           # tests/test_reverse.py and tests/test_pow_rev.py)
            'tighter than the vector',
            # M13g: approved with D16 (owner 2026-09-26)
            'no NaI: invalid input raises',
-           # M13g, PROPOSED, not approved: needs the owner (v2-implementation-plan.md M13g)
+           # M13g, approved by the owner 2026-09-27 (D18)
            'exact parsing decides validity')
 
 _LOG = ('degenerate infinities: the operand meets the domain [0, inf] only at 0, and log(0) is '
@@ -293,7 +294,7 @@ _CANCEL_EMPTY = ('cancellation as a Minkowski difference: with B = ∅ every X h
 # (statement text, whitespace collapsed and decorations stripped) -> reason. as of 2026-09-26 every
 # listed row is a degenerate infinity of a function at the end of its domain, a touching pair that
 # shares a point, or a cancellation where 1788 has no answer (or ∅ for ∅ and ∅); M13g adds, below,
-# the literals decided exactly (PossiblyUndefinedOperation, PROPOSED) and bounded exactly (com). the
+# the literals decided exactly (PossiblyUndefinedOperation) and bounded exactly (com). the
 # NaI and isNaI rows are generated once the vectors are loaded, and PLAIN_ONLY holds the rows on a
 # decoration alone
 DIVERGENCES = {
@@ -406,7 +407,7 @@ DIVERGENCES.update({text: _POWN_REV_INF for text in _POWN_REV_ROWS})
 # two more have the same infinities and a second difference: 1788's end is one double outside the
 # tightest enclosure of 2 ** (1074/7), which ours is (arb: 1.5367463556376297869...e46, strictly between
 # 0x1.588cea3f093bdp+153 and 0x1.588cea3f093bep+153), so they differ even with x = 1788's entire
-_POWN_REV_LOOSE = ('tighter than the vector (PROPOSED): 1788 gives ±0x1.588cea3f093bcp+153 for 2 ** (1074/7), '
+_POWN_REV_LOOSE = ('tighter than the vector: 1788 gives ±0x1.588cea3f093bcp+153 for 2 ** (1074/7), '
                    'one double outside the tightest enclosure, whose inner double is 0x1.588cea3f093bdp+153 '
                    '(ours); the unary form also has ±inf here (degenerate infinities, as the other pownRev rows)')
 _POWN_REV_LOOSE_ROWS = (
@@ -417,7 +418,7 @@ DIVERGENCES.update({text: _POWN_REV_LOOSE for text in _POWN_REV_LOOSE_ROWS})
 # sinRev, cosRev, tanRev (M13e): six *Bin vectors (and their decorated copies, 7 keys) whose expected hull has one
 # end one or two doubles outside the tightest enclosure of k pi ± asin, acos or atan of an end of c; ours is
 # the tightest, the other end matches, and arb agrees (tests/test_reverse.py::test_trig_rev_is_tighter_than_the_vector)
-_TRIG_REV_LOOSE = ('tighter than the vector (PROPOSED): one end of 1788\'s hull is one or two doubles outside '
+_TRIG_REV_LOOSE = ('tighter than the vector: one end of 1788\'s hull is one or two doubles outside '
                    'the tightest enclosure of k pi ± asin/acos/atan(v), which ours is (arb)')
 _TRIG_REV_LOOSE_ROWS = (
     'sinRevBin [0X1.FFFFFFFFFFFFFP-1,0X1P+0] [1.57,1.58 ] = [0x1.921fb50442d18p+0,0x1.921fb58442d1ap+0]',
@@ -434,7 +435,7 @@ DIVERGENCES.update({text: _TRIG_REV_LOOSE for text in _TRIG_REV_LOOSE_ROWS})
 # is exactly 2; 1 ** s is never 2), so the answer is (-inf, -1/2]: the neighbouring vectors with C = [2, 4]
 # (`pow_rev.itl:608`, `:640`) answer -1/2 there, and C = [2, inf) only adds points that s -> -inf reaches.
 # checked exactly, with no rounding, by tests/test_pow_rev.py::test_pow_rev2_is_tighter_than_the_vector
-_POW_REV_LOOSE = ('tighter than the vector (PROPOSED): for A in [1/4, 1] and C = [2, inf), t ** s >= 2 iff '
+_POW_REV_LOOSE = ('tighter than the vector: for A in [1/4, 1] and C = [2, inf), t ** s >= 2 iff '
                   's <= log_t 2 <= -1/2, so the tightest hull is [-inf, -0.5], which ours is; 1788 answers '
                   '[entire] and [-infinity, 0.0], though its own vectors with C = [2, 4] answer -0.5 at that end')
 _POW_REV_LOOSE_ROWS = (
@@ -442,7 +443,7 @@ _POW_REV_LOOSE_ROWS = (
     'powRev2 [0.25, 1.0] [2.0, infinity] [entire] = [-infinity, 0.0]',
 )
 DIVERGENCES.update({text: _POW_REV_LOOSE for text in _POW_REV_LOOSE_ROWS})
-# M13g: the vectors expecting PossiblyUndefinedOperation, decided exactly here (PROPOSED category)
+# M13g: the vectors expecting PossiblyUndefinedOperation, decided exactly here (D18)
 DIVERGENCES.update({
     'b-textToInterval "[1.0000000000000001, 1.0000000000000002]" = [1.0, 0x1.0000000000001p+0] '
     'signal PossiblyUndefinedOperation': _EXACT_VALID,
@@ -581,8 +582,10 @@ def to_ours(literal, cls=MultiInterval, as_float=False, decorated=False):
 
 
 def is_decorated(vector) -> bool:
-    """a decoration on an operand or on the result (M13g part 3)"""
-    values = (*vector.args, *(vector.expected if isinstance(vector.expected, tuple) else (vector.expected,)))
+    """a decoration on an operand or on the result (M13g part 3). `Interval` is a NamedTuple, so only a
+    two-value result is unpacked: unpacking an interval would read its fields, never its decoration"""
+    pair = isinstance(vector.expected, tuple) and not isinstance(vector.expected, Interval)
+    values = (*vector.args, *(vector.expected if pair else (vector.expected,)))
     return any(isinstance(v, Interval) and v.decoration for v in values)
 
 
@@ -1011,6 +1014,15 @@ def test_signalled_reads_only_undefined_operation(monkeypatch):
     monkeypatch.setitem(OPS, vector.op, plain)
     with pytest.raises(ValueError, match='plain'):
         _signalled(vector)
+
+
+def test_is_decorated_sees_the_result_alone():
+    """a decoration on the result alone counts (2026-09-27: no vector has one yet, and an `Interval`
+    result used to be unpacked into its fields, so its decoration was never seen)"""
+    bare, com = Interval(Fraction(1), Fraction(2)), Interval(Fraction(1), Fraction(2), 'com')
+    for expected, want in ((com, True), (bare, False), ((bare, com), True), ((bare, bare), False)):
+        v = Vector('x.itl:1', 't', 'sqr', (bare,), expected, 'sqr [1, 2] = [1, 2]')
+        assert is_decorated(v) is want, expected
 
 
 def test_no_decorated_pair_goes_unchecked():
