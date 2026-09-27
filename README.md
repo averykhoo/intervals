@@ -61,6 +61,13 @@ intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]'
 [1, 2]_com
 >>> print(d / DecoratedInterval(MI(-1, 1)))      # 1/0 is outside the domain: trv
 { [-inf, -1] , [1, inf] }_trv
+>>> from intervals import derivative, newton
+>>> print(derivative(lambda t: t ** 3 - 2 * t, MI(-1, 2)))   # forward-mode autodiff over a set
+[-2, 10]
+>>> for root in newton(lambda t: t ** 2 - 2, MI(-10, 10)):   # every zero, each proved unique
+...     print(root.unique, root.interval)
+True (-1.4142135623730951, -1.414213562373095)
+True (1.414213562373095, 1.4142135623730951)
 
 ```
 
@@ -138,6 +145,16 @@ intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]'
   propagate the decoration as 1788 does (the weakest of the operands' and the op's own on the
   operands' sets: `DecoratedInterval(MI(1, 2)) / DecoratedInterval(MI(0, 1))` is `[1, inf]_trv`).
   the reverse ops take `DecoratedInterval` operands too and decorate the result trv, as 1788 does
+* **autodiff** (M15): `Dual.variable(X)` and the ops on it (`+ - * / **`, `abs`, `reciprocal`, the
+  elementary functions) carry a derivative beside the value, each a set, by the chain rule over the
+  library's own ops; `derivative(f, X)` encloses `f'` over `X`. with `DecoratedInterval` parts the
+  decorations prove `f` C¹ on `X` (dac or better on both), which an enclosure of `f'` alone does not
+* **interval newton** (M15): `newton(f, X)` returns `Root(interval, unique)`s holding every zero of
+  `f` in `X` (any multi-interval, unbounded included), `unique` when exactly one zero is proved. its
+  step is `m + mul_rev(F', -f(m))`, so where the derivative's set holds 0 one step cuts the piece in
+  two, where a connected interval type would get the hull; the step runs only where the
+  decorations prove `f` C¹, elsewhere the pieces are pruned by range and bisected. it computes in
+  `OutwardMultiInterval`, so every root encloses
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`
@@ -167,7 +184,7 @@ intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]'
   (the elementary functions over sets, and at one point), `numeric` (midpoint, radius, width,
   magnitude, mignitude), `reductions` (sums and dot products of numbers), `reverse` (the reverse
   ops), `literals` (1788's interval literals and constructors), `decorated` (1788's decorated
-  type), `rounding`, `errors`
+  type), `autodiff` (`Dual`), `solver` (`newton`), `rounding`, `errors`
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)

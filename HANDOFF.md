@@ -11,13 +11,18 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-09-27)
 
+* **M15 (H3's first part) built on `v2`, committed, not pushed**: forward-mode autodiff
+  (`intervals/autodiff.py`, `Dual`, `derivative`) and interval newton (`intervals/solver.py`,
+  `newton`, `Root`), exported from `intervals`. the choices the build made are D19, owner question
+  Q11. record: plan §2 M15; design: `v2-plan.md` "the solver stack"
+
 * branch `v2`: M13 finished and merged 2026-09-27 (branches `m13e`, `m13g`, merged in `m13-merge`,
   then fast-forwarded into `v2`); pushed. `origin/v2` is at `a1d45a9`, whose CI run 36305984327
   is green (all 8 jobs, 22166 passed on each of python 3.11-3.14, 2026-09-27): M13e and M13g have
   now run on every supported python
 * gate: `C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q` from the repo root; on
   this shared laptop it runs past the 10-min tool limit, so run it as two calls (`tests/itf1788` and
-  `--ignore=tests/itf1788`). last recorded 2026-09-27 at the H2' fix: 18246 passed in 69 s + 3920 in 687 s (22166; 17346 at M13d)
+  `--ignore=tests/itf1788`). last recorded 2026-09-27 at M15: 18246 passed in 67 s + 4088 in 482 s (22334) (22166 at the H2' fix)
 * M13 done: every statement of the 19 itf1788 files runs (9542 vectors of 111 ops, 0 skipped, pinned
   by `tests/itf1788/test_itf1788.py::test_nothing_is_skipped`); 185 divergence keys, 0 unknown
   failures (2026-09-27; regenerate with `tools/itf1788_census.py`). M14: fuzz job and flint oracle
@@ -34,7 +39,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 | 5 | Q6-rest | `random_multi_interval`, a public `apply()`: to-do, undecided whether to port | owner's call, later | plan §4 (their rows) |
 | 6 | H1 | release 2.0.0 (`pyproject.toml` is now `2.0.0.dev0`) | when everything is fully done (owner 2026-09-26) | plan §2 M11; D5, D17 |
 | 7 | M8 | the time layer on the v2 class | on hold, no rush (owner 2026-09-26); D4 recommends (a), Fraction seconds under a thin wrapper | plan §2 "M8 `time_interval.py`"; D4 |
-| 8 | H3 | solver stack: direction tag on a degenerate zero (only if a solver needs `1/(1/[inf])` back), thin `ieee1788.py`, autodiff, Newton as a test (buildable: the functions exist since M12), numpy interop (today `__array_ufunc__ = None`), per-piece Allen matrix, gmpy2/mpfr backend | not v2.0; numpy and gmpy2/mpfr recorded, not now (owner 2026-09-26); suggested first pick when it starts: Newton with autodiff | `v2-plan.md` "later (not in v2.0)"; the Allen matrix and `ieee1788.py`: `v2-plan.md` decision log "v2 consolidated decisions (2026-08-16)", "comparisons" and "ieee 1788 conformance: test adapter, not a runtime flag" |
+| 8 | H3 | the rest of the solver stack: a solver in several variables (a `Dual` carries one derivative; a gradient, a jacobian, krawczyk), direction tag on a degenerate zero (only if a solver needs `1/(1/[inf])` back; M15 did not), thin `ieee1788.py`, numpy interop (today `__array_ufunc__ = None`), per-piece Allen matrix, gmpy2/mpfr backend. **built 2026-09-27 as M15: forward-mode autodiff and interval newton** (the first pick) | not v2.0; numpy and gmpy2/mpfr recorded, not now (owner 2026-09-26) | `v2-plan.md` "the solver stack" and "later (not in v2.0)"; the Allen matrix and `ieee1788.py`: `v2-plan.md` decision log "v2 consolidated decisions (2026-08-16)", "comparisons" and "ieee 1788 conformance: test adapter, not a runtime flag" |
 | 9 | H4 | delete `archive/v1/` | after v2 is stable (owner 2026-09-26) | plan §2 M10 (last bullet before "done") |
 
 ## open questions for the owner
@@ -51,6 +56,13 @@ session log below; nothing is listed as open and done at once), and list anythin
   call. give the constructors a class argument (`OutwardMultiInterval`, 1788's binary64 hull; new
   API), or is the plain pass enough? kept as built (plan §2 M13g "review")
 
+* **Q11 M15's choices (D19)**, built as the session's defaults when the owner said "do h3 first":
+  (a) `Dual`, `derivative`, `newton` and `Root` are public and exported from `intervals` (the
+  2025-12 sketch named `autodiff.py` and `solver.py`), not newton "as a test" only; (b) newton's
+  step runs only where decorations prove `f` C¹, else the piece is pruned and bisected; (c) the
+  step is `mul_rev`, never `/`; (d) one variable only; (e) `tol=1e-10` absolute, `max_steps=10_000`.
+  keep, rename, or narrow the public surface? (plan §0 D19; `v2-plan.md` "2026-09-27 revision: M15")
+
 Q1-Q8 answered 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers to the open
 questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) answered 2026-09-27
 (`v2-plan.md` "2026-09-27 revision: owner answers on M13's proposed categories (D18)").
@@ -64,6 +76,16 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
   (plan §2 M13d sabotage). recorded, not scheduled
 
 ## session log (newest first)
+
+* **2026-09-27** M15, H3's first part: the owner asked for H3 first; built its suggested first pick,
+  forward-mode autodiff over sets (`Dual`, chain rules over every elementary method, arb's taylor
+  series as the oracle) and interval newton over multi-intervals (`newton`: the step is `mul_rev`,
+  so a derivative set holding 0 splits a piece in one step; C¹ proved by decorations; uniqueness
+  proofs; exponent splits for wide pieces). 30 breaks sabotaged, 23 red at once, the 7 green ones
+  (3 gaps, 4 cost rules) closed with tests and re-run red. the gate's randomized run found an old
+  test-oracle bug in `tests/test_kernel.py::test_normalize_is_canonical` (a midpoint underflowing
+  onto an end), fixed and pinned. gate 18246 passed in 67 s + 4088 in 482 s (22334). not pushed. records: plan
+  §0 D19, §2 M15; `v2-plan.md` "the solver stack" and its 2026-09-27 revision; new question Q11
 
 * **2026-09-27** (`69a667a`..`a1d45a9`, pushed) H2' done: `v2` pushed at `dbec908`, CI red on one
   test-oracle gap, fixed in `d7e46c2`, CI green at `a1d45a9` (plan §1). fuzz ×10 measured locally,

@@ -32,6 +32,7 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D16 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13g), now in `v2-plan.md` "ieee 1788" (`DecoratedInterval`, `UndefinedOperationError`, `PossiblyUndefinedOperationWarning`).** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. 1788's signals, owner 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers"): `UndefinedOperation` **raises** (a `ValueError` subclass, so it reads like `MultiInterval(2, 1)`'s `ValueError`); `PossiblyUndefinedOperation` is an **`IntervalWarning` subclass** (the result is returned); names chosen when built. **no NaI** and no `ill` (owner 2026-09-26): its statements are rows under a new category, M13g | wrapper type; signals as the owner chose | M13g |
 | D17 | **decided 2026-09-25 by owner**: M13 does **not** block the 2.0.0 release, and there is no hurry to release either ("I have zero users and this is a yak shaving pet project"). M13 only adds methods and a type and gives a meaning to exponents that raise `TypeError` today, so nothing that works now changes | release whenever; not blocked | — |
 | D18 | **decided 2026-09-27 by owner**, on M13's proposed categories and choices: (a) **"tighter than the vector"** is an approved residual category (M13e): 11 keys, 18 vectors where 1788's expected hull is looser than the tightest double enclosure and ours is the tightest, checked with arb or exactly; the two grossly loose `pow_rev.itl:609`, `:642` stay in it. (b) **"exact parsing decides validity"** is approved (M13g): the 1788 text constructors read bounds exactly, so no `PossiblyUndefinedOperation` for a near-tie literal; 7 keys. (c) the 15 rows where an exact value past the doubles keeps com (`_BOUNDED_EXACTLY` 3, `PLAIN_ONLY` 12) stay under **decoration expectations**. (d) `set_dec` **demotes** as 1788's `setDec` does; only the `DecoratedInterval` constructor raises | both categories approved; rows stay; set_dec demotes | M13e, M13g |
+| D19 | **decided in the build 2026-09-27 (the session's defaults), open for the owner: `HANDOFF.md` Q11.** the solver stack's first part (M15): (a) `intervals/autodiff.py` (`Dual`, `derivative`) and `intervals/solver.py` (`newton`, `Root`) are public and exported from `intervals`, not newton as a test only; (b) newton's step runs only where `f` is proved C¹ by decorations (dac or better on the value and the derivative), else the piece is pruned and bisected; (c) the step is `mul_rev`, never `/` (D7); (d) one variable; (e) `tol=1e-10` absolute, `max_steps=10_000` | as built | M15 |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
 milestones below: infinite result endpoints always go through attainment (the corner-flag rule is
@@ -436,7 +437,8 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
   `tests/itf1788/test_itf1788.py::SKIPPED`; `isNaI` has no counterpart (and gets none: no NaI, owner 2026-09-26). owner 2026-09-25: add
   every one, as M13b, M13c and M13g (D9, D10, D16)
 * **solver stack** (a; `v2-plan.md` "later (not in v2.0)"): its decorated type was brought forward
-  to M13g by D16; the rest is open, `HANDOFF.md` H3 (numpy and gmpy2/mpfr recorded, not now: owner 2026-09-26)
+  to M13g by D16; autodiff and interval newton built as M15 (2026-09-27); the rest is open, `HANDOFF.md`
+  H3 (numpy and gmpy2/mpfr recorded, not now: owner 2026-09-26)
 * **v1 surface with no v2 row in section 4** (a: port or record as gone): open, `HANDOFF.md` Q6
 * **smaller** (c): the old README's leftovers, `HANDOFF.md` H5
 * **archive deletion** (a): `HANDOFF.md` H4
@@ -2368,6 +2370,104 @@ land with M13a so that every later M13 op arrives with them
 * what is still open in M14: `HANDOFF.md` (M14-run, M14-breadth; each remaining M13 sub-task brings
   its own properties)
 
+### M15 the solver stack's first part: `autodiff.py`, `solver.py` (H3; done 2026-09-27)
+
+the owner, 2026-09-27: "do h3 first". H3 is the solver stack of `v2-plan.md` "later (not in
+v2.0)"; its suggested first pick (`v2-plan.md` "2026-09-26 revision: owner answers") was forward-mode
+autodiff with newton's method, "the demonstration of what multi-intervals are for". numpy and
+gmpy2/mpfr stay out (owner 2026-09-26, recorded, not now); the direction tag was not needed (see
+the design). the choices the build made are D19, open for the owner as `HANDOFF.md` Q11. the
+design is `v2-plan.md` "the solver stack"; here the spec, the exit and the record.
+
+* **`intervals/autodiff.py`**: `Dual(value, derivative)`, two `MultiInterval`s (either class) or two
+  `DecoratedInterval`s; `Dual.variable`, `Dual.constant`, `derivative(f, x)`; the arithmetic
+  dunders, `reciprocal`, `abs`, `**` (number, `Dual` or set exponent, and `number ** Dual`) and
+  every elementary method of `MultiInterval` with its chain rule
+* **`intervals/solver.py`**: `newton(f, x, *, tol, max_steps)` and `Root(interval, unique)`: branch
+  and prune, a newton step `piece ∩ (m + mul_rev(F', -f(m)))` where decorations prove `f` C¹ on a
+  bounded piece, the uniqueness proof (`solver.py::_newton_step`), bisection (by exponent on a
+  piece spanning more than a factor of 16), exact zeros at a point or a closed end
+  (`solver.py::_finish`)
+* exit: every op of `Dual` against an independent oracle (arb's taylor series) for soundness and
+  sharpness; newton sound (every zero enclosed) and its uniqueness claims true on polynomials with
+  known zeros, under any `tol` and `max_steps`; the C¹ gate shown necessary by a function it
+  saves; the gate green; every new property sabotaged once and seen red
+
+record (2026-09-27):
+* **what the build found on its way**, each fixed before the record: the quotient rule as
+  `(u' - (u / v) v') / v` gave `1 / x` over `[-1, 1]` the derivative `[-inf, -1] ∪ [1, inf]` (sound,
+  but the sign lost across the pole); `(u' v - u v') / v ** 2` gives `[-inf, -1]`. newton from far
+  off a zero crept by a constant factor a step (`x ** 2 - 2` on `[-inf, inf]`: 743 evaluations, 2 s);
+  splitting by exponent before any step on a piece spanning more than a factor of 16 made it 57
+  (0.04 s). at a double zero newton converges linearly (3/8 a step at 0 for `x ** 2`) and ran into
+  the subnormals past `tol` (5 s for `x ** 2 (x - c)`); stopping it at `tol` then left a simple
+  zero one step short of its uniqueness proof, so newton goes on past `tol` for at most 8 steps
+  (`solver.py::_PAST_TOL`). a zero on a split point (`cbrt(x) - 1` on `[0, 8]` splits at 1) is a
+  closed end, where no newton set fits inside the interior: `_finish` outputs such an end alone
+  when `f` is exactly 0 there
+* **the gate found an old test-oracle bug** (not M15's, not the library's): the local gate's
+  randomized `tests/test_kernel.py::test_normalize_is_canonical` drew the piece `(0, 5e-324)`, which
+  the test re-expresses split at `(lo + hi) / 2`, here `0.0`, adding the point 0. the kernel was
+  right. fixed in the oracle (a split only at a midpoint strictly inside), the example pinned; the old
+  oracle is red on it. CI never saw it, its profile being derandomized
+* **tests** (`tests/test_autodiff.py`, `tests/test_solver.py`, and the two modules' doctests):
+  each of the 42 rows of `test_autodiff.py::OPS` at drawn points of drawn intervals against
+  `arb_series` (value and derivative, soundness), the derivative at a point within 1e-10 relative
+  (sharpness), random expression trees over the ops (200 examples), every op dac inside its domain
+  and trv or def where it is not differentiable; newton on polynomials from 1 to 4 drawn zeros
+  (ints, fractions, floats; with doubles and close pairs), with and without a budget, 1 to 3 zeros
+  `n + 1/sqrt 2` each proved unique to within 1e-12, `sin` on `[-10, 10]` (7 zeros, each unique,
+  within 2e-15 of `k pi`), the first step's split, `_newton_step`'s three conditions one by one,
+  the non-C¹ example and its sabotage as a test (`::test_not_c1_would_lose_a_zero`), poles,
+  unbounded and multi-piece input, warnings kept inside
+* **measured 2026-09-27** (shared laptop): `tests/test_autodiff.py` 144 tests in about 15 s,
+  `tests/test_solver.py` 21 in about 24 s; the gate numbers are in `HANDOFF.md`'s banner
+* **sabotage** (a throwaway harness: each break alone, `.hypothesis` cleared, the four files' tests
+  with `-x` and a 600 s timeout, the file restored and compared; 2026-09-27). the last column is
+  the first test to fail under `-x`:
+
+| break | first run | final run: red by |
+|---|---|---|
+| cos derivative sign | red | red: `tests/test_autodiff.py::test_op_encloses_value_and_derivative[cos]` |
+| product rule term dropped | red | red: `tests/test_autodiff.py::test_expression_encloses_value_and_derivative` |
+| quotient rule sign | red | red: `tests/test_autodiff.py::test_expression_encloses_value_and_derivative` |
+| sqrt factor | red | red: `tests/test_autodiff.py::test_op_encloses_value_and_derivative[sqrt]` |
+| abs derivative 1 | red | red: `tests/test_autodiff.py::test_op_encloses_value_and_derivative[abs]` |
+| tan derivative | red | red: `tests/test_autodiff.py::test_op_encloses_value_and_derivative[tan]` |
+| exp derivative loose but sound | red | red: `tests/test_autodiff.py::test_op_derivative_is_tight_at_a_point[exp]` |
+| pow 0 derivative | red | red: `tests/test_autodiff.py::test_pow_zero_is_the_constant_one` |
+| pow dual: log term dropped | red | red: `tests/test_autodiff.py::test_op_encloses_value_and_derivative[pow self]` |
+| log base factor | red | red: `tests/test_autodiff.py::test_op_encloses_value_and_derivative[log base 3]` |
+| acos sign | red | red: `tests/test_autodiff.py::test_op_encloses_value_and_derivative[acos]` |
+| C1 gate removed | red | red: `tests/test_solver.py::test_not_c1_is_bisected_not_stepped` |
+| C1 gate at def | red | red: `tests/test_solver.py::test_not_c1_is_bisected_not_stepped` |
+| C1 gate: value decoration ignored | green | red: `tests/test_solver.py::test_a_jump_is_caught_by_the_value_decoration` |
+| uniqueness: 0 in slope allowed | red | red: `tests/test_solver.py::test_newton_step_proves_uniqueness_only_without_zero_slope` |
+| uniqueness: empty image allowed | green | red: `tests/test_solver.py::test_newton_step_proves_uniqueness_only_without_zero_slope` |
+| uniqueness: piece not interior | red | red: `tests/test_solver.py::test_newton_step_proves_uniqueness_only_without_zero_slope` |
+| step not intersected with the piece | red | red: a hypothesis failure in `tests/test_solver.py` (several examples) |
+| division instead of mul_rev | red | red: `tests/test_solver.py::test_every_zero_is_enclosed` |
+| range prune removed | red | red: `tests/test_solver.py::test_sin_zeros` |
+| degenerate always unique | green | red: `tests/test_solver.py::test_a_point_is_unique_only_when_f_is_exactly_zero` |
+| exact-ends rule removed | red | red: `tests/test_solver.py::test_sin_zeros` |
+| no newton past tol | red | red: `tests/test_solver.py::test_close_zeros` |
+| past-tol cap removed (multiple zero runs on) | green | red: `tests/test_solver.py::test_evaluation_budgets` |
+| tol ignored | green | red: `tests/test_solver.py::test_evaluation_budgets` |
+| magnitude split before newton removed | green | red: `tests/test_solver.py::test_evaluation_budgets` |
+| magnitude split across 0 removed | green | red: `tests/test_solver.py::test_evaluation_budgets` |
+| budget drops the stack | red | red: `tests/test_solver.py::test_every_zero_is_enclosed_on_a_budget` |
+| split keeps one piece | red | red: a hypothesis failure in `tests/test_solver.py` (several examples) |
+| bisection drops the split point | red | red: a hypothesis failure in `tests/test_solver.py` (several examples) |
+
+the seven green in the first run were gaps, each closed by a test added the same session and the
+break re-run red: the value's decoration (every derivative formula of `Dual` already carries its
+op's domain, so only a hand-made `Dual` shows it: `::test_a_jump_is_caught_by_the_value_decoration`),
+the empty newton set and the exact point (`::test_newton_step_proves_uniqueness_only_without_zero_slope`,
+`::test_a_point_is_unique_only_when_f_is_exactly_zero`), and four rules that cost time, not
+soundness, pinned by evaluation counts (`::test_evaluation_budgets`, 57, 57, 30, 5 and 49
+evaluations on 2026-09-27, against bounds of 80 and 10; without the magnitude split 743, without
+the cap past tol 922)
+
 ## 3. order and parallelism
 
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
@@ -2378,6 +2478,7 @@ whether it is done (the M13 and M14 headings list them); what is open, and in wh
 `parse`, `__str__` and `__repr__` come from `fmt`); M7a and M9 are independent after M6. total ≈ 12
 working days (the per-milestone sum without M8) plus the M7b session. the first internally usable
 point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6; release needs M7b.
+M15 (H3's first part, 2026-09-27) came after M13, on the owner's call to take H3 first.
 
 ## 4. v1 → v2 surface map (for the M10 README and for not forgetting anything)
 

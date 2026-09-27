@@ -7,7 +7,8 @@ open work and open questions for the owner (including the ones raised in the dec
 2026-09-25/26 entries) live in `HANDOFF.md`; the milestones are in `v2-implementation-plan.md`.
 
 ## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a,
-M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-26; M13's merge, 2026-09-27)
+M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-26; M13's merge, 2026-09-27;
+M15, H3's first part: autodiff and interval newton, 2026-09-27)
 
 ### domain and semantics
 
@@ -717,6 +718,57 @@ M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-
   decorations; the outward pass matches), measured 2026-09-26. the reverse ops (M13e, not here) are
   trv in 1788, `::_trivial`
 
+### the solver stack (M15, H3's first part, 2026-09-27)
+
+built: forward-mode automatic differentiation and an interval newton solver, the demonstration of
+what multi-intervals are for. the rest of H3 is under "later" below.
+
+* **`Dual`** (`intervals/autodiff.py`): a value and a derivative, each a `MultiInterval` (either
+  class) or each a `DecoratedInterval`, never one of each. `Dual.variable(x)` seeds `[1]`,
+  `Dual.constant(x)` `[0]`; a number or a bare set in an op is a constant. its ops are the
+  arithmetic dunders, `reciprocal`, `abs`, `**` (a number exponent as `MultiInterval.__pow__` reads
+  it; a `Dual` or set exponent as pow, `u ** v (v' log u + v u' / u)`; `u ** 0` the constant 1) and
+  every elementary method with `log(base)` and `rootn(n)`, each with its chain rule computed by the
+  library's own ops, so the derivative's set encloses `{f'(x) : x ∈ X, f differentiable at x}`:
+  exactly for int and Fraction, outward in `OutwardMultiInterval` (to nearest in `MultiInterval`
+  with float ends, which is not an enclosure). the quotient rule is `(u' v - u v') / v ** 2`, the
+  square a pown, so `1 / x` gives `-1 / x ** 2` and never a positive value across the pole. no step
+  functions, `%`, `//`, `minimum`, `maximum`, `fma`, `hypot`, `atan2`: not methods of `Dual`.
+  `derivative(f, x)` is `f(Dual.variable(x)).derivative` (`[0]` if `f` returns a number)
+* **an enclosure of f' is not a proof that f is differentiable** (`abs` at 0 has the value
+  `sign(0) = 0`). with decorated parts the two decorations are that proof: every op, and every op
+  of the chain rule's formula, is defined and continuous on the input iff both are dac or com, so
+  `f` is C¹ there. each formula is undefined exactly where its op is not differentiable (`sqrt`,
+  `rootn`, `cbrt`, pow at 0, `asin` at ±1, `acosh` at 1: a division by 0, trv; `abs` across 0:
+  `sign` is def), which `tests/test_autodiff.py` pins op by op
+* **`newton(f, x, *, tol=1e-10, max_steps=10_000)`** (`intervals/solver.py`) returns `Root(interval,
+  unique)`s, disjoint, in order, each a connected piece of `x`, and every zero of `f` in `x` is in
+  one: a branch and prune over the pieces of `x` (a multi-piece `x` is fine), in
+  `OutwardMultiInterval` (int and Fraction stay exact). per piece: prune if `0 ∉ f(piece)`; where
+  both decorations of `f` on a `Dual` of `DecoratedInterval`s are dac or better and the piece is
+  bounded, a newton step `piece ∩ (m + mul_rev(F', -f(m)))` from `m`, the midpoint (as a float if
+  one is in the piece); `mul_rev`, not `/`, because `[0] / [0]` is `∅` (D7) where the mean value
+  theorem needs every `t` (`t * 0 = 0`). where `0 ∈ F'` the step is two pieces: the gap is cut in
+  one step, where a connected interval type gets two intervals (1788's `mulRevToPair`) or their
+  hull. **unique** when the newton set is non-empty, inside the piece's interior, and `0 ∉ F'` (not
+  implied by the others for a multi-piece `F'` with an isolated 0); kept by every later step. a
+  point piece where `f` is exactly `[0]` is a unique zero, and so is a closed end where it is (a
+  zero on a split point is a closed end, where no newton set fits inside the interior)
+* termination: newton goes on while it halves a piece, past `tol` for at most 8 steps (quadratic at
+  a simple zero, so that proves it; linear at a multiple one, 3/8 a step for `x ** 2` at 0); a
+  proved zero is narrowed until a step no longer narrows it; else bisection at the midpoint, or,
+  on a piece spanning more than a factor of 16 in magnitude, at 0, ±1 or ±2 ** the mean binary
+  exponent, with no newton step (so `[-inf, inf]` reaches the scale of its zeros in about a dozen
+  splits: `x ** 2 - 2` on it in 57 evaluations, measured 2026-09-27); an unproved piece is output
+  once its width is at most `tol` or it cannot be split, and past `max_steps` the whole stack is
+  output as it is (still every zero enclosed)
+* `f` takes one argument and uses the library's ops on it, with numbers as its constants (it is
+  called with a decorated `Dual`, which refuses a bare set, and with a point as an
+  `OutwardMultiInterval`). the library's warnings inside `f` are silenced: a piece the solver makes
+  can be an indeterminate point (`1/[0]`), which is no news to the caller
+* the direction tag under "later" was not needed: the C¹ gate keeps newton off anything holding
+  ±inf as a point, and a range check on such a piece needs no tag
+
 ### package layout
 
 modules export pure functions over cut tuples; one class file on top binds the dunders. no mixins.
@@ -748,6 +800,9 @@ imports only point downward.
                            nums_to_interval, 1788's bare constructors (M13g); above the class
         decorated.py       Decoration, DecoratedInterval (a MultiInterval and a decoration),
                            set_dec and the d- constructors (M13g); above literals
+        autodiff.py        Dual, derivative: forward-mode autodiff over sets (M15); above decorated
+        solver.py          newton, Root: interval newton over multi-intervals (M15); above
+                           autodiff and reverse
         multi_interval.py  the class and OutwardMultiInterval: immutable cut tuple; _coerce
                            (numbers and intervals only — strings go through an explicit
                            parse()); one-line dunders. arithmetic
@@ -770,7 +825,8 @@ imports only point downward.
                            test_orders.py, the orders and the interior, M13c;
                            test_cancel.py, cancellation, M13f;
                            test_literals.py, test_decorated.py and test_propagation.py,
-                           1788's literals, the decorated type and propagation, M13g)
+                           1788's literals, the decorated type and propagation, M13g;
+                           test_autodiff.py and test_solver.py, M15)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
@@ -885,6 +941,15 @@ imports only point downward.
   ops on decorated grid sets, `x` omitted or given, is the core op's set on the intervals, in its
   class, decorated trv (`::test_each_reverse_op_is_trv`); a bare set beside a decorated one is
   refused, a number is a point, the class is kept, the core's warning reaches the caller once
+* autodiff and newton (M15, 2026-09-27): `tests/test_autodiff.py` checks every op of `Dual`, and
+  random expression trees over them, against arb's taylor series (`arb_series`, python-flint): at
+  an exact point of a drawn interval, f and f' are in the value's and the derivative's sets, and at
+  a point the derivative is within 1e-10 relative, so a loose formula is caught; the decorations
+  are dac inside each op's domain and not where it is not differentiable.
+  `tests/test_solver.py`: on polynomials from drawn zeros, every zero is enclosed (under any `tol`
+  and `max_steps`), a unique `Root` holds exactly one distinct zero, the roots are disjoint and in
+  order; by example the first step's split, a non-C¹ function whose derivative's values would lose
+  a zero (`abs(x) + x / 2 - 1/4` on `[-1, 3]`), close zeros, poles, unbounded and multi-piece input
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
   every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 100) times its
   own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
@@ -901,11 +966,31 @@ imports only point downward.
 * a decorated wrapper type, with the solver. owner 2026-09-25: brought forward to
   `v2-implementation-plan.md` M13g, for the itf1788 decoration vectors; the core stays undecorated.
   built 2026-09-26 (`DecoratedInterval`, "ieee 1788" above); what stays here is the solver using it
-* forward-mode autodiff, newton's method as a test, numpy compat (array API / `__array_ufunc__`),
-  gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook (not a tighter one).
-  owner 2026-09-26: numpy and gmpy2/mpfr recorded, not now
+* forward-mode autodiff and newton's method: **built 2026-09-27** (M15, "the solver stack" above).
+  still here: numpy compat (array API / `__array_ufunc__`; today `__array_ufunc__ = None` on every
+  type, `Dual` included), gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook
+  (not a tighter one), owner 2026-09-26: recorded, not now. and, from `HANDOFF.md` H3: a thin
+  `ieee1788.py`, a per-piece Allen matrix, a solver in several variables (a `Dual` carries one
+  derivative), 1788's `mulRevToPair` as an op (Q9)
 
 ## decision log
+
+### 2026-09-27 revision: M15, autodiff and interval newton (H3's first part), built
+
+the owner asked for H3 first; its suggested first pick (2026-09-26 revision below) was built. the
+choices the build made, each the session's default, open for the owner (`HANDOFF.md` Q11; D19 in
+v2-implementation-plan.md):
+* **public, in the package**: `intervals/autodiff.py` (`Dual`, `derivative`) and
+  `intervals/solver.py` (`newton`, `Root`), exported from `intervals`, as the 2025-12 layout sketch
+  named them (`autodiff.py`, `solver.py`), rather than newton "as a test" only
+* **C¹ is proved by decorations** (dac or better on the value and on the derivative), the decorated
+  type's use in the solver that the "later" list kept back; where it fails the piece is only pruned
+  and bisected. the alternative, trusting the caller that `f` is differentiable, is the silent
+  failure `tests/test_solver.py::test_not_c1_would_lose_a_zero` shows
+* **the step is `mul_rev`**, the reverse op, never `/`: `[0] / [0]` is `∅` (D7)
+* **one variable**: a `Dual` carries one derivative; several variables (a gradient, a jacobian and
+  a krawczyk or newton step in n dimensions) are not built
+* `tol=1e-10` absolute, `max_steps=10_000`; float midpoints; the magnitude split at a factor of 16
 
 ### 2026-09-27 revision: owner answers on M13's proposed categories (D18)
 

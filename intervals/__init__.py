@@ -42,6 +42,11 @@ from intervals.decorated import Decoration
 from intervals.decorated import nums_to_decorated_interval
 from intervals.decorated import set_dec
 from intervals.decorated import text_to_decorated_interval
+# M15: the solver stack's first part, autodiff and interval newton (H3)
+from intervals.autodiff import Dual
+from intervals.autodiff import derivative
+from intervals.solver import Root
+from intervals.solver import newton
 
 EMPTY = MultiInterval()
 REALS = MultiInterval(-_math.inf, _math.inf)  # the affine extended reals, both infinities included
@@ -90,4 +95,9 @@ __all__ = [
     'set_dec',
     'text_to_decorated_interval',
     'nums_to_decorated_interval',
+    # M15: the solver stack's first part, autodiff and interval newton (H3)
+    'Dual',
+    'derivative',
+    'newton',
+    'Root',
 ]

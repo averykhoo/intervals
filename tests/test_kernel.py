@@ -1,4 +1,5 @@
 import math
+import random
 
 import pytest
 from hypothesis import example
@@ -61,12 +62,15 @@ def test_normalize_is_valid_and_covers_the_same_points(pairs_):
 
 
 @given(cut_tuples(), st.randoms(use_true_random=False))
+@example((above(0), below(5e-324)), random.Random(0))  # (0 + 5e-324) / 2 is 0.0
 def test_normalize_is_canonical(cuts, rnd):
-    # re-express the same set as split, duplicated and shuffled pieces
+    # re-express the same set as split, duplicated and shuffled pieces. a piece is split only at a
+    # midpoint strictly inside it: between adjacent floats the midpoint rounds onto an end, and the
+    # split would add that end as a point (the oracle's bug found 2026-09-27, not the kernel's)
     parts = []
     for lo, lo_closed, hi, hi_closed in pieces(cuts):
-        if math.isfinite(lo) and math.isfinite(hi) and lo < hi:
-            mid = (lo + hi) / 2
+        mid = (lo + hi) / 2 if math.isfinite(lo) and math.isfinite(hi) else None
+        if mid is not None and lo < mid < hi:
             parts += [piece(lo, mid, lo_closed, False), piece(mid, hi, True, hi_closed)]
         else:
             parts.append(piece(lo, hi, lo_closed, hi_closed))
