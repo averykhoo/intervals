@@ -12,9 +12,9 @@ session log below; nothing is listed as open and done at once), and list anythin
 ## banner (2026-09-27)
 
 * branch `v2`: M13 finished and merged 2026-09-27 (branches `m13e`, `m13g`, merged in `m13-merge`,
-  then fast-forwarded into `v2`); **not pushed**. `origin/v2` is at `e5dc315`; everything after it
-  is local. the last CI run is 36219282601 at `2f3a895` (all 8 jobs green, 2026-09-26): nothing of
-  M13e or M13g has run on python 3.11, 3.12 or 3.14 yet
+  then fast-forwarded into `v2`); pushed 2026-09-27 at `dbec908` (gate green first: 18246 in 66 s +
+  3920 in 691 s). **CI run 36293351201 at `dbec908` is red** (2026-09-27): the 4 exhaustive jobs
+  green, all 4 gate jobs (3.11-3.14) `1 failed, 22165 passed`, the same one: see H2'
 * gate: `C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q` from the repo root; on
   this shared laptop it runs past the 10-min tool limit, so run it as two calls (`tests/itf1788` and
   `--ignore=tests/itf1788`). last recorded 2026-09-27 at M13's close: 18246 passed in 40 s + 3920 in 510 s (22166; 17346 at M13d)
@@ -27,7 +27,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
-| 1 | H2' | push `v2` (M13e, M13g, the merge, D18) and read the CI run: the first run of the reverse ops and the decorated type on python 3.11-3.14 | needs the owner's go-ahead to push | plan §1 (CI) |
+| 1 | H2' | CI red at `dbec908` (run 36293351201, 2026-09-27): `tests/test_reverse.py::test_mul_rev_float_operands` fails line 751 `exact_all.issubset(_widened(nearest_all))` on every python, at `b=(Cut(-inf, ABOVE), Cut(2.2250738585e-313, BELOW)), c=(Cut(0.5, ABOVE), Cut(1.0, BELOW)), x=()`. exact is `(-inf, 0) ∪ (0.5/b, inf)` with `0.5/b` ≈ 2.2e312 > the largest double; to nearest that end rounds to `inf`, giving the piece `[inf]`, and `_widened` leaves non-finite ends alone, so `(2.2e312, inf)` is outside it. the local gate passed because the local hypothesis profile is randomized; CI's `ci` profile is derandomized and finds it every run. replaying the example against the local tree fails the same way (2026-09-27). open: an oracle gap (widen an end rounded to ±inf to ±the largest double) or should nearest not give `[inf]` there? then pin the example as an `@example` | the owner's call on which | plan §1 (CI) |
 | 2 | M14-run | the fuzz workflow's first green run on GitHub; record its example count and time, dated. `multiplier=10` is the cheap first `workflow_dispatch`; ×100 was extrapolated to 2.2-3.4 h before M13e/g, under the 350-min timeout, and M13e/g grew the gate from 17346 to 22166 items (the non-vector ones, where the property tests are, from 3351 to 3920; 2026-09-27), so re-extrapolate from the ×10 run before trying ×100 | caveat: `.github/workflows/fuzz.yml` is not on `origin/master` (no workflows there at all), and GitHub runs `schedule` and `workflow_dispatch` only for workflows on the default branch (GitHub docs; not tried here), so a push to `v2` alone may not make it runnable | plan §2 M14 "exit" and "**the fuzz job, built 2026-09-26**" |
 | 3 | M14-breadth | fuzz where it is thin: `tests/test_extreme_floats.py` extended to the functions, `minimum`/`maximum`/`fma`, `%`, `//` and `OutwardMultiInterval`; more `@given` in `test_outward`, `test_steps`, `test_fmt`, `test_applicator` | ready | plan §2 M14 "**breadth where fuzz is thin**" |
 | 4 | Q6-shift | port v1's `<<` and `>>` (owner 2026-09-26: "for sure"); choose the meaning on real sets when built (`A * 2**n`; `>>` exact or floored) | ready | plan §4 (the `<<`, `>>` row); `v2-plan.md` "2026-09-26 revision: owner answers" |
