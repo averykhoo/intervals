@@ -426,9 +426,10 @@ float_cut_tuples = cut_tuples(values=float_values)
 
 
 def _widened(r: MultiInterval) -> MultiInterval:
-    """each piece closed and one double wider at each finite end"""
-    return M.from_pieces((math.nextafter(lo, -INF) if math.isfinite(lo) else lo,
-                          math.nextafter(hi, INF) if math.isfinite(hi) else hi)
+    """each piece closed and one double wider at each end but -inf below and inf above; so a piece
+    `[inf]`, an end past the largest double to nearest, is widened to `[max, inf]`"""
+    return M.from_pieces((math.nextafter(lo, -INF) if lo != -INF else lo,
+                          math.nextafter(hi, INF) if hi != INF else hi)
                          for lo, _, hi, _ in pieces(r.cuts))
 
 
@@ -727,6 +728,8 @@ def test_mul_rev_by_a_point(y, c, x, cls):
 @example(b=one(3.0, 3.0), c=one(1.0, 1.0), x=ALL)  # 1/3, one point: outward two doubles, open
 @example(b=one(MAX, MAX), c=one(H('0x0.0000000000001p-1022'), 1.0), x=ALL)  # underflow below the least subnormal
 @example(b=one(H('0x0.0000000000001p-1022'), 1.0), c=one(MAX, MAX), x=ALL)  # past max float
+@example(b=one(-INF, H('0x0.0000a7c5ac472p-1022'), False, False), c=one(0.5, 1.0, False, False),
+         x=())  # CI 2026-09-27: an end past max float, to nearest the piece [inf]
 def test_mul_rev_float_operands(b, c, x):
     """outward: the exact result of the same doubles is inside, what rounding adds holds no double
     strictly inside it, a closed end is a point of the exact result. to nearest, x omitted (an end of
