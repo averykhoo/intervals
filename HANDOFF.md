@@ -79,7 +79,8 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
   (D18). the adapter's `::is_decorated` missed a decoration on the result alone (0 vectors run
   differently; the census undercounted 1521 for 1624), fixed and pinned. `.scratch/m13` audited
   (174 files): 2 notes' unrecorded review results transcribed into the M13e record, then the
-  directory deleted. records: plan §2 M13e, M13g, "exit for M13"; `v2-plan.md` 2026-09-27 revisions
+  directory left in place: neither Recycle Bin route worked from the session, and the audit found
+  nothing else in it untracked, so `.scratch/m13/` can go to the Recycle Bin by hand. records: plan §2 M13e, M13g, "exit for M13"; `v2-plan.md` 2026-09-27 revisions
 
 * **2026-09-26** the owner answered Q3-Q7 and H1-H5 (`v2-plan.md` "2026-09-26 revision: owner
   answers to the open questions"); then, after 1788's context, Q1 (`UndefinedOperation` and `IntvlPartOfNaI` raise,
