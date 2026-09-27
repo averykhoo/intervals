@@ -63,7 +63,7 @@ vendoring.
   under GitHub Actions hypothesis loads its built-in `ci` profile (derandomized, no deadline).
   `tests/conftest.py` (M14, 2026-09-26) loads nothing unless `HYPOTHESIS_PROFILE` is set, so the
   gate still gets hypothesis's own choice (`default` locally, `ci` under Actions); set to `fuzz` it
-  runs every hypothesis test randomized at `FUZZ_MULTIPLIER` (default 100) times its examples,
+  runs every hypothesis test randomized at `FUZZ_MULTIPLIER` (default 10; 100 until 2026-09-27) times its examples,
   which `.github/workflows/fuzz.yml` does weekly and on `workflow_dispatch`, never on push (M14).
   first run 2026-09-25 at `d232b78` (run 36091651163), all 8 jobs green:
   the gate took 71-94 s on each python, and on the runners the exhaustive jobs took 21 s

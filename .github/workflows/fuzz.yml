@@ -1,5 +1,5 @@
 # weekly randomized fuzzing, not in the gate: HYPOTHESIS_PROFILE=fuzz makes tests/conftest.py run
-# every hypothesis test randomized with FUZZ_MULTIPLIER (default 100) times its gate examples.
+# every hypothesis test randomized with FUZZ_MULTIPLIER (default 10) times its gate examples.
 # the ci profile the gate gets is derandomized, so only this job tries new inputs in CI.
 # .hypothesis/ (the example database) is carried between runs, so a failing example found once is
 # replayed first by every later run until it is fixed; each one found is pinned as an @example on
@@ -13,7 +13,7 @@ on:
     inputs:
       multiplier:
         description: "times each test's gate max_examples"
-        default: "100"
+        default: "10"
 
 permissions:
   contents: read
@@ -25,12 +25,13 @@ concurrency:
 jobs:
   fuzz:
     runs-on: ubuntu-latest
-    # measured 2026-09-26: tests/test_ops_properties.py alone took 90 s at x1 and 1155 s at x10
-    # locally, so x100 over the suite is some hours; 360 is the hosted runner's ceiling
-    timeout-minutes: 350
+    # measured 2026-09-27 at dbec908 on the laptop: the suite at x10 took 84 min (5037 s), and
+    # x100 extrapolates to 13-16 h, past the hosted runner's 360-min ceiling. x10 keeps the weekly
+    # run cheap; a dispatch above about x20 needs timeout-minutes raised first (360 at most)
+    timeout-minutes: 180
     env:
       HYPOTHESIS_PROFILE: fuzz
-      FUZZ_MULTIPLIER: ${{ inputs.multiplier || '100' }}
+      FUZZ_MULTIPLIER: ${{ inputs.multiplier || '10' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6

@@ -1,5 +1,5 @@
 # the fuzz profile, for .github/workflows/fuzz.yml: HYPOTHESIS_PROFILE=fuzz runs every hypothesis
-# test randomized, with no deadline and FUZZ_MULTIPLIER (default 100) times its usual examples.
+# test randomized, with no deadline and FUZZ_MULTIPLIER (default 10) times its usual examples.
 # with HYPOTHESIS_PROFILE unset this file does nothing, so the gate keeps hypothesis's own choice:
 # the `default` profile locally and the derandomized `ci` profile under GitHub Actions.
 import os
@@ -24,12 +24,12 @@ if PROFILE:
 def pytest_collection_modifyitems(items):
     # a test's own @settings(max_examples=N) overrides any profile's max_examples, and most tests
     # pin one, so the profile cannot raise the count. instead each hypothesis test's settings are
-    # rewrapped here with max_examples times the multiplier: 100 -> 10000 for a test that pins
-    # nothing, 60 -> 6000 for one that pins 60. a parametrized test is one function behind many
+    # rewrapped here with max_examples times the multiplier, at x10 100 -> 1000 for a test that pins
+    # nothing, 60 -> 600 for one that pins 60. a parametrized test is one function behind many
     # items, so each function is rewrapped once, not once per item
     if not FUZZ:
         return
-    multiplier = int(os.environ.get('FUZZ_MULTIPLIER', '100'))
+    multiplier = int(os.environ.get('FUZZ_MULTIPLIER', '10'))
     seen = set()
     for item in items:
         test = getattr(getattr(item, 'obj', None), '__func__', getattr(item, 'obj', None))
