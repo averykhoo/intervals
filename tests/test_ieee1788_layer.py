@@ -295,6 +295,13 @@ def test_flavours(name):
     assert f(Fraction(1, 10), bare) == f(Interval(Fraction(1, 10)), bare)
 
 
+def test_a_call_of_numbers_alone_is_bare():
+    """no operand is a decorated interval, so the call is bare (the review's S1)"""
+    assert ieee1788.add(1, 2) == Interval(3.0) and ieee1788.add(1, 2).decoration is None
+    assert ieee1788.sqrt(4.0) == Interval(2.0) and ieee1788.fma(1, 2, 3) == Interval(5.0)
+    assert ieee1788.mul_rev_to_pair(2.0, 4.0) == (Interval(2.0), Interval())
+
+
 LIBRARY_VALUES = [MultiInterval(1, 2), OutwardMultiInterval(1.0, 2.0), DecoratedInterval(MultiInterval(1, 2))]
 
 
@@ -347,12 +354,18 @@ def cancel_1788(a: Interval, b: Interval) -> Interval:
 @st.composite
 def cancel_operands(draw):
     a = draw(intervals_1788())
-    kind = draw(st.integers(0, 3))
+    kind = draw(st.integers(0, 4))
     if kind == 0 and ends(a) is not None:
         b = a  # equal widths
     elif kind == 1:  # a shift of a small-integer a: equal widths, exactly
         lo, width, shift = draw(st.integers(-8, 8)), draw(st.integers(0, 6)), draw(st.integers(-5, 5))
         a, b = Interval(float(lo), float(lo + width)), Interval(float(lo + shift), float(lo + width + shift))
+    elif kind == 2:  # widths equal as floats but not exactly (the review's F1, S6): big - small and
+        # big + small round to big, since small < ulp(big) / 2
+        big, small = draw(st.floats(2.0 ** 54, 2.0 ** 70)), draw(st.floats(TINY, 0.5))
+        a, b = draw(st.sampled_from([(Interval(small, big), Interval(0.0, big)),
+                                     (Interval(0.0, big), Interval(-small, big)),
+                                     (Interval(0.0, big), Interval(small, big))]))
     else:
         b = draw(intervals_1788())
     return a, b
@@ -364,6 +377,10 @@ def cancel_operands(draw):
 @example((Interval(), Interval(1.0, INF)), False)
 @example((Interval(), Interval()), True)
 @example((Interval(1.0, 5.0), Interval(1.0, 5.1)), False)
+# the widths compared exactly (the review's F1, S6): wid a < wid b, but not in floats
+@example((Interval(0.1, 1e17), Interval(0.0, 1e17)), False)  # 1e17 - 0.1 rounds to 1e17
+@example((Interval(0.0, 1e16), Interval(-1e16, 1.0)), False)  # 1e16 + 1 rounds to 1e16
+@example((Interval(-MAX, math.nextafter(MAX, 0)), Interval(-MAX, MAX)), False)  # both overflow
 def test_cancel_minus_is_1788s(ab, decorated):
     a, b = ab
     want = cancel_1788(a, b)
@@ -473,8 +490,10 @@ def decorated_pair_operands(draw):
 @example((Interval(1.0, INF, 'dac'), Interval(1.0, 2.0, 'com')))
 def test_mul_rev_to_pair_decorated(bc):
     """0 not in b: (div(c, b), [empty]_trv), 1788's wording; 0 in b: both trv. the sets are the bare
-    pair's, and where 0 is not in b the bare pair's first member is div's set (the law of the design's
-    5.1: the two branches agree where both apply)"""
+    pair's. the law of the design's 5.1 (where 0 is not in b the pieces of mul_rev are div's set) is
+    drawn by ::test_mul_rev_to_pair_bare, against the library's pieces: here both sides of the div
+    assertions come from the layer's div branch, so they pin the decoration and the branch only (the
+    review's m4)"""
     b, c = bc
     first, second = ieee1788.mul_rev_to_pair(b, c)
     bare = ieee1788.mul_rev_to_pair(bare_and(b), bare_and(c))
@@ -799,6 +818,9 @@ def test_the_class():
     assert x != x.to_set() and y != y.to_set()
     with pytest.raises(AttributeError):
         x._set = Interval(3.0)._set
+    with pytest.raises(AttributeError):  # the review's S5
+        del x._set
+    assert x == Interval(1.0, 2.0)
     assert Interval.__array_ufunc__ is None
     assert pickle.loads(pickle.dumps(y)) == y
     assert not Interval() and x
@@ -817,3 +839,13 @@ def test_exponents_are_ints(call):
     """1788's pown, rootn and pownRev take an integer (critique n2); `x ** 2.0` is D11's pown"""
     with pytest.raises(TypeError):
         call()
+
+
+@pytest.mark.parametrize('x', [Interval(), Interval(1.0, 4.0), Interval(decoration='trv'), Interval(1.0, 4.0, 'com')])
+def test_rootn_of_degree_0_raises(x):
+    """the library's rule (`v2-plan.md`: rootn for every int n other than 0), kept by the layer for
+    every x, the empty set included (the review's F3); `pown_rev(c, 0)` answers, as the library's"""
+    with pytest.raises(ValueError, match='degree'):
+        ieee1788.rootn(x, 0)
+    assert ieee1788.pown_rev(Interval(1.0, 2.0), 0) == Interval(-INF, INF)
+    assert ieee1788.pown_rev(Interval(2.0, 3.0), 0) == Interval()

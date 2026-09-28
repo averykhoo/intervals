@@ -46,6 +46,7 @@ from fractions import Fraction
 
 import pytest
 
+from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import ieee1788
 from intervals.decorated import Decoration
@@ -282,6 +283,25 @@ def test_the_comparison_is_exact():
     assert same(read(number), expected_form(number))
     with pytest.raises(AssertionError):
         read(number, lambda v: Fraction(1))
+    # a pair of numbers (midRad) with a member that is not a python float (the review's S4)
+    pair = _vector('midRad [0.0,2.0] = 1.0 1.0')
+    assert same(read(pair), expected_form(pair))
+    with pytest.raises(AssertionError):
+        read(pair, lambda v: (Fraction(1), 1.0))
+    # a set of another type than the layer's (to-nearest float ends, closed, one piece: every other
+    # check passes, so only the type assertion sees it; the review's S3)
+    object.__setattr__(fake, '_set', MultiInterval(4.0, 6.0))
+    with pytest.raises(AssertionError):
+        read(bare, lambda v: fake)
+
+
+def test_a_stale_row_fails(monkeypatch):
+    """a row whose vector matches fails as stale (the module docstring's promise; the review's S2)"""
+    vector = _vector('add [1.0,2.0] [3.0,4.0] = [4.0,6.0]')
+    check(vector)
+    monkeypatch.setitem(ROWS, key(vector), 'tighter than the vector: a probe')
+    with pytest.raises(AssertionError, match='stale row'):
+        check(vector)
 
 
 def test_an_escaped_warning_fails():
