@@ -11,7 +11,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-09-28)
 
-* **M16 (H3's second part) built on `v2` (merged in `h3-merge`, then fast-forwarded), committed, not pushed**: the owner, 2026-09-27: "get
+* **M16 (H3's second part) built on `v2` (merged in `h3-merge`, then fast-forwarded), pushed 2026-09-28**: the owner, 2026-09-27: "get
   the rest of h3 done". five streams, each on its own branch off `v2` at `04946af`, merged into
   `h3-merge` without conflicts: M16a the solver in several variables (`gradient`, `jacobian`,
   `solve`, `RootBox`, exported from `intervals`), M16b the 1788 layer (`intervals/ieee1788.py`, not
@@ -20,15 +20,14 @@ session log below; nothing is listed as open and done at once), and list anythin
   (`intervals/backend.py`, `intervals/_gmpy2.py`; opt-in, the pure path by default). the choices
   the build made are D20-D24, owner questions Q12-Q16. gate on the merged tree green: 27795 passed in 84 s (`tests/itf1788`) + 5535 in 747 s (the rest) = 33330, 2026-09-28 at `511056d` (the merged code; the doc commit after it changes docs and one comment only). records:
   plan §2 M16; design: `v2-plan.md` "current design" and its five 2026-09-28 revisions
-* **M15 (H3's first part) built on `v2` (`04946af`), committed, not pushed**: forward-mode autodiff
+* **M15 (H3's first part) built on `v2` (`04946af`), pushed 2026-09-28 with M16**: forward-mode autodiff
   (`intervals/autodiff.py`, `Dual`, `derivative`) and interval newton (`intervals/solver.py`,
   `newton`, `Root`), exported from `intervals`. the choices the build made are D19, owner question
   Q11. record: plan §2 M15; design: `v2-plan.md` "the solver stack". M16 is on top of it
 
 * branch `v2`: M13 finished and merged 2026-09-27 (branches `m13e`, `m13g`, merged in `m13-merge`,
-  then fast-forwarded into `v2`); pushed. `origin/v2` is at `a1d45a9`, whose CI run 36305984327
-  is green (all 8 jobs, 22166 passed on each of python 3.11-3.14, 2026-09-27): M13e and M13g have
-  now run on every supported python
+  then fast-forwarded into `v2`); pushed, CI run 36305984327 at `a1d45a9` green (all 8 jobs, 22166
+  passed on each of python 3.11-3.14, 2026-09-27). M15 and M16 pushed 2026-09-28 at `3aaf8f4`: CI run 36402681261 at `3aaf8f4` (M15 and M16's first, 2026-09-28): 7 of 8 jobs green, the gate 33330 passed on python 3.12-3.14 in 365-429 s; on python 3.11 `1 failed, 33329 passed in 393 s`, `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[longdouble-pow]`, a test-oracle bug: python 3.11 gets numpy 2.4.6 (2.5 dropped 3.11), which compares a wider long double with a float as its double, so the oracle's `f == s` read `1 + 2 ** -60` as 1.0 while the library kept it exact, as designed (`cuts.py::normalize_value` decides on exact values). the oracle now decides exactly, pinned by `::test_python_number_decides_exactly` (red on the old oracle); the exhaustive jobs 19 s to 8 min 54 s. the fix is pushed after it; its CI run is the check
 * gate: `C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q` from the repo root; on
   this shared laptop it runs past the 10-min tool limit, so run it as two calls (`tests/itf1788` and
   `--ignore=tests/itf1788`; M16's streams split the second in three by file). last recorded
@@ -218,14 +217,10 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
 * M13d's extra working bits near 0 for expm1 and log1p (`elementary.py::_tiny_bits`) are a speed
   measure only: removing them keeps every test green, since ziv then doubles the precision itself
   (plan §2 M13d sabotage). recorded, not scheduled
-* M16 is not pushed: none of its new tests (`tests/test_gradient.py`, `tests/test_solve.py`,
-  `tests/test_ieee1788_layer.py`, `tests/itf1788/test_ieee1788.py`, `tests/test_numpy_compat.py`,
-  `tests/test_backend.py`, and M16c's and M16d's additions to `tests/test_relations.py` and
-  `tests/test_autodiff.py`) has run on CI (python 3.11-3.14) or under the fuzz profile; the local
-  gates are the only evidence. the long double half of
-  `tests/test_numpy_compat.py::test_longdouble_is_exact` discriminates only where
-  `np.finfo(np.longdouble).nmant > 52` (CI's linux, never this laptop): its first CI run is its
-  first real run
+* M16's new tests first ran on CI 2026-09-28 (run 36402681261, see the banner); none has run
+  under the fuzz profile. the long double cases (`tests/test_numpy_compat.py::test_longdouble_is_exact`,
+  the `longdouble` rows of test 2) discriminate only where `np.finfo(np.longdouble).nmant > 52`
+  (CI's linux, never this laptop), which is how the numpy 2.4 oracle bug reached CI unseen
 * M16a: a constructed n = 3 system with two zeros costs more than 120 s, so n = 3 is covered by one
   constructed zero and the sphere only, with no random n = 3 test; whether a faster jacobian
   (Q12(a)) or a tighter form of `F` would change that is not measured. the natural path to a split
@@ -262,6 +257,7 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
 
 ## session log (newest first)
 
+* **2026-09-28** pushed `v2` at `3aaf8f4` after a full local gate (27795 + 5535 = 33330 passed); CI run 36402681261 at `3aaf8f4` (M15 and M16's first, 2026-09-28): 7 of 8 jobs green, the gate 33330 passed on python 3.12-3.14 in 365-429 s; on python 3.11 `1 failed, 33329 passed in 393 s`, `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[longdouble-pow]`, a test-oracle bug: python 3.11 gets numpy 2.4.6 (2.5 dropped 3.11), which compares a wider long double with a float as its double, so the oracle's `f == s` read `1 + 2 ** -60` as 1.0 while the library kept it exact, as designed (`cuts.py::normalize_value` decides on exact values). the oracle now decides exactly, pinned by `::test_python_number_decides_exactly` (red on the old oracle); the exhaustive jobs 19 s to 8 min 54 s. a CI babysitter agent (read-only) watched the run and extracted the failure
 * **2026-09-28** M16, H3's second part: the owner said 2026-09-27 "get the rest of h3 done",
   superseding 2026-09-26's "numpy and gmpy2/mpfr recorded, not now". a design workflow first (five
   designers, one per stream, and five adversarial critics), then a build workflow per stream in five

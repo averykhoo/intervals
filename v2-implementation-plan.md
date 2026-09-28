@@ -81,7 +81,7 @@ vendoring.
   quotient passes the largest double, where to nearest gives the piece `[inf]` (as designed) and
   the oracle `_widened` skipped infinite ends; the local gate missed it (randomized profile; `ci`
   is derandomized). fixed in the oracle, the example pinned (`d7e46c2`); run 36305984327 at
-  `a1d45a9` all 8 green, the gate 272-285 s on each python
+  `a1d45a9` all 8 green, the gate 272-285 s on each python. M15 and M16's first, CI run 36402681261 at `3aaf8f4` (M15 and M16's first, 2026-09-28): 7 of 8 jobs green, the gate 33330 passed on python 3.12-3.14 in 365-429 s; on python 3.11 `1 failed, 33329 passed in 393 s`, `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[longdouble-pow]`, a test-oracle bug: python 3.11 gets numpy 2.4.6 (2.5 dropped 3.11), which compares a wider long double with a float as its double, so the oracle's `f == s` read `1 + 2 ** -60` as 1.0 while the library kept it exact, as designed (`cuts.py::normalize_value` decides on exact values). the oracle now decides exactly, pinned by `::test_python_number_decides_exactly` (red on the old oracle); the exhaustive jobs 19 s to 8 min 54 s
 * v1 files stay in place, untouched, until M10, then move to `archive/v1/`. **no v1 file is ever
   deleted by this plan**: the archive is the reference until v2 works. v1 is the differential
   oracle for set ops and for `A % scalar`. the package is `intervals/`, so `import multi_interval`

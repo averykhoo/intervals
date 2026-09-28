@@ -110,9 +110,15 @@ def python_number(np, s):
     if isinstance(s, np.complexfloating):
         return complex(s)
     f = float(s)
-    if math.isnan(f) or f == s:
+    try:
+        ratio = s.as_integer_ratio()
+    except (ValueError, OverflowError):  # a nan or an infinity; a finite s past the doubles has one
         return f
-    return Fraction(*(int(k) for k in s.as_integer_ratio()))
+    # decided on exact values, never by `f == s`: numpy 2.4 (the last for python 3.11) compares a
+    # wider long double with a float as equal to its double, so `1 + 2 ** -60` read as 1.0 (CI run
+    # 36402681261, 2026-09-28); the library itself decides exactly (`cuts.py::normalize_value`)
+    exact = Fraction(*(int(k) for k in ratio))
+    return f if math.isfinite(f) and Fraction(f) == exact else exact
 
 
 def numpy_scalars(np, name):
@@ -193,6 +199,32 @@ def test_numpy_scalar_operators_are_python_numbers(np, kind, op, data):
     p = python_number(np, s)
     assert_same_outcome(outcome(lambda: fn(s, x)), outcome(lambda: fn(p, x)))
     assert_same_outcome(outcome(lambda: fn(x, s)), outcome(lambda: fn(x, p)))
+
+
+class _WideLongDouble:
+    """a long double wider than a double, compared with a float as numpy 2.4 does (as its double):
+    windows has no such long double, so this stands in for CI's linux one"""
+
+    def __init__(self, ratio, rounded):
+        self.ratio, self.rounded = ratio, rounded
+
+    def __float__(self):
+        return self.rounded
+
+    def __eq__(self, other):
+        return self.rounded == other
+
+    def as_integer_ratio(self):
+        return self.ratio
+
+
+def test_python_number_decides_exactly(np):
+    """the oracle of test 2 keeps a value that is not a double exact, whatever `==` says: CI run
+    36402681261 (python 3.11, numpy 2.4.6) drew `1 + 2 ** -60`, read as 1.0 by `f == s`"""
+    assert python_number(np, _WideLongDouble((2 ** 60 + 1, 2 ** 60), 1.0)) == Fraction(2 ** 60 + 1, 2 ** 60)
+    assert python_number(np, _WideLongDouble((2 ** 2000, 1), INF)) == 2 ** 2000  # finite past the doubles
+    assert python_number(np, np.float64(0.1)) == 0.1 and type(python_number(np, np.float64(0.1))) is float
+    assert python_number(np, np.longdouble(-INF)) == -INF
 
 
 def test_numpy_scalar_operator_examples(np):
