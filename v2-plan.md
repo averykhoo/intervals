@@ -8,7 +8,8 @@ open work and open questions for the owner (including the ones raised in the dec
 
 ## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a,
 M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-26; M13's merge, 2026-09-27;
-M15, H3's first part: autodiff and interval newton, 2026-09-27)
+M15, H3's first part: autodiff and interval newton, 2026-09-27; M16, H3's second part: several
+variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-28)
 
 ### domain and semantics
 
@@ -173,7 +174,7 @@ M15, H3's first part: autodiff and interval newton, 2026-09-27)
 * relations are defined **on cuts, not on values**: `before` = `A.end <= B.start`, `adjoins` =
   `A.end == B.start or B.end == A.start` (symmetric), plus disjoint / overlaps / contains / within /
   equals, and certainly_/possibly_ variants of before, after and equal. the class exposes before,
-  after, adjoins, overlaps, contains, within and allen; disjoint, equals and the modal variants
+  after, adjoins, overlaps, contains, within, allen, allen_matrix and allen_relations; disjoint, equals and the modal variants
   are functions in `relations.py`. (`sup A < inf B` is wrong for `[1,2)` before `[2,3]`).
   relations return plain `bool` — they are set-level facts; only the pointwise `< <= > >=` return a `TruthSet`. so
   `before([1,2), [2,3])` is True and `before([1,2], [2,3])` is False, while `[1,2) < [2,3]` is
@@ -181,6 +182,38 @@ M15, H3's first part: autodiff and interval newton, 2026-09-27)
   `(A < B).certainly`
 * `allen(a, b)` on contiguous pieces only (raise otherwise). cuts make it finer than classical Allen:
   tiling-without-sharing (`[1,2) meets [2,3]`) vs sharing one point (`[1,2] ∩ [2,3] = {2}`)
+* **allen of any operands, per piece** (M16c, H3's second part, built 2026-09-28;
+  `intervals/relations.py::allen_matrix`, `::allen_relations`, `::_allen_pairs`):
+  `A.allen_matrix(B)` is `allen()` of every pair of pieces, a tuple of tuples of `Allen` with a row
+  per piece of `A` and a column per piece of `B`, both in order (`A.allen_matrix(B)[i][j] is
+  A.pieces[i].allen(B.pieces[j])`). `A.allen_relations(B)` is the `frozenset` of the relations
+  holding between some piece of `A` and some piece of `B`: allen's algebra reasons over relation
+  sets (the 2026-08-16 note). every entry is `allen()` of a cut pair, so exactly one of the 13 per
+  pair (JEPD per entry, which is why it goes per piece) and no new divergence against 1788: the
+  cut-based relations' 5 keys stand, a point never OVERLAPS, `[1, inf)` MEETS `[inf]`
+* **an empty operand has no pairs**: `EMPTY.allen_matrix(B)` is `()`, `A.allen_matrix(EMPTY)` is
+  one empty row per piece of `A` (the shape is kept: `len(M) == len(A)` always), and
+  `allen_relations` is `frozenset()`. not a raise (`allen()` still raises: it owes one relation)
+  and not a warning (not an op on a set)
+* **cost**: the matrix is the plain `n x m` loop over `allen()`, `Θ(nm)` like its size, and it does
+  not use the order of the pieces (any cut pairs do). the set view is an `O(n + m)` merge sweep
+  over the pieces (`_allen_pairs`: at most `n + m - 1` calls to `allen()`, every pair that is not
+  BEFORE or AFTER among them) plus two corner comparisons (some piece of `A` is BEFORE some piece
+  of `B` iff the first of `A` is BEFORE the last of `B`), and never builds the matrix: `O(n + m)`
+  in calls to `allen()` and in cut comparisons. for many pieces the set view is the answer; a
+  1000 x 1000 matrix is a million references
+* **the set view needs normalized operands; the matrix does not.** on out-of-order pieces the sweep
+  would miss entries, so `relations.allen_relations` asserts `kernel.is_valid` of both cut tuples
+  under `__debug__`, as `MultiInterval._wrap` does (the methods cannot reach it: every
+  `MultiInterval` is valid). `relations.allen_matrix` takes any cut pairs in any order
+* within one set the pieces never meet (`kernel.normalize` merges pieces that touch), so
+  `A.allen_matrix(A)` is EQUALS on the diagonal, BEFORE above it and AFTER below it. `adjoins`
+  stays a fact about the sets' ends: `[0, 1) | [3, 5]` has a piece that MEETS `[1, 2]`, and does
+  not adjoin it
+* numbers coerce to points and anything else is a `TypeError`, as every relation; the two classes
+  mix. not on `DecoratedInterval`: relations go through `.interval`, as `allen` does
+  (`tests/test_propagation.py::NOT_ON_THE_WRAPPER` lists both names). nothing new at the top level
+  (`Allen` already is); the sparse view `(i, j, relation)` stays private (`_allen_pairs`)
 * **interval orders** (D10, built at M13c 2026-09-26; `intervals/relations.py::weakly_less`,
   `::strictly_less`): 1788's `less` and `strictLess` are the methods `A.weakly_less(B)` (`inf A ≤
   inf B` and `sup A ≤ sup B`) and `A.strictly_less(B)` (both strict, except that two starts at
@@ -272,8 +305,9 @@ M15, H3's first part: autodiff and interval newton, 2026-09-27)
   **`OutwardMultiInterval`** (M12) is the subclass that rounds outward: its class attribute
   `_outward` reaches every op as `outward=`, and the `ops.OUTWARD` descriptors evaluate a float corner
   exactly (each float as the Fraction it denotes) and round it down for a low end and up for a high
-  end (`rounding.round_rational`). that is the tightest float enclosure, so gmpy2/mpfr would only be
-  faster, not tighter. mixed with a `MultiInterval` on either side, the result is outward: the
+  end (`rounding.round_rational`). that is the tightest float enclosure. the same doubles can come
+  from gmpy2/mpfr, faster (the backend, "elementary and step functions" below); it never makes one
+  tighter or looser. mixed with a `MultiInterval` on either side, the result is outward: the
   subclass overrides every reflected dunder, which python requires before it tries the right
   operand first. int and Fraction are exact and never rounded. `mod`, `floordiv`, `fma` and the step
   functions have no hook: they compute exactly and round once (`rounding.round_piece`), to nearest
@@ -329,7 +363,7 @@ M15, H3's first part: autodiff and interval newton, 2026-09-27)
       result class is the receiver's, as for `fma`; no warning is emitted, since `∅` and
       `[-inf, inf]` are real answers
 
-### elementary and step functions (M12, M13d, M13e)
+### elementary and step functions (M12, M13d, M13e, M16e)
 
 * `functions.py`: sqrt, exp, exp2, exp10, log (with an optional base), log2, log10, sin, cos, tan,
   asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh, and atan2 (M12); expm1, log1p (1788's
@@ -388,6 +422,39 @@ M15, H3's first part: autodiff and interval newton, 2026-09-27)
       coth and csch through expm1, acot as `atan(1/x)`, roots and pow as `exp(ln x / n)` and
       `exp(y ln x)`; pow decides overflow and underflow from a bracket of `ln x` good to a factor of
       3.1, before any series
+    * **the backend** (M16e, 2026-09-28): which code picks the rounded double, the pure path
+      (`python`) or gmpy2/mpfr (`gmpy2`, `intervals/_gmpy2.py`). **the default is the pure path**; the
+      environment variable `INTERVALS_BACKEND`, read once at `import intervals`
+      (`intervals/backend.py`), selects: unset, `''` or `python` the pure path (gmpy2 never imported);
+      `gmpy2` gmpy2, and an `ImportError` at import if it is missing or below the floor (gmpy2 2.3 with
+      MPFR 4.2); `auto` gmpy2 if it imports and `2.3 <= version < 3`, else the pure path, silently;
+      anything else a `ValueError`. no public setter (rounding is a property of the type, never an
+      ambient mode); `intervals.backend.name()` says which, and is not exported from `intervals`
+    * **the backend's contract: the same doubles and the same flags, faster.** it answers only "which
+      double": every decision that is not a rounding (`elementary.exact`, `exact_pow`, `_beyond` and
+      the range shortcuts of `rounded_pow`, the pi limits at ±inf, every flag and attainment in
+      `functions`, `reverse` and the applicator) runs first and stays pure. it replaces the `_ziv`
+      loop of `elementary.rounded`, `rounded_pow`, `rounded_angle` (the `(q, m)` of `functions._angle`)
+      and `rounded_inverse_trig` (k = 0), and the rounding of the five `ops.OUTWARD` descriptors (add sub
+      mul div reciprocal, keyed on the descriptor object). each answers a float or None (then the pure
+      path runs), so a partial backend is correct by construction
+    * **why one MPFR call is the correctly rounded double**: MPFR is correctly rounded in every direction,
+      and a `gmpy2.ieee(64)` context is binary64 exactly (the subnormals applied with the ternary
+      value). so the input must be exact: an MPFR function is called only on an mpfr equal to x, built
+      at x's own bit length in a private context (x dyadic: every float, every int, `Fraction(3, 8)`).
+      declined, hence pure: a non-dyadic x (`1/3`), `log` to a base, `acoth`, `rootn` with `n <= 0` or
+      `n >= 2**31` (gmpy2 takes n as a C `unsigned long`, 32 bits on windows, where it raises
+      `OverflowError` from `2**32`; `2**31` is a margin that holds on every platform), `k pi + ...` with
+      k != 0, the `pow{n}` descriptors, an operand past `2**20` bits in its numerator or denominator
+      (past MPFR's exponent range, `2**30` on windows, a dyadic flushes to 0 with a ternary value of 0,
+      to inf with 1, silently). native at a non-dyadic rational: atan, acot and the angles of atan2, as
+      atan2 of two exact ints; the hook's mixed operands, as an exact mpq rounded once
+    * **the backend's own rules**: every mpfr it builds names a context (a bare `mpfr(x)` reads the
+      user's global context); `+ 0.0` is every function's last operation, after a sign (MPFR gives
+      `-0.0` where the pure path gives `0.0`); a ternary value of 0 on an elementary result is a missed
+      exact case and raises `ArithmeticError` as the pure loop does, in every direction (the pure loop
+      answers where both ends of its enclosure round alike); a nan (an argument outside the domain)
+      raises. untested on free-threaded builds; `backend._use`, the tests' switch, is a module global
     * **atan2(y, x)**: the angle in [-pi, pi]. no -0, so the negative x axis is at pi and points just
       below it near -pi; `atan2(v, ±inf)`, `atan2(±inf, u)` follow python (the limits). `(0, 0)` and
       `(±inf, ±inf)` have no angle: a box that is one of them contributes nothing and warns
@@ -425,7 +492,7 @@ M15, H3's first part: autodiff and interval newton, 2026-09-27)
       result never leaves `x`. the result is an `OutwardMultiInterval` if either operand is one
     * an empty operand gives `∅` and an `EmptySetPropagationWarning`, as the functions do; an empty
       answer from non-empty operands (no solution) warns nothing. a number is a point; `n` must be
-      an int (not bool), else `TypeError`
+      an `Integral` (not bool; numpy's ints since M16d, "numpy" below), else `TypeError`
     * **`mul_rev(b, c, x=REALS)`** (M13e, second part, built 2026-09-26): `{t ∈ x : t * y ∈ c for
       some y ∈ b}` with the library's `*`, so `t` is in iff `{t} * b` meets `c`. `0 * ±inf` has no
       value, so 0 is in iff `0 ∈ c` and `b` has a finite point; a finite `t != 0` comes from
@@ -718,10 +785,109 @@ M15, H3's first part: autodiff and interval newton, 2026-09-27)
   decorations; the outward pass matches), measured 2026-09-26. the reverse ops (M13e, not here) are
   trv in 1788, `::_trivial`
 
-### the solver stack (M15, H3's first part, 2026-09-27)
+### the 1788 layer (M16b, H3's second part, 2026-09-28)
+
+* **a wrapper, never a mode** (the 2026-08-16 principle): `intervals/ieee1788.py` gives 1788's
+  answers over the library and changes nothing in it. every set is computed by the library
+  (`OutwardMultiInterval`, and `DecoratedInterval` over one); the layer converts in by 1788's input
+  rule and out by its output rule, and has its own logic only where 1788 *defines* another answer
+  than the library's set (cancellation, overlap, `mulRevToPair`'s decoration). no library module
+  was edited. not exported from `intervals` and not imported by it: `from intervals import
+  ieee1788`
+* **one class for both flavours**: `ieee1788.Interval(lo, hi, decoration)`, immutable and hashable,
+  a set in **1788's form** (empty, or one piece whose finite ends are closed python floats and whose
+  infinite ends are open: `[1, +infinity]` is `[1.0, inf)`) and a `Decoration` or `None` (bare). the
+  form is the class invariant, asserted under `__debug__` in `Interval._init`, which both
+  `Interval.__init__` and the internal constructor `Interval._make` call, as `MultiInterval._wrap`
+  asserts `kernel.is_valid`. a call's flavour is its
+  operands', which must agree (1788 has no mixed operations: `TypeError`); a real number is a point
+  of that flavour (newDec's if decorated); a library value (`MultiInterval`, `DecoratedInterval`) is
+  no operand (`TypeError`; the operators return `NotImplemented`), since it would bypass the input
+  rule. `x.to_set()` is the library value the layer computes on; `x.decoration`
+* **the input rule** is the constructor: `Interval(lo, hi)` is 1788's `numsToInterval`,
+  `literals.nums_to_interval` (exact, infinite ends open) then the output rule, so a non-double end
+  is rounded outward (`Interval(Fraction(1, 10))` is `[0.09999999999999999, 0.1]`, `Interval(0.1)`
+  the double). with a decoration it is **strict**, decided on the binary64 result
+  (`Interval(1, 2 ** 1024, 'com')` raises, its hull `[1.0, inf)` being unbounded), as
+  `DecoratedInterval(x, d)` and a literal `[1,]_com` are, where `text_to_decorated_interval`
+  demotes the same overflow to dac because 1788's `d-textToInterval` does (the three
+  `_BOUNDED_EXACTLY` rows). `set_dec` is the forgiving one. `Interval(None, hi)` is a `TypeError`
+* **the output rule** is `from_set(s)`, public, for any library value: (1) drop the attained
+  infinities (`s ∩ (-inf, inf)` on the cuts, explicitly: 1788's functions are functions of reals,
+  so `log((-inf, 0])` = `[-inf]` is 1788's empty); (2) the hull; (3) its ends outward to doubles
+  (`rounding.round_value`); (4) 1788's form; (5) a decorated value's decoration capped by newDec of
+  the binary64 result (`[6, 2 + max]_com` exactly is `[6.0, inf)_dac`). `from_set(x.to_set()) ==
+  x`. it encloses the set it is given: a to-nearest `MultiInterval`'s float ends are read as exact,
+  so only an `OutwardMultiInterval` or an exact result encloses a computation
+* **every function** is `from_set(<library op>(<operands' sets>))`, flavours checked, with the
+  library's `EmptySetPropagationWarning`, `DomainClippedWarning`, `IndeterminateResultWarning` and
+  `HullWarning` silenced inside the call (`warnings.catch_warnings` + four `simplefilter('ignore',
+  c)`; process-global filter state, so not thread-safe, as `decorated._quietly` is not). 1788
+  signals none of them (`[0] / [0]` is empty with no signal). `PossiblyUndefinedOperationWarning`
+  goes through, so the base class `IntervalWarning` is never the one silenced;
+  `UndefinedOperationError` is raised
+* **where 1788 defines another answer**, the layer gives 1788's and the library keeps its own, so
+  one 1788 name has two answers in the package, each module's docstring saying which:
+  `cancel_minus` is entire as 1788's "no answer" (`a` empty with `b` bounded: empty; both
+  non-empty and bounded with `wid a >= wid b` compared exactly as `Fraction`s: the library's
+  Minkowski difference, then 1788's `[a1 - b1, a2 - b2]` outward; else entire; trv when decorated)
+  where `MultiInterval.cancel_minus` is the Minkowski difference (D13); `overlap` returns
+  `Overlap`, an enum of 1788's 16 states on the ends as extended reals (`[1, 2]`, `[2, 3]` `meets`)
+  where the library's `allen` is on cuts (`overlaps`); attained infinities are dropped in the layer
+  only. `mul_rev_to_pair(b, c)` is `(div(c, b), empty)` where 0 is not in `b` (1788's wording: the
+  first decorated as the division) and otherwise the pieces of the library's `mul_rev` with a real
+  point, in order, each through the output rule, trv (at most two for 1788-form operands; a third
+  raises, never hulled). the library's `mul_rev` stays one op, trv
+* **numbers** are python floats of the interval part: `inf` of the empty set `+inf`, `sup` `-inf`;
+  `inf` of an interval whose lower end is 0 is `-0.0` and `sup` of one whose upper end is 0 `+0.0`,
+  1788's rule (`libieeep1788_num.itl:34`; nothing re-enters the library, whose one zero stays);
+  `rootn(x, 0)` raises `ValueError` for every `x`, the empty set included (the library's rule,
+  "rootn(n) for every int n other than 0", kept; no vector has degree 0), while `pown_rev(c, 0)`
+  answers (entire or empty), as the library's does;
+  `mid`, `rad`, `wid`, `mag`, `mig`, `mid_rad` of the empty set raise `ValueError` (D9's answer
+  where 1788 says NaN; the default built, pending Q13 (b)). booleans are of the interval parts;
+  `is_member(nan, x)` and `is_member(±inf, x)` are false. the reductions are the library's own
+  objects (`ieee1788.sum_ is intervals.sum_`; `sum_square` is `sum_sqr`)
+* **names**: 1788's, transliterated to snake_case mechanically (`mulRevToPair` ->
+  `mul_rev_to_pair`), a trailing underscore on a python builtin (`abs_`, `min_`, `max_`, `pow_`,
+  `sum_`); `NAMES` maps 1788's own spelling to each function: 104 names, 1788's 102 and
+  itf1788's `'d-numsToInterval'`, `'d-textToInterval'` for the decorated constructors, 104
+  distinct functions. every 1788 op the library
+  implements and nothing else: not the recommended `exp2m1`, `exp10m1`, `log2p1`, `log10p1`,
+  `compoundm1`, `rsqrt`, the `*Pi` functions, NaI and `isNaI` (D16), the exact conversions, other
+  formats than binary64 (an `AttributeError`, not a stub)
+* **the class's own operators** are python's obvious spellings of a function: `+ - * /` (and
+  reflected), unary `- +`, `abs()`, `**` as D11 reads it (an integral real exponent `pown`, any
+  other real and an `Interval` `pow_`; the function `pown` itself takes an `int` only), `&`
+  (`intersection`), `|` (`convex_hull`), `in` (`is_member`), `==`/`hash` structural (a bare and a
+  decorated interval are never equal), `bool` (non-empty). **no ordering**: 1788 has four orders and
+  none is the obvious one. `repr` evaluates back (`Interval(float('-inf'), 2.0)`); `str` is a 1788
+  literal with python's shortest decimal of each end (`[0.1, 2.0]_com`, `[entire]`, `[empty]_trv`),
+  read back by `text_to_interval` as an enclosure within one double at each end.
+  `__array_ufunc__ = None`, the package's rule for every type when the layer was designed; since
+  M16d the three core classes have numpy's hook ("numpy" below) and the layer's `Interval` still
+  refuses numpy: the rule for the layer is owed (`HANDOFF.md` "still owed")
+* **conformance: a third pass** (`tests/itf1788/test_ieee1788.py`) runs all 9542 vectors through
+  the layer and compares **exactly** (no hull, no rounding, no input rule): an interval as its
+  float ends and decoration after asserting 1788's form, a pair member by member, numbers as
+  floats, booleans, `Overlap` and `Decoration` values as they are. operands are the literals'
+  nearest doubles in `Interval(lo, hi, d)`, strict (the C++ tests' convention, not 1788's text
+  reading); a `Fraction` becomes its float and an `int` stays an `int`. warnings are recorded and
+  every one must be a `PossiblyUndefinedOperationWarning`; the readings, in order: an
+  `UndefinedOperationError` is `signal UndefinedOperation`, a `PossiblyUndefinedOperationWarning`
+  `signal PossiblyUndefinedOperation`, then a `ValueError` from a number or a reduction is `NaN`
+  only where the vector expects `NaN`. its rows are the adapter's under three categories only, taken
+  from the adapter's lists by reason: **94 keys, 104 vectors** (76 no NaI, 11 tighter than the
+  vector, 7 exact parsing; 2026-09-28). the adapter's other rows (degenerate infinities, cut-based
+  relations, cancellation as a Minkowski difference, decoration expectations incl. Q9's 52 pair
+  rows and the 12 plain-only ones) all match through the layer: each stays a true statement about
+  the library, and has a second reading, "1788's own answer is `ieee1788.<op>`, which matches"
+
+### the solver stack (M15, H3's first part, 2026-09-27; M16a, several variables, 2026-09-28)
 
 built: forward-mode automatic differentiation and an interval newton solver, the demonstration of
-what multi-intervals are for. the rest of H3 is under "later" below.
+what multi-intervals are for (M15), then its n-variable form (M16a, the last bullets). what stays
+of H3 is under "later" below.
 
 * **`Dual`** (`intervals/autodiff.py`): a value and a derivative, each a `MultiInterval` (either
   class) or each a `DecoratedInterval`, never one of each. `Dual.variable(x)` seeds `[1]`,
@@ -768,6 +934,165 @@ what multi-intervals are for. the rest of H3 is under "later" below.
   can be an indeterminate point (`1/[0]`), which is no news to the caller
 * the direction tag under "later" was not needed: the C¹ gate keeps newton off anything holding
   ±inf as a point, and a range check on such a piece needs no tag
+* **`gradient(f, xs)` and `jacobian(F, xs)`** (`intervals/autodiff.py`, below `derivative`; exported
+  from `intervals`): n passes of `f`, pass j calling `f(c_1, ..., Dual.variable(x_j), ..., c_n)` with
+  `c_k = Dual.constant(x_k)` and reading the derivatives: column j of the jacobian. `Dual` is not
+  touched (no vector mode: a tangent tuple inside `Dual` would edit the 42 chain rules M15 pinned).
+  `xs` is a list or a tuple of n sets or numbers, every set bare or every set decorated (checked up
+  front: `f` need not combine the two, and `lambda x, y: x` would never meet the bare `y`); a number
+  is a point of the first set's kind (a `MultiInterval` if every entry is a number). `f` takes n
+  positional arguments and returns a `Dual` or a number (a constant: its partials `[0]`); `F` returns
+  a list or a tuple of m of them, and `jacobian(F, xs)[i][j]` is `∂F_i/∂x_j`, rows as tuples, no
+  matrix type. at n == 1 `gradient(f, [x]) == (derivative(f, x),)`, the same pass. decorated, the
+  entries carry the C¹ proof in n variables, relative to the box: a value and every partial dac or
+  better say every op and every op of its chain rule's formula was defined and continuous on the
+  box, so `F` is C¹ on the box relative to the box, which is what the mean value theorem on the box
+  needs (one-sided at its faces). not on an open set holding the box: `x ** 1.5` over `[0, 1]` is com
+  with nothing below 0 in its domain, and `abs` over the point `[0]` has a dac derivative (review
+  F1)
+* **`solve(F, xs, *, tol=1e-10, max_steps=10_000)`** (`intervals/solver.py`, below `newton`) returns
+  `RootBox(box, unique)`s (`box` a tuple of n connected `OutwardMultiInterval`s), pairwise disjoint in
+  some coordinate, inside `xs`, sorted by the components' `sort_key`s, and every zero of `F` in `xs`
+  is in one. `xs` as for `newton` per coordinate (a `DecoratedInterval` refused); n == 1 is `newton`
+  exactly. a branch and prune over the product of the pieces of `xs`, per box: prune by range; a
+  point is unique iff `F` is exactly `[0]` there; **the step** on a box with no wide component
+  (unbounded, or spanning more than a factor of 16 in magnitude) where the n decorated passes over
+  the box's **closed hull** `H` are all dac or better (krawczyk's theorem is for a compact box, and
+  a box from `mul_rev` or a bisection has open ends): `J` over `H`, a point `m` (the float midpoint,
+  else the exact one, so a component two doubles wide can still be stepped), `Y` the float inverse
+  of `mid J` by gauss-jordan with partial pivoting (the identity where a midpoint is not a finite
+  float or the matrix is singular: any real `Y` keeps the step valid), `Mx = Y J`, `b = Y F(m)`, then
+  * **krawczyk's test**: every `K[i] = m[i] - b[i] + Σ_j (δ_ij - Mx[i][j]) (H[j] - m[j])` non-empty
+    and inside `H[i]`'s interior proves exactly one zero in `H`, so in the box (`int H` is inside the
+    box whatever its ends). `g(x) = x - Y F(x)` maps `H` into `K` by the mean value theorem row by
+    row: brouwer gives a fixed point. uniqueness is argued on the exact `K*`, built from the closed
+    range of the true partials over the compact `H`: `K* ⊆ K ⊆ int H` and `K*` compact make it
+    strictly narrower than `H`, so `ρ(|I - Y A|) < 1` for every real `A` of the mean value theorem,
+    `Y` is regular and `g` contracts. (the computed `K` may be as wide as `H`, its ends open: the
+    strict inequality is not read off `K`)
+  * **the narrowing, preconditioned interval gauss-seidel with `mul_rev`** (hansen and sengupta),
+    on the box: row by row `Z[i] = Z[i] ∩ (m[i] + mul_rev(Mx[i][i], -b[i] - Σ_{j≠i} Mx[i][j] (Z[j] -
+    m[j])))`, each row using the rows before it. `mul_rev`, not `/` (D7). where `0 ∈ Mx[i][i]` the row
+    is two pieces: the sweep stops and the box splits there, the other components as narrowed so far.
+    krawczyk proves and gauss-seidel narrows: krawczyk has no division, so a partial holding 0 teaches
+    it nothing, which is where multi-intervals split
+  * then `newton`'s rules: a unique box is narrowed while the step narrows it; an unproved one goes on
+    while the step halves its width, past `tol` for at most `_PAST_TOL = 8` steps; else bisection: a
+    wide component first, round robin from the last split coordinate + 1 (`x + y, x - y` on `REALS²`:
+    15 calls, 2749 without), then the other components widest first, falling through past a component
+    that cannot be split
+* **before an unproved box is output**: (1) **its simplest point**, the simplest rational of each
+  component's closed hull (`_simplest_between`, continued fractions), when inside the component (not
+  on an unbounded one): if `F` is exactly `[0]` there it is output alone as a unique point, and the
+  rest of the box goes back as up to 2n boxes. a zero at a simple rational sits on a split face or on
+  a component a row made degenerate, where no `K` fits inside an interior. (2) else **krawczyk on the
+  box inflated within its region**: each stack entry carries its region `R`, the part of the input
+  it stands for, with every zero of `R` in the box. the work list starts with `R` = the box; a
+  gauss-seidel narrowing keeps `R`; a split (gauss-seidel's or a bisection's) cuts the old `R` in the
+  split coordinate only, between the neighbouring boxes, and the simplest point's rest boxes get `R`
+  cut at the point. `H'' = ` the closed hull of (the box widened by twice its width, at least 1e-12
+  relative, on each side) ∩ `R`, with its own jacobian and C¹ gate: `K(H'') ⊆ int H''` gives one zero
+  in `H''`, in `int H'' ⊆ R`, so in the box, and the box ⊆ `H''` holds no other. why: one row that
+  pins a coordinate (`y - 1/4`, `3y - 1`) makes the box degenerate or an ulp wide there at once, and
+  krawczyk on the box can then never prove the textbook simple zero
+* the warnings inside `F` are silenced as in `newton`. `F` is called with decorated `Dual`s, with boxes
+  of `OutwardMultiInterval`s and with points
+* known limits: a zero on a split face that is not a simple rational in every coordinate, and a
+  singular zero, end as unproved boxes of width `tol`, often with unproved slivers beside them
+  (sound, not proved). the cost is the library's arithmetic: a box costs n + 2 calls of `F` (the
+  plain call, n decorated passes, the point), plus up to n + 2 when it is output unproved. a
+  continuum of zeros is bisected to `tol` everywhere, and each of its boxes gives its simplest point
+  and up to 2n rest boxes, so the output is up to 2n + 1 times the boxes of width `tol` (not a
+  cascade: a rest box's closed hull holds the point, which is then its own simplest point and not
+  in it). an exact end beyond the doubles (`[10 ** 400, 10 ** 401]`) makes the float
+  preconditioner overflow `b` to `(1.8e308, inf)`, so such a box is bisected, not stepped (review
+  F2, F3; numbers in M16a's record)
+* **the direction tag stays under "later", now for n variables**: the step runs only on a box whose
+  components are all bounded, where `F` is dac on the closed hull, so every real value and partial
+  over it is bounded. the enclosures may still hold an open end at ±inf by overflow (`exp` over
+  `[700, 720]` is `(1.0142320547350045e+304, inf)`, dac): every set op keeps every real point, so the
+  real `A` and the real `F(m)` of the mean value theorem stay inside `J`, `Mx`, `b` and `K`, and no
+  degenerate `[±inf]` arises from a finite real (overflow is open at inf, and D2's corner makes
+  `(a, inf) * [0]` `[0]`). on a box holding ±inf as a point `F` is only evaluated for the range
+  prune, where `1/(1/[inf])` is `∅` (D7) and the tag would make it `[inf]`: that changes which
+  function `F` is at ±inf, not whether a zero of it is found (a zero is a point where `F` has the
+  value 0, and with the tag `[inf] - 5` holds no 0 either). no test: a test that the solver behaves
+  the same with and without a type that does not exist cannot be written;
+  `tests/test_solve.py::test_overflow_box` pins the overflow case
+
+### numpy (M16d, H3's second part, 2026-09-28)
+
+numpy is optional: never imported at load (`intervals/numpy_compat.py` imports numpy inside the two
+hooks, which only numpy calls), not in `[project]` dependencies nor the `[test]` extra (CI's jobs
+install it beside the extra). a multi-interval is a *scalar* to numpy, one value of a number-like
+type, never an array of numbers, so interop is four rules and one refusal:
+
+* **a numpy scalar is a python number** to every op: numpy registers `np.floating` as
+  `numbers.Real` and `np.integer` as `numbers.Integral`, so a numpy scalar goes through `_coerce`
+  and `cuts.py::normalize_value` like any python number. `np.float64` is a `float`, rounded to
+  nearest in `MultiInterval` and outward in `OutwardMultiInterval`; `np.float32` and `np.float16`
+  are the doubles they hold, exactly (`np.float32(0.1)` is `0.10000000149011612`); the numpy ints
+  are ints; `np.bool_` and `np.complex*` are refused, as python's bool and complex
+* **a foreign real is its exact value** (`cuts.py::normalize_value`) where it has one to give. a
+  foreign real is a `numbers.Real` that is no int, float or Fraction: numpy's scalars, gmpy2's
+  numbers. a `numbers.Rational` (gmpy2's `mpq`) is exact by type, as a `Fraction` is; any other
+  real is the float it equals where it is a double (so nothing a double can hold changes type), else
+  its exact `as_integer_ratio()` as a `Fraction` or an int; a real with no `as_integer_ratio()` is
+  `float()` of it, as before M16d. so an `np.longdouble` wider than a
+  double (x86-64 linux, where CI runs: 64-bit significand) and a wide `mpfr` are exact, where
+  `float()` rounded them to nearest and an `OutwardMultiInterval` result did not hold its operand
+  (and `np.longdouble('1e4000')` became `inf`). the float path pays one `isinstance(value, float)`
+* **integer arguments take any `Integral` but bool**, as `ops.py::power` does: `rootn(n)`,
+  `round(ndigits)`, `round_ties_away(ndigits)`, `pown_rev(c, n)` (`functions.py::_check_degree`,
+  `steps.py::step`, `reverse.py::pown_rev`), and the `log` base takes any real but bool, through
+  `normalize_value` (`functions.py::_check_base`). `Dual.rootn` takes `int(n)` before `n - 1`
+* **ufuncs** (`MultiInterval`, `OutwardMultiInterval`, `DecoratedInterval`, `Dual`:
+  `__array_ufunc__ = numpy_compat.array_ufunc`): a numpy scalar on the left of an operator reaches
+  numpy's ufunc and so the hook, which runs python's protocol **on our dunders only**
+  (`np.float64(2) + A` is `A.__radd__(np.float64(2))`, the call python made before the hook
+  existed; both operands ours, python's own operator, subclass first, so `np.add(M, O)` is `M + O`,
+  an `OutwardMultiInterval`); `==` and `!=` fall back to identity, as python's do
+  (`np.float64(2) == M(2)` is False). the other ufuncs are the method computing the set image of
+  the ufunc's pointwise function: `sqrt cbrt exp exp2 expm1 log log2 log10 log1p sin cos tan sinh
+  cosh tanh floor ceil trunc sign reciprocal` the method of that name, `arcsin ... arctanh` the
+  1788 names `asin ... atanh`, `rint` `round` (ties to even, as numpy's), `square` `x ** 2` (pown,
+  not `x * x`), `minimum maximum hypot` the method of whichever operand is ours, `arctan2(y, x)`
+  `y.atan2(x)`; with both operands ours, the operators' subclass rule: `np.hypot(M, O)` is
+  `O.hypot(M)` and `np.arctan2(M, O)` takes y as an `OutwardMultiInterval` first, so an outward
+  operand keeps its rounding in either order (`M.hypot(O)`, called directly, is still M's), and
+  with no subclass between them the first operand's method (`np.hypot(M, D)` a TypeError, as
+  `M.hypot(D)`); and the unary operators (`negative positive absolute fabs`, `invert` the complement
+  `~`). a class without the method (`Dual` has no `floor`) is a TypeError. **not mapped**, so a
+  TypeError: `fmod` (C's truncated remainder, `fmod(-7, 2)` is -1 where `-7 % M(2)` is `[1]`),
+  `fmin`/`fmax` (numpy's point is to ignore a nan operand; a nan is refused here), `float_power`,
+  `deg2rad` and the like, `isnan` and the other predicates of a point, `matmul`, every other ufunc,
+  every ufunc method but `__call__` (`reduce`, `outer`, `accumulate`, `at`) and every keyword
+  (`out=`, `where=`, `dtype=`, `casting=`). the table is keyed by the ufunc *objects*, so a foreign
+  ufunc sharing a name (scipy's) is not numpy's
+* **an ndarray meeting one of ours** (`np.linspace(0, 1, 3) + A`, either order, any ufunc of the
+  table with two operands) is elementwise into an object array of the array's shape, each element a
+  python number (as `tolist()` gives it) meeting the object on the scalar path; an element with no
+  answer raises (a nan element: `ValueError`, as `nan + A`; a bool or complex array: `TypeError`).
+  `==` and `!=` never broadcast: `f == A` is False and `A in f` False, as before. a list is not an
+  array here: `np.add([1, 2], A)` is a TypeError
+* **arrays hold a `MultiInterval` as one element** (`MultiInterval.__array__ = numpy_compat.array`,
+  a 0-d object array): `np.array([A, B])` has shape `(2,)` (before, numpy took A for the sequence
+  of its pieces: a 64-deep array or a ValueError). `np.asarray(A, copy=False)` is a ValueError.
+  `DecoratedInterval` and `Dual` have no `__len__` and were scalars to numpy already. a float dtype
+  is numpy's cast, `float()` of each element, **to nearest in both classes**:
+  `np.asarray(O(Fraction(1, 3)), dtype=float)` is the double nearest 1/3, as `float(O(...))` is,
+  so a degenerate outward set flows into float code rounded to nearest
+* **object arrays run numpy's own loops, not the table**: numpy calls the python operator or a
+  method named after the ufunc on each element, so on `arr = np.array([A, B])` `arr + 1`,
+  `np.sum(arr)`, `np.sin(arr)` work, `np.arcsin(arr)` is a TypeError (no method `arcsin`),
+  `np.square(arr)` is `x * x` (looser than `np.square(A)`), and `arr == A` is False and `A in arr`
+  False although `arr` holds `A` (identity: `==` is structural and does not broadcast).
+  `np.round(A)` and `np.around(A)` are TypeErrors (not ufuncs: numpy's fallback looks for `rint`).
+  `np.frompyfunc(MultiInterval.asin, 1, 1)(arr)` or an operand of ours reaches the table
+* **the array API standard and `__array_function__` are not built**: the standard is a namespace
+  for arrays of fixed-size numbers, with elementwise `bool` comparisons and float special cases;
+  ours are ragged sets with structural `==`, `TruthSet` comparisons and set images without nan.
+  an interval *array* type is the D23 alternative, "later" if ever
 
 ### package layout
 
@@ -776,13 +1101,21 @@ imports only point downward.
 
     intervals/
         errors.py          warning and exception classes
+        numpy_compat.py    numpy's hooks: array_ufunc (the __array_ufunc__ of MultiInterval,
+                           DecoratedInterval, Dual) and array (MultiInterval.__array__); numpy
+                           imported only inside them, never at load (M16d); below the three classes
         cuts.py            Side, Cut, below()/above(), mirror, -0.0 normalization
         kernel.py          normalize sweep; union/intersection/complement/difference; membership;
                            interior (M13c); size; Builder (collect, sort once, sweep)
         fmt.py             format and parse cut tuples; regexes compiled at module level
         relations.py       TruthSet, pointwise compare, relation predicates, allen(),
-                           the interval orders weakly_less strictly_less (M13c)
+                           the interval orders weakly_less strictly_less (M13c),
+                           allen_matrix allen_relations of every pair of pieces (M16c)
         rounding.py        rounding an exact value to a double: nearest, down, up
+        backend.py         which code picks a rounded double: INTERVALS_BACKEND, python (default),
+                           gmpy2 or auto; imports _gmpy2 only when selected (M16e)
+        _gmpy2.py          the gmpy2/mpfr backend: the same doubles as elementary.py and the
+                           outward hook, faster, or None (then the pure path) (M16e)
         applicator.py      op descriptor, corner evaluation, closure pass, rounding hook
         ops.py             neg pos absolute reciprocal add sub mul div, power (int exponents),
                            minimum maximum as descriptors; the OUTWARD descriptors; fma;
@@ -800,15 +1133,19 @@ imports only point downward.
                            nums_to_interval, 1788's bare constructors (M13g); above the class
         decorated.py       Decoration, DecoratedInterval (a MultiInterval and a decoration),
                            set_dec and the d- constructors (M13g); above literals
-        autodiff.py        Dual, derivative: forward-mode autodiff over sets (M15); above decorated
-        solver.py          newton, Root: interval newton over multi-intervals (M15); above
-                           autodiff and reverse
+        autodiff.py        Dual, derivative: forward-mode autodiff over sets (M15); gradient,
+                           jacobian: n passes, one variable seeded each (M16a); above decorated
+        solver.py          newton, Root: interval newton over multi-intervals (M15); solve,
+                           RootBox: a square system in n variables (M16a); above autodiff and
+                           reverse
         multi_interval.py  the class and OutwardMultiInterval: immutable cut tuple; _coerce
                            (numbers and intervals only — strings go through an explicit
                            parse()); one-line dunders. arithmetic
                            owns `+ - * / // % **` and unary `- + abs`; set algebra is `| & ^ ~`
                            plus named methods (`difference` has no operator, because `-` is
                            arithmetic subtraction, as in v1)
+        ieee1788.py        1788's inf-sup binary64 intervals, bare and decorated, over the
+                           library (M16b); not imported by intervals
         time_interval.py   the same kernel over datetime/timedelta values (deferred, D4)
         __init__.py        public API, constants (EMPTY, REALS, ...)
     tests/
@@ -826,7 +1163,12 @@ imports only point downward.
                            test_cancel.py, cancellation, M13f;
                            test_literals.py, test_decorated.py and test_propagation.py,
                            1788's literals, the decorated type and propagation, M13g;
-                           test_autodiff.py and test_solver.py, M15)
+                           test_autodiff.py and test_solver.py, M15;
+                           test_gradient.py and test_solve.py, several variables, M16a;
+                           test_ieee1788_layer.py and itf1788/test_ieee1788.py, the 1788
+                           layer and its conformance pass, M16b; test_relations.py gained
+                           the allen matrix, M16c; test_numpy_compat.py, numpy, M16d;
+                           test_backend.py, the backend differential, M16e)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
@@ -950,9 +1292,54 @@ imports only point downward.
   and `max_steps`), a unique `Root` holds exactly one distinct zero, the roots are disjoint and in
   order; by example the first step's split, a non-C¹ function whose derivative's values would lose
   a zero (`abs(x) + x / 2 - 1/4` on `[-1, 3]`), close zeros, poles, unbounded and multi-piece input
+* several variables (M16a, 2026-09-28): `tests/test_gradient.py` (the jacobian against arb series,
+  one column per seeded variable) and `tests/test_solve.py` (constructed systems `A G(B x + c)` with
+  every real zero known: exact fractions, or `r + Σ a sqrt(q)` decided by arb)
+* the 1788 layer (M16b, 2026-09-28): the third conformance pass,
+  exact, over all 9542 vectors (`tests/itf1788/test_ieee1788.py`); `tests/test_ieee1788_layer.py`
+  checks every lifted function against a table of library calls written apart from the module's
+  (`::LIBRARY`) and 1788's form on drawn operands of both flavours (ends from a pool with 0, ±1,
+  subnormals, ±max, ±inf and drawn doubles), `from_set` against the output rule decided with
+  `Fraction` and `math.nextafter` on drawn library sets (several pieces, attained ±inf, ints and
+  Fractions past the doubles), cancellation against 1788's rule written in the test (equal widths
+  drawn, and widths equal as floats but not exactly), `overlap` on the 729 pairs of a grid against a
+  table keyed on the signs of the ends' comparisons and its converse, `mul_rev_to_pair` against the
+  library's pieces on drawn bare operands (so the law "where 0 is not in b the pieces of `mul_rev`
+  are `div(c, b)`" is drawn there) and, with com drawn, its sets tied to the bare pair's and its
+  decorations pinned (div's where 0 is not in b, trv otherwise), the flavours (a call of numbers
+  alone is bare), the refusal of library values, the warnings (silent, `PossiblyUndefinedOperationWarning` through, the
+  filters unchanged after a call), names, `repr`/`str` read back, the operators
+* the per-piece allen matrix (M16c, 2026-09-28; `tests/test_relations.py`): every entry against the
+  `n x m` loop over the pinned `allen()` (`::allen_loop`), on operand pairs often derived one from
+  the other (itself, its complement, hull, gaps, interior), so shared cuts, MEETS and MET_BY are
+  common; the set view against the matrix's entries; the converse, a set against itself and the set
+  relations as identities over the matrix; the empty shapes; 13 worked rows both ways; the plain
+  loop's contract on unnormalized operands; the set view's cost pinned by counts, calls to
+  `allen()` (at most `n + m - 1`, exactly the intersecting cells, never the matrix) and cut
+  comparisons (`::_CountingCut`, at most `10 (n + m)`), and its refusal of out-of-order operands
+* numpy (M16d, 2026-09-28; `tests/test_numpy_compat.py`, which skips without numpy): numpy never
+  imported at load (a subprocess); 9 numpy scalar types in every operator derived from the classes'
+  reflected dunders, both sides, against the python number of the same value (result, exception
+  type and warning categories); every ufunc of the table against its method, both operands ours by
+  the operators' subclass rule; the unmapped ufuncs, ufunc methods and keywords `TypeError`s; the
+  elementwise path against the scalar path per element, numpy's float flags left alone; `==` never
+  broadcasting; the foreign-real rule against stubs (`::Wide`, `::Rat`, `::Plain`), every float32
+  bit pattern and the long double (which discriminates on linux CI only); numpy ints as integer
+  arguments. in `tests/test_autodiff.py`, M15's `Dual ** r` hole against arb at 400 bits, bare and
+  decorated (`::test_pow_number_exponent_derivative_encloses`)
+* **the backend differential** (M16e, `tests/test_backend.py`): at every point it draws, each
+  primitive three ways, the pure path under `backend._use('python')`, `_gmpy2`'s function directly
+  (the same double and sign bit, and None exactly where the module's table says,
+  `::declines_rounded` and its kin, written from this design), and the dispatch under
+  `_use('gmpy2')` (which sees an argument dropped on the way); 15 edge classes (`::EDGES`, `::HARD`,
+  `::_bound_cases`), the whole list again under a hostile gmpy2 global context; the `repr` of every
+  set-level method under both backends; `::test_use_switches` guards that the two really ran
+  different code, and `::test_use_restores` that the files after it run on the pure path again.
+  gmpy2 is in `[test]`, so nothing skips. the rest of the suite runs on the pure
+  path (the default); the build ran the whole gate once more forced to gmpy2
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
-  every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 100) times its
-  own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
+  every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 10; 100 until
+  2026-09-27) times its own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
   derandomized `ci` under GitHub Actions. `.github/workflows/fuzz.yml` runs it weekly and on
   `workflow_dispatch`, never on push, carrying `.hypothesis/` between runs and uploading it with
   the log on a failure
@@ -962,18 +1349,155 @@ imports only point downward.
 * a **direction tag on a degenerate zero piece** if a solver ever needs `1/(1/[inf]) == [inf]`:
   metadata that `==` and hash ignore, created only by limits (`1/[±inf]`, `exp([-inf])`), consumed
   only by branch-at-zero functions. never a position in the order — that is what the signed-zero seam
-  was
+  was. M15: not needed in one variable; M16a: not needed in n variables either (the argument is
+  "the solver stack" above, its last M16a bullet; the overflow case pinned by
+  `tests/test_solve.py::test_overflow_box`)
 * a decorated wrapper type, with the solver. owner 2026-09-25: brought forward to
   `v2-implementation-plan.md` M13g, for the itf1788 decoration vectors; the core stays undecorated.
-  built 2026-09-26 (`DecoratedInterval`, "ieee 1788" above); what stays here is the solver using it
-* forward-mode autodiff and newton's method: **built 2026-09-27** (M15, "the solver stack" above).
-  still here: numpy compat (array API / `__array_ufunc__`; today `__array_ufunc__ = None` on every
-  type, `Dual` included), gmpy2/mpfr as a faster backend for `elementary.py` and the outward hook
-  (not a tighter one), owner 2026-09-26: recorded, not now. and, from `HANDOFF.md` H3: a thin
-  `ieee1788.py`, a per-piece Allen matrix, a solver in several variables (a `Dual` carries one
-  derivative), 1788's `mulRevToPair` as an op (Q9)
+  built 2026-09-26 (`DecoratedInterval`, "ieee 1788" above); the solver uses it since M15 (the C¹
+  gate)
+* H3, the solver stack: **built**. forward-mode autodiff and newton's method 2026-09-27 (M15), and
+  2026-09-28 (M16, on the owner's "get the rest of h3 done") the solver in several variables
+  (M16a), a thin `ieee1788.py` with 1788's `mulRevToPair` as `ieee1788.mul_rev_to_pair` (M16b, Q9),
+  the per-piece Allen matrix (M16c), numpy interop (M16d) and gmpy2/mpfr as a faster backend for
+  `elementary.py` and the outward hook, not a tighter one (M16e). what stays here from it:
+    * an interval *array* type (the array API standard's namespace), if ever; not the numpy
+      interop, which is built (M16d; D23 (a), `HANDOFF.md` Q15(a))
+    * the backend's non-dyadic part: an mpfr ziv loop for a monotone f at a bracketed x, for the
+      points the backend declines today (a `Fraction(1, 3)`, `log` to a base, `pow_rev2`'s `log_t
+      v`, `acoth`, `rootn` with n < 0, the periodic reverse ops' `k pi + f(v)`); not measured
+      (M16e; `HANDOFF.md` Q16(c))
+    * allen's composition table (from the relations of `(a, b)` and `(b, c)`, those possible for
+      `(a, c)`), re-derived for the cut reading with points, where some classical compositions
+      shrink (a point cannot OVERLAP); `allen_relations` is its input. a design of its own (M16c)
+    * vector-mode autodiff (a tangent tuple inside `Dual`, one pass for a jacobian, M15's chain
+      rules edited), the alternative if a measured solve is too slow (M16a; `HANDOFF.md` Q12(a))
+    * 1788's recommended operations the layer does not have, not built by design (no vectors):
+      `exp2m1`, `exp10m1`, `log2p1`, `log10p1`, `compoundm1`, `rsqrt`, the `*Pi` functions, the
+      exact text and interchange conversions, and every inf-sup type but binary64 (M16b)
 
 ## decision log
+
+### 2026-09-28 revision: M16e, the gmpy2/mpfr backend (H3's second part), built
+
+the owner, 2026-09-27: "get the rest of h3 done", which supersedes 2026-09-26's "numpy and
+gmpy2/mpfr recorded, not now" (`HANDOFF.md` H3; plan §2 M15: "gmpy2/mpfr stay out"). built as M16e,
+one of M16's five streams. the choices, each the build's default, open for the owner (D24, Q16):
+* **the pure path is the default**; gmpy2 only with `INTERVALS_BACKEND=gmpy2` (forced) or `auto`.
+  the design had automatic-when-importable; its critique held that the conservative reading wins:
+  the pure path is the reference, the local gate and itf1788 then keep checking it, and a user's
+  gmpy2 (linked to whatever MPFR their distribution ships) never changes code paths unasked
+* **the backend only picks the double** (the contract above), so it is correct by construction
+  wherever it declines, and bit-identical where it answers (the differential)
+* **declined where one MPFR call is not one rounding**: non-dyadic inputs (but atan2 of two ints and
+  the hook's exact mpq), `log` to a base, `acoth`, `rootn` with n < 0, `k pi + ...`; and short of
+  where MPFR's limits bite: `rootn` from `n = 2**31` (a margin: gmpy2 raises from `2**32` on
+  windows), an operand past `2**20` bits
+* **`gmpy2>=2.3,<3` in `[test]`** (the differential never skips, and CI installs the series `auto`
+  takes) and a new extra `[fast]` (`gmpy2>=2.3`, unpinned); no CI change:
+  every gate job installs `.[test]`, so `tests/test_backend.py` runs everywhere, and the rest of the
+  suite runs on the pure path there as here
+* **`auto`'s window is `2.3 <= version < 3`** (the series verified); forced takes any gmpy2 at the floor
+
+### 2026-09-28 revision: M16d, numpy interop (H3's second part), built
+
+the owner asked (2026-09-27) for the rest of H3; numpy was one of its five streams. the choices the
+build made, each the session's default, open for the owner (`HANDOFF.md` Q15; D23 in
+v2-implementation-plan.md):
+* **`__array_ufunc__`, not the array API**: the owner's 2025-12 line names "numpy compat via
+  data-apis.org/array-api or `__array_ufunc__` or the interoperability page"; a multi-interval is an
+  element, not an array, so the hook; the array API would be a new interval-array type (Q15(a))
+* **a foreign real is exact** (Q15(b)): a `numbers.Rational` by type, any other real by value where
+  `float()` would round it; fixes the outward class for `np.longdouble` on linux and gmpy2's `mpq`
+  and `mpfr` operands; a double stays the float it is
+* **an ndarray meeting ours is elementwise into an object array**, `==`/`!=` never broadcast
+  (Q15(c))
+* **no numpy-named alias methods** (`arcsin`, `rint`, ...) on the classes (Q15(d)), so numpy's
+  object loops and `np.round` refuse them
+* **`np.invert(A)` is the complement `~A`** (Q15(e)); `fmin`/`fmax` not mapped (Q15(f))
+* **numpy not in the `[test]` extra** (Q15(g)); the README's numpy section is prose
+* **both operands ours in a method ufunc: the subclass decides** (Q15(h)), as for the operators, so
+  `np.hypot(M, O)` is outward (the review found the first operand's class decided)
+* found on the way and fixed (not choices): M15's `Dual ** r` computed `r - 1` in r's own
+  arithmetic, unsound in the outward class with plain python floats (`Dual.variable(O(1e300)) ** 0.1`
+  missed its derivative, bare and decorated; `Dual.variable(O(-1)) ** 2.0 ** 60` had its sign
+  flipped); a number exponent is now an int (integral) or a point set of u's kind first, which
+  also changes the nearest class (an exact derivative for an integral float exponent; pow, not
+  pown, for an r like 1e-20 whose float `r - 1` is -1.0)
+
+### 2026-09-28 revision: M16c, the per-piece allen matrix (H3's second part), built
+
+the owner, 2026-09-27: "get the rest of h3 done" (`HANDOFF.md` H3). the per-piece allen matrix
+was built as M16c, one of five streams. the choices the build made, each the session's default,
+open for the owner (`HANDOFF.md` Q14; D22 in `v2-implementation-plan.md`):
+* **two views**, the 2026-08-16 note's "per-piece relation matrix, or the set of relations
+  holding between any piece pair": `A.allen_matrix(B)` (nested tuples of `Allen`, not a matrix
+  class) and `A.allen_relations(B)` (a `frozenset`). the set view is a second public name the H3
+  row did not list; built because the note motivates it and it is the `O(n + m)` form. functions
+  over cut tuples in `relations.py`, methods on `MultiInterval`
+* **an empty operand gives no rows or empty rows and `frozenset()`**, not `allen()`'s
+  `ValueError`: a matrix owes one entry per pair and there are none. matches `before`, `after`,
+  `adjoins` of an empty operand (False) and the pointwise comparisons (`NEITHER`)
+* **the matrix is the plain `n x m` loop over `allen()`**, the conservative choice: it does not
+  depend on the operands being normalized. the design's alternative filled every entry BEFORE or
+  AFTER with one cut comparison and overwrote the pairs the sweep visits: faster (~3x at 1000
+  pieces the designer measured 2026-09-27; ~2x measured 2026-09-28 on a loaded laptop, M16c's
+  record), but wrong on a cut tuple whose pieces are out of order. not taken; the trade is recorded
+* **the set view is the merge sweep** (`relations.py::_allen_pairs`) plus two corners, and never
+  builds the matrix; pinned by counts (calls to `allen()` and cut comparisons), not time. it needs
+  normalized operands and asserts them under `__debug__` (the review, 2026-09-28); the matrix
+  takes any cut pairs
+* **not on `DecoratedInterval`** (through `.interval`, as `allen`); the sparse `(i, j, relation)`
+  view private; nothing at the top level
+* not built: allen's composition table over the cut reading ("later")
+
+### 2026-09-28 revision: M16b, the 1788 layer (H3's second part), built
+
+the owner asked (2026-09-27) "get the rest of h3 done", which supersedes 2026-09-26's "numpy and
+gmpy2/mpfr recorded, not now"; H3's rest was built as M16 in five streams, this one M16b. the
+2026-08-16 decision ("if real conformance is ever needed, it's a thin wrapper class in
+`ieee1788.py`, never a mode on MultiInterval") is now built, as designed there. the choices the
+build made, each the session's default, open for the owner (`HANDOFF.md` Q13; D21 in
+`v2-implementation-plan.md`):
+* **shape**: `intervals/ieee1788.py`, one class `Interval` for both flavours, snake_case 1788 names
+  with 1788's camelCase in `NAMES`, not exported from `intervals`
+* **numbers of the empty set raise** (`ValueError`, D9's answer, as the owner chose for the
+  reductions, Q2) where 1788 says NaN; `inf`/`sup` of it are `±inf` either way
+* **Q9 and Q10 answered by the layer, pending Q13 (c), (d)**: 1788's pair with its decoration is
+  `ieee1788.mul_rev_to_pair` and the library's `mul_rev` stays one op, trv; the constructors' binary64
+  run is the layer's pass, no class argument on the library's constructors. the adapter's 52
+  `DECORATION_ONLY` rows and its reasons are left as they are (true of the library)
+* **where 1788 and the library disagree, the layer answers 1788's way** (cancellation's "no answer",
+  `meets`, attained infinities dropped), the library its own
+* **the sign of zero follows 1788 in the layer**: `inf` gives `-0.0` for a lower end of 0 and `sup`
+  `+0.0` for an upper end of 0 (1788-2015's rule; the critique's n7: "recorded, not an owner
+  question" did not fit the layer's principle of answering 1788's way). no vector can see it
+  (`tests/itf1788/itl.py::parse_number` reads `-0.0` as `Fraction(0)`); pinned by
+  `tests/test_ieee1788_layer.py::test_the_sign_of_zero_is_1788s`. the package's one zero (2026-09-22
+  revision) is unchanged: the ends of an `Interval` are never `-0.0`, and nothing re-enters the
+  library from `inf`/`sup`
+
+### 2026-09-28 revision: M16a, the solver in several variables (H3's second part), built
+
+the owner, 2026-09-27: "get the rest of h3 done". M16a is its stream nd-solver; the choices are the
+build's defaults, open for the owner (Q12; D20):
+* **n passes, `Dual` untouched**: a gradient or a jacobian is n evaluations of `F`, each with one
+  variable seeded. vector mode (a tangent tuple inside `Dual`, one pass) edits M15's pinned chain
+  rules; it stays the alternative if a measured solve is too slow (Q12(a))
+* **`solve` and `RootBox`** (names, Q12(b)); `Root` stays one set for `newton`. n == 1 delegates to
+  `newton`, so one variable keeps M15's behaviour exactly
+* **krawczyk proves, gauss-seidel with `mul_rev` narrows**, on the closed hull, with a float
+  preconditioner (identity fallback); uniqueness for n >= 2 by krawczyk only (hansen and sengupta's
+  own test is not used: its proof was not checked)
+* **the simplest point and the inflation, before an unproved box is output**, each measured to be
+  needed: without the first, the cusp's `(0, 0)` and `(1, 1)` end unproved; without the second,
+  `(x ** 2 - 2, y - 1/4)` proves none of its two zeros (critique B1). the inflation is clipped to the
+  box's region, carried on the stack, without which it can claim a box holding no zero
+* **the C¹ gate in n variables**: every value and every partial of the n decorated passes dac or
+  better, over the closed hull
+* **bisection**: wide components first, round robin; then the widest (kearfott's smear measured on
+  the prototype, 148 against 146 calls, 345 against 340, not taken)
+* **no direction tag** (the solver stack, above)
 
 ### 2026-09-27 revision: M15, autodiff and interval newton (H3's first part), built
 
@@ -989,7 +1513,8 @@ v2-implementation-plan.md):
   failure `tests/test_solver.py::test_not_c1_would_lose_a_zero` shows
 * **the step is `mul_rev`**, the reverse op, never `/`: `[0] / [0]` is `∅` (D7)
 * **one variable**: a `Dual` carries one derivative; several variables (a gradient, a jacobian and
-  a krawczyk or newton step in n dimensions) are not built
+  a krawczyk or newton step in n dimensions) are not built. **superseded 2026-09-28**: built as M16a (the 2026-09-28
+  revision above), `Dual` untouched
 * `tol=1e-10` absolute, `max_steps=10_000`; float midpoints; the magnitude split at a factor of 16
 
 ### 2026-09-27 revision: owner answers on M13's proposed categories (D18)
@@ -1068,7 +1593,9 @@ the owner answered `HANDOFF.md`'s questions and items on 2026-09-26:
   `math.fsum` raises on `inf + -inf` too
 * **H3**: numpy interop and a gmpy2/mpfr backend are recorded, not built now ("later (not in
   v2.0)" above). the session's suggested first pick when the solver stack starts: Newton's
-  method with forward-mode autodiff, the demonstration of what multi-intervals are for
+  method with forward-mode autodiff, the demonstration of what multi-intervals are for. **superseded
+  2026-09-27** by the owner's "get the rest of h3 done": numpy interop and the gmpy2/mpfr backend
+  were built as M16d and M16e (the 2026-09-28 revisions above)
 
 ### 2026-09-26 revision: M13e, the reverse ops, built
 

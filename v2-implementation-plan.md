@@ -5,12 +5,14 @@ criterion per milestone. review findings that needed an owner decision are in se
 of 2026-09-23 and written into `v2-plan.md`'s "current design"; D8 was settled 2026-09-24. D9–D17
 were settled 2026-09-25 for M13 and M14: they go into "current design" as each is built, and until
 then they are in `v2-plan.md`'s decision log. D14 (the flint oracle) and D15 (vendoring) were built
-with M13a and M14's first two items (2026-09-26) and are in "current design" now.
+with M13a and M14's first two items (2026-09-26) and are in "current design" now. D19 (M15) and
+D20–D24 (M16, 2026-09-28) are the build's own defaults, written into "current design" as built and
+open for the owner in `HANDOFF.md` (Q11 to Q16).
 
 **open work and open questions live in `HANDOFF.md`** (since 2026-09-26): ranked items, questions for
 the owner, loose ends, session log. this file keeps the spec (what to build, exits) and the records.
 
-## 0. decisions (D1–D8 from the 2026-09-23 reviews; D9–D17 for M13 and M14, 2026-09-25)
+## 0. decisions (D1–D8 from the 2026-09-23 reviews; D9–D17 for M13 and M14, 2026-09-25; D18 for M13, D19 for M15, 2026-09-27; D20–D24 for M16, 2026-09-28)
 
 | # | question | recommended default | blocks |
 |---|---|---|---|
@@ -33,6 +35,11 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D17 | **decided 2026-09-25 by owner**: M13 does **not** block the 2.0.0 release, and there is no hurry to release either ("I have zero users and this is a yak shaving pet project"). M13 only adds methods and a type and gives a meaning to exponents that raise `TypeError` today, so nothing that works now changes | release whenever; not blocked | — |
 | D18 | **decided 2026-09-27 by owner**, on M13's proposed categories and choices: (a) **"tighter than the vector"** is an approved residual category (M13e): 11 keys, 18 vectors where 1788's expected hull is looser than the tightest double enclosure and ours is the tightest, checked with arb or exactly; the two grossly loose `pow_rev.itl:609`, `:642` stay in it. (b) **"exact parsing decides validity"** is approved (M13g): the 1788 text constructors read bounds exactly, so no `PossiblyUndefinedOperation` for a near-tie literal; 7 keys. (c) the 15 rows where an exact value past the doubles keeps com (`_BOUNDED_EXACTLY` 3, `PLAIN_ONLY` 12) stay under **decoration expectations**. (d) `set_dec` **demotes** as 1788's `setDec` does; only the `DecoratedInterval` constructor raises | both categories approved; rows stay; set_dec demotes | M13e, M13g |
 | D19 | **decided in the build 2026-09-27 (the session's defaults), open for the owner: `HANDOFF.md` Q11.** the solver stack's first part (M15): (a) `intervals/autodiff.py` (`Dual`, `derivative`) and `intervals/solver.py` (`newton`, `Root`) are public and exported from `intervals`, not newton as a test only; (b) newton's step runs only where `f` is proved C¹ by decorations (dac or better on the value and the derivative), else the piece is pruned and bisected; (c) the step is `mul_rev`, never `/` (D7); (d) one variable; (e) `tol=1e-10` absolute, `max_steps=10_000` | as built | M15 |
+| D20 | **decided in the build 2026-09-28 (the session's defaults), open for the owner: `HANDOFF.md` Q12.** the solver stack's second part (M16a): (a) a gradient or a jacobian is n passes of `F`, `Dual` untouched (not vector mode); (b) names `gradient`, `jacobian`, `solve`, `RootBox`, public and exported from `intervals`, `Root` unchanged; (c) `solve` at n == 1 is `newton`; (d) uniqueness by krawczyk only, on the closed hull, with a float preconditioner (identity fallback), narrowing by gauss-seidel with `mul_rev`; (e) before an unproved box is output, its simplest rational point (exactly `[0]`: a unique point) and then krawczyk on the box inflated within its region; (f) wide components bisected first, round robin, then the widest; (g) `tol=1e-10` absolute on the widest component, `max_steps=10_000` boxes; (h) no direction tag | as built | M16a |
+| D21 | **decided in the build 2026-09-28 (the session's defaults), open for the owner: `HANDOFF.md` Q13.** the 1788 layer (M16b): (a) `intervals/ieee1788.py`, one `Interval` class for both flavours, 1788's names in snake_case (`NAMES` has the camelCase), not exported from `intervals`; (b) `mid`, `rad`, `wid`, `mag`, `mig`, `mid_rad` of the empty set raise `ValueError`, where 1788 says NaN; (c) Q9 answered by the layer: `ieee1788.mul_rev_to_pair` is 1788's pair with its decoration, the library's `mul_rev` unchanged; (d) Q10 answered by the layer: its pass runs the constructors in binary64, no class argument on the library's; (e) where 1788 defines another answer than the library's set (cancellation, overlap, attained infinities), the layer gives 1788's and the library keeps its own | as built | M16b |
+| D22 | **decided in the build 2026-09-28 (the session's defaults), open for the owner: `HANDOFF.md` Q14.** the per-piece allen matrix (M16c): (a) `A.allen_matrix(B)`, a tuple of tuples of `Allen` (rows the pieces of `A`, columns those of `B`), and `relations.allen_matrix` over cut tuples; (b) `A.allen_relations(B)`, the `frozenset` of the relations holding between some pair of pieces, a second public name the H3 row did not list; (c) an empty operand gives `()` / one empty row per piece / `frozenset()`, no raise and no warning; (d) the matrix is the plain `n x m` loop over `allen()` (no dependence on normalized input; the design's ~2-3x faster fill + sweep not taken), the set view an `O(n + m)` sweep that never builds the matrix; (e) methods on `MultiInterval`, functions in `relations.py`, nothing at the top level, not on `DecoratedInterval`, the sparse `(i, j, relation)` view private | as built | nothing (additive: `allen()` and every existing name unchanged); M16c's record |
+| D23 | **decided in the build 2026-09-28 (the session's defaults), open for the owner: `HANDOFF.md` Q15.** numpy interop (M16d): (a) `__array_ufunc__` on `MultiInterval`, `DecoratedInterval`, `Dual` (`intervals/numpy_compat.py`), operator ufuncs as python's operators on our dunders only, the others the method of the same set image, the rest `TypeError`; `__array__` on `MultiInterval` only (a 0-d object array); the array API standard not built (the alternative: an interval-array type); (b) a foreign real is its exact value (a `Rational` by type, else where `float()` would round), alternatives refuse or keep `float()`; (c) an ndarray meeting ours is elementwise into an object array, `==`/`!=` never broadcast; (d) no numpy-named alias methods; (e) `np.invert` the complement; (f) `fmin`/`fmax` not mapped; (g) numpy not in `[test]`; (h) both operands ours in a method ufunc (`hypot minimum maximum arctan2`): the subclass decides, as for the operators | as built | M16d |
+| D24 | **decided in the build 2026-09-28 (the session's defaults), open for the owner: `HANDOFF.md` Q16.** the gmpy2/mpfr backend (M16e): (a) the default is the pure path; `INTERVALS_BACKEND=gmpy2` forces gmpy2 (ImportError if missing or below 2.3 / MPFR 4.2), `auto` takes it if importable and `2.3 <= version < 3`; (b) public surface: the env var and the `[fast]` extra only; `intervals.backend.name()` not exported, no setter; (c) non-dyadic points stay pure (no mpfr ziv loop), but atan, acot, atan2's angles and the hook's mixed operands; (d) `gmpy2>=2.3,<3` in `[test]`; (e) CI unchanged: the whole suite on the pure path, `tests/test_backend.py` compares both in every job; no gmpy2 fuzz job; (f) ships in 2.0 as an opt-in, or waits under "later" | as built | M16e |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
 milestones below: infinite result endpoints always go through attainment (the corner-flag rule is
@@ -2468,6 +2475,1313 @@ soundness, pinned by evaluation counts (`::test_evaluation_budgets`, 57, 57, 30,
 evaluations on 2026-09-27, against bounds of 80 and 10; without the magnitude split 743, without
 the cap past tol 922)
 
+### M16 the solver stack's second part and the rest of H3 (done 2026-09-28)
+
+the owner, 2026-09-27: "get the rest of h3 done", which superseded 2026-09-26's "numpy and
+gmpy2/mpfr recorded, not now" (M15 above: "gmpy2/mpfr stay out"). H3's rest was built as M16, H3's
+second part, in five streams on five branches, each off `v2` at `04946af`: M16a nd-solver
+(`h3-nd-solver`: `gradient`, `jacobian`, `solve`, `RootBox`; D20, `HANDOFF.md` Q12), M16b ieee1788
+(`h3-ieee1788`: `intervals/ieee1788.py`, the 1788 layer; D21, Q13), M16c allen-matrix
+(`h3-allen-matrix`: `allen_matrix`, `allen_relations`; D22, Q14), M16d numpy (`h3-numpy`:
+`intervals/numpy_compat.py`; D23, Q15) and M16e gmpy2 (`h3-gmpy2`: `intervals/backend.py`,
+`intervals/_gmpy2.py`, opt-in, pure by default; D24, Q16). each stream was designed by one agent
+and critiqued by an adversarial one, then built by a builder with properties and sabotage,
+reviewed by three read-only reviewers (lenses soundness, sabotage audit, spec/regression), fixed by
+a fixer that reproduced each finding first, and checked by a verifier, in its own worktree. the
+five were merged into `v2` on `h3-merge`, without conflicts; the gate on the merged tree is in
+`HANDOFF.md`'s banner. the designs are `v2-plan.md` "the solver stack", "the 1788 layer",
+"comparisons", "numpy" and "elementary and step functions" (the backend); here each stream's spec,
+exit and record. each stream's gate numbers below were measured on its own branch, with the five
+sharing the laptop, so every time is loaded.
+
+**M16a the solver in several variables: `gradient`, `jacobian`, `solve`, `RootBox` (done 2026-09-28)**
+(D20). the design is `v2-plan.md` "the solver stack" (its M16a bullets); the choices are D20, open
+as `HANDOFF.md` Q12.
+
+* **`intervals/autodiff.py`**: `gradient(f, xs)`, `jacobian(F, xs)` (and the private `_box`,
+  `_entry`, `_passes`, `_sequence`), appended below `derivative`; nothing above it edited
+* **`intervals/solver.py`**: `RootBox(box, unique)`, `solve(F, xs, *, tol, max_steps)`, and the
+  private `_input_box`, `_outputs`, `_values`, `_jacobian`, `_points`, `_mid`, `_inverse`,
+  `_combine`, `_precondition`, `_krawczyk`, `_gauss_seidel`, `_width`, `_wide`, `_choose`,
+  `_simplest_between`, `_simplest_point`, `_finish_box`, `_regions`, `_inflate`, `_rounded`,
+  `_inflated_unique`, appended below `_bisect`; M15's functions reused unchanged (`newton`,
+  `_magnitude_split`, `_bisect`, `_PAST_TOL`) but `_point_in`, whose `float(mid)` now falls back to
+  the exact midpoint where it overflows (review F2, which `newton` shared); the module docstring
+  unchanged
+* `intervals/__init__.py`: the four names imported and in `__all__`, under "M16: the solver stack's
+  second part, several variables (H3)"
+* exit: the jacobian against arb (soundness at points of boxes, sharpness at a point) and equal to
+  `derivative` at n == 1; `solve` sound and its uniqueness claims true on constructed systems with
+  every real zero known (rational and irrational), under any `tol` and `max_steps`, and with factors
+  not C¹ under a budget (`max_steps` up to 30); the C¹ gate shown necessary by examples (the pole,
+  the kink, a coupled kink, a jump: the random factors not C¹ do not detect it, review spec F1);
+  simple zeros proved, irrational ones by
+  krawczyk (pinned coordinates included), simple rational ones as exact points; n == 1 equal to
+  `newton`; the budgets pinned; the gate green; every new property sabotaged once and seen red
+
+record (2026-09-28):
+* **what the build found on its way**, each fixed before the record:
+  * **critique B1's region was not enough.** the critique defined the region as "the box as last
+    pushed by the work list, a bisection, a gauss-seidel split or step 6". built that way,
+    `(x ** 2 + y ** 2 - 1, y - 1/4)` on `[-3, 3]²` still proved neither zero: y was pinned to `[0.25]`
+    by a step *before* a later split, so the split's pieces, and their regions, were degenerate in y,
+    where no inflated box has an interior. fix (`solver.py::_regions`): a split cuts the *old* region
+    in the split coordinate only, between the neighbouring boxes (their open and closed ends
+    respected); the other coordinates keep the region's extent. every zero of the new region is a
+    zero of the old one, so in one of the boxes, and on its own box's side of the cut. the simplest
+    point's rest boxes get the region cut at the point, the point's coordinates before k. pinned by
+    `tests/test_solve.py::test_simple_zeros_are_proved_unique[pinned circle]` (bisection) and
+    `[pinned, then split]` (a gauss-seidel split: `(x - 1/4, x ** 2 + y ** 2 - 4)`, whose first step
+    pins x in row 0 and splits y in row 1; the `- 1` variant does not split, row 1's `c` holding 0)
+  * **the n-dimensional loop at n == 1 gives `newton`'s boxes** on all four functions of
+    `::test_n_equals_one_is_newton` (sabotage: green), at 1.4x to 2x the calls (49 against 32 for
+    `x ** 2 - 2` on `[-10, 10]`, 145 against 93 for `sin`, 32 against 16 for the kink, 47 against 33
+    for the pole; 2026-09-28, the review's `.scratch/h3b/review/nd-solver-spec/n1.py`, which execs
+    `solve` with `if n == 1:` made `if False:`; the first two pairs were quoted as "about 1.5x" until
+    review spec F4). the delegation is pinned by the call counts as well as the boxes
+  * **cost** (2026-09-28, five streams sharing the laptop; `.scratch` timing scripts calling
+    `tests/test_solve.py::system` and `::Counted`): unbudgeted constructed systems with two factors
+    per coordinate have a tail (one of 11 draws: 4677 calls, 201 s); factors not C¹ at their zeros
+    (`abs`, `cbrt`), unbudgeted with `tol=0.01`, cost 500 to 1500 calls, 50 to 90 s each (the gate
+    keeps the step off every box across the kink line, so they are bisected); a constructed n = 3
+    system with two zeros did not finish in 120 s (1464 calls in 66 s at `max_steps=400`). so the
+    unbudgeted random test draws one factor per coordinate (its `@example`s keep two), the factors not
+    C¹ are drawn only in the budgeted test, and `::test_three_variables` has one zero (0.4 s); the
+    sphere is the n = 3 system with two zeros. so the `abs` and `cbrt` factors check soundness under
+    a budget only: they do not detect the C¹ gate removed (review spec F1: forced off, the budgeted
+    test and 25 draws at `max_steps` 100 to 400 stayed green); the gate is pinned by the examples
+  * the gate found `tests/test_applicator.py::test_package_exports_unchanged` red: it pins
+    `intervals.__all__`; the four names are added there
+  * a split of a box already proved unique needs a step whose new preconditioner leaves 0 in a
+    diagonal entry, which no example reached (sabotage "a split box keeps unique": green). pinned
+    directly: `::test_a_split_box_is_unproved` makes `_krawczyk` claim the first box, which the step
+    then splits, and with `max_steps=1` both pieces are output unproved
+  * the "jacobian over the box, not its closed hull" break is seen by the kink, not only by the
+    helper case the design planned (`::test_c1_is_decided_on_the_closed_hull`)
+* **tests** (`tests/test_gradient.py`, `tests/test_solve.py`, and the doctests of `gradient`,
+  `jacobian`, `solve`):
+  * `tests/test_gradient.py::test_jacobian_encloses_the_partials` (random expression trees in x and
+    y, `F = (e1, e2)` over drawn boxes, every entry against arb's partial at a drawn point, 60
+    examples), `::test_jacobian_is_tight_at_a_point` (1e-10 relative; it cannot see a wrong seed,
+    which is still tight at a point), `::test_gradient_is_the_jacobian_row`,
+    `::test_one_variable_is_derivative` (set and decoration), `::test_seeds`,
+    `::test_decorated_columns`, `::test_arguments` (the kind check with an `f` that ignores the
+    bare argument, critique B2)
+  * `tests/test_solve.py`, the oracle `::system` (`A G(B x + c)`, zeros exact or `r + Σ a sqrt(q)`
+    decided by arb) and `::check_roots`: `::test_every_zero_is_enclosed` (one factor per coordinate,
+    four input boxes: closed, open-ended, multi-piece, integer faces; `max_steps=2000`, critique N6;
+    `@example`s: systems 7 and 3 of the prototype, system 3 on a box with zeros on its faces and
+    corners, a double zero, zeros 1e-12 apart, irrational zeros),
+    `::test_every_zero_is_enclosed_on_a_budget` (with `abs` and `cbrt` factors, `max_steps` 1..30,
+    `tol` in {1e-3, 1e-10, 0}, 40 examples), `::test_three_variables`,
+    `::test_simple_zeros_are_proved_unique` (12 systems: `(x ** 2 - 2, y - x)`, the circle and the
+    line on `[-10, 10]²`, `REALS²` and `[-1e300, 1e300]²`, the sphere, `(exp x - y, x + y - 2)` (x =
+    2 - W(e²) by arb), `(sin(x + y), x - 2y)`, and the pinned-coordinate systems of critique B1:
+    `y - 1/4`, `3y - 1`, `y - 0.1`, the pinned circle, pinned then split; each zero in one unique box
+    under 1e-12 wide), `::test_simple_rational_zeros_are_exact_points` (cusp, pole, kink, `sin` at
+    0), `::test_the_first_step_splits_the_box`, `::test_not_c1_is_not_stepped` and
+    `::test_not_c1_would_lose_a_zero` (the kink and the coupled kink),
+    `::test_a_jump_is_caught_by_the_value_decoration`, `::test_c1_is_decided_on_the_closed_hull`;
+    the helpers: `::test_krawczyk_proves_only_inside_the_interior`, `::test_gauss_seidel_step`,
+    `::test_inverse`, `::test_precondition_falls_back_to_the_identity` (an exact midpoint beyond the
+    doubles, critique B4), `::test_simplest_between`, `::test_the_simplest_point_needs_an_exact_zero`
+    (the box case of critique B3), `::test_a_point_is_unique_only_when_f_is_exactly_zero`,
+    `::test_inflation_is_clipped_to_the_region`, `::test_inflation_takes_its_own_jacobian` (a spy
+    `F`), `::test_inflation_needs_the_c1_gate`, `::test_a_split_box_is_unproved`,
+    `::test_a_bisected_box_is_unproved` (review S3),
+    `::test_the_simplest_points_rest_is_its_own_region`,
+    `::test_choose_falls_through_to_the_other_components` (critique N1, N2);
+    `::test_n_equals_one_is_newton`, `::test_multi_piece_input`, `::test_unbounded_input`,
+    `::test_constant_and_continuum_systems`, `::test_overflow_box` (critique B4),
+    `::test_degenerate_input_component`, `::test_ends_beyond_the_doubles` (review F2),
+    `::test_arguments_are_checked` (a decorated `xs` refused,
+    one wording for a wrong-length `F` at n == 1 and n == 2, critique N7), `::test_warnings_stay_inside`,
+    `::test_results_are_outward`, `::test_evaluation_budgets`
+* **measured 2026-09-28** (five streams sharing the laptop):
+  * `tests/test_gradient.py` 15 tests in 0.9 s; `tests/test_solve.py` 52 tests in 134 s
+    (`::test_every_zero_is_enclosed` 104 s of it); after the review (its fixes in the tree):
+    15 tests in 1.0 s and 54 tests in 66 s (`::test_every_zero_is_enclosed` 36 s; the laptop less
+    loaded, not a speed-up); command
+    `C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q tests/test_solve.py --durations=8`
+    (and the same for `tests/test_gradient.py`), `.hypothesis` cleared first
+  * calls of `F` (every kind: plain, decorated, point), `tests/test_solve.py::_calls` with
+    `max_steps=20000`, against the bounds of `::test_evaluation_budgets` (the five bounded rows
+    re-measured after the review, 2026-09-28: unchanged):
+
+| system | box | calls | bound | the break it catches |
+|---|---|---|---|---|
+| `(x + y, x - y)` | `REALS²` | 15 | 30 | round robin removed |
+| circle and line | `REALS²` | 71 | 110 | `[-inf, inf]` not wide |
+| circle and line | `[-1e300, 1e300]²` | 103 | 160 | magnitude split removed |
+| cusp `(x ** 2 - y, y - x ** 3)` | `[-2, 2]²` | 371 | 560 | past-tol cap removed |
+| system 7 | `[-6, 6]²` | 31 | 50 | (the exact midpoint: caught first by the pinned 1/3 system) |
+| `(x ** 2 - 2, y - x)` | `[-10, 10]²` | 64 | — | |
+| `(sin(x + y), x - 2y)` | `[-4, 4]²` | 148 | — | |
+| kink | `[-1, 3] × [-1, 1]` | 102 | — | |
+| `(exp x - y, x + y - 2)` | `[-5, 5]²` | 24 | — | |
+
+  (the prototype's counts, `.scratch/h3b/nd-solver/probe13a.log`, were the same but the cusp's,
+  359: the inflation costs 12 calls there)
+  * the gate, from the worktree root, on the tree committed: `C:/Users/user/anaconda3/envs/intervals/python.exe
+    -m pytest -q tests/itf1788`: 18246 passed in 40.3 s; the rest (`--ignore=tests/itf1788`: 4158
+    collected) in four calls, each with `--ignore=tests/itf1788` and explicit paths: the four solver
+    test files, `intervals` and `README.md`: 334 passed in 104.3 s; the first 14 other test files
+    (alphabetical): 2361 passed in 192.3 s; the other 13: 1460 passed in 245.3 s; `tests/oracles.py`
+    (its doctests): 3 passed in 0.2 s. sum 4158 passed in 542 s. the whole tree collects 22404 in
+    one process (test basenames unique)
+  * the gate after the review, from the worktree root, on the tree committed (2026-09-28, five
+    streams sharing the laptop): `tests/itf1788`: 18246 passed in 48.8 s; the rest (4160 collected)
+    in three calls, each with `--ignore=tests/itf1788` and explicit paths: the four solver test
+    files, `intervals` and `README.md`: 336 passed in 115.6 s; the first 14 other test files
+    (alphabetical): 2361 passed in 251.9 s; the other 13 and `tests/oracles.py`: 1463 passed in
+    292.7 s. sum 4160 passed in 660 s. the whole tree collects 22406 in one process
+    (`python -m pytest --collect-only -q`; basenames unique)
+* **sabotage** (a throwaway harness, M15's shape: each break alone, the one replacement matching
+  exactly once, `.hypothesis` cleared, `tests/test_gradient.py`, `tests/test_solve.py`,
+  `tests/test_solver.py`, `tests/test_autodiff.py` and the two modules' doctests with `-x` and a
+  900 s timeout, the file restored and compared; 2026-09-28). a no-op edit first: green, 235 passed
+  in 248 s. the last column is the first test to fail under `-x`. the four green at first were
+  closed by tests and re-run red; seven whose first run named only a hypothesis note were re-run to
+  name the test; the other rows' final run is the first (the closing tests only add red paths):
+
+| break | first run | final run: red by |
+|---|---|---|
+| jacobian transposed (columns as rows) | red | red: `tests/test_gradient.py::test_jacobian_encloses_the_partials` |
+| column j read from pass j + 1 | red | red: `tests/test_gradient.py::test_jacobian_encloses_the_partials` |
+| a constant coordinate seeded `[1]` | red | red: `tests/test_gradient.py::test_jacobian_encloses_the_partials` |
+| a number beside decorated sets a bare point | red | red: `tests/test_gradient.py::test_arguments` |
+| the up-front kind check removed (critique B2) | red | red: `tests/test_gradient.py::test_arguments` |
+| C¹ gate removed | red | red: `tests/test_solve.py::test_simple_rational_zeros_are_exact_points[pole]` |
+| C¹ gate reads the values only | red | red: `tests/test_solve.py::test_simple_rational_zeros_are_exact_points[kink]` |
+| C¹ gate reads the partials only | red | red: `tests/test_solve.py::test_a_jump_is_caught_by_the_value_decoration` |
+| jacobian over the box, not its closed hull | red | red: `tests/test_solve.py::test_simple_rational_zeros_are_exact_points[kink]` |
+| krawczyk never proves in the step | red | red: `tests/test_solve.py::test_three_variables` |
+| the inflation test removed (critique B1) | red | red: `tests/test_solve.py::test_simple_zeros_are_proved_unique[pinned 1/4]` |
+| krawczyk inside `H`, not `int H` | red | red: `tests/test_solve.py::test_simple_rational_zeros_are_exact_points[kink]` |
+| krawczyk ignores an empty K | red | red: `tests/test_solve.py::test_krawczyk_proves_only_inside_the_interior` |
+| krawczyk on the box's own (open) ends | red | red: `tests/test_solve.py::test_krawczyk_proves_only_inside_the_interior` |
+| gauss-seidel divides, not `mul_rev` | red | red: `tests/test_solve.py::test_every_zero_is_enclosed` |
+| gauss-seidel not intersected with the box | red | red: `tests/test_solve.py::test_every_zero_is_enclosed` |
+| gauss-seidel takes the hull of two pieces | red | red: `tests/test_solve.py::test_the_first_step_splits_the_box` |
+| jacobi, not gauss-seidel | red | red: `tests/test_solve.py::test_gauss_seidel_step` |
+| a split box keeps unique | green | red: `tests/test_solve.py::test_a_split_box_is_unproved` |
+| preconditioner removed | red | red: `tests/test_solve.py::test_three_variables` |
+| no pivoting in `_inverse` | red | red: `tests/test_solve.py::test_not_c1_would_lose_a_zero` (the coupled kink; `::test_inverse` comes later in the file) |
+| range prune removed | red | red: `tests/test_solve.py::test_simple_zeros_are_proved_unique[circle and line, the reals]` |
+| a point unique without `F == [0]` | red | red: `tests/test_solve.py::test_a_point_is_unique_only_when_f_is_exactly_zero` |
+| simplest point removed | red | red: `tests/test_solve.py::test_simple_zeros_are_proved_unique[sin]` |
+| simplest point accepts `0 ∈ F(p)` (critique B3) | red | red: `tests/test_solve.py::test_the_simplest_point_needs_an_exact_zero` |
+| simplest point drops the rest of the box | red | red: `tests/test_solve.py::test_constant_and_continuum_systems` |
+| exact midpoint fallback removed | red | red: `tests/test_solve.py::test_simple_zeros_are_proved_unique[pinned 1/3]` |
+| round robin removed | red | red: `tests/test_solve.py::test_evaluation_budgets` |
+| `[-inf, inf]` not wide (magnitude split only) | red | red: `tests/test_solve.py::test_evaluation_budgets` |
+| magnitude split removed for bounded components | red | red: `tests/test_solve.py::test_evaluation_budgets` |
+| past-tol cap removed | red | red: `tests/test_solve.py::test_evaluation_budgets` |
+| tol ignored | red | red: `tests/test_solve.py::test_simple_rational_zeros_are_exact_points[cusp]` (after 735 s) |
+| max_steps drops the stack | red | red: `tests/test_solve.py::test_every_zero_is_enclosed_on_a_budget` |
+| bisection keeps one half | red | red: `tests/test_solve.py::test_every_zero_is_enclosed` |
+| bisection drops the split face (M15's `_bisect`) | red | red: `tests/test_solve.py::test_every_zero_is_enclosed` |
+| n == 1 not delegated to `newton` | green | red: `tests/test_solve.py::test_n_equals_one_is_newton[<lambda>-x0]` (the call counts) |
+| work list: the first piece of each component | red | red: `tests/test_solve.py::test_every_zero_is_enclosed` |
+| output not sorted | red | red: `tests/test_solve.py::test_every_zero_is_enclosed` |
+| inflation not clipped to the region (critique B1) | red | red: `tests/test_solve.py::test_every_zero_is_enclosed` (a unique box with no zero) |
+| inflation test with `J(B)`, not `J(H'')` | red | red: `tests/test_solve.py::test_inflation_takes_its_own_jacobian` |
+| inflation test ignores the C¹ gate | red | red: `tests/test_solve.py::test_inflation_needs_the_c1_gate` |
+| a gauss-seidel split's region is the piece | green (twice: the first closing case did not split) | red: `tests/test_solve.py::test_simple_zeros_are_proved_unique[pinned, then split]` |
+| a bisection's region is the half | red | red: `tests/test_solve.py::test_simple_zeros_are_proved_unique[pinned circle]` |
+| a split does not cut the region | red | red: `tests/test_solve.py::test_every_zero_is_enclosed` (a unique box with no zero) |
+| the simplest point's rest keeps the whole region | green | red: `tests/test_solve.py::test_the_simplest_points_rest_is_its_own_region` |
+| `_choose`: no fall-through past unsplittable wide components (critique N1) | red | red: `tests/test_solve.py::test_choose_falls_through_to_the_other_components` |
+| simplest point on an unbounded component (critique N2) | red | red: `tests/test_solve.py::test_choose_falls_through_to_the_other_components` |
+| krawczyk `m + b` (review S1) | green (the reviewer's run) | red: `tests/test_solve.py::test_krawczyk_proves_only_inside_the_interior` |
+| the inflation of an unbounded box claims it (review S2) | green (the reviewer's run) | red: `tests/test_solve.py::test_choose_falls_through_to_the_other_components` |
+| a bisected box keeps unique (review S3) | green (the reviewer's run) | red: `tests/test_solve.py::test_a_bisected_box_is_unproved` |
+| the pass-length check removed (review S4, spec F2) | green (the reviewer's run) | red: `tests/test_gradient.py::test_arguments` |
+| `solve` takes a bool as a number (review S5) | green (the reviewer's run, and ours with `match='got bool'`) | red: `tests/test_solve.py::test_arguments_are_checked` |
+| `gradient` takes a bool as a number (review S5) | green (the reviewer's run, and ours with `match='got bool'`) | red: `tests/test_gradient.py::test_arguments` |
+| `_combine` multiplies by an exact 0 (review S6) | green (the reviewer's run) | red: `tests/test_solve.py::test_precondition_falls_back_to_the_identity` |
+| the step skips a `J` with an infinite end (review spec F5) | not run before | red: `tests/test_solve.py::test_overflow_box` |
+| the simplest point not checked inside its component (review F3's claim) | red (the reviewer's run, by `::test_every_zero_is_enclosed`) | red: `tests/test_solve.py::test_the_simplest_points_rest_is_its_own_region` |
+| `_point_in`'s `float(mid)` unguarded (review F2) | red (the crash itself) | red: `tests/test_solve.py::test_ends_beyond_the_doubles` |
+| `solve`'s width halved by float division (review F2) | red (the next crash) | red: `tests/test_solve.py::test_ends_beyond_the_doubles` |
+
+  47 breaks, 4 green at first, all red in the final runs; then the review's 11 (the rows from
+  "krawczyk `m + b`" on; "first run" is the reviewer's harness over the stream's tests, or the
+  crash before the fix; the final run is the closing test alone, `.scratch/fix/sab.py`,
+  2026-09-28): 7 green at first and 1 not run before; 58 breaks in all, all red in the final runs. against the design's 36-row plan: its
+  rows 1 and 3 are one break here ("a constant coordinate seeded"), row 1's place taken by the
+  transposed jacobian; the rows for critique B1, B2, B3, N1, N2 and for the regions are new
+* **the direction tag, not built**: the argument is in `v2-plan.md` "the solver stack", corrected per critique B4 (an
+  enclosure may hold an open end at inf by overflow, which keeps every real point; no degenerate
+  `[±inf]` arises from a finite real), with the overflow box as a test (`::test_overflow_box`:
+  `(exp x - y, x - 709.5)` over `[700, 720] × [1e307, 1.7e308]`, the zero enclosed)
+
+review (2026-09-28, three read-only reviewers over `c8c9e08`, lenses soundness, sabotage-audit and
+spec/regression; each finding reproduced on `c8c9e08` before any change, by
+`.scratch/fix/repro.py` in the worktree (gitignored) or by the red run of its closing test; ids are
+the reviewers', the soundness and spec lenses both using F1 to F3). **no wrong answer in the
+solver**: every finding is a false claim in the text, a crash, a cost, or a property the tests did
+not pin. found and fixed:
+
+* **soundness F1 (blocking, a false claim)**: `autodiff.py::gradient`'s docstring and `v2-plan.md` "the solver stack"
+  said dac or better makes `F` C¹ "on an open set holding the box". decorations are relative to the
+  box: `gradient(lambda x, y: x ** 1.5 + y, [D(O(0, 1)), D(O(0, 1))])` is `[0.0, 1.5]_com
+  [1.0]_com` with no point below 0 in the domain, and `abs(Dual.variable(D(O(0))))` is `[0]_com d
+  [0]_dac`. both texts now say C¹ on the box relative to the box, which is what the mean value
+  theorem on `H` needs (one-sided at its faces); the solver's argument never used an open set, so no
+  answer changes
+* **soundness F2 (minor, a crash, shared with `newton` at `04946af`)**: `solve(lambda x, y: (x - 3 *
+  10 ** 400, y - x), [M(10 ** 400, 10 ** 401)] * 2)` and `newton(lambda x: x - 3 * 10 ** 400, M(10
+  ** 400, 10 ** 401))` raised `OverflowError` in `solver.py::_point_in`'s `float(mid)`. it now falls
+  back to the exact midpoint there; the next crash on the same input, `solve`'s `width <=
+  _width(box) / 2` (int true division), is now `2 * width <= _width(box)`. pinned by
+  `tests/test_solve.py::test_ends_beyond_the_doubles` (red before: `OverflowError`), n == 2 on a
+  budget (`max_steps=10`) since the unbudgeted solve costs 13669 calls, 27 to 46 s (2026-09-28, loaded
+  laptop; it ends with the exact point, unique): the float `Y` overflows `b` to `(1.8e308, inf)`, so
+  the step is idle and the box is bisected. recorded under known limits. `newton`'s own `width <=
+  piece.wid() / 2` is left as M15 wrote it (still owed)
+* **soundness F3 (minor, a cost)**: `solve(lambda x, y: (0, 0), [M(0, 1)] * 2, tol=1e-2)` returns
+  8056 boxes. measured (2026-09-28, `.scratch/fix/f3.py`): 8056 is `max_steps=10_000` cutting the
+  bisection short; with `max_steps=10 ** 6` it is 64720 boxes (12996 unique points), 492580 calls,
+  568 s; `tol` 0.25, 0.1, 0.05 give 34, 688, 3312 boxes. **the cascade the finding describes does not
+  happen**: a rest box's closed hull holds the point, the simplest rational of a larger set, so the
+  point is the rest box's simplest point too, and not inside it: `_simplest_point` is None there and
+  no second point is drawn. the output is at most 2n + 1 times the boxes of width `tol`, which a
+  continuum needs anyway. so the suggested fix (skip the point on rest boxes) would save no call of
+  `F`; not built. recorded under known limits, and the no-cascade claim pinned in
+  `tests/test_solve.py::test_the_simplest_points_rest_is_its_own_region`
+* **sabotage S1 (blocking)**: krawczyk's `m - b` made `m + b` stayed green: every unit case had `m`
+  at the midpoint, where the two mirror. pinned in
+  `tests/test_solve.py::test_krawczyk_proves_only_inside_the_interior` with `m = (1/4, 1/4)`: `b =
+  (-1/2, 0)` proves the zero `(3/4, 1/4)`, `b = (1/2, 0)` does not claim `(-1/4, 1/4)`
+* **sabotage S2 (blocking)**: `_inflated_unique` returning True where the inflation is None
+  stayed green: `tests/test_solve.py::test_choose_falls_through_to_the_other_components` now asserts
+  that no root of `(1 / x, y - 0.5)` over `(MAX, inf] × [-1, 1]` is unique (as built: one root,
+  unproved)
+* **sabotage S3 (blocking)**: a bisected box keeping its `unique` flag stayed green: the new
+  `tests/test_solve.py::test_a_bisected_box_is_unproved` makes `_krawczyk` claim the first box and
+  `_gauss_seidel` narrow it to `[0.5, 20] × [-1, 1]` (wide in x), which the next pop bisects; with
+  `max_steps=2` both halves are output unproved
+* **sabotage S4 and spec F2 (minor, one finding)**: `_passes`'s "F returned sequences of different
+  lengths" had no test: `tests/test_gradient.py::test_arguments` now calls `jacobian` with an `F`
+  of two outputs on pass 0 and one on pass 1 (under the break: `IndexError`)
+* **sabotage S5 (minor)**: the bool refusals in `solver.py::_input_box` and `autodiff.py::_box`
+  dropped stayed green. the reviewer's closing `match='got bool'` stays green too, since
+  `MultiInterval(True)` itself raises `TypeError: expected a real number, got bool: True`: the
+  break changes the wording, not the refusal. the tests (`::test_arguments_are_checked`,
+  `tests/test_gradient.py::test_arguments`) pin each function's own wording, `match='or a number,
+  got bool'`
+* **sabotage S6 (minor)**: `_combine`'s exact-0 skip made unconditional stayed green: `0.0 * (1,
+  inf)` is already `[0]`, and only `0 * [inf]` is `{}`. pinned in
+  `tests/test_solve.py::test_precondition_falls_back_to_the_identity` (`_combine((0.0, 1.0),
+  (O(inf), O(2))) == O(2)`), and the docstring narrowed to an entry `[±inf]`
+* **spec F1 (minor, an overstated exit)**: the random oracle's `abs` and `cbrt` factors run only
+  under a budget and do not detect the C¹ gate removed. the exit line and the cost bullet above now
+  say so; the gate stays pinned by the pole, kink, coupled kink and jump examples (the sabotage
+  table)
+* **spec F3 (minor)**: the README's package-layout line was missing from the record's readme text; added (README "layout")
+* **spec F4 (minor, a number)**: "about 1.5x the calls" at n == 1 held for two of the four
+  functions; re-measured 2026-09-28 (49/32, 145/93, 32/16, 47/33), now "1.4x to 2x" with all four,
+  in the record and in `tests/test_solve.py::test_n_equals_one_is_newton`'s docstring
+* **spec F5 (minor, an unpinned docstring)**: `tests/test_solve.py::test_overflow_box` claimed the
+  step runs with an infinite end in `J` but asserted only the enclosure; a spy on
+  `solver._precondition` now asserts that some `J` it sees has one (red when the step skips such a
+  `J`)
+
+sabotage of the review's fixes: `.scratch/fix/sab.py` in the worktree (a throwaway harness, each
+break alone, its closing test run alone with `-x`, `.hypothesis` cleared, the file restored and
+compared; 2026-09-28). the rows are in the table above, from "krawczyk `m + b`" on
+
+**M16b the 1788 layer: `ieee1788.py` (done 2026-09-28)** (D21).
+
+the owner, 2026-09-27: "get the rest of h3 done". the layer is H3's "thin `ieee1788.py`" and
+Q9's pair op; the design is `v2-plan.md` "the 1788 layer", the choices D21 (owner question Q13).
+
+* **`intervals/ieee1788.py`**: `Interval(lo, hi, decoration)`, `from_set`, `Overlap` (16 states),
+  `NAMES` (104 names: 1788's 102 and itf1788's `d-numsToInterval`, `d-textToInterval`), and the
+  104 functions: the constructors (`nums_to_interval`,
+  `text_to_interval`, their decorated twins, `empty`, `entire`), `new_dec`, `set_dec`,
+  `interval_part`, `decoration_part`, every forward op and elementary function the library has, the
+  step functions, the reverse ops (`x` optional) and `mul_rev_to_pair`, `cancel_minus`,
+  `cancel_plus`, `intersection`, `convex_hull`, the numbers, the booleans, `overlap`, and the
+  library's reductions re-exported. no library module is edited
+* **`tests/itf1788/test_ieee1788.py`**: the third conformance pass, exact, with its own rows (the
+  adapter's under three categories)
+* **`tests/test_ieee1788_layer.py`**: the properties
+* exit: every vector matches through the layer or is a row of the three owner-approved categories
+  (no row on a decoration alone, none for cancellation, relations or infinities); every function the
+  library's op through the output rule, in 1788's form, on drawn operands of both flavours; the
+  output rule against its definition; the gate green, one-process collection clean; every new
+  property sabotaged once and seen red
+
+record (2026-09-28):
+* **what the build found on its way**:
+  * the pass matched on its first run with the module (9542 vectors; the rows exactly the 94 keys,
+    104 vectors, the design's probe predicted), so the prototype's measurement carried over. the
+    rows' count is pinned (`tests/itf1788/test_ieee1788.py::test_rows`) and regenerated by
+    `tools/itf1788_census.py`
+  * a number beside a decorated operand must become newDec's point **before** any op of the layer
+    runs on it: `cancel_plus(x_dec, 2.0)` as `cancel_minus(a, neg(b))` with `neg(2.0)` bare would
+    be a mixed call and a `TypeError`. so `cancel_plus` and `mul_rev_to_pair` take the flavour first
+    (`ieee1788.py::_interval_of`), pinned by `tests/test_ieee1788_layer.py::test_flavours`
+  * the critique's leak test is written against the filters, not with `pytest.warns`: `pytest.warns`
+    records under its own `catch_warnings` with `simplefilter('always')`, which outranks any filter a
+    leaking layer left behind. `::test_the_silencing_does_not_leak` compares `warnings.filters`
+    before and after layer calls and lets the suite's `error::IntervalWarning` filter turn a direct
+    library call's `DomainClippedWarning` into an error; its break ("silencing without
+    catch_warnings") is red there
+  * 1788's `pown` takes an integer, D11's `**` an integral real: the function `pown(x, 2.0)` is a
+    `TypeError` (as the library's `pown_rev` refuses a float), the operator `x ** 2.0` is `pown(x,
+    2)` and `x ** 0.5` `pow_(x, 0.5)`; the pass keeps an `int` exponent an `int` and makes a
+    `Fraction` its float (critique n2)
+  * the module's docstring examples were first written with outputs from the design's text; two
+    were wrong (`Interval(1, 2, 'com') * Interval(-1, inf, 'dac')` is `[-2.0, inf]_dac`, and
+    `mul_rev_to_pair([-2, -0.1]_dac, [-2.1, -0.4]_dac)`'s first member is `[0.2, 21.0]_dac`, both ends
+    exact doubles) and were corrected to the computed values
+* **tests**: `tests/itf1788/test_ieee1788.py::test_vector` (9542 items), `::test_rows` (94 keys by
+  category, 104 vectors, none on a decoration alone), `::test_every_op_is_mapped` (every vector op
+  but `isNaI` reaches `NAMES`, and `NAMES` less those is exactly `{'empty', 'entire'}`),
+  `::test_the_comparison_is_exact` (one double wider at either end, a bare result for a decorated
+  vector, an int end, an open finite end, a non-float number, a `midRad` member that is not a
+  float, a set of another type than `OutwardMultiInterval`: each rejected), `::test_a_stale_row_fails`,
+  `::test_an_escaped_warning_fails`, `::test_the_nan_reading_is_narrow`,
+  `::test_operands_keep_int_exponents`; `tests/test_ieee1788_layer.py`:
+  `::test_each_function_is_the_library_op_in_1788_form` (75 rows of `::LIBRARY`, every lifted
+  function and each reverse op with `x` omitted and given, both flavours drawn),
+  `::test_from_set_is_the_output_rule`, `::test_from_set_examples`, `::test_the_drop_is_explicit`,
+  `::test_flavours`, `::test_a_call_of_numbers_alone_is_bare`, `::test_library_values_are_not_operands`, `::test_operators_refuse_library_values`,
+  `::test_cancel_minus_is_1788s`, `::test_overlap_on_the_grid`, `::test_overlap_examples`,
+  `::test_mul_rev_to_pair_bare`, `::test_mul_rev_to_pair_decorated`, `::test_mul_rev_to_pair_examples`,
+  `::test_numbers`, `::test_the_sign_of_zero_is_1788s`, `::test_numbers_examples`, `::test_booleans`,
+  `::test_booleans_examples`, `::test_is_member`, `::test_constructors`, `::test_constructor_refusals`,
+  `::test_decorations`, `::test_set_dec_and_new_dec`, `::test_the_library_s_warnings_are_silent`,
+  `::test_possibly_undefined_operation_reaches_the_caller`, `::test_the_silencing_does_not_leak`,
+  `::test_names`, `::test_not_exported`, `::test_repr_str_and_to_set`, `::test_repr_and_str_examples`,
+  `::test_operators_are_the_functions`, `::test_the_class`, `::test_exponents_are_ints`,
+  `::test_rootn_of_degree_0_raises`; and the module's doctests
+* **measured 2026-09-28, after the review's fixes** (shared laptop, five H3 streams running at
+  once, so every time is loaded): the pass, `python -m pytest -q tests/itf1788/test_ieee1788.py`,
+  9549 passed (9542 vectors and its seven rules) in 38 s; the properties and the module's doctests,
+  `python -m pytest -q tests/test_ieee1788_layer.py intervals/ieee1788.py`, 292 passed in 22 s
+  (287 at `027d8e6`, before the review). the pass's rows: 94 keys, 104 vectors (76 no NaI, 11
+  tighter than the vector, 7 exact parsing), `python tools/itf1788_census.py` (its new last line,
+  "layer pass rows"). the gate in three calls from the worktree root: `pytest -q tests/itf1788`
+  27795 passed in 133 s (18246 at M15, plus the pass's 9549); then 14 files named one by one,
+  `tests/test_applicator.py`, `test_autodiff.py`, `test_cancel.py`, `test_cuts.py`,
+  `test_decorated.py`, `test_elementary.py`, `test_errors.py`, `test_extreme_floats.py`,
+  `test_fmt.py`, `test_functions.py`, `test_ieee1788_layer.py`, `test_kernel.py`,
+  `test_literals.py`, `test_minmax_fma.py`, 1748 passed in 337 s; and everything else,
+  `pytest -q --ignore=tests/itf1788` with an `--ignore` for each of those 14 (so the rest of
+  `tests/`, the modules' doctests and `README.md`), 2632 passed in 472 s: 32175 passed, 942 s
+  (32169 at `027d8e6`), and `pytest --collect-only -q` over the whole tree in one process collects
+  the same 32175 (no basename clash). re-run after the second look (2026-09-28, same three calls,
+  each rc=0): 27795 passed in 151 s, 1748 in 366 s (and 328 s in a second, lone run of that call),
+  2632 in 493 s: 32175 passed, 1010 s; the collection again 32175. a leftover gate run of the
+  verifier's, still going beside this one and writing the same log files, ended its second call
+  with rc=1, and its output was lost (its log was deleted and overwritten mid-run); it ran on this
+  tree less the one test edit below, and both later runs of that call on the final tree are
+  green, so it is recorded here and not explained
+* **files**: `intervals/ieee1788.py`, `tests/itf1788/test_ieee1788.py`, `tests/test_ieee1788_layer.py`
+  (new); `tools/itf1788_census.py` (prints the layer pass's rows). no library module and no existing
+  test was edited, so the library's behaviour is unchanged
+* **sabotage** (a throwaway harness copied from M15's: each break alone, `.hypothesis` cleared, the
+  layer's files with `-x` (the module's doctests, `tests/test_ieee1788_layer.py` and the pass's own
+  rules), then the pass's `::test_vector` with `-x`, the file restored and compared; 2026-09-28).
+  the last column is the first test to fail under `-x`, the layer's files first:
+
+| break | first run | final run: red by |
+|---|---|---|
+| from_set without step 1 (no drop of ±inf points) | red | red: `tests/test_ieee1788_layer.py::test_from_set_is_the_output_rule`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_rev.itl:217]` |
+| from_set rounds to nearest, not outward | red | red: `tests/test_ieee1788_layer.py::test_from_set_is_the_output_rule`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_class.itl:73]` |
+| from_set leaves a finite end open | red | red: the collection of `tests/test_ieee1788_layer.py` (the class's `__debug__` invariant assertion, building `::GRID`); the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_elem.itl:25]` |
+| from_set without the newDec cap | red | red: `tests/test_ieee1788_layer.py::test_from_set_is_the_output_rule` (drawn; at the build first red at `::test_from_set_examples[s7-want7]`); the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_class.itl:165]` |
+| cancellation without 1788's "no answer" | red | red: `tests/test_ieee1788_layer.py::test_cancel_minus_is_1788s`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_cancel.itl:28]` |
+| cancellation wid a > wid b for >= | red | red: `tests/test_ieee1788_layer.py::test_cancel_minus_is_1788s`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_cancel.itl:67]` |
+| cancellation: a empty, b unbounded gives empty | red | red: `tests/test_ieee1788_layer.py::test_cancel_minus_is_1788s`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_cancel.itl:33]` |
+| overlap: meets and metBy as the library's allen (overlaps) | red | red: `tests/test_ieee1788_layer.py::test_overlap_on_the_grid`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_overlap.itl:37]` |
+| overlap: starts/startedBy swapped | red | red: `tests/test_ieee1788_layer.py::test_overlap_on_the_grid`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_overlap.itl:43]` |
+| pair decorated trv always | red | red: `tests/test_ieee1788_layer.py::test_mul_rev_to_pair_decorated`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_mul_rev.itl:223]` |
+| pair decorated as the operands also when 0 in b | red | red: `tests/test_ieee1788_layer.py::test_mul_rev_to_pair_decorated`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_mul_rev.itl:224]` |
+| pair pieces in decreasing order | red | red: `tests/test_ieee1788_layer.py::test_mul_rev_to_pair_bare`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_mul_rev.itl:32]` |
+| pair as one hull (1788's mulRev) | red | red: `tests/test_ieee1788_layer.py::test_mul_rev_to_pair_bare`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_mul_rev.itl:32]` |
+| a bare operand beside a decorated one accepted | red | red: `tests/test_ieee1788_layer.py::test_flavours[cancel_minus]` (the pass green) |
+| a number always made bare | red | red: `tests/test_ieee1788_layer.py::test_flavours[add]` (the pass green) |
+| the layer's silencing removed | red | red: `tests/test_ieee1788_layer.py::test_each_function_is_the_library_op_in_1788_form[pos I]`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_elem.itl:26]` |
+| silencing the IntervalWarning base class | red | red: `tests/test_ieee1788_layer.py::test_possibly_undefined_operation_reaches_the_caller` (the pass green) |
+| silencing without catch_warnings (leaks) | red | red: `tests/test_ieee1788_layer.py::test_the_silencing_does_not_leak` (the pass green) |
+| numbers not made float | red | red: `tests/test_ieee1788_layer.py::test_numbers`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_num.itl:97]` |
+| inf/sup of empty raise | red | red: `tests/test_ieee1788_layer.py::test_numbers`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_num.itl:26]` |
+| numbers of empty return nan | red | red: `tests/test_ieee1788_layer.py::test_numbers` (the pass green) |
+| Interval(lo, hi, d) demotes instead of raising | red | red: `tests/test_ieee1788_layer.py::test_constructor_refusals[args1-UndefinedOperationError]` (the pass green) |
+| text_to_interval hulls to nearest | red | red: `tests/test_ieee1788_layer.py::test_constructors`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_class.itl:73]` |
+| a NAMES entry bound to the wrong function (sub -> add) | red | red: `tests/test_ieee1788_layer.py::test_each_function_is_the_library_op_in_1788_form[sub II]`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_elem.itl:132]` |
+| a NAMES entry missing (hypot) | red | red: `tests/test_ieee1788_layer.py::test_each_function_is_the_library_op_in_1788_form[hypot II]`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[mpfi.itl:812]` |
+| a NAMES entry no vector reaches (exp2m1) | red | red: `tests/test_ieee1788_layer.py::test_names` (the pass green) |
+| to_set of a decorated interval returns the bare set | red | red: `tests/test_ieee1788_layer.py::test_from_set_is_the_output_rule`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_elem.itl:40]` |
+| library values accepted as operands | red | red: `tests/test_ieee1788_layer.py::test_library_values_are_not_operands[multi-add]` (the pass green) |
+| inf of a zero lower end is +0.0 | red | red: `tests/test_ieee1788_layer.py::test_the_sign_of_zero_is_1788s` (the pass green) |
+| sup of a zero upper end is -0.0 | red | red: `tests/test_ieee1788_layer.py::test_the_sign_of_zero_is_1788s` (the pass green) |
+| repr of an infinite end does not evaluate back | red | red: `tests/test_ieee1788_layer.py::test_repr_str_and_to_set` (the pass green) |
+| hash disagrees with == | red | red: `tests/test_ieee1788_layer.py::test_the_class` (the pass green) |
+| == ignores the decoration | red | red: `tests/test_ieee1788_layer.py::test_booleans_examples` (the pass green) |
+| is_member(nan) true | red | red: `tests/test_ieee1788_layer.py::test_is_member[nan-False]`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_rec_bool.itl:138]` |
+| Interval(None, hi) is empty | red | red: `tests/test_ieee1788_layer.py::test_constructor_refusals[args7-TypeError]` (the pass green) |
+| set_dec takes a decorated interval | red | red: `tests/test_ieee1788_layer.py::test_library_values_are_not_operands[multi-set_dec]` (the pass green) |
+| x ** 2.0 is pow, not pown (D11) | red | red: `tests/test_ieee1788_layer.py::test_operators_are_the_functions` (the pass green) |
+| pown takes a float exponent | red | red: `tests/test_ieee1788_layer.py::test_exponents_are_ints[<lambda>0]` (the pass green) |
+| new_dec: com for an unbounded interval | red | red: `tests/test_ieee1788_layer.py::test_cancel_minus_is_1788s`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_class.itl:38]` |
+| the pass: comparison allows one double of slack | red | red: `tests/itf1788/test_ieee1788.py::test_the_comparison_is_exact`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_rev.itl:276]` |
+| the pass: decorations dropped on ours | red | red: `tests/itf1788/test_ieee1788.py::test_the_comparison_is_exact`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_elem.itl:40]` |
+| the pass: form assertion removed | red | red: `tests/itf1788/test_ieee1788.py::test_the_comparison_is_exact` (the pass green) |
+| the pass: pownRevBin operands in the wrong order | red | red: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_rev.itl:287]` (the layer's files green) |
+| the pass: recorded warnings not asserted | red | red: `tests/itf1788/test_ieee1788.py::test_an_escaped_warning_fails` (the pass green) |
+| the pass: NaN reading anywhere | red | red: `tests/itf1788/test_ieee1788.py::test_the_nan_reading_is_narrow` (the pass green) |
+| the pass: int exponents made floats | red | red: `tests/itf1788/test_ieee1788.py::test_operands_keep_int_exponents`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_elem.itl:1409]` |
+| cancellation compares widths in float (the review's F1, S6) | green in the layer's files, red in the pass | red: `tests/test_ieee1788_layer.py::test_cancel_minus_is_1788s`; the pass: `tests/itf1788/test_ieee1788.py::test_vector[libieeep1788_cancel.itl:86]` |
+| a call of numbers alone decorated (`_flavour`: `decorated != {False}`; S1) | green | red: `tests/test_ieee1788_layer.py::test_a_call_of_numbers_alone_is_bare` (the pass green) |
+| the pass: stale-row check dropped (S2) | green | red: `tests/itf1788/test_ieee1788.py::test_a_stale_row_fails` (the pass green) |
+| the pass: the type assertion dropped (S3) | green | red: `tests/itf1788/test_ieee1788.py::test_the_comparison_is_exact` (the pass green) |
+| the pass: `midRad`'s members not checked float (S4) | green | red: `tests/itf1788/test_ieee1788.py::test_the_comparison_is_exact` (the pass green) |
+| `__delattr__` removed (S5) | green | red: `tests/test_ieee1788_layer.py::test_the_class` (the pass green) |
+| `rootn(x, 0)` answered as `rootn(x, 1)` (F3) | new | red: `tests/test_ieee1788_layer.py::test_rootn_of_degree_0_raises[x0]` (the pass green) |
+| `rootn(empty, 0)` answered empty (F3) | new | red: `tests/test_ieee1788_layer.py::test_rootn_of_degree_0_raises[x0]` and `[x2]`, the bare and the decorated (trv) empty set (the pass green) |
+
+at the build no break stayed green in both runs; the review (below) found five that did (S1 to S5)
+and one green in the layer's files alone (F1, S6), each now closed by a test and red (the last
+eight rows: six the reviewers' breaks, whose first run is theirs, and two new for F3's pin; the
+stale-row break was run by hand, since the harness names the pass's rule tests one by one and
+`::test_a_stale_row_fails` is new). after the review's fixes the builder's 46 breaks were
+re-run on the layer's files (2026-09-28, `.hypothesis` cleared): all red by the same test but one
+drawn case, and the pass's column is unchanged (its module's `::test_vector` and the layer were not
+edited). 27 breaks are green in the pass alone, each as expected: the vectors never mix flavours, never pass a library
+value, never call with numbers alone, never read the sign of a zero, a `repr`, a hash, a deletion
+or a leak, never take a root of degree 0, never match under a row, never yield another set type or
+a non-float `midRad` member through a working layer, and every vector operand's decoration fits (so
+a demoting constructor cannot show); the design's expectation that removing the
+layer's silencing would be seen by the warnings test only was the critique's n1, and it is now red
+in the pass as well (the pass asserts every recorded warning is a `PossiblyUndefinedOperationWarning`).
+one break is green in the layer's files alone, as expected: `pownRevBin`'s operand order is the
+pass's own map, seen by the vectors only. two of the design's §8.3 breaks were no-ops as worded and
+were restated to be real breaks: "pair decorated as div also when 0 in b" changes nothing (a
+division by a `b` holding 0 is trv already), so the break decorates with the operands' decorations;
+"the pass's comparison rounds ours outward first" changes nothing on float ends, so the break lets
+the comparison accept one double of slack
+* review (2026-09-28, three read-only reviewers over `027d8e6`, lenses soundness, sabotage audit
+  and spec/regression; each finding reproduced on this branch before any change, by a probe at
+  `027d8e6` or by its break): **no wrong answer in the layer**. 15 findings, 11 distinct (F1 and S6
+  one gap; F2, S7 and m1 one wording): six test gaps, closed; one unrecorded choice, recorded and
+  pinned; one inherited library hang, owed; three doc slips. found and fixed:
+    * **cancellation's exact width comparison was held by the pass alone** (F1, S6): with the
+      widths compared in float, `cancel_minus(Interval(0.1, 1e17), Interval(0.0, 1e17))` is empty
+      where 1788 (and the layer) say entire, and the layer's property stayed green, since
+      `tests/test_ieee1788_layer.py::cancel_operands` never drew a width tie that floats round
+      away. it now has a branch drawing widths equal as floats but not exactly (`big` in
+      [2^54, 2^70], `small` in [tiny, 0.5], so `big ± small` rounds to `big`; hypothesis's `find`
+      over the strategy reaches one within 300 examples), and `::test_cancel_minus_is_1788s` three
+      `@example`s: F1's pair, S6's `1e16 + 1` pair and two widths that overflow in floats
+    * **a call of numbers alone was unpinned** (S1): `_flavour` returning `decorated != {False}`
+      made `add(1, 2)` com and stayed green. `::test_a_call_of_numbers_alone_is_bare` (`add`,
+      `sqrt`, `fma`, `mul_rev_to_pair` on numbers: bare)
+    * **three of the pass's own assertions were never exercised** (S2, S3, S4): the stale-row check
+      (`tests/itf1788/test_ieee1788.py::test_a_stale_row_fails`, a matching vector put under `ROWS`
+      with `monkeypatch`), `interval_form`'s type check (a to-nearest `MultiInterval(4.0, 6.0)`
+      passes every other check) and `value_form`'s float check on `midRad`'s members (both
+      appended to `::test_the_comparison_is_exact`)
+    * **immutability was half pinned** (S5): `del x._set` is now refused in
+      `tests/test_ieee1788_layer.py::test_the_class`
+    * **`rootn(x, 0)` was an unrecorded choice** (F3): it raises `ValueError` for every `x`, the
+      empty set included, the library's rule (`v2-plan.md`: "rootn(n) for every int n other than
+      0"), while `pown_rev(c, 0)` answers. recorded in the design's numbers bullet as the default
+      built, and pinned by `::test_rootn_of_degree_0_raises` (4 items: empty and `[1, 4]`, bare and
+      com); no vector has degree 0. not made a Q13 item: the layer keeps a documented library rule
+      where no 1788 vector answers
+    * docs: `NAMES` read as 106 names (F2, S7, m1; it is 104, 1788's 102 and itf1788's two `d-`
+      constructors, 104 distinct functions: `len(NAMES)`, and `::test_names`); the form invariant
+      cited `Interval._make` (m2; it is `Interval._init`, which `__init__` and `_make` call); the
+      gate's second call was described as "`tests/test_a*` to `tests/test_m*`" (m3; it named 14
+      files, `tests/test_applicator.py` to `tests/test_minmax_fma.py`, and `tests/test_modulo.py`,
+      `tests/test_multi_interval.py` ran in the third; M16b's measured bullet now names the split); the
+      testing bullet said the pair's set law is drawn with com operands (m4; in
+      `::test_mul_rev_to_pair_decorated` both sides of the law come from the layer's `div` branch,
+      so it pins the decoration only; the law is drawn on bare operands by
+      `::test_mul_rev_to_pair_bare`, and the test's docstring now says so)
+* deferred (F4): the library's `pown` of a huge integral exponent is unbounded in time, inherited
+  and reached through the layer's `pown` and `**`; `HANDOFF.md` "still owed"
+* sabotage of the fixes: the last eight rows of the table above, all red
+* second look (2026-09-28, a read-only verifier over `06d9876`): no defect. the gate's second and
+  third calls had not finished when it reported, so the gate was re-run whole (M16b's measured
+  bullet); F4's deferral judged sound; `rootn(empty, 0)`'s break is red at both empty items,
+  `[x0]` and `[x2]` (the table now names both); and
+  `::test_a_call_of_numbers_alone_is_bare` checked `.decoration is None` for `add` only, the rest
+  by equality. it now asserts no decoration on all five results (`add`, `sqrt`, `fma` and both of
+  the pair's); the S1 break is red there, as before (not a gap: `Interval`'s equality already
+  compares decorations)
+
+| id | lens | disposition | evidence |
+|---|---|---|---|
+| F1 | soundness | fixed (with S6) | probe at `027d8e6`: float widths agree for the pair, exact do not; break "cancellation compares widths in float" was green in the layer's files, now red at `tests/test_ieee1788_layer.py::test_cancel_minus_is_1788s` |
+| F2 | soundness | fixed (with S7, m1) | `len(ieee1788.NAMES)` 104, 104 distinct values, the two `d-` keys among them; design and M16b spec reworded |
+| F3 | soundness | fixed: recorded and pinned | `ieee1788.rootn(Interval(), 0)` raises `ValueError` at `027d8e6`; design numbers bullet; `::test_rootn_of_degree_0_raises`, red under two breaks |
+| F4 | soundness | deferred: still owed | `pown(Interval(0.5, 1), 2 ** 31 - 1)` and `OutwardMultiInterval(0.5, 1) ** (2 ** 31 - 1)` past a 30 s timeout (2026-09-28); library, outside M16b |
+| S1 | sabotage | fixed | `::test_a_call_of_numbers_alone_is_bare`, red under the break |
+| S2 | sabotage | fixed | `tests/itf1788/test_ieee1788.py::test_a_stale_row_fails`, red under the break (by hand) |
+| S3 | sabotage | fixed | `::test_the_comparison_is_exact` (a `MultiInterval` set), red under the break |
+| S4 | sabotage | fixed | `::test_the_comparison_is_exact` (`midRad` with a `Fraction` member), red under the break |
+| S5 | sabotage | fixed | `tests/test_ieee1788_layer.py::test_the_class` (`del x._set`), red under the break |
+| S6 | sabotage | fixed (F1's gap) | as F1: three `@example`s and a generator branch |
+| S7 | sabotage | fixed (F2's wording) | as F2 |
+| m1 | spec | fixed (F2's wording) | as F2 |
+| m2 | spec | fixed | `intervals/ieee1788.py::Interval._init` holds the `_is_1788_form` assertion; the design cites it |
+| m3 | spec | fixed | the measured bullet names the gate's three calls by file |
+| m4 | spec | fixed | testing bullet reworded; `::test_mul_rev_to_pair_decorated`'s docstring says what it pins |
+
+**M16c the per-piece allen matrix (done 2026-09-28)** (D22).
+
+the owner, 2026-09-27: "get the rest of h3 done". H3's row lists "per-piece Allen matrix"; its
+spec pointer is `v2-plan.md` "v2 consolidated decisions (2026-08-16)" / "comparisons". the choices
+the build made are D22, open for the owner as `HANDOFF.md` Q14; the design is `v2-plan.md`
+"comparisons".
+
+* **`intervals/relations.py`**: `allen_matrix(a, b)` (the plain loop), `allen_relations(a, b)`
+  (the sweep and two corners), `_allen_pairs(pa, pb)` (the sweep, private; it calls `allen` as the
+  module global, which the cost test counts); `allen_relations` asserts its operands normalized
+  (the review, F1); two sentences in the module docstring
+* **`intervals/multi_interval.py`**: `MultiInterval.allen_matrix`, `MultiInterval.allen_relations`,
+  each coercing through `_coerce_or_raise`, each with doctests (the worked example and an empty
+  operand)
+* exit: every entry is `allen()` of its pair of pieces and the set view is the matrix's entries,
+  both against the `n x m` loop over the pinned `allen()`; the converse, a set against itself and
+  the set relations (overlaps, disjoint, before, after, within, contains, equals, adjoins) as
+  identities over the matrix; the empty shapes; the set view `O(n + m)` in calls and in cut
+  comparisons, never the matrix, and refusing out-of-order operands; the gate green; every new
+  property sabotaged once and seen red
+
+record (2026-09-28):
+* **what the build found on its way**:
+  * **the gate found a name the design missed.** `tests/test_propagation.py::test_every_public_name_of_the_core_is_on_the_wrapper_or_asked_of_the_interval`
+    went red on `{'allen_matrix', 'allen_relations'}`: a name the core gains must be on
+    `DecoratedInterval` or in `::NOT_ON_THE_WRAPPER`, on purpose. the design's "not on
+    `DecoratedInterval`" is now written there, beside `allen` (the design listed the file as
+    untouched). the guard worked as meant
+  * **the sweep's tie rule was held by chance.** "a tie advances `i` only" is output-equivalent (one
+    extra `allen()` per tie, an AFTER pair; still within `n + m - 1`), and the design accepted it
+    unpinned. the repo's rule makes a green break a gap: the cost test now asserts the sweep visits
+    exactly the pairs of cells that intersect (piece `i` owns the cuts after the end of piece
+    `i - 1`, up to its own end; the sweep walks the two partitions' common refinement). that went
+    red on a re-run, but green on the first final run: measured 2026-09-28, 19 of 20 seeded
+    100-example runs of `operand_pairs` hit a tie followed by more pieces (0 to 15 examples a
+    run). so the test carries an `@example` of a two-piece set against itself, where every end
+    ties; red since then
+  * **the sabotage harness ran stale bytecode.** the template harness (copy the file to `.orig`,
+    write the break, run, move `.orig` back) restores a file whose mtime lies in the same second
+    as the broken write; for a break of the same byte length ("allen_relations operands swapped")
+    the restored source matched the broken `.pyc` (mtime in seconds, size), and python kept
+    running the broken bytecode. the next two runs were red for that reason, not their own; both
+    were re-run. the harness now clears `__pycache__` before and after each break, runs with
+    `PYTHONDONTWRITEBYTECODE=1`, restores with `copy2`, and starts with a control row on the
+    intact code. H3's template harness has the same hazard
+  * **the conservative matrix is pinned**: the plain loop is a choice, so
+    `::test_allen_matrix_does_not_need_normalized_operands` (two cut tuples laid end to end give
+    the two matrices stacked) holds it; the design's fill + sweep goes red there
+* **tests** (`tests/test_relations.py`, and the two methods' doctests in
+  `intervals/multi_interval.py`), all at hypothesis's default settings (no `@settings`, so the
+  fuzz profile multiplies them like the rest):
+  * operands: `::operand_pairs`, a mixture of two independent `::operands`
+    (`exact_cut_tuples` or `::dense`, a grid with ±inf) and pairs where one is derived from the
+    other (`::_derived`: itself, its complement, hull, gaps, interior, and itself with the
+    complement of its hull), so shared cuts, MEETS and MET_BY are common; oracle `::allen_loop`,
+    the `n x m` loop over `relations.allen`; `::converse` takes the column count explicitly
+  * `::test_allen_matrix_is_allen_of_each_pair_of_pieces` (and the method equals the function),
+    `::test_allen_relations_are_the_matrix_entries`, `::test_allen_matrix_converse`,
+    `::test_allen_matrix_of_a_set_with_itself`, `::test_allen_matrix_and_the_set_relations`
+    (columns counted with `range(m)`), `::test_allen_matrix_on_single_pieces`, and two lines in
+    `::test_allen_table` (on each of its 17 rows the matrix is `((relation,),)` and the set view
+    `{relation}`)
+  * `::test_allen_matrix_does_not_need_normalized_operands`,
+    `::test_allen_matrix_of_unordered_overlapping_pieces` (the plain loop's contract)
+  * `::test_allen_matrix_of_an_empty_operand` (no raise, no warning of any kind; `allen()` still
+    raises), `::test_allen_matrix_table` (13 worked rows, both directions: a shared closed end,
+    a piece that meets where the sets do not adjoin, a point filling a one-point gap, points
+    against pieces, `[1, inf)` and `[1, inf]` against `[inf]`, `[-inf]`, both corners at once),
+    `::test_a_piece_meets_where_the_sets_do_not_adjoin`,
+    `::test_allen_matrix_coerces_as_every_relation` (a number, a string, nan, the two classes in
+    both orders), `::test_allen_matrix_mixes_numeric_types_at_a_shared_cut` (`[0, 0.5)` MEETS
+    `[1/2, 3]`, `[0, 1.0)` MEETS `[1, 2]`)
+  * `::test_allen_relations_is_a_linear_sweep`, the cost pin: `_allen_pairs` directly (no pair
+    twice, at most `n + m - 1`, every pair that is not BEFORE or AFTER, exactly the intersecting
+    cells, each relation `allen()`'s), then `allen_relations` with `relations.allen_matrix` patched
+    to raise (critique B1: flattening the matrix would keep the call count) and `relations.allen`
+    spied: at most `n + m - 1` calls and at least one per pair that is neither BEFORE nor AFTER.
+    its docstring says the lower bound pins an implementation detail on purpose (a spy that
+    cannot pass at 0 calls): relax it knowingly, do not delete it
+  * `::test_allen_relations_compares_cuts_linearly` (the review, SAB-1): the same cost in cut
+    comparisons, which the call counts do not see. `::_CountingCut`, a `Cut` subclass counting
+    `< <= == != > >=`, on 40 pieces of `a` all AFTER 40 of `b` (a quadratic scan for BEFORE cannot
+    stop early): at most `10 (n + m)` = 800. measured 2026-09-28: 360 (158 of them the operands'
+    `kernel.is_valid`); the review measured its `O(nm)` BEFORE pass at 1801, before the check
+  * `::test_allen_relations_refuses_unnormalized_operands` (the review, F1): `[3, 4]` then `[0, 1]`
+    against `[0, 1]`, whose matrix holds AFTER and EQUALS and whose sweep found only AFTER, raises
+    `AssertionError` in both orders and against itself (skipped under `python -O`)
+* **measured 2026-09-28** (shared laptop, four other streams running). every command runs from the
+  worktree root with the env's interpreter, written `$PY` below: `PY=C:/Users/user/anaconda3/envs/intervals/python.exe`
+  (bare `python` is a Microsoft Store stub on this laptop):
+  * the stream: `$PY -m pytest -q -p no:cacheprovider tests/test_relations.py
+    intervals/relations.py intervals/multi_interval.py`: 103 passed in 36.4 s at `9bc9e7c`; after
+    the review's two tests, 105 passed in 26.1 s
+  * the module three times each, `.hypothesis` cleared before every run, `$PY -m pytest -q -p
+    no:cacheprovider <module>`: at `04946af` 47 tests in 21.1, 25.2, 26.6 s; at `9bc9e7c` 73 tests
+    in 34.0, 38.8, 38.1 s: about 13 s added to the gate. the review's two tests are not
+    hypothesis tests and ran in 0.41 s together (collection included). `too_slow` never fired
+    (these six runs and every sabotage run), so no health check is suppressed
+  * the trade, laptop numbers (the tests pin counts, not times): `n = m` pieces `[2k, 2k+1]`
+    against `[2k+1/2, 2k+3/2]`, best of 3 by `time.perf_counter`. the probe is the block below
+    (gitignored as a file, so it is written out here): save it as `.scratch/trade.py` and run
+    `PYTHONPATH=. $PY .scratch/trade.py`. re-run 2026-09-28 after the review (the first run's
+    table, same day at `9bc9e7c`: 4040 / 2060 / 27.5 / 4640 ms at 1000); the fill's gain stays
+    about 2x at 1000 pieces, the design's ~3x on 2026-09-27
+
+    ```
+    import time
+    from fractions import Fraction
+
+    from intervals import kernel, relations
+    from intervals.relations import Allen
+
+
+    def fill_sweep(a, b):  # the design's matrix, not taken
+        pa, pb = tuple(kernel.pairs(a)), tuple(kernel.pairs(b))
+        rows = [[Allen.BEFORE if p[1] < q[0] else Allen.AFTER for q in pb] for p in pa]
+        for i, j, r in relations._allen_pairs(pa, pb):
+            rows[i][j] = r
+        return tuple(tuple(row) for row in rows)
+
+
+    def best(f, *args, k=3):
+        out = []
+        for _ in range(k):
+            t = time.perf_counter()
+            f(*args)
+            out.append(time.perf_counter() - t)
+        return min(out) * 1000
+
+
+    for n in (10, 100, 300, 1000):
+        a = kernel.normalize([kernel.piece(2 * k, 2 * k + 1) for k in range(n)])
+        b = kernel.normalize([kernel.piece(2 * k + Fraction(1, 2), 2 * k + Fraction(3, 2)) for k in range(n)])
+        assert relations.allen_matrix(a, b) == fill_sweep(a, b)
+        flat = lambda a, b: frozenset(r for row in relations.allen_matrix(a, b) for r in row)  # noqa: E731
+        assert relations.allen_relations(a, b) == flat(a, b)
+        cols = [best(relations.allen_matrix, a, b), best(fill_sweep, a, b),
+                best(relations.allen_relations, a, b), best(flat, a, b)]
+        print(f'| {n} | ' + ' | '.join(f'{c:.2f} ms' for c in cols) + ' |', flush=True)
+    ```
+
+    | n = m | matrix, plain loop (built) | matrix, fill + sweep (not taken) | relations, sweep (built) | relations, matrix flattened |
+    |---|---|---|---|---|
+    | 10 | 0.28 ms | 0.27 ms | 0.20 ms | 0.31 ms |
+    | 100 | 24.7 ms | 9.6 ms | 2.07 ms | 30.0 ms |
+    | 300 | 246 ms | 156 ms | 6.55 ms | 262 ms |
+    | 1000 | 3788 ms | 1942 ms | 22.6 ms | 3772 ms |
+
+  * the gate at `9bc9e7c`, from the worktree root: `$PY -m pytest -q tests/itf1788`: 18246 passed in 81.3 s.
+    `$PY -m pytest -q --ignore=tests/itf1788` in three calls (five streams at once would
+    overrun one call): `tests/test_reverse.py tests/test_functions.py tests/test_propagation.py
+    tests/test_oracle_flint.py tests/test_pow_rev.py` 1011 passed and the one red above in
+    398.8 s, `tests/test_propagation.py` re-run after the fix 193 passed in 51.0 s; nine files
+    (`test_elementary`, `test_modulo`, `test_ops_examples`, `test_ops_properties`,
+    `test_relations`, `test_applicator`, `test_literals`, `test_oracles`, `test_autodiff`) 2467
+    passed in 277.5 s; the rest (`--ignore` of those 14 files, with the doctests and `README.md`)
+    637 passed in 296.8 s. 4116 items outside itf1788 (22362 collected in all, one process),
+    973 s summed (1024 s with the re-run)
+  * the gate after the review's fixes, the same calls and groups: `tests/itf1788` 18246 passed in
+    78.8 s; the five files 1012 passed in 381.4 s; the nine files 2469 passed in 372.7 s; the rest
+    637 passed in 424.2 s. 4118 items outside itf1788 in 1178.3 s summed (the laptop more loaded
+    than at `9bc9e7c`); `$PY -m pytest --collect-only -q` over the whole tree in one process:
+    22364 collected, no error (so every test file basename is unique)
+* **sabotage** (a throwaway harness: each break alone, `.hypothesis` and `__pycache__` cleared, the
+  stream's three files with `-x` and a 600 s timeout, the file restored and compared; 2026-09-28).
+  the last column is the first test to fail under `-x`, in the whole table's re-run after the
+  review's fixes (21 rows, the control 105 passed); two breaks now fall first to another test than
+  in the build's final run (`sweep: compare starts` was red by
+  `::test_allen_relations_are_the_matrix_entries`, `sweep: stops after two pairs` by the same):
+  hypothesis draws afresh with `.hypothesis` cleared, and `-x` stops at the first:
+
+| break | first run | final run: red by |
+|---|---|---|
+| none (control: the intact code) | green | green: 105 passed |
+| sweep: advance the other pointer | red | red: `tests/test_relations.py::test_allen_relations_are_the_matrix_entries` |
+| sweep: compare starts, not ends | red | red: `tests/test_relations.py::test_allen_matrix_converse` |
+| sweep: a tie advances `i` only | green | red: `tests/test_relations.py::test_allen_relations_is_a_linear_sweep` |
+| sweep: stops after two pairs | red | red: `tests/test_relations.py::test_allen_matrix_table[[0, 10]-[0, 1] \| [2, 3] \| [9, 10]-matrix12]` |
+| sweep: `allen` bound locally (the spy reads 0) | red | red: `tests/test_relations.py::test_allen_relations_is_a_linear_sweep` |
+| relations: BEFORE corner dropped | red | red: `tests/test_relations.py::test_allen_relations_are_the_matrix_entries` |
+| relations: BEFORE corner `<=` (MEETS counted) | red | red: `tests/test_relations.py::test_allen_table[[1, 2)-[2, 3]-Allen.MEETS]` |
+| relations: AFTER corner on the wrong pieces | red | red: `tests/test_relations.py::test_allen_relations_are_the_matrix_entries` |
+| relations: flatten `allen_matrix` (critique B1) | red | red: `tests/test_relations.py::test_allen_relations_is_a_linear_sweep` |
+| relations: `n m` calls to `allen()` | red | red: `tests/test_relations.py::test_allen_relations_is_a_linear_sweep` |
+| relations: an empty operand raises | red | red: `tests/test_relations.py::test_allen_relations_are_the_matrix_entries` |
+| relations: the empty guard removed | red | red: `tests/test_relations.py::test_allen_relations_are_the_matrix_entries` |
+| matrix: each entry inverted | red | red: `tests/test_relations.py::test_allen_table[[1, 2]-[3, 4]-Allen.BEFORE]` |
+| matrix: transposed | red | red: `tests/test_relations.py::test_allen_matrix_is_allen_of_each_pair_of_pieces` |
+| matrix: an empty other gives `()` (shape lost) | red | red: `tests/test_relations.py::test_allen_matrix_is_allen_of_each_pair_of_pieces` |
+| matrix: the design's fill + sweep (the choice not taken) | red | red: `tests/test_relations.py::test_allen_matrix_does_not_need_normalized_operands` |
+| method: `allen_matrix` without `_coerce_or_raise` | red | red: `tests/test_relations.py::test_allen_matrix_coerces_as_every_relation` |
+| method: `allen_relations` operands swapped | red | red: `tests/test_relations.py::test_allen_table[[1, 2]-[3, 4]-Allen.BEFORE]` |
+| relations: BEFORE corner by an `O(nm)` comparison pass, `any(p[1] < q[0] for p in pa for q in pb)` (review SAB-1) | green (at `9bc9e7c`: 103 passed) | red: `tests/test_relations.py::test_allen_relations_compares_cuts_linearly` |
+| relations: the normalized-operand assert removed (review F1) | red (the test written first, against `9bc9e7c`: DID NOT RAISE) | red: `tests/test_relations.py::test_allen_relations_refuses_unnormalized_operands` |
+
+the two greens in a first run were gaps, each closed and re-run red: the tie rule
+(`::test_allen_relations_is_a_linear_sweep`, the intersecting cells and the `@example` above) in the
+build, and the `O(nm)` comparison pass (`::test_allen_relations_compares_cuts_linearly`) at the
+review. the control row was added with the harness fix, so its first run is the final one's. two
+runs between the build's first and final run were red for a stale `.pyc` (above) and are not in
+the table.
+
+review (2026-09-28, three read-only reviewers over `9bc9e7c`, lenses soundness, sabotage-audit and
+spec/regression; each finding reproduced on this branch before any change): **no wrong result
+through `MultiInterval`**. found and fixed:
+* **F1 (soundness) and m2 (spec), one defect: the module docstring said `allen_matrix` and
+  `allen_relations` "take any"**, and `relations.allen_relations` on a valid-per-piece but
+  out-of-order cut tuple gave a strict subset of the matrix's entries, silently. reproduced at
+  `9bc9e7c`: `a = [3, 4]` then `[0, 1]` against `b = [0, 1]` gave `{AFTER}`, the matrix
+  `{AFTER, EQUALS}`. the methods could not reach it (`MultiInterval.from_cuts` validates and
+  `MultiInterval._wrap` asserts). fixed twice over: the docstring now says the matrix takes any cut
+  pairs in any order and the set view's sweep needs normalized cut tuples, as every relation there;
+  and `relations.allen_relations` asserts `kernel.is_valid` of both operands under `__debug__`, as
+  `_wrap`. pinned by `tests/test_relations.py::test_allen_relations_refuses_unnormalized_operands`,
+  written first and red at `9bc9e7c` (DID NOT RAISE); its break (the assert removed) is a sabotage
+  row. the cost: `is_valid` is `O(n + m)` comparisons, inside the set view's bound
+* **SAB-1 (sabotage-audit): the set view's `O(n + m)` was pinned in calls to `allen()` only.** a
+  BEFORE corner rewritten as `any(p[1] < q[0] for p in pa for q in pb)`, `n m` cut comparisons
+  that call neither `allen()` nor `allen_matrix`, stayed green; reproduced at `9bc9e7c` with the
+  harness (103 passed; critique B1 had named the residue). the reviewer's option (a) taken:
+  `tests/test_relations.py::test_allen_relations_compares_cuts_linearly` counts cut comparisons
+  through `::_CountingCut` (the reviewer's class, with `!=` counted too) and bounds them by
+  `10 (n + m)`; 360 of 800 on the intact code, and the break is red there. a sabotage row
+* **m1 (spec): the trade table named no command**, its probe only in the gitignored
+  `.scratch/trade.py`, while the decision-log revision's and D22's ~2x rested on it. the probe is
+  now written out in M16c's record with its command, and re-run 2026-09-28 after the fix (3788 ms
+  against 1942 ms at 1000 pieces: still about 2x)
+* **m3 (spec): the record's commands read bare `python`**, a Microsoft Store stub on this laptop.
+  they now read `$PY`, defined once as the env's interpreter
+* not changed: the record's "O(n + m) in calls" and "pinned by counts, not time", which the
+  sabotage lens called not false; they now name both counts
+
+**M16d numpy interop: `numpy_compat.py` (done 2026-09-28)** (D23).
+
+the owner, 2026-09-27: "get the rest of h3 done". the design is `v2-plan.md` "numpy"; the choices
+are D23, open as `HANDOFF.md` Q15. here the spec, the exit and the record.
+
+* **`intervals/numpy_compat.py`**: `array_ufunc` (the `__array_ufunc__` of `MultiInterval`,
+  `DecoratedInterval`, `Dual`) and `array` (`MultiInterval.__array__`); imports no numpy at load
+* **`cuts.py::normalize_value`**: the foreign-real exact path (`cuts.py::_exact_value`)
+* **integer arguments**: `functions.py::_check_degree`, `steps.py::step` (`ndigits`),
+  `reverse.py::pown_rev` any `Integral` but bool; `functions.py::_check_base` any real but bool
+  through `normalize_value`
+* **`autodiff.py::Dual.__pow__`**: a number exponent an int or a point set before `- 1` (B1, an
+  M15 hole); **`Dual.rootn`** `int(n)` first (B2)
+* exit: every numpy scalar type in every operator the classes have, on both sides, the same outcome
+  as the python number of the same value; every ufunc of the table equal to its method; the
+  elementwise path equal to the scalar path per element; the foreign-real rule against a stub
+  holding a `Fraction`; B1 against arb; numpy never imported at load; the gate green; every new
+  property sabotaged once and seen red
+
+record (2026-09-28):
+* **what the build found on its way**, each fixed before the record:
+  * **M15 shipped an unsoundness in `Dual ** r`** (the critique found it; confirmed on `04946af`
+    with arb at 400 bits): `exponent * u ** (exponent - 1)` computed `r - 1` in r's own float
+    arithmetic, rounded to nearest. `Dual.variable(O(u)) ** r` missed `r u^(r-1)` for 5 of 9
+    pairs, r in {0.1, 1e-20, 0.3}, u in {2, 1e300, 1e-300}: 0.1 with 1e300 and 1e-300, 1e-20 with
+    2, 0.3 with 1e300 and 1e-300 (0.1 with 1e300: the derivative
+    `(9.999999999999845e-272, 9.999999999999849e-272)`), and the same 5 for
+    `DecoratedInterval(O(u))` (the build first wrote "6 of 9", and pinned the bare class only: the
+    review's catch, see the review below). the build found the integral case too:
+    `2.0 ** 60 - 1` rounds to `2.0 ** 60`, so `Dual.variable(O(-1)) ** 2.0 ** 60` had the
+    derivative `+2 ** 60` where it is `-2 ** 60` (a sign; `np.float32(16777218)` the same). the
+    solver builds its steps from that derivative. fixed: an integral r is `n = int(r)` and `n - 1`
+    int arithmetic; any other r a point set `e` of u's kind and `e - 1` the library's subtraction
+  * the fix changes the nearest and decorated classes too, not only the unsound outward cases
+    (the review's catch): an integral float exponent's derivative is `n u ** (n - 1)` with the int
+    n, exact where the value is (`Dual.variable(M.parse('[1/3, 3]')) ** 2.0`: the value `[1/9, 9]`,
+    the derivative `[2/3, 6]` where M15 gave `[0.6666666666666666, 6.0]`; `** -3.0` at `M(3)`:
+    `[-1/27]`, was `[-0.037037037037037035]`), and a non-integral r whose float `r - 1` is -1.0
+    (r = 1e-20) is pow, as the value is, where M15 took pown(u, -1): over `M(-1, 1)` the derivative
+    is `[1e-20, inf)` (was `{ [-inf, -1e-20] , [1e-20, inf] }`), over `M(-2, -1)` it is `{}` beside
+    the empty value (was `[-1e-20, -5e-21]`). kept: each agrees with the value's own reading of r
+    (pown for an integral r, else pow); nothing outward loses its value
+  * with both operands ours, the method ufuncs took the first operand's method and class:
+    `np.hypot(M(0.1), O(0.1))` was the nearest `[0.1414213562373095]`, which misses the true value,
+    and `np.hypot(O(0.1), M(0.1))` outward (the review's catch). fixed: the operators' subclass rule
+    (`numpy_compat.py::_subclass_first`), Q15(h)
+  * the `except TypeError` round the table lookup in `numpy_compat.py::array_ufunc` guarded an
+    unhashable ufunc numpy never passes, and nothing could pin it (the review's sabotage): deleted
+  * `O(u) ** 2 ** 60` does not finish for u in {2, 2.0, 1e300} (outward pown evaluates
+    `Fraction(u) ** n` exactly; a plain `M(2) ** 2 ** 60` too): pre-existing, not this stream's; so
+    the critique's r = `2.0 ** 60` is pinned with u = -1, where the power is cheap (still owed)
+  * `Dual.rootn(np.int64(-2 ** 63))` would compute `n - 1` in int64 (a wrap and a RuntimeWarning)
+    once the core took numpy ints: `int(n)` first (B2)
+  * the prototype looked dunders up with `hasattr(type(x), name)`, which finds `type.__or__` (PEP
+    604) on every class: `Dual` has no `|` but `hasattr(Dual, '__or__')` is True. the hook walks
+    the MRO dicts, as python's operator lookup does (`numpy_compat.py::_special`)
+  * numpy reads the floating-point status flags after an object loop, and the library's own
+    python float arithmetic leaves them set: `np.array([1.0]) / M.parse('(-inf, 2.2e-309)')` gave
+    a numpy `RuntimeWarning: overflow` the scalar path never gives. the elementwise path runs under
+    `np.errstate(all='ignore')` (found by
+    `tests/test_numpy_compat.py::test_ndarray_and_interval_elementwise[divide]`); underflow too
+    (`np.array([1e-308]) + M(0)` under a caller's `np.errstate(all='raise')`), which numpy ignores
+    by default, so only the review's sabotage (`errstate(over=...)` stayed green) found it unpinned
+  * the prototype's `__array__` cast with `astype(dtype)`; numpy casts the 0-d object array itself,
+    so the cast was dead code with no test able to see it: dropped
+  * the numpy-missing check by hand: `sys.modules['numpy'] = None` crashes hypothesis itself (it
+    reads `sys.modules['numpy']`); a meta-path finder raising `ModuleNotFoundError` is the faithful
+    stand-in
+* **tests** (`tests/test_numpy_compat.py`; two in `tests/test_autodiff.py`):
+  * `tests/test_numpy_compat.py::test_numpy_is_never_imported_at_load` (a subprocess imports every
+    module; `pyproject.toml` has no numpy in `dependencies` or `[test]`)
+  * `::test_numpy_scalar_operators_are_python_numbers`: 9 numpy scalar types (float64, float32,
+    float16, longdouble with values off the doubles, int8, int64, uint64, bool_, complex128) x the
+    operators **derived from the classes' reflected dunders** (`::REFLECTED`) plus `== != < <= > >=`
+    and `in` of a list, both sides, over drawn `MultiInterval`, `OutwardMultiInterval`, decorated
+    and `Dual` objects: the same result (type and repr) or exception type, and the same warning
+    categories, attributed to the test file, as the python number of the same value
+    (`::python_number`); `::test_numpy_scalar_operator_examples`, `::test_the_operators_are_derived`,
+    `::test_a_missing_dunder_is_numpys_refusal` (a gap the sabotage found), `::test_numpy_exponent_of_a_dual` (B1)
+  * `::test_unary_ufunc_is_the_method`, `::test_binary_ufunc_is_the_method_or_the_operator` (the
+    other operand a number or one of ours, both orders; both ours is python's rule),
+    `::test_both_ours_is_pythons_rule`, `::test_both_ours_examples` (B3),
+    `::test_both_ours_methods_are_subclass_first` (Q15(h), the review), `::test_ufunc_pinned_examples`
+    (`square [-1, 1]`, `rint [1/2, 5/2]`, `arcsin` against `acos`, `arctan2` both ways)
+  * `::test_unmapped_ufuncs_and_forms_are_type_errors` (fmod with its reason, fmin/fmax, keywords,
+    `reduce`/`outer`/`accumulate`, a `frompyfunc` ufunc, list operands),
+    `::test_the_table_is_keyed_by_the_ufunc_object` (a stand-in named `'sin'`, B3) and its positive
+    control `::test_the_table_answers_numpys_sin`
+  * `::test_equality_never_broadcasts` (with `np.array([A]) == A` and `A in np.array([A])` pinned
+    False), `::test_arrays_hold_intervals_as_elements`, `::test_object_array_loops_are_numpys`
+    (`np.square(arr)` is `x * x`, `np.arcsin(arr)`, `np.round`, `np.around` TypeErrors)
+  * `::test_ndarray_and_interval_elementwise` (float64 and int64 arrays of shape `(k,)` or
+    `(2, k)`, every two-operand entry but `==`/`!=`, both orders, against the scalar path on each
+    python element; an element that raises raises the op), `::test_elementwise_examples` (a nan
+    element, bool and complex arrays), `::test_elementwise_warning_is_the_callers`,
+    `::test_elementwise_leaves_numpys_float_flags_alone` (a gap the sabotage found),
+    `::test_elementwise_leaves_every_float_flag_alone` (underflow; the review)
+  * `::test_foreign_reals_are_exact` (stubs `::Wide`, registered `numbers.Real`, and `::Rat`,
+    registered `numbers.Rational`, over drawn fractions, ones past the doubles and x86-64's long
+    double nearest 1/3), `::test_foreign_real_specials`,
+    `::test_a_foreign_real_without_a_ratio_is_its_float` (`::Plain`; the review),
+    `::test_float32_is_the_double_it_holds`
+    (every float32 bit pattern drawn), `::test_longdouble_is_exact` (discriminates on linux CI),
+    `::test_gmpy2_values_are_exact` (skips where gmpy2 is absent, as on CI; since the merge with
+    M16e gmpy2 is in `[test]`, so it runs in every CI job)
+  * `::test_integer_arguments_take_numpy_ints` (rootn, round, round_ties_away, pown_rev, the
+    decorated and `Dual` forms, the log base; bool refused), `::test_numpy_ndigits_past_int64` and
+    `::test_numpy_pown_rev_degrees` (the `int()` conversions; the review),
+    `::test_dual_rootn_takes_the_degree_as_an_int` (B2)
+  * `tests/test_autodiff.py::test_pow_number_exponent_derivative_encloses` (B1, arb at 400 bits,
+    r in {0.1, 1e-20, 0.3} x u in {2, 1e300, 1e-300} x {`O(u)`, `DecoratedInterval(O(u))`}),
+    `::test_pow_integral_exponent_derivative_is_exact` (r in {2.0 ** 60, 2 ** 60, Fraction(2 ** 60)},
+    u = -1), `::test_pow_any_zero_is_the_constant_one` (0, 0.0, -0.0, `Fraction(0)` over four u;
+    the review), `::test_pow_number_exponent_nearest_examples` (the nearest-class change; the review)
+* **measured 2026-09-28** (laptop shared with four other streams' runs, so loaded):
+  * `C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q tests/test_numpy_compat.py`: 280 passed
+    in 36.96 s (numpy 2.5.2, python 3.13, windows; after the review's fixes)
+  * the numpy-missing path, by hand: a meta-path finder raising `ModuleNotFoundError` for numpy,
+    then `pytest.main(['-q', 'tests/test_numpy_compat.py', 'tests/test_cuts.py',
+    'tests/test_applicator.py'])`: 140 passed, 276 skipped, nothing errored, numpy never imported
+    (8.57 s; after the review's fixes)
+  * the gate after the review's fixes, from the worktree root, the second call split in three by
+    file for the tool's time limit (`python` is the env's): `python -m pytest -q tests/itf1788`
+    18246 passed in 80.64 s; `python -m pytest -q tests/test_[a-l]*.py` 1475 passed in 312.48 s,
+    `python -m pytest -q tests/test_[m-z]*.py` 2829 passed in 690.57 s, and `python -m pytest -q
+    intervals README.md tests/conftest.py tests/exhaustive_modulo.py tests/exhaustive_ops.py
+    tests/oracles.py tests/strategies.py` 102 passed in 0.60 s: the three are what
+    `--ignore=tests/itf1788` collects (4406, checked with `--collect-only`), 4406 passed in 1003.65
+    s (482 s at M15 unloaded; `--collect-only` over the whole tree: 22652)
+  * the hook's cost, `timeit` best of 5 x 2000 on `A = MultiInterval(1, 2)`, the package at
+    `04946af` against this build: `np.float64(2) == A` 0.24 µs to 4.70 µs (numpy's override
+    machinery now runs, then the identity fallback: it matters for `x in list_of_sets` with numpy
+    numbers), `np.float64(2) < A` 8.5 to 13.9 µs; `np.float64(2) + A` 60.6 to 68.6 µs, inside the
+    noise (`2.0 + A`, untouched, 53.3 to 73.2 µs in the same runs); `normalize_value(0.1)` 3.0 to
+    2.4 µs (the float path: one `isinstance` more, noise); `normalize_value(np.float32(0.1))` 2.0 to
+    12.3 µs (a `Fraction` built per foreign value)
+* **sabotage** (`.scratch/sabotage.py` in the worktree, the M15 harness adapted, and
+  `.scratch/fix/sabotage2.py` for the review: each break alone, `.hypothesis` cleared,
+  `tests/test_numpy_compat.py tests/test_autodiff.py tests/test_cuts.py tests/test_applicator.py`
+  with `-x` and a 900 s timeout, the file restored and compared; 2026-09-28). the review's rows ran
+  first against an export of the build's commit `e7bb3fb` (every one green: 567 passed), and the
+  final run is all 47 against a copy of the fixed tree (the `arctan2` swap re-anchored on the new
+  line). the last column is the first test to fail under `-x`:
+
+| break | first run | final run: red by |
+|---|---|---|
+| `import numpy` at the top of numpy_compat | red | red: `tests/test_numpy_compat.py::test_numpy_is_never_imported_at_load` |
+| `bitwise_or` dropped from the table | red | red: `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[float64-or]` |
+| identity fallback of `equal` removed | red | red: `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[float64-eq]` |
+| `less` reflected as `__lt__` | red | red: `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[longdouble-lt]` |
+| reflected call made with the forward dunder | red | red: `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[float64-divmod]` |
+| 0-d arrays not unwrapped | red | red: `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[float64-ge]` |
+| both ours: forward dunder first, no subclass rule (B3) | red | red: `tests/test_numpy_compat.py::test_binary_ufunc_is_the_method_or_the_operator[add]` |
+| table keyed by `ufunc.__name__` (B3) | red | red: `tests/test_numpy_compat.py::test_the_table_is_keyed_by_the_ufunc_object` |
+| dunder lookup through the metaclass (`type.__or__`) | green | red: `tests/test_numpy_compat.py::test_a_missing_dunder_is_numpys_refusal` |
+| `arcsin` mapped to `acos` | red | red: `tests/test_numpy_compat.py::test_unary_ufunc_is_the_method[arcsin]` |
+| `square` as `x * x` | red | red: `tests/test_numpy_compat.py::test_unary_ufunc_is_the_method[square]` |
+| `rint` as `round_ties_away` | red | red: `tests/test_numpy_compat.py::test_ufunc_pinned_examples` |
+| `arctan2` with swapped arguments | red | red: `tests/test_numpy_compat.py::test_binary_ufunc_is_the_method_or_the_operator[arctan2]` |
+| `invert` dropped | red | red: `tests/test_numpy_compat.py::test_unary_ufunc_is_the_method[invert]` |
+| `fmod` mapped to `%` | red | red: `tests/test_numpy_compat.py::test_unmapped_ufuncs_and_forms_are_type_errors` |
+| `fmin`/`fmax` mapped to `minimum`/`maximum` | red | red: `tests/test_numpy_compat.py::test_unmapped_ufuncs_and_forms_are_type_errors` |
+| keywords accepted (`out=` ignored) | red | red: `tests/test_numpy_compat.py::test_unmapped_ufuncs_and_forms_are_type_errors` |
+| method `reduce` accepted | red | red: `tests/test_numpy_compat.py::test_unmapped_ufuncs_and_forms_are_type_errors` |
+| a list taken for an array | red | red: `tests/test_numpy_compat.py::test_unmapped_ufuncs_and_forms_are_type_errors` |
+| elementwise `equal` (array path) | red | red: `tests/test_numpy_compat.py::test_equality_never_broadcasts` |
+| elementwise path returns NotImplemented | red | red: `tests/test_numpy_compat.py::test_ndarray_and_interval_elementwise[add]` |
+| elementwise element with swapped operands | red | red: `tests/test_numpy_compat.py::test_ndarray_and_interval_elementwise[divide]` |
+| `errstate` removed around the object loop | green | red: `tests/test_numpy_compat.py::test_elementwise_leaves_numpys_float_flags_alone` |
+| `__array__` removed | red | red: `tests/test_numpy_compat.py::test_equality_never_broadcasts` |
+| `__array__` returns an array for `copy=False` | red | red: `tests/test_numpy_compat.py::test_arrays_hold_intervals_as_elements` |
+| `warn` stops at numpy_compat frames | red | red: `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[float64-add]` |
+| `normalize_value` back to `float()` for foreign reals | red | red: `tests/test_numpy_compat.py::test_foreign_reals_are_exact` |
+| exact path taken for doubles too | red | red: `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[float32-add]` |
+| a foreign Rational by the value rule, not exact by type | red | red: `tests/test_numpy_compat.py::test_foreign_reals_are_exact` |
+| `_check_degree` back to `int` only | red | red: `tests/test_numpy_compat.py::test_integer_arguments_take_numpy_ints` |
+| `ndigits` back to `int` only | red | red: `tests/test_numpy_compat.py::test_integer_arguments_take_numpy_ints` |
+| `pown_rev` back to `int` only | red | red: `tests/test_numpy_compat.py::test_integer_arguments_take_numpy_ints` |
+| `_check_base` back to int, float, Fraction | red | red: `tests/test_numpy_compat.py::test_foreign_real_specials` |
+| `_check_base` without `normalize_value` | red | red: `tests/test_numpy_compat.py::test_foreign_real_specials` |
+| B1: restore `exponent - 1` (non-integral) | red | red: `tests/test_numpy_compat.py::test_numpy_exponent_of_a_dual` |
+| B1: restore `exponent - 1` (integral) | red | red: `tests/test_autodiff.py::test_pow_integral_exponent_derivative_is_exact[1.152921504606847e+18]` |
+| B2: drop `int(n)` in `Dual.rootn` | red | red: `tests/test_numpy_compat.py::test_dual_rootn_takes_the_degree_as_an_int` |
+| B1 broken in the decorated class only (review F4) | green | red: `tests/test_autodiff.py::test_pow_number_exponent_derivative_encloses[0.1-1e+300-decorated` |
+| `Dual ** 0.0` not the constant-1 case (review SAB-R21) | green | red: `tests/test_autodiff.py::test_pow_any_zero_is_the_constant_one[u0-0.0]` |
+| `int(ndigits)` dropped in `step` (review SAB-R19) | green | red: `tests/test_numpy_compat.py::test_numpy_ndigits_past_int64` |
+| `int(n)` dropped in `pown_rev` (review SAB-R20) | green | red: `tests/test_numpy_compat.py::test_numpy_pown_rev_degrees` |
+| `errstate(all=...)` narrowed to `over=` (review SAB-R9) | green | red: `tests/test_numpy_compat.py::test_elementwise_leaves_every_float_flag_alone` |
+| a real without `as_integer_ratio` refused (review SAB-R16) | green | red: `tests/test_numpy_compat.py::test_a_foreign_real_without_a_ratio_is_its_float` |
+| integral exponent: multiplier the float, not the int n (review F3) | green | red: `tests/test_autodiff.py::test_pow_number_exponent_nearest_examples` |
+| nearest class keeps M15's float `r - 1` (review F3) | green | red: `tests/test_autodiff.py::test_pow_number_exponent_nearest_examples` |
+| both ours: `hypot minimum maximum` without the subclass rule (review F2/F5) | red | red: `tests/test_numpy_compat.py::test_binary_ufunc_is_the_method_or_the_operator[maximum]` |
+| both ours: `arctan2` without the subclass rule (review F2/F5) | red | red: `tests/test_numpy_compat.py::test_both_ours_methods_are_subclass_first` |
+
+the two green in the first run were gaps, each closed by a test added the same session and the break
+re-run red: the metaclass lookup (every class answers `hasattr(cls, '__or__')` through
+`type.__or__`, so the break only changed which TypeError numpy raised:
+`::test_a_missing_dunder_is_numpys_refusal` pins numpy's refusal), and `errstate` (the property test
+had found the numpy RuntimeWarning by chance once and then drew past it:
+`::test_elementwise_leaves_numpys_float_flags_alone` pins the example). the first run's B1
+(non-integral) row was red by `tests/test_autodiff.py::test_pow_number_exponent_derivative_encloses`
+alone: the property test 2 did not draw a `Dual` with a float32 exponent in its examples, so
+`tests/test_numpy_compat.py::test_numpy_exponent_of_a_dual` pins B1 through numpy too (the final run's first red).
+the eight green first runs marked "review" were the review's (see the review below): each closed by a test
+and re-run red. the two subclass-rule rows are new code (Q15(h)); their test,
+`tests/test_numpy_compat.py::test_both_ours_methods_are_subclass_first`, was red against the
+build's `numpy_compat.py` before the fix (with `::test_binary_ufunc_is_the_method_or_the_operator[maximum]`)
+
+* review (2026-09-28, three read-only reviewers over `e7bb3fb`, lenses soundness, sabotage-audit
+  and spec/regression; each finding reproduced on this branch before any change, probes in the
+  worktree's `.scratch/fix/`). **no unsound result in the build**: the M15 hole is closed in the
+  bare and decorated outward classes (0 of 9 pairs miss at 400 bits, both kinds). found and fixed
+  (id, lens, disposition, evidence):
+    * **soundness F1 = spec F1** (fixed): the record and the docstring of
+      `tests/test_autodiff.py::test_pow_number_exponent_derivative_encloses` said M15 missed "6 of
+      9" pairs; the test's own oracle at 400 bits against `04946af` misses 5 (0.1 with 1e300 and
+      1e-300, 1e-20 with 2, 0.3 with 1e300 and 1e-300), the build 0. both now say 5 and name them
+    * **soundness F4** (fixed): the B1 pin covered the bare outward class only; a B1 break in the
+      decorated class alone stayed green (567 passed on `e7bb3fb`), and `04946af` missed the same 5
+      pairs there. `::test_pow_number_exponent_derivative_encloses` now runs both kinds (18 items);
+      the break is red by its `[0.1-1e+300-decorated outward]`
+    * **sabotage SAB-R21** (fixed): the zero exponent's constant-1 case narrowed to an int zero
+      stayed green, and `Dual.variable(M(0)) ** 0.0` then has the derivative `{}` where it is 0.
+      pinned by `tests/test_autodiff.py::test_pow_any_zero_is_the_constant_one` (0, 0.0, -0.0,
+      `Fraction(0)` over `M(0)`, `O(0)`, `M(-1, 1)`, `D(M(0))`; 16 items)
+    * **sabotage SAB-R19** (fixed): dropping `int(ndigits)` in `steps.py::step` stayed green; an
+      int64 `10 ** ndigits` wraps past 10 ** 18. pinned by
+      `tests/test_numpy_compat.py::test_numpy_ndigits_past_int64` (19, 20, 30 digits)
+    * **sabotage SAB-R20** (fixed): dropping `int(n)` in `reverse.py::pown_rev` stayed green
+      (`pown_rev(M(1, 4), np.int64(3))` an `OverflowError`). pinned by
+      `tests/test_numpy_compat.py::test_numpy_pown_rev_degrees`
+    * **sabotage SAB-R9** (fixed): `np.errstate(all=...)` narrowed to `over=` stayed green; the
+      library leaves underflow set too, which only a caller's `np.errstate(all='raise')` shows.
+      pinned by `::test_elementwise_leaves_every_float_flag_alone`
+    * **sabotage SAB-R16** (fixed): the fallback of `cuts.py::_exact_value` (a real with no
+      `as_integer_ratio()`) was untested, and the docstring of `cuts.py` and this record's design
+      said "never `float()` of it", false there. pinned by
+      `tests/test_numpy_compat.py::test_a_foreign_real_without_a_ratio_is_its_float` (`::Plain`);
+      both texts now say a real with no ratio is `float()` of it, as before
+    * **sabotage SAB-R10** (fixed by deletion): the `except TypeError` round the table lookup in
+      `numpy_compat.py::array_ufunc` guarded an unhashable ufunc numpy never passes (`KeyError` in
+      its place stayed green); deleted, so there is no line left to pin
+    * **soundness F2 = spec F5** (fixed, Q15(h)): with both operands ours, `hypot minimum maximum
+      arctan2` took the first operand's method, so `np.hypot(M(0.1), O(0.1))` was the nearest
+      `[0.1414213562373095]`, missing the true value, while the operators put the subclass first.
+      `numpy_compat.py::_subclass_first` now gives the method ufuncs the operators' rule; pinned by
+      `tests/test_numpy_compat.py::test_both_ours_methods_are_subclass_first` (red against the build's hook) and by the
+      property test's oracle `::_binary_oracle`, which takes the same rule; two sabotage rows
+    * **soundness F3 = spec F2** (fixed, documented and pinned; the change kept): the B1 fix also
+      changes the nearest and decorated classes (an exact derivative for an integral float
+      exponent; pow, not pown, for r = 1e-20). kept, because each agrees with the value's own
+      reading of r (the value of `Dual.variable(M.parse('[1/3, 3]')) ** 2.0` is the exact `[1/9,
+      9]`, and over `M(-2, -1)` the value of `** 1e-20` is empty, where M15 gave a derivative);
+      stated under "what the build found" and pinned by
+      `tests/test_autodiff.py::test_pow_number_exponent_nearest_examples`: both of the reviewer's
+      alternatives (the float multiplier; M15's `r - 1` in the nearest class) stayed green on
+      `e7bb3fb` and are red now
+    * **spec F3** (fixed): two bare `::` citations named the wrong file under the record's
+      convention; both are written in full as `tests/test_numpy_compat.py::...`
+    * **spec F4** (deferred, as the build recorded it): r = `2.0 ** 60` is pinned at u = -1 only,
+      because `O(u) ** 2 ** 60` does not finish for u in {2, 1e300, 1e-300} (an exact power,
+      pre-existing at `04946af`); it stays under `HANDOFF.md` "still owed"
+
+**M16e the gmpy2/mpfr backend: `backend.py`, `_gmpy2.py` (done 2026-09-28)** (D24).
+
+the owner, 2026-09-27: "get the rest of h3 done" (H3), superseding 2026-09-26's "recorded, not
+now". H3's rest is M16, five streams; this is M16e. the design is `v2-plan.md` "elementary and step
+functions" (the backend bullets); the choices are D24, open as Q16. here the spec, the exit and the
+record. what it blocks: nothing. every answer keeps today's behaviour (the pure path) unless a user sets the
+variable; Q16(a) (default automatic) and Q16(f) (in 2.0 or not) are the only ones whose answer
+would change what a user without the variable sees, and neither blocks H1.
+
+* **`intervals/backend.py`**: `INTERVALS_BACKEND` read at import (`::_select`: unset, `''`,
+  `python` → pure; `gmpy2` forced; `auto`; else `ValueError`), `NAME`, `fast`, `name()`, the version
+  floor `::_supported` (gmpy2 `>= 2.3`, a pre-release counting as just before its release, a
+  `+local` label read on a release or a pre-release; MPFR `>= 4.2`; `auto` also `< 3`; an
+  unparsable string unsupported), `::_load` (lazy import of
+  `_gmpy2`), `::_use` (the tests' switch)
+* **`intervals/_gmpy2.py`**: `rounded`, `rounded_pow`, `rounded_angle`, `rounded_inverse_trig`,
+  `outward`; each a float or None. the exact input (`::_operand`, `::_ratio`, `::_int`), the two
+  guards (`::_value`: nan, and a ternary value of 0 on an elementary result), `BOUND = 2**20`,
+  `ROOTN_LIMIT = 2**31`
+* **the dispatches**: `elementary.rounded` after `_beyond`, `rounded_pow` after its two range
+  shortcuts, `rounded_angle` after `q == 0 and m == 0`, `rounded_inverse_trig` after its exact k = 0
+  case; `ops.outward` keyed on the descriptor object (`ops._FAST_OPS`). each reads `backend.fast` at
+  call time. `pyproject.toml`: `fast = ["gmpy2>=2.3"]`, `gmpy2>=2.3,<3` in `test`
+* exit: every primitive bit-identical to the pure path (value and sign bit) at drawn points and over
+  15 edge classes, None exactly where the table says; the set-level `repr` of every method equal
+  under both; the switch, the env var and the version floor pinned; every new property sabotaged
+  once and seen red; the gate green on the default (pure) backend, and once more with
+  `INTERVALS_BACKEND=gmpy2`
+
+record (2026-09-28):
+* **what the build found on its way**, each fixed before the record:
+    * the critique's seven blocking items were built as fixes before any code (B1 the `rootn` bound,
+      B2 the bound on bits, B4 no fixture: each example computes both under `_use`, B5 the pure
+      default, C1 `log(b)`/`rootn(n)`/`pow_rev2` at set level, C3 hard points by construction, C4
+      `+ 0.0` last)
+    * **the class-15 test at the real bound hung the first run**: the pure path at a tiny x past
+      `2**20` bits grows about quadratically for sin, exp, atan and pow (at `2**16` bits: 3.3 s for
+      sin, 5.5 s for exp, 2026-09-28, the build's timing; 3.46 s and 1.46 s, 5.94 s for the whole
+      list, at 10:03 the same day, loaded, `tools/backend_speed.py --bound`), so a million bits would
+      take ~15 min. the
+      real-bound test keeps only the calls whose pure path stays cheap (atan and log of a huge int,
+      acot of a tiny one, the hook, an angle; 0.12 s at `2**20`); every call runs at a bound
+      monkeypatched to `2**12` (`::_bound_cases`, its `cheap` flag). the backend's check itself is
+      one `bit_length` comparison
+    * **a hostile global context changed by `set_context` does not reach a backend that captured
+      the global context object**: the class-13 helper `::hostile_global_context` mutates the global
+      context in place instead, so both a bare `mpfr(x)` (S3) and a captured global (S3b) go red
+    * `sys.modules['gmpy2'] = None` (the "gmpy2 missing" stub) leaves the key in `sys.modules`: the
+      env-var test's expected line says so
+    * the backend is NOT faster everywhere at set level (measured below): `.sin()` over a
+      multi-interval and newton on a polynomial gain nothing, since `floor_over_pi`, the applicator
+      and the kernel dominate there
+* **tests** (`tests/test_backend.py`, 735 tests since the review, 717 at the build, and `tests/test_elementary.py::test_a_missed_exact_case_raises_instead_of_looping`
+  now under `backend._use('python')`):
+    * the three-way check per primitive, `::check_rounded`, `::check_pow`, `::check_angle`,
+      `::check_inverse_trig`, `::check_outward`, against the table `::declines_rounded`,
+      `::declines_pow`, `::declines_angle`, `::declines_inverse_trig`, `::declines_outward`
+    * drawn: `::test_rounded_matches_python` (all 30 names over `tests/test_oracle_flint.py::points`),
+      `::test_log_base_matches_python`, `::test_rootn_matches_python` (n up to `2**64 + 1`, and
+      negative), `::test_pow_matches_python`, `::test_angle_matches_python` (m in 0, ±1, ±2, ±3),
+      `::test_inverse_trig_matches_python` (k in 0, ±1, 5), `::test_outward_matches_python`,
+      `::test_outward_reciprocal_matches_python`
+    * the edge classes `::EDGES` (1 dyadic floats over the range, 2 subnormal results, 3 the `-0.0`
+      class incl. `csch(-746)`, C4's `atan(5e-324)` with sign -1, the angle's atan2 route at
+      `(-5e-324, 0)` and the hook's mpq route at `mul(-5e-324, 1/3)`, 4 overflow, 5 wide exact inputs,
+      6 non-dyadic, 7 infinite x, 8 every `(q, m)` of `functions._angle` and some it never makes, 9
+      inverse trig, 10 rootn incl. `2**31 - 1`, `2**31`, `2**32`, `2**64 + 1`, 11 pow, 12 mixed hook
+      operands; 179 cases) in `::test_edge_class`, all again in `::test_hostile_global_context` (13, guarded by
+      `::test_the_hostile_context_is_hostile`), 14 `::HARD` in `::test_hard_point` (78 points, each
+      asserted answered by the backend), 15 `::test_past_the_bound_is_declined_at_a_small_bound` and
+      `::test_past_the_bound_is_declined_at_the_real_bound`; `test_oracle_flint.py::EXTREMES` in
+      `::test_extreme_point`
+    * coverage: `::test_backend_answers_where_it_should` (a point per row of the table),
+      `::test_backend_declines_where_it_should`, `::test_power_descriptors_decline`
+    * rules: `::test_the_shortcuts_run_before_the_backend`, `::test_the_hook_is_keyed_on_the_descriptor`,
+      `::test_missed_exact_case_raises` (all three directions) and its twin
+      `::test_missed_exact_case_raises_in_pow_and_inverse_trig` (`rounded_pow(4, 1/2)`,
+      `asin(0)`, `atan(0)` with sign -1), `::test_a_domain_slip_raises_instead_of_returning_nan`,
+      `::test_inputs_it_does_not_know_are_declined`
+    * set level: `::test_set_level_matches_unary` (the 30 methods, `reciprocal`, `** 3`, `** -2`,
+      `** 2.5`, `rootn` 2 3 -2 -3, `log` to 1/2, 0.25, 3, 2.5), `::test_set_level_matches_binary` (+ -
+      * /, atan2, pow, hypot, `sin_rev`, `cos_rev`, `tan_rev`, `pow_rev2`),
+      `::test_set_level_matches_newton`, `::test_set_level_matches_newton_sin`; both classes
+    * the switch: `::test_use_switches`, `::test_env_var` (11 cases in a subprocess, the variable
+      removed from the inherited env), `::test_forced_gmpy2_never_falls_back`, `::test_version_floor`
+      (20 cases), `::test_use_restores` (nested and on an exception: the rest of the suite runs after
+      this file in one process), `::test_the_test_extra_installs_what_auto_takes` (`[test]`'s pin)
+* **measured 2026-09-28** (this laptop, python 3.13, gmpy2 2.3.1 / MPFR 4.2.2; four other M16 streams
+  running, so absolute times are loaded): `tests/test_backend.py` 717 passed in 46-49 s
+  (`python -m pytest -q tests/test_backend.py`). the gate, two runs (`.scratch/gate.sh`: three
+  calls, `tests/itf1788`, then `tests --ignore=tests/itf1788 --ignore-glob=tests/test_[o-z]*.py`,
+  then `tests/test_[o-z]*.py intervals README.md`; 3251 + 1554 = 4805 items, the non-vector half):
+    * **default (pure), 2026-09-28 08:30-08:48**: `tests/itf1788` 18246 passed in 86.6 s; the
+      first group 3251 passed in 540.9 s; the second 1554 passed in 455.7 s; so 4805 in 996.6 s
+      (pytest's own times; M15's one call was 482 s on an unloaded laptop, this one ran beside four
+      other streams)
+    * **`INTERVALS_BACKEND=gmpy2`, 2026-09-28 08:48-09:06**: `tests/itf1788` 18246 passed in 110.8 s;
+      3251 passed in 477.4 s; 1554 passed in 464.3 s; so 4805 in 941.7 s. the evidence that the
+      backend passes the whole suite (the forced setting raises at import if gmpy2 is not taken).
+      the two runs' times are not a speed comparison (load)
+    * after the last edit (a docstring), `tests/test_backend.py` re-run: 717 passed in 43.4 s, and
+      717 in 39.1 s with `INTERVALS_BACKEND=gmpy2`
+    * **after the review's fixes, default (pure), 2026-09-28 10:14-10:30** (the same three calls;
+      the x10 fuzz below ran beside the first two): `tests/itf1788` 18246 passed in 77.1 s; 3269
+      passed in 442.2 s; 1554 passed in 420.6 s; so 4823 in 862.8 s. `tests/test_backend.py` alone:
+      735 passed in 43.4 s, and 735 in 41.6 s with `INTERVALS_BACKEND=gmpy2`. the forced whole gate
+      was not re-run: the review changed the library only in `backend.py::_PRE` (a version string)
+      and comments. `pytest --collect-only -q` over the whole tree in one process: 23069 items
+    * **the x10 fuzz of the differential** (`HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10 python -m
+      pytest -q tests/test_backend.py`, 2026-09-28 10:14-10:20, beside the gate): 735 passed in
+      387.5 s; the spec review had 579.5 s for the 717 at `adeeb97`, loaded. `fuzz.yml` runs it with
+      the rest (the last whole x10 run was 5037 s, `HANDOFF.md` M14-run), so about 6-10 min more
+      against its 180-min timeout
+* **speed** (`tools/backend_speed.py`, tracked since the review; the build ran the same loop from
+  `.scratch`: pure then gmpy2 back to back under `backend._use`, best of 5 per call; 2026-09-28 09:07, after this stream's gate, with other streams' runs on the laptop, so ratios,
+  not absolute times. a first run beside the gate had `.sin()` 0.86x and newton on `t**2 - 2`
+  0.82x; the second run below has them 1.1x and 1.2x: noise at that size):
+
+| call | pure µs | gmpy2 µs | ratio |
+|---|---|---|---|
+| `rounded('exp', 0.7, DOWN)` | 85.7 | 17.8 | 4.8 |
+| `rounded('exp', 1/3, DOWN)` (declined: pure in both) | 76.4 | 79.7 | 0.96 |
+| `rounded('log', 0.7, DOWN)` | 138 | 38.1 | 3.6 |
+| `rounded('sin', 0.7, DOWN)` | 145 | 36.3 | 4.0 |
+| `rounded('sin', 1e22, DOWN)` | 119 | 15.5 | 7.7 |
+| `rounded('atan', 1/3, DOWN)` (atan2 of the ints) | 83.7 | 20.1 | 4.2 |
+| `rounded('atan', 2**-30, DOWN)` | 129 | 20.6 | 6.3 |
+| `rounded_pow(2, 1/2, UP)` | 107 | 36.7 | 2.9 |
+| `rounded_angle(1/3, 1, UP)` | 83.7 | 8.38 | 10 |
+| hook `add(0.1, 0.2)` down | 17.1 | 2.76 | 6.2 |
+| hook `div(1.0, 3.0)` down | 13.4 | 2.38 | 5.6 |
+| hook `add(0.1, 1/3)` down (the mpq route) | 18.4 | 6.76 | 2.7 |
+
+| op | pure ms | gmpy2 ms | ratio |
+|---|---|---|---|
+| `OutwardMultiInterval`, 3 float pieces, `.exp()` | 0.42 | 0.185 | 2.3 |
+| same, `.log()` | 0.699 | 0.198 | 3.5 |
+| same, `.sin()` (`floor_over_pi` stays pure) | 0.911 | 0.828 | 1.1 |
+| same, `.atan()` | 1.27 | 0.453 | 2.8 |
+| `MultiInterval`, 2 float pieces, `.exp()` | 0.561 | 0.261 | 2.1 |
+| A + B (3 x 2 float pieces, outward) | 5.77 | 4.8 | 1.2 |
+| A * B | 5.75 | 4.66 | 1.2 |
+| A / B | 6.55 | 5.15 | 1.3 |
+| `newton(t**2 - 2, Outward(-10.0, 10.0))` | 65.3 | 53.1 | 1.2 |
+| `newton(sin(t) - t/3, Outward(-10.0, 10.0))` | 345 | 250 | 1.4 |
+
+  so: an elementary function at a float point 3.6-7.7x (10x for an angle of atan2), a declined
+  point 1x (one `bit_length` test), the outward hook about 6x per corner (2.7x on the mpq route); at
+  set level 2-3.5x for exp, log and atan over a multi-interval, 1.1x for sin, about 1.0-1.3x for
+  outward `+ * /` and 1.2-1.4x for newton, where the applicator's and the kernel's own python
+  dominate. the spec review's re-run (2026-09-28 09:28, loaded) matched the per-call ratios roughly
+  and had `A + B` at 0.72x once and 1.0-1.4x over six repeats: at set level the arithmetic gain is
+  within the noise of a loaded laptop
+
+* **sabotage** (a throwaway harness: each break alone, `.hypothesis` cleared,
+  `tests/test_backend.py` and `tests/test_elementary.py::test_a_missed_exact_case_raises_instead_of_looping`
+  with `-x` and a 900 s timeout, the files restored and compared; 2026-09-28). the last column is
+  the first test to fail under `-x`:
+
+| break | first run | final run: red by |
+|---|---|---|
+| S1 drop `+ 0.0` (rounded) | red | red: `tests/test_backend.py::test_edge_class[3-rounded-'sin'--5e-324]` |
+| S1b drop `+ 0.0` (hook, two dyadic operands) | red | red: `tests/test_backend.py::test_edge_class[3-outward-'mul'--1e-300-1e-300]` |
+| S2 a non-dyadic handed to MPFR as mpq | red | red: `tests/test_backend.py::test_edge_class[6-rounded-'exp'-Fraction(1, 3)]` |
+| S3 a float built with a bare `mpfr(x)` | red | red: `tests/test_backend.py::test_hostile_global_context[3-outward-'mul'--1e-300-1e-300]` |
+| S3b the wide context is the global one | red | red: `tests/test_backend.py::test_hostile_global_context[1-rounded-'log'-5e-324]` |
+| S4 a dyadic Fraction built at 53 bits | red | red: `tests/test_backend.py::test_edge_class[5-rounded-'log'-Fraction(...)]` (`(2**100 + 1) / 2**100`) |
+| S4b an int built at 53 bits | red | red: `tests/test_backend.py::test_edge_class[5-rounded-'sin'-1152921504606846977]` |
+| S5 subnormalize off | red | red: `tests/test_backend.py::test_edge_class[2-rounded-'sinh'-5e-324]` |
+| S6 angle m = 1 as `atan2(n, -d)` | red | red: `tests/test_backend.py::test_edge_class[8-angle-Fraction(1, 3)-1]` |
+| S7 angle accepts m = 2 with q > 0 | red | red: `tests/test_backend.py::test_edge_class[8-angle-Fraction(1, 3)-2]` |
+| S7b angle at q = 0: direction not reversed for m < 0 | red | red: `tests/test_backend.py::test_edge_class[8-angle-0--1]` |
+| S8 hook, mixed operands: each rounded to 53 bits first | red | red: `tests/test_backend.py::test_edge_class[6-outward-'add'-0.1-Fraction(1, 3)]` |
+| S9 `rounded` always declines | red | red: `tests/test_backend.py::test_edge_class[1-rounded-'exp'-0.7]`; alone, `::test_backend_answers_where_it_should[rounded-args0]` |
+| S10 rootn n < 0 as `1 / rootn(m, -n)` | red | red: `tests/test_backend.py::test_edge_class[10-rounded-'rootn'-2.0--2]` |
+| S11 inverse trig: sign < 0 keeps the direction | red | red: `tests/test_backend.py::test_edge_class[3-inverse-'atan'-5e-324--1-0]` |
+| S12 acot as `atan2(1, n/d rounded)` | red | red: `tests/test_backend.py::test_edge_class[6-rounded-'acot'-Fraction(1, 3)]` |
+| S13 drop the `rc == 0` guard | red | red: `tests/test_backend.py::test_missed_exact_case_raises` |
+| S14 `_use` a no-op | red | red: `tests/test_backend.py::test_the_hook_is_keyed_on_the_descriptor`; alone, `::test_use_switches` |
+| S15 the hook captures the backend at build | red | red: `tests/test_backend.py::test_the_hook_is_keyed_on_the_descriptor`; alone, `::test_use_switches` |
+| S16 forced gmpy2 falls back when missing | red | red: `tests/test_backend.py::test_forced_gmpy2_never_falls_back[...-gmpy2]` (blocked) |
+| S16b forced gmpy2 falls back below the floor | red | red: `tests/test_backend.py::test_forced_gmpy2_never_falls_back[...-2.2.9]` |
+| S17 the version floor compares strings | red | red: `tests/test_backend.py::test_version_floor[2.10.0-MPFR 4.2.2-True-True]` |
+| S17b a pre-release counts as its release | red | red: `tests/test_backend.py::test_version_floor[2.3.0rc1-MPFR 4.2.2-False-False]` |
+| S17c no ceiling for auto | red | red: `tests/test_backend.py::test_env_var[auto-...3.0.0...]` |
+| S17d no MPFR floor | red | red: `tests/test_backend.py::test_env_var[auto-...MPFR 4.1.1...]` |
+| S17e an unparsable version accepted | red | red: `tests/test_backend.py::test_forced_gmpy2_never_falls_back[...-two point three]` |
+| S17f auto takes gmpy2 3 (auto read as forced) | red | red: `tests/test_backend.py::test_env_var[auto-sys.modules['gmpy2'] = None-...]` |
+| S18 the dispatch moved before `_beyond` | **green** | red: `tests/test_backend.py::test_the_shortcuts_run_before_the_backend` |
+| C1 the dispatch drops `base` | red | red: `tests/test_backend.py::test_edge_class[10-rounded-'rootn'-2.0-2]`; set level alone, `::test_set_level_matches_unary[log base 0.25]` and `::test_set_level_matches_binary[pow_rev2]` |
+| C2 decline NEAREST | red | red: `tests/test_backend.py::test_edge_class[1-rounded-'exp'-0.7]`; alone, `::test_backend_answers_where_it_should[rounded-args0]` |
+| C4 `+ 0.0` before the sign | red | red: `tests/test_backend.py::test_edge_class[3-inverse-'atan'-5e-324--1-0]` |
+| B1 drop the rootn n bound | red | red: `tests/test_backend.py::test_edge_class[10-rounded-'rootn'-2.0-2147483648]` |
+| B2 drop the bound on bits | red | red: `tests/test_backend.py::test_past_the_bound_is_declined_at_a_small_bound` |
+| N1 the nan guard dropped | red | red: `tests/test_backend.py::test_a_domain_slip_raises_instead_of_returning_nan` |
+| N2 any input taken as a Fraction | red (see below) | red: `tests/test_backend.py::test_inputs_it_does_not_know_are_declined` |
+| N3 `''` not read as unset | red | red: `tests/test_backend.py::test_env_var[--python python False False]` |
+| N4 the hook keyed on the name | red | red: `tests/test_backend.py::test_the_hook_is_keyed_on_the_descriptor` |
+| N5 inverse trig answers k != 0 | red | red: `tests/test_backend.py::test_edge_class[9-inverse-'acos'--1-1-0]` |
+| N6 the hook: a zero divisor not declined | red | red: `tests/test_backend.py::test_inputs_it_does_not_know_are_declined` |
+| N7 `_gmpy2` imported eagerly | red | red: `tests/test_backend.py::test_env_var[None--python python False False]` |
+| N8 the pure missed-exact guard dropped | red | red: `tests/test_elementary.py::test_a_missed_exact_case_raises_instead_of_looping` |
+| S1c drop `+ 0.0` (hook, the mpq route; review T1) | **green** | red: `tests/test_backend.py::test_edge_class[3-outward-'mul'--5e-324-Fraction(1, 3)]` |
+| S1d drop `+ 0.0` (angle, the atan2 route; review G4) | **green** | red: `tests/test_backend.py::test_edge_class[3-angle--5e-324-0]` |
+| S13b `rounded_pow` without the `rc == 0` guard (review G1) | **green** | red: `tests/test_backend.py::test_missed_exact_case_raises_in_pow_and_inverse_trig[exact_pow-<lambda>]` |
+| S13c `rounded_inverse_trig` without the guard (review G3) | **green** | red: `tests/test_backend.py::test_missed_exact_case_raises_in_pow_and_inverse_trig[exact-<lambda>0]` |
+| S13d `rounded_angle`'s atan2 without the guard (review G2) | green | green: equivalent, not kept (unreachable, see the review below) |
+| S13e `rounded_angle`'s pi without the guard | green | green: equivalent, not kept (pi is irrational) |
+| S14b `_use` never restores (review R11) | **green** | red: `tests/test_backend.py::test_use_restores` |
+| S17g `dev` dropped from `_PRE` (review R7) | **green** | red: `tests/test_backend.py::test_version_floor[2.3.1.dev1-MPFR 4.2.2-True-True]` |
+| S17h `+local` dropped from `_FINAL` (review R8) | **green** | red: `tests/test_backend.py::test_version_floor[2.3.1+local-MPFR 4.2.2-True-True]` |
+| S17i `+local` dropped from `_PRE` (new with the fix) | red (the row, on `adeeb97`) | red: `tests/test_backend.py::test_version_floor[2.3.1rc1+local-MPFR 4.2.2-True-True]` |
+| B2b the bound off by one, `> BOUND + 1` (review R9) | **green** | red: `tests/test_backend.py::test_past_the_bound_is_declined_at_a_small_bound` |
+| V1 `[test]` without the `<3` pin (new with the fix) | red (the test, on `adeeb97`) | red: `tests/test_backend.py::test_the_test_extra_installs_what_auto_takes` |
+
+the one green in the first run was a gap, as the design predicted: moving the dispatch before
+`_beyond` changes no value (MPFR agrees with `_beyond`, which is why no differential sees it), only
+cost and provenance. closed by `::test_the_shortcuts_run_before_the_backend` (a spy on
+`_gmpy2.rounded` and `_gmpy2.rounded_pow`, never called for `exact`'s values, `_beyond`'s, the pi
+limits at ±inf or `rounded_pow`'s range shortcuts), and the break re-run red. N2's first run was red
+for the wrong reason (the replacement left a syntax error: red at collection); rewritten as intended
+and re-run red by its test. S9, S14, S15, C1 and C2 were re-run against their named guard alone,
+since under `-x` an earlier test caught them first; each went red there too. the rows from S1c on
+come from the review (2026-09-28): their first run is the break on `adeeb97` (a git-archive copy,
+718 passed for each green one), their final run the same harness on the fixed tree (736 items
+unbroken; S13d and S13e 736 passed, as they must)
+
+review: three read-only reviewers over `adeeb97` (2026-09-28; lenses soundness, sabotage-audit and
+spec/regression). the sabotage lens re-ran 10 of the table's rows (S1b S4b S7b S8 S13 S16b S18 C4 B2
+N5): each red on the test the table names, so no row was false. **no wrong double, flag or sign bit
+in the backend as built**: the soundness lens checked about 41k primitive answers against arb, about
+118k hook answers exactly and 1200 set-level `repr`s under both backends, 0 wrong; the spec lens ran
+`tests/itf1788`, `tests/test_elementary.py` and `tests/test_backend.py` under
+`INTERVALS_BACKEND=gmpy2`, 19354 passed (both 2026-09-28, from their notes). every finding below was reproduced on `adeeb97` first (a git-archive
+copy, the break alone, `tests/test_backend.py` and the pure twin under `-x`, 2026-09-28: 718
+passed for each green one), then fixed with a test seen red, or rejected with evidence. ids are the
+reviewers' own, prefixed by lens, since three lenses reused `F1`:
+
+| id | lens | finding | disposition | evidence |
+|---|---|---|---|---|
+| soundness F1, sabotage F3, spec G4G5 | all three | `+ 0.0` (C4) unpinned on the hook's mpq route and on the angle's atan2 route: MPFR gives `-0.0` at `outward('mul', (-5e-324, 1/3), UP)` and at `rounded_angle(-5e-324, 0, UP)` | fixed | reproduced: T1 and G4 green (718 passed each). five class-3 `::EDGES` cases added (`angle (-5e-324, 0)`, `angle (-1/2**1100, 0)`, `mul(-5e-324, 1/3)`, `mul(-1/10**400, 1e-300)`, `add(-5e-324, 2/(3 * 2**1074))`); T1 now red by `::test_edge_class[3-outward-'mul'--5e-324-Fraction(1, 3)]`, G4 by `::test_edge_class[3-angle--5e-324-0]` |
+| soundness F2, sabotage F1, spec G1, spec G3 | all three | the missed-exact guard (rc 0 raises) pinned only on `rounded`; dropped at `rounded_pow` or `rounded_inverse_trig`, nothing went red | fixed | reproduced: G1 and G3 green. `::test_missed_exact_case_raises_in_pow_and_inverse_trig` (`exact_pow` or `exact` patched to None: `rounded_pow(4, 1/2)`, `asin(0)`, `atan(0)` with sign -1, every direction); G1 and G3 now red by it. the angle's guard (spec G2) is **rejected as a gap**: G2 and G2b green before and after, since it cannot be reached (`rounded_angle` calls atan2 only with y != 0, and atan of a nonzero rational plus a multiple of pi is irrational, as is pi); the guard stays as defence |
+| sabotage F2 | sabotage | `_use` never restoring (`finally: pass`) stayed green: `::test_use_switches` reads `before` after earlier tests left gmpy2 on, so every file after `test_backend.py` in the gate's one process could run on gmpy2 unseen | fixed | reproduced: R11 green. `::test_use_restores` (nested both ways, and on an exception); R11 now red by it |
+| sabotage F4 | sabotage | a dev build of a supported release and a `+local` label unpinned (`dev` dropped from `_PRE`, `+local` from `_FINAL`: green); `2.3.1rc1+local` read as unsupported | fixed | reproduced: R7, R8 green; `::test_version_floor[2.3.1rc1+local-...]` red on `adeeb97`. `backend.py::_PRE` takes a `+local` label too; three rows added (`2.3.1.dev1`, `2.3.1+local`, `2.3.1rc1+local`: 20 cases). R7, R8 and S17i (the new group dropped) now red by their rows |
+| sabotage F5 | sabotage | the bound's exact edge untested: the "just past" operands had b + 2 bits, so `> BOUND + 1` stayed green | fixed | reproduced: R9 green. `::_bound_cases` now uses `2**b` and `1/2**b` (b + 1 bits); R9 (B2b) now red by `::test_past_the_bound_is_declined_at_a_small_bound` |
+| soundness F3 | soundness | the bound's rationale said a dyadic past MPFR's range "flushes to 0 or inf with a ternary value of 0" | fixed (wording) | reproduced (gmpy2 2.3.1 / MPFR 4.2.2, 2026-09-28): `mpfr(2**(2**30 + 1), 2, context())` is `inf` with rc 1; `mpfr(mpq(1, 2**(2**30 + 1)), 2, context())` is `0.0` with rc 0. now "to 0 with a ternary value of 0 (to inf with 1), silently" in `_gmpy2.py`'s docstring, `tests/test_backend.py`'s class-15 comment and `v2-plan.md` "elementary and step functions"; the conclusion (decline) stands |
+| sabotage F6 | sabotage | the rootn bound's reason: gmpy2 takes n as a C `unsigned long`, accepts `2**31` and `2**32 - 1`, and raises `OverflowError` only from `2**32` (windows); `ROOTN_LIMIT`'s comment said "a C long" | fixed (wording) | reproduced (same versions, 2026-09-28): `ieee(64).rootn(mpfr(2), 2**31)` is 1.0000000003227718, `2**32` raises. `2**31` kept as a margin that holds on every platform; `_gmpy2.py`, the class-10 comment, `v2-plan.md` "elementary and step functions" and its decision-log revision say so |
+| spec R1 | spec | the readme example had no blank line before the closing fence, so doctest read the fence as expected output | fixed | reproduced: the section extracted and run with `python -m doctest` failed under both backends (1 of 3). blank line added; 3 passed under `INTERVALS_BACKEND=python` and `gmpy2` |
+| spec V1 | spec | `[test]` had `gmpy2>=2.3` with no ceiling while `auto` takes only `< 3`: a gmpy2 3 on PyPI turns `test_env_var`'s auto row red in every CI job | fixed | `[test]` now `gmpy2>=2.3,<3`; `::test_the_test_extra_installs_what_auto_takes` reads `pyproject.toml` and asserts the pin equals `backend.FLOOR`/`CEILING` and that the installed gmpy2 is in the window: red on `adeeb97`, and red again with the pin removed (the table's V1). `[fast]` stays unpinned (Q16(d)) |
+| spec F1 | spec | the record says `fuzz.yml`'s x10 run fuzzes the differential, with no cost | fixed (a number) | the spec lens measured `tests/test_backend.py` under `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10` at 579.47 s (717 passed, loaded); re-measured on the fixed tree 2026-09-28 10:14-10:20, beside this fix's gate: 735 passed in 387.51 s. with the last whole x10 run at 5037 s (`HANDOFF.md` M14-run, 2026-09-27) that is about 5400-5600 s against `fuzz.yml`'s 180 min; in "measured" above, `HANDOFF.md` Q16(e) and "still owed" |
+| spec S1 | spec | the speed table and the class-15 cost cited gitignored `.scratch` scripts | fixed | the loop is now tracked, `tools/backend_speed.py` (and `--bound` for the class-15 cost; run 2026-09-28 10:03, loaded: at `2**16` bits sin 3.46 s, exp 1.46 s, 5.94 s for the list; `2**20` cheap 0.15 s). the set-level `+ * /` claim softened to about 1.0-1.3x, with the spec lens's 0.72x-1.4x re-runs |
+
 ## 3. order and parallelism
 
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
@@ -2479,6 +3793,8 @@ whether it is done (the M13 and M14 headings list them); what is open, and in wh
 working days (the per-milestone sum without M8) plus the M7b session. the first internally usable
 point is after M5 (set algebra, formatting, comparisons); arithmetic lands at M6; release needs M7b.
 M15 (H3's first part, 2026-09-27) came after M13, on the owner's call to take H3 first.
+M16 (H3's second part, 2026-09-28) came after M15: its five streams, M16a to M16e, are
+independent of each other and were built in parallel worktrees, then merged on `h3-merge`.
 
 ## 4. v1 → v2 surface map (for the M10 README and for not forgetting anything)
 

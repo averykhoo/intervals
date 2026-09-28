@@ -21,6 +21,11 @@ MultiInterval.parse('{ [0, 1) , (2, 3] }')
 BOTH
 >>> MI(1, 3).strictly_less(MI(2, 4))   # 1788's interval order, on the ends
 True
+>>> A = MI(0, 1) | MI(3, 5)
+>>> [[r.name for r in row] for row in A.allen_matrix(MI(1, 4))]   # allen() of each pair of pieces
+[['OVERLAPS'], ['OVERLAPPED_BY']]
+>>> sorted(r.name for r in A.allen_relations(MI(2, 6) | MI(8, 9)))   # the relations holding
+['BEFORE', 'DURING']
 >>> print(MI(0, 1).interior)           # every end opened
 (0, 1)
 >>> x.size
@@ -68,6 +73,23 @@ intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]'
 ...     print(root.unique, root.interval)
 True (-1.4142135623730951, -1.414213562373095)
 True (1.414213562373095, 1.4142135623730951)
+>>> from intervals import gradient, solve
+>>> print(*gradient(lambda x, y: x * y ** 2, [MI(1, 2), 3]))     # n passes, one variable seeded each
+[9] [6, 12]
+>>> for root in solve(lambda x, y: (x ** 2 + y ** 2 - 1, x - y), [MI(-10, 10), MI(-10, 10)]):
+...     print(root.unique, *root.box)                            # a square system: krawczyk proves
+True (-0.7071067811865476, -0.7071067811865475) (-0.7071067811865476, -0.7071067811865475)
+True (0.7071067811865475, 0.7071067811865476) (0.7071067811865475, 0.7071067811865476)
+>>> from intervals import ieee1788                 # 1788's own answers, as a thin layer
+>>> from intervals.ieee1788 import Interval
+>>> Interval(1, 2) / 10                            # binary64, rounded outward
+Interval(0.09999999999999999, 0.2)
+>>> ieee1788.cancel_minus(Interval(0, 1), Interval(0, 2))   # 1788's "no answer"
+Interval(float('-inf'), float('inf'))
+>>> ieee1788.overlap(Interval(1, 2), Interval(2, 3))
+<Overlap.MEETS: 'meets'>
+>>> print(ieee1788.sqrt(Interval(-1, 4, 'com')), ieee1788.NAMES['mulRevToPair'](Interval(-1, 1), Interval(1, 2)))
+[0.0, 2.0]_trv (Interval(float('-inf'), -1.0), Interval(1.0, float('inf')))
 
 ```
 
@@ -81,7 +103,8 @@ True (1.414213562373095, 1.4142135623730951)
   points, ordered lexicographically)
 * **relations**: `< <= > >=` and `eq_pointwise()` return a `TruthSet` (`TRUE`, `FALSE`, `BOTH`,
   empty); `before after adjoins overlaps contains within` return bool; `allen()` gives the Allen
-  relation; `weakly_less()` and `strictly_less()` are 1788's interval orders, on the ends (the
+  relation of two contiguous sets, and `allen_matrix()` and `allen_relations()` that of every pair
+  of pieces, as a matrix or as the set of relations holding; `weakly_less()` and `strictly_less()` are 1788's interval orders, on the ends (the
   hull's), and return bool. `==` is structural and `MultiInterval` is hashable and immutable
 * **arithmetic**: `+ - * /`, `reciprocal()`, `abs`, `**`, `%`, `//`, `divmod`,
   `minimum()`, `maximum()`, `fma()`, for every sign combination including zero-crossing and
@@ -155,9 +178,38 @@ True (1.414213562373095, 1.4142135623730951)
   two, where a connected interval type would get the hull; the step runs only where the
   decorations prove `f` C¹, elsewhere the pieces are pruned by range and bisected. it computes in
   `OutwardMultiInterval`, so every root encloses
+* **several variables** (M16a): `gradient(f, xs)` and `jacobian(F, xs)` are n passes of forward-mode
+  autodiff, one variable seeded each. `solve(F, xs)` returns `RootBox(box, unique)`es holding every
+  zero of a square system `F` in the box `xs`: gauss-seidel with `mul_rev` narrows (a partial holding
+  0 splits the box in one step), krawczyk's test proves a zero unique, on the closed hull and, for a
+  converged box, once more on the box inflated within the part of the input it stands for; a zero at
+  a simple rational is output as that exact point. the step runs only where the decorations prove
+  `F` C¹ on the box
+* **numpy** (M16d, optional): a numpy scalar is a python number to every op (`np.float32(0.1)` is
+  the double it holds; an `np.longdouble` wider than a double is exact, as any foreign real);
+  ufuncs on a set are its methods (`np.sin(A)` is `A.sin()`, `np.arcsin(A)` is `A.asin()`,
+  `np.square(A)` is `A ** 2`) or python's operators (`np.add(M, O)` is `M + O`), anything else a
+  `TypeError`; an ndarray meeting a set is elementwise into an object array
+  (`np.linspace(0, 1, 3) + A`), except `==`, which stays structural; `np.array([A, B])` holds the
+  sets as elements. `np.asarray(x, dtype=float)` rounds each point to nearest, in both classes.
+  object arrays of sets run numpy's own loops (`np.arcsin(arr)` and `np.round(A)` are TypeErrors)
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`
+* **a faster backend, optional** (M16e): `pip install intervals[fast]` adds gmpy2, and
+  `INTERVALS_BACKEND=gmpy2` (or `auto`: gmpy2 when it imports) picks it at `import intervals`. it
+  computes the same doubles as the default pure-python path, only faster (a few times for the
+  elementary functions at a float, less at set level), and changes no flag, so every result is
+  the same either way:
+
+  ```python
+  >>> from intervals import OutwardMultiInterval
+  >>> OutwardMultiInterval(0.5, 2.0).exp()
+  OutwardMultiInterval.parse('(1.648721270700128, 7.38905609893065)')
+  >>> OutwardMultiInterval(0.1) + 0.2
+  OutwardMultiInterval.parse('(0.3, 0.30000000000000004)')
+
+  ```
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)
@@ -175,6 +227,15 @@ True (1.414213562373095, 1.4142135623730951)
   vector needs a NaI, and 64 on a decoration alone (12 in the exact pass only; 52 `mulRevToPair`
   pairs whose set matches) (`tests/itf1788/`, measured 2026-09-27 at M13's merge). no statement is
   skipped
+* **the 1788 layer** (M16b): `from intervals import ieee1788` gives 1788's inf-sup binary64
+  intervals, bare and decorated, as one class, `ieee1788.Interval`, over the library: every set is
+  the library's, converted in by 1788's input rule and out by its output rule (attained infinities
+  dropped, the hull rounded outward to doubles, an infinite end open), with 1788's answer where it
+  defines another (cancellation's "no answer" is entire, touching intervals `meets`,
+  `mul_rev_to_pair` decorated as the division). 1788's names in snake_case, and `ieee1788.NAMES` in
+  1788's own spelling. a third conformance pass runs every vector through it and compares exactly:
+  all match but 104 vectors under 94 rows (no NaI, tighter than the vector, exact parsing;
+  2026-09-28)
 
 ## layout
 
@@ -184,14 +245,17 @@ True (1.414213562373095, 1.4142135623730951)
   (the elementary functions over sets, and at one point), `numeric` (midpoint, radius, width,
   magnitude, mignitude), `reductions` (sums and dot products of numbers), `reverse` (the reverse
   ops), `literals` (1788's interval literals and constructors), `decorated` (1788's decorated
-  type), `autodiff` (`Dual`), `solver` (`newton`), `rounding`, `errors`
+  type), `autodiff` (`Dual`, `gradient`, `jacobian`), `solver` (`newton`, `solve`, `RootBox`),
+  `numpy_compat` (numpy's hooks, numpy imported only when numpy calls them), `backend` and `_gmpy2`
+  (the optional gmpy2 backend), `rounding`, `errors`; and `ieee1788` (1788's intervals over the
+  library, not imported by `intervals`)
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)
 * `v2-plan.md` — the design. its "current design" section is normative: where it and the code
   disagree, one of them is a bug
 * `v2-implementation-plan.md` — milestones (each one's spec and, once built, its record), decisions
-  D1–D17
+  D1–D24
 * `HANDOFF.md` — what is open now: ranked items, questions for the owner, a session log
 * `references/` — papers and the modulo derivations
 * `archive/v1/` — the previous implementation, kept unchanged as a reference: `multi_interval.py`,
@@ -210,7 +274,8 @@ of the v2 class later (M8 in the implementation plan).
 C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q
 ```
 
-needs `pytest`, `hypothesis` and `python-flint` (`pip install -e .[test]`). the library's own
+needs `pytest`, `hypothesis`, `python-flint` and `gmpy2` (`pip install -e .[test]`). the numpy
+tests skip without numpy; CI installs it beside the extra. the library's own
 warnings are errors inside the suite. `HYPOTHESIS_PROFILE=fuzz` runs every hypothesis test
-randomized at `FUZZ_MULTIPLIER` (default 100) times its examples, as the weekly
+randomized at `FUZZ_MULTIPLIER` (default 10; 100 until 2026-09-27) times its examples, as the weekly
 `.github/workflows/fuzz.yml` does.
