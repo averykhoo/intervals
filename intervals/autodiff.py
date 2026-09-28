@@ -336,3 +336,89 @@ def derivative(f, x):
     if not isinstance(y, Dual):
         raise TypeError(f'f returned {type(y).__name__}, not a Dual or a number')
     return y.derivative
+
+
+# SEVERAL VARIABLES (M16): a gradient or a jacobian is n passes, pass j with x_j the variable
+
+def _box(xs) -> tuple:
+    """xs as n sets of one kind: a number is a point of the first set's kind (a `MultiInterval` if
+    every entry is a number); a bare set beside a decorated one is refused here, up front, since `f`
+    need not combine the two (a `lambda x, y: x` would never meet the bare `y`)"""
+    if not isinstance(xs, (list, tuple)):
+        raise TypeError(f'xs is a list or a tuple of sets or numbers, got {type(xs).__name__}')
+    if not xs:
+        raise ValueError('xs needs at least one variable')
+    for x in xs:
+        if not isinstance(x, _PART) and not (isinstance(x, Real) and not isinstance(x, bool)):
+            raise TypeError(f'expected a MultiInterval, a DecoratedInterval or a number, got {type(x).__name__}')
+    sets = [x for x in xs if isinstance(x, _PART)]
+    if len({isinstance(x, DecoratedInterval) for x in sets}) > 1:
+        raise TypeError('xs is MultiIntervals or DecoratedIntervals, not one of each')
+    like = sets[0] if sets else MultiInterval(0)
+    return tuple(x if isinstance(x, _PART) else _constant(like, x) for x in xs)
+
+
+def _entry(y, zero):
+    """an output's derivative: a Dual's, or `zero` for a number (a constant)"""
+    if isinstance(y, Real) and not isinstance(y, bool):
+        return zero
+    if not isinstance(y, Dual):
+        raise TypeError(f'f returned {type(y).__name__}, not a Dual or a number')
+    return y.derivative
+
+
+def _passes(F, xs, row):
+    """the n passes of F over the box xs, each an output's derivatives, as columns; `row(ys)` reads
+    F's outputs as a sequence"""
+    box = _box(xs)
+    columns = []
+    for j, x in enumerate(box):
+        ys = row(F(*(Dual.variable(c) if k == j else Dual.constant(c) for k, c in enumerate(box))))
+        columns.append(tuple(_entry(y, _constant(x, 0)) for y in ys))
+    if len({len(column) for column in columns}) > 1:
+        raise ValueError('F returned sequences of different lengths')
+    return columns
+
+
+def _sequence(ys):
+    if not isinstance(ys, (list, tuple)):
+        raise TypeError(f'F returned {type(ys).__name__}, not a list or a tuple of Duals or numbers')
+    return ys
+
+
+def gradient(f, xs) -> tuple:
+    """
+    `(∂f/∂x_1, ..., ∂f/∂x_n)` over the box `xs` (a list or a tuple of n sets or numbers, every set
+    bare or every set decorated): n passes of `f`, pass j calling `f(c_1, ..., Dual.variable(x_j),
+    ..., c_n)` with `c_k = Dual.constant(x_k)` and reading the derivative. `f` takes n positional
+    arguments and returns a `Dual` or a number (a constant, whose partials are `[0]`). at n == 1 it
+    is `(derivative(f, x),)`, the same pass
+
+    decorated, the entries carry the C¹ proof of `derivative`, now in n variables and relative to
+    the box: a value and every partial dac or better say every op, and every op of its chain rule's
+    formula, was defined and continuous on the box, so `f` is C¹ on the box relative to the box (the
+    multivariate chain rule is the same products). that is what the mean value theorem on the box
+    needs, one-sided at its faces; it says nothing outside the box (`x ** 1.5` over `[0, 1]` is com,
+    with no point below 0 in its domain, and `abs` over the point `[0]` has a dac derivative)
+
+    >>> from intervals import MultiInterval as M
+    >>> [str(d) for d in gradient(lambda x, y: x * y.sin(), [M(1, 2), 0])]
+    ['[0]', '[1, 2]']
+    """
+    return tuple(column[0] for column in _passes(f, xs, lambda y: (y,)))
+
+
+def jacobian(F, xs) -> tuple:
+    """
+    the jacobian of `F` over the box `xs`, as rows: `jacobian(F, xs)[i][j]` is `∂F_i/∂x_j` (see
+    `gradient`; the same n passes, each giving one column of every row). `F` takes n positional
+    arguments and returns a list or a tuple of m `Dual`s or numbers; the jacobian is m x n
+
+    >>> from intervals import MultiInterval as M
+    >>> for row in jacobian(lambda x, y: (x * y, x - y ** 2), [2, 3]):
+    ...     print(*row)
+    [3] [2]
+    [1] [-6]
+    """
+    columns = _passes(F, xs, _sequence)
+    return tuple(tuple(column[i] for column in columns) for i in range(len(columns[0])))

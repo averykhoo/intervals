@@ -432,7 +432,9 @@ def test_package_exports_unchanged():
         # M13g: ieee 1788's decorated type and its constructors
         'DecoratedInterval', 'Decoration', 'set_dec', 'text_to_decorated_interval', 'nums_to_decorated_interval',
         # M15: autodiff and interval newton (intervals/autodiff.py, intervals/solver.py)
-        'Dual', 'derivative', 'newton', 'Root'}
+        'Dual', 'derivative', 'newton', 'Root',
+        # M16a: several variables (intervals/autodiff.py, intervals/solver.py)
+        'gradient', 'jacobian', 'solve', 'RootBox'}
     for name in ('add', 'mul', 'OpDescriptor', 'apply_binary', 'mod', 'floordiv', 'floor', 'sqrt', 'sign',
                  'fma', 'apply', 'step'):
         assert not hasattr(intervals, name), name
