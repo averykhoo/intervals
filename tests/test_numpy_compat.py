@@ -283,11 +283,15 @@ def _binary_oracle(name):
     if name in BINARY_METHODS:
         def symmetric(a, b):
             x, y = (a, b) if _is_ours(a) else (b, a)
+            if _is_ours(y) and type(y) is not type(x) and issubclass(type(y), type(x)):
+                x, y = y, x  # both ours: the subclass decides, as for the operators
             return _method(x, BINARY_METHODS[name])(y)
         return symmetric
     assert name == 'arctan2'
 
     def arctan2(y, x):
+        if _is_ours(y) and _is_ours(x) and type(x) is not type(y) and issubclass(type(x), type(y)):
+            y = type(x).from_cuts(y.cuts)  # both ours: the subclass decides, as for the operators
         if not _is_ours(y):
             if not hasattr(x, 'atan2'):
                 raise TypeError
@@ -336,6 +340,27 @@ def test_both_ours_examples(np):
     assert s != M(0.1).__add__(O(0.2))  # the forward dunder alone: rounded to nearest, a plain set
     assert type(np.multiply(O(0.1), M(3))) is O
     assert np.less(M(1, 2), O(3)) == (M(1, 2) < O(3))
+
+
+def test_both_ours_methods_are_subclass_first(np):
+    """the method ufuncs take the operators' rule (the M16d review, 2026-09-28): with a MultiInterval
+    and an OutwardMultiInterval, the outward class decides in either order, so the result holds the
+    true value; M's method, called directly, is still M's and rounds to nearest"""
+    a, b = M(0.1), O(0.1)
+    true_square = 2 * Fraction(0.1) ** 2  # hypot(0.1, 0.1) ** 2
+    for h in (np.hypot(a, b), np.hypot(b, a)):
+        assert type(h) is O and h == b.hypot(b)
+        assert Fraction(h.cuts[0].value) ** 2 < true_square < Fraction(h.cuts[-1].value) ** 2
+    direct = a.hypot(b)
+    assert type(direct) is M and Fraction(direct.cuts[0].value) ** 2 != true_square  # [0.1414213562373095]
+    for f in (np.minimum, np.maximum):
+        assert type(f(M(0.1), O(0.2))) is O and type(f(O(0.2), M(0.1))) is O
+        assert f(M(0.1), O(0.2)) == f(O(0.1), O(0.2))
+    t = np.arctan2(a, b)
+    assert type(t) is O and t == b.atan2(b) and t != a.atan2(b)  # atan2(M, O): y as an O first
+    assert type(np.arctan2(b, a)) is O and np.arctan2(b, a) == b.atan2(a)
+    with pytest.raises(TypeError):
+        np.hypot(a, D(a))  # no subclass: the first operand's method, which refuses a decorated set
 
 
 def test_ufunc_pinned_examples(np):
@@ -518,6 +543,16 @@ def test_elementwise_leaves_numpys_float_flags_alone(np):
         assert (np.array([1.0]) / x).tolist() == [1.0 / x]
 
 
+def test_elementwise_leaves_every_float_flag_alone(np):
+    """underflow too (a subnormal end), which numpy ignores by default: only a caller's errstate
+    shows it, and the scalar path never raises it (the M16d review's sabotage: `errstate(over=...)`
+    stayed green, 2026-09-28)"""
+    x = M.parse('(-inf, 2.225073858507203e-309)')
+    with np.errstate(all='raise'):
+        assert (np.array([1e-308]) + M(0)).tolist() == [1e-308 + M(0)]
+        assert (np.array([1.0]) / x).tolist() == [1.0 / x]
+
+
 def test_elementwise_warning_is_the_callers(np):
     from intervals.errors import IndeterminateResultWarning
     with pytest.warns(IndeterminateResultWarning) as caught:
@@ -602,6 +637,28 @@ def test_foreign_real_specials():
     assert M(1, 8).log(Rat(2)) == M(1, 8).log(2)  # the log base: any real (was int, float, Fraction)
 
 
+class Plain:
+    """a foreign real with no as_integer_ratio: float() of it, as before M16d"""
+
+    def __init__(self, f):
+        self.f = f
+
+    def __float__(self):
+        return self.f
+
+
+numbers.Real.register(Plain)
+
+
+def test_a_foreign_real_without_a_ratio_is_its_float():
+    """the fallback of `cuts._exact_value` (the M16d review's sabotage: refusing it stayed green)"""
+    got = normalize_value(Plain(0.1))
+    assert type(got) is float and got == 0.1
+    assert M(Plain(0.5)) == M(0.5)
+    with pytest.raises(ValueError):
+        normalize_value(Plain(math.nan))
+
+
 @settings(max_examples=200, deadline=None)
 @given(bits=st.integers(0, 2 ** 32 - 1))
 def test_float32_is_the_double_it_holds(np, bits):
@@ -668,6 +725,22 @@ def test_integer_arguments_take_numpy_ints(np):
     for thunk in (lambda: a.log(math.nan), lambda: a.log(np.float64(math.nan)), lambda: a.log(1), lambda: a.log(-2)):
         with pytest.raises(ValueError, match='a logarithm needs'):
             thunk()
+
+
+def test_numpy_ndigits_past_int64(np):
+    """`10 ** ndigits` in an int64 wraps past 10 ** 18: ndigits is an int first (the M16d review's
+    sabotage: dropping `int(ndigits)` stayed green, 2026-09-28). single-point sets, so no hull warns"""
+    for a in (M(Fraction(1, 3)), M(0.125)):
+        for nd in (19, 20, 30):
+            assert a.round(np.int64(nd)) == a.round(nd)
+            assert a.round_ties_away(np.int64(nd)) == a.round_ties_away(nd)
+
+
+def test_numpy_pown_rev_degrees(np):
+    """`pown_rev` takes int(n) first: an int64 degree past -2 overflowed inside (the M16d review's
+    sabotage: dropping `int(n)` stayed green, 2026-09-28)"""
+    for n in (3, 2, -3, 2 ** 62):
+        assert pown_rev(M(1, 4), np.int64(n)) == pown_rev(M(1, 4), n)
 
 
 def test_dual_rootn_takes_the_degree_as_an_int(np):

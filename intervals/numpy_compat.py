@@ -19,8 +19,11 @@ comparison over as a 0-d array, which is unwrapped first.
 **the other ufuncs** are the method that computes the set image of the ufunc's pointwise function
 (`np.sin(A)` is `A.sin()`, `np.arcsin(A)` is `A.asin()`, `np.rint(A)` is `A.round()`, ties to even
 as numpy's rint, `np.square(A)` is `A ** 2`, `np.minimum(1, A)` is `A.minimum(1)`,
-`np.arctan2(y, A)` is `y.atan2(A)`); a class without the method (`Dual` has no `floor`) is a
-TypeError. not mapped, so a TypeError: `fmod` (C's truncated remainder, not `%`), `fmin`/`fmax`
+`np.arctan2(y, A)` is `y.atan2(A)`); with both operands ours, the operators' subclass rule holds
+here too: `np.hypot(M, O)` is `O.hypot(M)` and `np.arctan2(M, O)` takes the y as an
+`OutwardMultiInterval` first, so an outward operand never loses its rounding to the operand order
+(`M.hypot(O)`, the method called directly, is still M's); a class without the method (`Dual` has
+no `floor`) is a TypeError. not mapped, so a TypeError: `fmod` (C's truncated remainder, not `%`), `fmin`/`fmax`
 (numpy's point is to ignore a nan operand, and a nan is refused here), `float_power`, `isnan`
 and the other predicates of a point, `matmul`, every other ufunc, every method but `__call__`
 (`reduce`, `outer`, ...) and every keyword (`out=`, `where=`, `dtype=`, ...). the table is keyed by
@@ -116,6 +119,12 @@ def _operator(name: str, x, y):
     return result
 
 
+def _subclass_first(x, y) -> bool:
+    """both ours and y's class a proper subclass of x's: python's rule for which operand's reflected
+    dunder goes first, so y's class decides (an OutwardMultiInterval over a MultiInterval)"""
+    return _ours(x) and _ours(y) and type(y) is not type(x) and issubclass(type(y), type(x))
+
+
 def _method(x, name: str):
     return getattr(x, name, None) if _ours(x) else None
 
@@ -135,10 +144,15 @@ def _apply(name: str, *args):
         return NotImplemented if method is None else method()
     if name in _SYMMETRIC:
         x, y = args if _ours(args[0]) else args[::-1]
+        if _subclass_first(x, y):  # np.hypot(M, O) is O's, as `M + O` is
+            x, y = y, x
         method = _method(x, _SYMMETRIC[name])
         return NotImplemented if method is None else method(y)
-    # arctan2(y, x): y.atan2(x), a number y a point of x's kind first
+    # arctan2(y, x): y.atan2(x), a number y a point of x's kind first, and so a y of our class
+    # whose subclass x is (np.arctan2(M, O) is outward, as `M + O` is)
     y, x = args
+    if _subclass_first(y, x):
+        y = type(x).from_cuts(y.cuts)
     if not _ours(y):
         if _method(x, 'atan2') is None:
             return NotImplemented
@@ -153,10 +167,7 @@ def array_ufunc(self, ufunc, method, *inputs, **kwargs):
     """`__array_ufunc__` of the three classes (see the module docstring)"""
     if method != '__call__' or kwargs:
         return NotImplemented
-    try:
-        name = _ufunc_names().get(ufunc)
-    except TypeError:  # an unhashable stand-in
-        return NotImplemented
+    name = _ufunc_names().get(ufunc)
     if name is None:
         return NotImplemented
     import numpy as np

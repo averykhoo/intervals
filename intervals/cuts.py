@@ -16,11 +16,11 @@ tiles exactly because the end `(2, BELOW)` equals the start `(2, BELOW)`.
 values are int, Fraction or float, including `-inf` and `inf`. the constructor normalizes them:
 `-0.0` becomes `0.0` (there is one zero), a Fraction with denominator 1 becomes int, and `nan` is
 rejected. a *foreign* real (a `numbers.Real` that is no int, float or Fraction: numpy's scalars, gmpy2's
-numbers) is its exact value, never `float()` of it: a `numbers.Rational` is exact by type, as a
+numbers) is its exact value where it has one to give: a `numbers.Rational` is exact by type, as a
 Fraction is; any other real is the float it equals where it is a double (so `np.float32(0.1)` is the
 double it holds, as today), else its exact `as_integer_ratio()` (an `np.longdouble` wider than a
-double, a wide `mpfr`), where `float()` would have rounded it and an outward result would not hold it
-(M16d, 2026-09-28).
+double, a wide `mpfr`), where `float()` would have rounded it and an outward result would not hold it;
+a real with no `as_integer_ratio()` is `float()` of it, as before (M16d, 2026-09-28).
 """
 import math
 from enum import IntEnum
