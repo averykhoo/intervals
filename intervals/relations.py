@@ -12,8 +12,10 @@ they are defined on cuts, not values: `before` is `A.end <= B.start`, so `[1, 2)
 the interval orders `weakly_less` and `strictly_less` (ieee 1788's `less` and `strictLess`) compare
 the ends, the infima and the suprema, so for a multi-interval they are its hull's; they return bool.
 
-`allen` needs two contiguous operands. `allen_matrix` and `allen_relations` take any: `allen` of each
-pair of pieces, as a matrix or as the set of relations holding.
+`allen` needs two contiguous operands. `allen_matrix` and `allen_relations` take any number of
+pieces: `allen` of each pair, as a matrix or as the set of relations holding. the matrix takes any
+cut pairs, in any order; the set view's sweep needs normalized cut tuples, as every relation here,
+and asserts it.
 """
 import math
 from enum import Enum
@@ -293,8 +295,10 @@ def allen_relations(a: Cuts, b: Cuts) -> FrozenSet[Allen]:
     """
     the relations holding between some piece of `a` and some piece of `b`: the entries of
     `allen_matrix(a, b)`, found in `O(n + m)` without building it (`_allen_pairs`, then the two
-    corners). normalized operands; `frozenset()` when either is empty
+    corners). normalized operands only (asserted: out of order, the sweep would miss entries);
+    `frozenset()` when either is empty
     """
+    assert kernel.is_valid(a) and kernel.is_valid(b), (a, b)
     pa, pb = tuple(kernel.pairs(a)), tuple(kernel.pairs(b))
     if not pa or not pb:
         return frozenset()

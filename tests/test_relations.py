@@ -16,6 +16,7 @@ from intervals import OutwardMultiInterval
 from intervals import TruthSet
 from intervals import kernel
 from intervals import relations
+from intervals.cuts import Cut
 from intervals.relations import BOTH
 from intervals.relations import FALSE
 from intervals.relations import NEITHER
@@ -453,3 +454,56 @@ def test_allen_relations_is_a_linear_sweep(ab):
             mock.patch.object(relations, 'allen', wraps=relations.allen) as spy:
         assert relations.allen_relations(a, b) == expected
     assert len(needed) <= spy.call_count <= bound
+
+
+_COMPARED = [0]
+
+
+def _counted(op):
+    def compare(self, other):
+        _COMPARED[0] += 1
+        return getattr(tuple, op)(self, other)
+    return compare
+
+
+class _CountingCut(Cut):
+    """a Cut that counts its comparisons (`<`, `<=`, `==`, `!=`, `>`, `>=`), to pin the set view's work"""
+    __slots__ = ()
+    __lt__, __le__, __eq__, __ne__, __gt__, __ge__ = [
+        _counted(op) for op in ('__lt__', '__le__', '__eq__', '__ne__', '__gt__', '__ge__')]
+    __hash__ = Cut.__hash__
+
+
+def test_allen_relations_compares_cuts_linearly():
+    """
+    the set view's cost in cut comparisons, which `::test_allen_relations_is_a_linear_sweep` (calls
+    to allen()) does not see: a pass over every pair of pieces that calls neither allen() nor
+    allen_matrix stays green there (review SAB-1). every piece of a lies AFTER every piece of b,
+    where a quadratic scan for BEFORE cannot stop early: allen_relations makes O(n + m) cut
+    comparisons, at most 10 per piece (the check of its operands, the sweep, the two corners)
+    """
+    n = m = 40
+    a = P(' | '.join(f'[{1000 + 3 * k}, {1001 + 3 * k}]' for k in range(n)))._cuts
+    b = P(' | '.join(f'[{3 * k}, {3 * k + 1}]' for k in range(m)))._cuts
+    ca, cb = (tuple(_CountingCut(c.value, c.side) for c in x) for x in (a, b))
+    _COMPARED[0] = 0
+    found = relations.allen_relations(ca, cb)
+    compared = _COMPARED[0]
+    assert found == relations.allen_relations(a, b) == {AFTER}
+    assert 0 < compared <= 10 * (n + m)
+
+
+@pytest.mark.skipif(not __debug__, reason='the check is an assert, as MultiInterval._wrap')
+def test_allen_relations_refuses_unnormalized_operands():
+    """
+    the sweep needs normalized operands (the matrix does not): out of order, the set view would be a
+    strict subset of the matrix's entries, so it is refused under `__debug__`, as `MultiInterval`
+    refuses a malformed cut tuple, not answered wrongly (review F1)
+    """
+    a = P('[3, 4]')._cuts + P('[0, 1]')._cuts
+    b = P('[0, 1]')._cuts
+    assert {r for row in relations.allen_matrix(a, b) for r in row} == {AFTER, EQUALS}
+    for x, y in ((a, b), (b, a), (a, a)):
+        with pytest.raises(AssertionError):
+            relations.allen_relations(x, y)
+    assert relations.allen_relations(b, b) == {EQUALS}
