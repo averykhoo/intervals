@@ -140,7 +140,7 @@ class Interval:
     DecoratedInterval(OutwardMultiInterval.parse('[1.0, 2.0]'), Decoration.COM)
     """
     __slots__ = ('_set', '_decoration')
-    __array_ufunc__ = None  # the package's rule for every type
+    __array_ufunc__ = None  # numpy defers to the reflected methods; the layer has no ufunc hook (M16d's is on the core types only)
 
     def __init__(self, lo=None, hi=None, decoration=None):
         if lo is None:
