@@ -24,8 +24,10 @@ a rational (the hook's mixed operands: rounded from an exact mpq). the rules the
 * no `-0.0`: MPFR gives one for a negative value rounded to 0, and `x - x` rounded down; the pure
   path never does, so `+ 0.0` is every function's last operation (after a sign, not before it)
 * an operand past `BOUND` bits (numerator or denominator) is declined: MPFR's exponent range is
-  `2**30` on windows, past which a dyadic flushes to 0 or inf with a ternary value of 0, silently
-* `rootn` only for `0 < n < 2**31`: MPFR takes n as a C `unsigned long`, 32 bits on windows
+  `2**30` on windows, past which a dyadic flushes to 0 with a ternary value of 0 (to inf with 1),
+  silently
+* `rootn` only for `0 < n < 2**31`: gmpy2 takes n as a C `unsigned long` (32 bits on windows, where
+  it raises `OverflowError` from `2**32`); `2**31` is a margin that holds on every platform
 * a ternary value of 0 on a function's result means the value is a double, so rational, which
   `exact` said it is not: an exact case was missed, and this raises as the pure loop does (MPFR
   would return the double, and the caller would mark the end open: a point lost). a nan (an argument
@@ -48,7 +50,7 @@ from intervals.rounding import NEAREST
 from intervals.rounding import UP
 
 BOUND = 1 << 20  # the most bits of an operand's numerator or denominator taken (class 15)
-ROOTN_LIMIT = 1 << 31  # rootn's n below this (a C long on every supported platform)
+ROOTN_LIMIT = 1 << 31  # rootn's n below this: a C unsigned long is 32 bits on windows, 64 on linux
 _MISSED = 'the enclosure never narrowed to one double: an exact case was missed'
 
 # the elementary functions that are a context method of the same name

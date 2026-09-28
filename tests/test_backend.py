@@ -238,6 +238,9 @@ EDGES = [
     ('3', 'outward', ('sub', (0.1, 0.1))), ('3', 'outward', ('div', (-1e-300, 1e300))),
     ('3', 'inverse', ('atan', TINY, -1, 0)), ('3', 'inverse', ('asin', TINY, -1, 0)),
     ('3', 'inverse', ('atan', Fraction(1, 2 ** 1100), -1, 0)),
+    ('3', 'angle', (-TINY, 0)), ('3', 'angle', (Fraction(-1, 2 ** 1100), 0)),
+    ('3', 'outward', ('mul', (-TINY, Fraction(1, 3)))), ('3', 'outward', ('mul', (Fraction(-1, 10 ** 400), 1e-300))),
+    ('3', 'outward', ('add', (-TINY, Fraction(2, 3 * 2 ** 1074)))),
     # 4 overflow in each direction
     ('4', 'rounded', ('exp', 709.782712893384)), ('4', 'rounded', ('exp', 709.7827128933841)),
     ('4', 'rounded', ('expm1', 709.782712893384)), ('4', 'rounded', ('expm1', 709.7827128933841)),
@@ -278,7 +281,7 @@ EDGES = [
     ('9', 'inverse', ('asin', 1, 1, 0)), ('9', 'inverse', ('asin', -1, -1, 0)), ('9', 'inverse', ('acos', -1, 1, 0)),
     ('9', 'inverse', ('acos', -1, -1, 0)), ('9', 'inverse', ('asin', 0.5, 1, 3)), ('9', 'inverse', ('atan', 0.5, -1, -2)),
     ('9', 'inverse', ('asin', Fraction(1, 3), 1, 0)), ('9', 'inverse', ('asin', -TINY, 1, 0)),
-    # 10 rootn: even and odd n, x < 0 with odd n, n at C long's edge (declined from 2**31), n < 0 declined
+    # 10 rootn: even and odd n, x < 0 with odd n, n at the margin (declined from 2**31), n < 0 declined
     ('10', 'rounded', ('rootn', 2.0, 2)), ('10', 'rounded', ('rootn', 2.0, 3)), ('10', 'rounded', ('rootn', -2.0, 3)),
     ('10', 'rounded', ('rootn', -TINY, 5)), ('10', 'rounded', ('rootn', MAX, 2)), ('10', 'rounded', ('rootn', 3.0, 10 ** 6)),
     ('10', 'rounded', ('rootn', 2.0, 2 ** 31 - 1)), ('10', 'rounded', ('rootn', -2.0, 2 ** 31 - 1)),
@@ -371,20 +374,21 @@ def test_extreme_point(name, x):
     check_rounded(name, x)
 
 
-# 15 an operand past the bound on its bits: declined, since MPFR's own exponent range (2**30 on
-# windows) is where a dyadic silently flushes to 0 or inf with a construction rc of 0
+# 15 an operand past the bound on its bits: declined, since past MPFR's own exponent range (2**30 on
+# windows) a dyadic flushes to 0 with a construction rc of 0 (to inf with 1), silently
 
 def _bound_cases(b, cheap=False):
     """
-    `(past, inside)`: calls with an operand just past the bound b, declined, and just inside it,
-    answered. with `cheap`, only those whose pure path stays fast at a million bits (it grows about
-    quadratically for sin, exp, atan and pow at a tiny x: 5.5 s at 2**16 bits, 2026-09-28)
+    `(past, inside)`: calls with an operand just past the bound b (b + 1 bits), declined, and just
+    inside it (b bits), answered. with `cheap`, only those whose pure path stays fast at a million
+    bits (it grows about quadratically for sin, exp, atan and pow at a tiny x: 1.5-5.5 s for sin or
+    exp at 2**16 bits, 2026-09-28, `tools/backend_speed.py --bound`)
     """
-    tiny, huge = Fraction(1, 2 ** (b + 1)), 2 ** (b + 1)
+    tiny, huge = Fraction(1, 2 ** b), 2 ** b  # b + 1 bits: just past
     past = [
         ('rounded', ('atan', huge)), ('rounded', ('log', huge)), ('rounded', ('acot', tiny)),
         ('outward', ('mul', (1.0, tiny))), ('outward', ('add', (0.5, huge))),
-        ('outward', ('mul', (0.1, Fraction(1, 3 * 2 ** (b + 1))))), ('angle', (tiny, 1)),
+        ('outward', ('mul', (0.1, Fraction(1, 3 * 2 ** b)))), ('angle', (tiny, 1)),
     ]
     inside = [('rounded', ('log', 2 ** (b - 1) + 1)), ('rounded', ('atan', 2 ** (b - 1) + 1)),
               ('outward', ('mul', (1.0, Fraction(1, 2 ** (b - 1)))))]
@@ -570,6 +574,24 @@ def test_missed_exact_case_raises(monkeypatch):
                 elementary.rounded('sqrt', 4, d)
 
 
+@pytest.mark.parametrize('patch, call', [
+    ('exact_pow', lambda d: elementary.rounded_pow(4, Fraction(1, 2), d)),
+    ('exact', lambda d: elementary.rounded_inverse_trig('asin', 0, 1, 0, d)),
+    ('exact', lambda d: elementary.rounded_inverse_trig('atan', 0, -1, 0, d)),
+])
+def test_missed_exact_case_raises_in_pow_and_inverse_trig(monkeypatch, patch, call):
+    """
+    the same guard on the other two primitives whose value can be rational (MPFR's 2 = 4 ** 1/2 and
+    0 = asin(0), each with a zero ternary value): each keeps calling it. the angle's cannot be reached
+    (atan2 of two ints with y != 0 and pi are irrational), so it has no twin
+    """
+    monkeypatch.setattr(elementary, patch, lambda *args, **kwargs: None)
+    with backend._use('gmpy2'):
+        for d in DIRECTIONS:
+            with pytest.raises(ArithmeticError, match='exact case was missed'):
+                call(d)
+
+
 def test_a_domain_slip_raises_instead_of_returning_nan():
     """MPFR answers nan outside a domain; the backend raises, as the pure path would, never a nan end"""
     for name, x in (('sqrt', Fraction(-1)), ('log', Fraction(-2)), ('asin', Fraction(2)), ('acosh', Fraction(1, 2))):
@@ -716,6 +738,26 @@ def test_use_switches(monkeypatch):
     assert backend.name() == before
 
 
+def test_use_restores():
+    """
+    `_use` puts back what was there, nested either way and on an exception: otherwise the rest of the
+    suite, run after this file in one process, would silently stay on gmpy2
+    """
+    saved = backend.NAME, backend.fast
+    for outer in ('python', 'gmpy2'):
+        with backend._use(outer):
+            state = backend.NAME, backend.fast
+            for inner in ('python', 'gmpy2'):
+                with backend._use(inner):
+                    assert backend.name() == inner
+                assert (backend.NAME, backend.fast) == state
+                with pytest.raises(RuntimeError):
+                    with backend._use(inner):
+                        raise RuntimeError
+                assert (backend.NAME, backend.fast) == state
+    assert (backend.NAME, backend.fast) == saved
+
+
 def _run(value, prelude=''):
     """`import intervals` in a fresh interpreter with INTERVALS_BACKEND=value (None: unset)"""
     env = {k: v for k, v in os.environ.items() if k != 'INTERVALS_BACKEND'}
@@ -782,6 +824,9 @@ def test_forced_gmpy2_never_falls_back(prelude, says):
     ('2.3.0rc1', 'MPFR 4.2.2', False, False),  # and one of 2.3.0 is before it
     ('2.3.0.dev3', 'MPFR 4.2.2', False, False),
     ('2.3.1.post1', 'MPFR 4.2.2', True, True),
+    ('2.3.1.dev1', 'MPFR 4.2.2', True, True),  # a dev build of 2.3.1 is past 2.3.0
+    ('2.3.1+local', 'MPFR 4.2.2', True, True),
+    ('2.3.1rc1+local', 'MPFR 4.2.2', True, True),  # a local label on a pre-release too
     ('3.0.0', 'MPFR 4.2.2', False, True),  # auto takes only the series verified; forced, any at the floor
     ('2.3.1', 'MPFR 5.0.0', True, True),
     ('2.3.1', 'MPFR 4.2.2-p1', True, True),
@@ -793,3 +838,15 @@ def test_forced_gmpy2_never_falls_back(prelude, says):
 def test_version_floor(version, mpfr, auto, forced):
     assert backend._supported(version, mpfr) is auto
     assert backend._supported(version, mpfr, ceiling=False) is forced
+
+
+def test_the_test_extra_installs_what_auto_takes():
+    """
+    `[test]` pins gmpy2 to the window `auto` takes (`FLOOR <= version < CEILING`): unpinned, a gmpy2 3
+    on PyPI would turn `test_env_var`'s auto row red in every CI job for a reason outside the code.
+    and the gmpy2 installed here is in it
+    """
+    import tomllib
+    extras = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['optional-dependencies']
+    assert f'gmpy2>={backend.FLOOR[0]}.{backend.FLOOR[1]},<{backend.CEILING}' in extras['test']
+    assert backend._supported(str(gmpy2.version()), str(gmpy2.mpfr_version()))

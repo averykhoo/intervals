@@ -40,7 +40,7 @@ def name() -> str:
 
 _RELEASE = re.compile(r'(\d+)\.(\d+)(?:\.(\d+))?(.*)')
 _FINAL = re.compile(r'(\.?post\d*)?(\+[0-9a-z.]*)?')
-_PRE = re.compile(r'[-._]?(a|b|c|rc|alpha|beta|pre|preview|dev)\d*([-._]?dev\d*)?')
+_PRE = re.compile(r'[-._]?(a|b|c|rc|alpha|beta|pre|preview|dev)\d*([-._]?dev\d*)?(\+[0-9a-z.]*)?')
 
 
 def _release(version: str) -> Optional[Tuple[Tuple[int, int, int], bool]]:
