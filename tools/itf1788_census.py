@@ -1,7 +1,8 @@
 """
 the itf1788 counts quoted in HANDOFF.md, v2-plan.md "ieee 1788" and the plan's M13 records: files,
 vectors, interval-valued vectors, ops, divergence keys and vectors by category, vectors per file,
-skipped statements by op. read from the adapter itself, so it cannot drift from what the gate runs.
+skipped statements by op, and (M16b) the 1788 layer pass's rows. read from the adapter and the pass
+themselves, so they cannot drift from what the gate runs.
 not collected by pytest (`tools/` is not in `testpaths`). from the repo root:
 
     C:/Users/user/anaconda3/envs/intervals/python.exe tools/itf1788_census.py
@@ -50,3 +51,9 @@ for name, c in t.SKIPPED.items():
     sk.update(c)
 print('skipped statements', sum(sk.values()), 'ops', len(sk))
 print('skipped by op', dict(sk.most_common()))
+# M16b: the 1788 layer's pass (tests/itf1788/test_ieee1788.py), exact, with its own rows: the
+# adapter's under three categories only
+from tests.itf1788 import test_ieee1788 as layer  # noqa: E402
+
+print('layer pass rows (keys) by category', dict(Counter(category(r) for r in layer.ROWS.values())),
+      'total', len(layer.ROWS), 'vectors under a row', sum(1 for v in t.VECTORS if t.key(v) in layer.ROWS))
