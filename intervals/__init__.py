@@ -47,6 +47,11 @@ from intervals.autodiff import Dual
 from intervals.autodiff import derivative
 from intervals.solver import Root
 from intervals.solver import newton
+# M16: the solver stack's second part, several variables (H3)
+from intervals.autodiff import gradient
+from intervals.autodiff import jacobian
+from intervals.solver import RootBox
+from intervals.solver import solve
 
 EMPTY = MultiInterval()
 REALS = MultiInterval(-_math.inf, _math.inf)  # the affine extended reals, both infinities included
@@ -100,4 +105,9 @@ __all__ = [
     'derivative',
     'newton',
     'Root',
+    # M16: the solver stack's second part, several variables (H3)
+    'gradient',
+    'jacobian',
+    'solve',
+    'RootBox',
 ]
