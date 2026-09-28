@@ -269,6 +269,7 @@ _ALPHABET = '[] ,?0123456789.+-/_eEpPxXinfINFtyudUDcomdvrlaNT\t'
 @example('[-I  nf, 1.000 ]')  # :127
 @example('[1/0]')
 @example('0x1p')
+@example('[]')  # 1788's empty literal: not contiguous, found by the gate's random draw (2026-09-28)
 def test_any_text_is_an_interval_or_undefined(text):
     # an exponent of many digits is a big exact power (as in `Fraction('1e999999999')`): too slow here
     assume(not re.search(r'[eEpP][-+]?[0-9]{4}', text))
@@ -277,7 +278,7 @@ def test_any_text_is_an_interval_or_undefined(text):
     except UndefinedOperationError:
         return
     # one interval under the input rule: an end is open exactly when it is infinite
-    assert type(result) is MultiInterval and result.is_contiguous
+    assert type(result) is MultiInterval and (result.is_empty or result.is_contiguous)
     if not result.is_empty:
         assert (result.inf in result) == (result.inf != -INF) and (result.sup in result) == (result.sup != INF)
 

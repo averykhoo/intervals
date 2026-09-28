@@ -1088,7 +1088,21 @@ type, never an array of numbers, so interop is four rules and one refusal:
   `np.square(arr)` is `x * x` (looser than `np.square(A)`), and `arr == A` is False and `A in arr`
   False although `arr` holds `A` (identity: `==` is structural and does not broadcast).
   `np.round(A)` and `np.around(A)` are TypeErrors (not ufuncs: numpy's fallback looks for `rint`).
-  `np.frompyfunc(MultiInterval.asin, 1, 1)(arr)` or an operand of ours reaches the table
+  `np.frompyfunc(MultiInterval.asin, 1, 1)(arr)` or an operand of ours reaches the table.
+  numpy's own comparisons (inside its loops and functions) call `bool()` of a `TruthSet`, so they
+  answer where the comparison is certain and raise where it is not: `np.sign(np.array([M(1, 2)]))`
+  is `[1]` (numpy's number, not a set) and `np.minimum(np.array([M(0, 1)]), 2)` holds the element
+  itself, while `np.sign(np.array([M(0, 1)]))`, `np.minimum(np.array([M(0, 1)]), 0.5)` and
+  `np.clip(M(1, 2), 0, 1)` are ValueErrors (BOTH), `np.max`/`np.maximum` over an empty set a
+  ValueError (no truth value), and `np.isclose(M(2), 2)` a TypeError (`TruthSet & bool`). `out=None`
+  never reaches the hook (numpy drops it): `np.sin(A, out=None)` is `np.sin(A)`
+* **pandas** (3.0.6, probed 2026-09-28, not tested): a `Series` meets ours as an ndarray does, so
+  `pd.Series([1.0, 2.0]) + A` and `A + pd.Series(...)` are object Series, elementwise (a TypeError
+  before M16d), and `pd.Series([1.0]) < A` a Series of `TruthSet`s; pandas broadcasts `==` itself,
+  so `pd.Series([1.0]) == A` is a bool Series of `False`, as before M16d (not numpy's single
+  `False`). a Series or a DataFrame column holds sets as elements (`pd.Series([A, B]) + 1`,
+  `.sum()`, `np.sin(series)` run numpy's loops), and a numpy masked array keeps its mask
+  (`np.ma.masked_array([1.0, 2.0], mask=[0, 1]) + A` masks the second element)
 * **the array API standard and `__array_function__` are not built**: the standard is a namespace
   for arrays of fixed-size numbers, with elementwise `bool` comparisons and float special cases;
   ours are ragged sets with structural `==`, `TruthSet` comparisons and set images without nan.
@@ -1466,7 +1480,14 @@ build made, each the session's default, open for the owner (`HANDOFF.md` Q13; D2
 * **Q9 and Q10 answered by the layer, pending Q13 (c), (d)**: 1788's pair with its decoration is
   `ieee1788.mul_rev_to_pair` and the library's `mul_rev` stays one op, trv; the constructors' binary64
   run is the layer's pass, no class argument on the library's constructors. the adapter's 52
-  `DECORATION_ONLY` rows and its reasons are left as they are (true of the library)
+  `DECORATION_ONLY` rows and its reasons are left as they are (true of the library).
+  why the library's `mul_rev` stays trv rather than decorated as the division: in the library ±inf
+  are points, so where 0 is not in `b` the two sets differ (`mul_rev([1, inf], [inf])` is `(0,
+  inf]`, `[inf] / [1, inf]` is `[inf]`; measured 2026-09-27, re-checked 2026-09-28), and a
+  decoration copied from the division would claim com or dac for a set that is not the division's; a
+  multi-piece `b` gives more than two pieces, so a pair has no meaning on the core; and 1788
+  decorates its own `mulRev`, the hull of the same set, trv (`libieeep1788_rev.itl:988`), so one
+  library op cannot match both
 * **where 1788 and the library disagree, the layer answers 1788's way** (cancellation's "no answer",
   `meets`, attained infinities dropped), the library its own
 * **the sign of zero follows 1788 in the layer**: `inf` gives `-0.0` for a lower end of 0 and `sup`
