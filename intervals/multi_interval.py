@@ -12,6 +12,7 @@ so its results enclose the exact result. the rounding is a property of the type,
 import math
 from numbers import Integral
 from numbers import Real
+from typing import FrozenSet
 from typing import Iterable
 from typing import Iterator
 from typing import Set
@@ -636,6 +637,33 @@ class MultiInterval:
     def allen(self, other) -> Allen:
         """allen's relation between two contiguous MultiIntervals (ValueError otherwise)"""
         return relations.allen(self._cuts, self._coerce_or_raise(other)._cuts)
+
+    def allen_matrix(self, other) -> Tuple[Tuple[Allen, ...], ...]:
+        """
+        `allen()` of every pair of pieces, a row per piece of self and a column per piece of
+        other: `A.allen_matrix(B)[i][j] is A.pieces[i].allen(B.pieces[j])`. an empty operand has
+        no pairs, so no rows or empty rows
+
+        >>> A, B = MultiInterval.parse('[0, 1] | [3, 5]'), MultiInterval(1, 4)
+        >>> A.allen_matrix(B)  # [0, 1] and [1, 4] share the point 1: OVERLAPS, on cuts
+        ((<Allen.OVERLAPS: 'overlaps'>,), (<Allen.OVERLAPPED_BY: 'overlapped by'>,))
+        >>> A.allen_matrix(MultiInterval()), MultiInterval().allen_matrix(A)
+        (((), ()), ())
+        """
+        return relations.allen_matrix(self._cuts, self._coerce_or_raise(other)._cuts)
+
+    def allen_relations(self, other) -> FrozenSet[Allen]:
+        """
+        the relations holding between some piece of self and some piece of other: the entries of
+        `allen_matrix`, found in `O(n + m)` without building it; `frozenset()` if either is empty
+
+        >>> A = MultiInterval.parse('[0, 1] | [4, 5]')
+        >>> sorted(r.name for r in A.allen_relations(MultiInterval.parse('[2, 3] | [6, 7]')))
+        ['AFTER', 'BEFORE']
+        >>> A.allen_relations(MultiInterval())
+        frozenset()
+        """
+        return relations.allen_relations(self._cuts, self._coerce_or_raise(other)._cuts)
 
     # INTERVAL ORDERS (bool, on the ends; ieee 1788's less and strictLess)
 

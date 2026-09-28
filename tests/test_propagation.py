@@ -619,7 +619,8 @@ def test_methods_mirror_the_core():
 
 # M13g review: what 1788 asks of the interval part, so not on the wrapper (`.interval` first)
 NOT_ON_THE_WRAPPER = {
-    'adjoins', 'after', 'allen', 'before', 'contains', 'cuts', 'degenerate_points', 'eq_pointwise', 'from_cuts',
+    'adjoins', 'after', 'allen', 'allen_matrix', 'allen_relations', 'before', 'contains', 'cuts',
+    'degenerate_points', 'eq_pointwise', 'from_cuts',
     'from_pieces', 'inf', 'inf_closed', 'is_contiguous', 'is_degenerate', 'is_empty', 'is_finite', 'is_integral',
     'is_negative', 'is_non_negative', 'is_non_positive', 'is_positive', 'isdisjoint', 'issubset', 'issuperset',
     'mag', 'mid', 'mid_rad', 'mig', 'overlaps', 'parse', 'pieces', 'rad', 'size', 'sort_key', 'strictly_less',
