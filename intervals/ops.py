@@ -67,6 +67,7 @@ from intervals.rounding import float_cuts
 from intervals.rounding import has_finite_float
 from intervals.rounding import is_float
 from intervals.rounding import round_rational
+from intervals import backend
 
 
 # POINTWISE (None where the op has no value)
@@ -183,12 +184,19 @@ MIN = OpDescriptor('min', min, monotone=(1, 1), attained=_min_attained)
 MAX = OpDescriptor('max', max, monotone=(1, 1), attained=_max_attained)
 
 
+_FAST_OPS = ((ADD, 'add'), (SUB, 'sub'), (MUL, 'mul'), (DIV, 'div'), (RECIPROCAL, 'reciprocal'))
+
+
 def outward(desc: OpDescriptor) -> OpDescriptor:
     """
     the descriptor with a directed rounding hook: a float corner is evaluated exactly (each float as
     the Fraction it denotes) and rounded down for a result's low end, up for its high end. `fn` is
-    exact too, so attainment is decided on exact values: an end that rounding moved is open
+    exact too, so attainment is decided on exact values: an end that rounding moved is open. the five
+    arithmetic descriptors (keyed on the object, not its name) ask the backend for the double first
+    (`intervals._gmpy2.outward`), read at each call; any other, and a None, keeps the pure rounding
     """
+    fast_op = next((op for d, op in _FAST_OPS if d is desc), None)
+
     def exact(*args):
         # an infinite corner is exact already (the pointwise functions treat ±inf symbolically), and
         # evaluating it on the floats keeps a float operand's result float (`2.5 / inf` is 0.0)
@@ -198,6 +206,10 @@ def outward(desc: OpDescriptor) -> OpDescriptor:
 
     def rounding(direction):
         def rounded(*args):
+            fast = backend.fast
+            if fast is not None and fast_op is not None and (
+                    answer := fast.outward(fast_op, args, direction)) is not None:
+                return answer
             return round_rational(exact(*args), direction)
         return rounded
     return desc._replace(fn=exact, rounded=(rounding(DOWN), rounding(UP)))
