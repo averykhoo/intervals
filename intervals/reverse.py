@@ -79,6 +79,7 @@ MultiInterval.parse('{ [-inf] , [inf] }')
 """
 import math
 from fractions import Fraction
+from numbers import Integral
 from numbers import Real
 from typing import Callable
 from typing import NamedTuple
@@ -279,8 +280,9 @@ def pown_rev(c, n: int, x=_REALS) -> MultiInterval:
     >>> pown_rev(M.parse('[0, inf)'), -1)
     MultiInterval.parse('{ [-inf] , (0, inf] }')
     """
-    if isinstance(n, bool) or not isinstance(n, int):
+    if isinstance(n, bool) or not isinstance(n, Integral):
         raise TypeError(f'pown_rev: the exponent must be an int, got {type(n).__name__}')
+    n = int(n)  # numpy's ints too
     if n == 0:
         return _reverse('pown_rev', c, x, lambda cuts, outward: kernel.REALS if kernel.contains_point(cuts, 1) else ())
     if n > 0:  # t ** n rises from 0 to inf on [0, inf]

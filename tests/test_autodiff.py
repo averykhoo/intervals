@@ -325,6 +325,33 @@ def test_pow_zero_is_the_constant_one():
     assert (y.value, y.derivative) == (MultiInterval(1), MultiInterval(0))
 
 
+@pytest.mark.parametrize('u', [2, 1e300, 1e-300])
+@pytest.mark.parametrize('r', [0.1, 1e-20, 0.3])
+def test_pow_number_exponent_derivative_encloses(r, u):
+    """
+    `(u ** r)' = r u ** (r - 1)`, outward: M15 computed `r - 1` in r's own arithmetic, a float
+    rounded to nearest, so the outward class's derivative missed the true value (6 of these 9 on
+    2026-09-28, python floats; found by the M16d critique). a number exponent is a point set first
+    """
+    d = (Dual.variable(O(u)) ** r).derivative
+    old = ctx.prec
+    try:
+        ctx.prec = 400
+        verdict = _inside(d, _arb(r) * (_arb(u).log() * (_arb(r) - 1)).exp())
+    finally:
+        ctx.prec = old
+    assert verdict is True, f'{r} {u ** (r - 1)!r}: {d}'
+
+
+@pytest.mark.parametrize('r', [2.0 ** 60, 2 ** 60, Fraction(2 ** 60)])
+def test_pow_integral_exponent_derivative_is_exact(r):
+    """an integral exponent n is pown and `n - 1` is exact int arithmetic: the float `2.0 ** 60 - 1`
+    rounds to `2.0 ** 60`, which gave `(-1) ** (2 ** 60)`, the derivative's sign flipped (M15, found
+    2026-09-28). the base is -1 because `O(2) ** 2 ** 60` is an exact power too large to compute"""
+    y = Dual.variable(O(-1)) ** r
+    assert y.value == O(1) and y.derivative == O(-2 ** 60)
+
+
 def test_constants_mix_in():
     x = Dual.variable(MultiInterval(1, 2))
     y = 2 - Fraction(1, 2) * x + MultiInterval(1)

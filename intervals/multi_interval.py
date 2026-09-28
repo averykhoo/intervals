@@ -22,6 +22,7 @@ from intervals import functions
 from intervals import kernel
 from intervals import modulo
 from intervals import numeric
+from intervals import numpy_compat
 from intervals import ops
 from intervals import relations
 from intervals import steps
@@ -50,9 +51,10 @@ class MultiInterval:
     _cuts: Cuts
     # float results round to nearest here and outward in OutwardMultiInterval
     _outward = False
-    # numpy's opt-out, so `np.float64(2) * A` runs the reflected dunders instead of treating A as
-    # a sequence (this is not the deferred numpy compat)
-    __array_ufunc__ = None
+    # numpy interop (M16d): ufuncs are python's operators or the methods of the same set, and an
+    # array holds a MultiInterval as one element, never as the sequence of its pieces
+    __array_ufunc__ = numpy_compat.array_ufunc
+    __array__ = numpy_compat.array
 
     # CONSTRUCTION
 
