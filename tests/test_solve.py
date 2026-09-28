@@ -367,6 +367,10 @@ def test_krawczyk_proves_only_inside_the_interior():
     # inside its own interior only if its open ends are kept
     open_box = (O(0, 1, start_closed=False, end_closed=False), O(0, 1))
     assert not solver._krawczyk(open_box, ((O(0), O(0)), (O(0), O(1))), (O(0), O(0)), m)
+    # m off the midpoint, so m - b and m + b are not mirror images: the sign of b shows (review S1)
+    q = (Q(1, 4), Q(1, 4))
+    assert solver._krawczyk(box, I2, (O(Q(-1, 2)), O(0)), q)       # the zero (3/4, 1/4): inside
+    assert not solver._krawczyk(box, I2, (O(Q(1, 2)), O(0)), q)    # the zero (-1/4, 1/4): outside
 
 
 def test_gauss_seidel_step():
@@ -401,6 +405,8 @@ def test_precondition_falls_back_to_the_identity():
     assert Mx == J and b == (O(1), O(2))
     Mx, b = solver._precondition(((O(2), O(0)), (O(0), O(4))), (O(1), O(2)))
     assert Mx == I2 and b == (O(0.5), O(0.5))
+    # an exact 0 of Y skips its term: 0 * [inf] is empty (D2), the real product 0 (review S6)
+    assert solver._combine((0.0, 1.0), (O(math.inf), O(2))) == O(2)
 
 
 def test_simplest_between():
@@ -488,6 +494,31 @@ def test_a_split_box_is_unproved(monkeypatch):
     assert len(roots) == 2 and not any(r.unique for r in roots), roots
 
 
+def test_a_bisected_box_is_unproved(monkeypatch):
+    """a proof is for the box, not for each half of a bisection (review S3). krawczyk is made to
+    claim the first box and gauss-seidel to narrow it to [0.5, 20] x [-1, 1], wide in x, so the next
+    pop bisects it; with max_steps=2 both halves are output, unproved"""
+    krawczyk, gauss_seidel = solver._krawczyk, solver._gauss_seidel
+    first = {'krawczyk': True, 'gauss_seidel': True}
+
+    def claim_once(*args):
+        if first['krawczyk']:
+            first['krawczyk'] = False
+            return True
+        return krawczyk(*args)
+
+    def widen_once(box, *args):
+        if first['gauss_seidel']:
+            first['gauss_seidel'] = False
+            return ((O(0.5, 20), box[1]),)
+        return gauss_seidel(box, *args)
+    monkeypatch.setattr(solver, '_krawczyk', claim_once)
+    monkeypatch.setattr(solver, '_gauss_seidel', widen_once)
+    roots = solve(lambda x, y: (x - 1, y), [M(-2, 20), M(-1, 1)], max_steps=2)
+    assert len(roots) == 2 and not any(r.unique for r in roots), roots
+    assert roots[0].box[0] | roots[1].box[0] == O(0.5, 20) and not roots[0].box[0] & roots[1].box[0], roots
+
+
 def test_the_simplest_points_rest_is_its_own_region():
     """the rest of a box around an exact zero p goes back with regions that exclude p (every zero
     of a region is in its box), each region holding its box, so no inflation can reach p"""
@@ -499,6 +530,9 @@ def test_the_simplest_points_rest_is_its_own_region():
     solver._finish_box(F, box, False, region, roots, work, 0)
     assert roots == [RootBox((O(Q(1, 2)), O(Q(1, 2))), True)]
     assert len(work) == 4
+    # each rest box's closed hull holds p, the simplest of a larger set, so p is its simplest point,
+    # which it does not hold: no second point is drawn from a rest box (review F3)
+    assert all(solver._simplest_point(rest) is None for rest, *_ in work)
     for rest, unique, past, turn, r in work:
         assert not unique and all(c.issubset(h) for c, h in zip(rest, r)), (rest, r)
         assert not all(Q(1, 2) in h for h in r), r
@@ -510,6 +544,7 @@ def test_choose_falls_through_to_the_other_components():
     the simplest point skips the unbounded x (N2)"""
     roots = solve(lambda x, y: (1 / x, y - 0.5), [M(MAX, math.inf, start_closed=False), M(-1, 1)], tol=1e-3)
     assert roots and all(r.box[1].wid() <= 1e-3 and 0.5 in r.box[1] for r in roots), roots
+    assert not any(r.unique for r in roots), roots   # 1 / x has no zero: an unbounded box is never proved (review S2)
 
 
 # N == 1, THE INPUT, THE OUTPUT
@@ -522,7 +557,8 @@ def test_choose_falls_through_to_the_other_components():
 ])
 def test_n_equals_one_is_newton(f, x):
     """box for box, and call for call (the n-dimensional loop at n == 1 gives the same boxes on
-    these, at about 1.5x the calls: 49 against 32 for x ** 2 - 2, 2026-09-28)"""
+    these, at 1.4x to 2x the calls: 49 against 32, 145 against 93, 32 against 16 and 47 against 33,
+    in this order, 2026-09-28)"""
     F, g = Counted(lambda t: [f(t)]), Counted(f)
     assert solve(F, [x]) == tuple(RootBox((r.interval,), r.unique) for r in newton(g, x))
     assert F.calls == g.calls
@@ -556,11 +592,19 @@ def test_constant_and_continuum_systems():
         assert all(all(c.is_degenerate for c in r.box) for r in roots if r.unique)
 
 
-def test_overflow_box():
+def test_overflow_box(monkeypatch):
     """exp over [700, 720] overflows to an open end at inf, dac: the step runs with an infinite end
-    in J, and the zero (709.5, e ** 709.5) stays enclosed (critique B4)"""
+    in J (a spy on `_precondition` sees one, review spec F5), and the zero (709.5, e ** 709.5)
+    stays enclosed (critique B4)"""
+    precondition, unbounded = solver._precondition, []
+
+    def spy(J, fm):
+        unbounded.append(any(not e.is_finite for row in J for e in row))
+        return precondition(J, fm)
+    monkeypatch.setattr(solver, '_precondition', spy)
     xs = [M(700, 720), M(1e307, 1.7e308)]
     roots = solve(lambda x, y: (x.exp() - y, x - 709.5), xs)
+    assert any(unbounded), unbounded
     old = ctx.prec
     ctx.prec = 200
     try:
@@ -580,8 +624,23 @@ def test_degenerate_input_component():
     assert RootBox((O(Q(1, 2)), O(Q(1, 4))), True) in roots
 
 
+def test_ends_beyond_the_doubles():
+    """exact int ends past the doubles: the point of a component is its exact midpoint, since no
+    float is inside (review F2: `_point_in`'s float(mid) raised OverflowError, in `newton` too).
+    n == 2 on a budget: the float preconditioner overflows `b` there, so the step is idle and the
+    unbudgeted solve bisects for 13669 calls (the record, M16a)"""
+    big = M(10 ** 400, 10 ** 401)
+    z = 3 * 10 ** 400
+    roots = solve(lambda x, y: (x - z, y - x), [big, big], max_steps=10)
+    assert any(z in r.box[0] and z in r.box[1] for r in roots), roots
+    assert solve(lambda x: [x - z], [big]) == (RootBox((O(z),), True),)
+
+
 def test_arguments_are_checked():
     F = lambda x, y: (x, y)  # noqa: E731
+    # review S5: solve's own wording (MultiInterval's constructor refuses a bool too, in its own)
+    with pytest.raises(TypeError, match='or a number, got bool'):
+        solve(F, [True, M(0, 1)])
     with pytest.raises(TypeError, match='MultiInterval or a number'):
         solve(F, [DecoratedInterval(M(0, 1)), M(0, 1)])
     with pytest.raises(TypeError, match='MultiInterval or a number'):

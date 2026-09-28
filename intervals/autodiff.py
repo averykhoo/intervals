@@ -384,10 +384,12 @@ def gradient(f, xs) -> tuple:
     arguments and returns a `Dual` or a number (a constant, whose partials are `[0]`). at n == 1 it
     is `(derivative(f, x),)`, the same pass
 
-    decorated, the entries carry the C¹ proof of `derivative`, now in n variables: an op is
-    differentiable exactly where its chain rule is defined and continuous, an open set, so a value
-    and every partial dac or better say every intermediate is C¹ on an open set holding the box, and
-    so is `f` (the multivariate chain rule is the same products)
+    decorated, the entries carry the C¹ proof of `derivative`, now in n variables and relative to
+    the box: a value and every partial dac or better say every op, and every op of its chain rule's
+    formula, was defined and continuous on the box, so `f` is C¹ on the box relative to the box (the
+    multivariate chain rule is the same products). that is what the mean value theorem on the box
+    needs, one-sided at its faces; it says nothing outside the box (`x ** 1.5` over `[0, 1]` is com,
+    with no point below 0 in its domain, and `abs` over the point `[0]` has a dac derivative)
 
     >>> from intervals import MultiInterval as M
     >>> [str(d) for d in gradient(lambda x, y: x * y.sin(), [M(1, 2), 0])]

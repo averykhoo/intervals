@@ -201,10 +201,14 @@ def _value_at(f, point) -> MultiInterval:
 def _point_in(piece: MultiInterval):
     """the piece's midpoint (of its hull, the piece being connected), as a float if one is in the
     piece, since exact midpoints make the fractions grow at every step; None if it is not in the
-    piece (a half-bounded piece's midpoint is ±max float, or a piece with no float inside)"""
+    piece (a half-bounded piece's midpoint is ±max float, or a piece with no float inside). an
+    exact midpoint beyond the doubles (`[10 ** 400, 10 ** 401]`) is returned exact"""
     mid = piece.mid()
     if not isinstance(mid, float):
-        rounded = float(mid)
+        try:
+            rounded = float(mid)
+        except OverflowError:
+            rounded = math.inf
         if math.isfinite(rounded) and rounded in piece:
             return rounded
     return mid if mid in piece else None
@@ -296,7 +300,9 @@ def solve(F, xs, *, tol=1e-10, max_steps=10_000) -> Tuple[RootBox, ...]:
 
     known limits: a zero on a split face that is not a simple rational in every coordinate, or a
     singular zero, is enclosed by unproved boxes of width `tol`, often with unproved slivers beside
-    it (sound, not proved)
+    it (sound, not proved). a continuum of zeros is bisected to `tol` everywhere, each box of it
+    giving its simplest point and up to 2n rest boxes. an exact end beyond the doubles makes the
+    float preconditioner overflow `b`, so such a box is bisected, not stepped
 
     >>> from intervals import MultiInterval as M
     >>> for root in solve(lambda x, y: (x ** 2 + y ** 2 - 1, x - y), [M(-10, 10), M(-10, 10)]):
@@ -359,7 +365,7 @@ def solve(F, xs, *, tol=1e-10, max_steps=10_000) -> Tuple[RootBox, ...]:
                             roots.append(RootBox(narrowed, True))
                         continue
                     width = _width(narrowed)
-                    if width <= _width(box) / 2 and (width > tol or past < _PAST_TOL):
+                    if 2 * width <= _width(box) and (width > tol or past < _PAST_TOL):
                         work.append((narrowed, False, past + (width <= tol), turn, region))
                         continue
                     box = narrowed
@@ -477,8 +483,8 @@ def _inverse(A):
 
 
 def _combine(row, sets):
-    """Σ_k row[k] * sets[k], a term with an exact 0 coefficient skipped (0 times an entry holding
-    ±inf would be D2's corner; the real product is 0)"""
+    """Σ_k row[k] * sets[k], a term with an exact 0 coefficient skipped: 0 times an entry `[±inf]`
+    is empty (D2's corner), where the real product is 0 (`0 * (a, inf)` is already `[0]`)"""
     total = OutwardMultiInterval(0)
     for y, s in zip(row, sets):
         if y != 0:

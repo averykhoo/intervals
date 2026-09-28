@@ -20,9 +20,12 @@ below). ids: M16a, D20, Q12 only.
   positional arguments and returns a `Dual` or a number (a constant: its partials `[0]`); `F` returns
   a list or a tuple of m of them, and `jacobian(F, xs)[i][j]` is `∂F_i/∂x_j`, rows as tuples, no
   matrix type. at n == 1 `gradient(f, [x]) == (derivative(f, x),)`, the same pass. decorated, the
-  entries carry the C¹ proof in n variables: each op is differentiable exactly where its chain rule
-  is defined and continuous, an open set, so a value and every partial dac or better say every
-  intermediate, and so `F`, is C¹ on an open set holding the box
+  entries carry the C¹ proof in n variables, relative to the box: a value and every partial dac or
+  better say every op and every op of its chain rule's formula was defined and continuous on the
+  box, so `F` is C¹ on the box relative to the box, which is what the mean value theorem on the box
+  needs (one-sided at its faces). not on an open set holding the box: `x ** 1.5` over `[0, 1]` is com
+  with nothing below 0 in its domain, and `abs` over the point `[0]` has a dac derivative (review
+  F1)
 * **`solve(F, xs, *, tol=1e-10, max_steps=10_000)`** (`intervals/solver.py`, below `newton`) returns
   `RootBox(box, unique)`s (`box` a tuple of n connected `OutwardMultiInterval`s), pairwise disjoint in
   some coordinate, inside `xs`, sorted by the components' `sort_key`s, and every zero of `F` in `xs`
@@ -73,7 +76,13 @@ below). ids: M16a, D20, Q12 only.
 * known limits: a zero on a split face that is not a simple rational in every coordinate, and a
   singular zero, end as unproved boxes of width `tol`, often with unproved slivers beside them
   (sound, not proved). the cost is the library's arithmetic: a box costs n + 2 calls of `F` (the
-  plain call, n decorated passes, the point), plus up to n + 2 when it is output unproved
+  plain call, n decorated passes, the point), plus up to n + 2 when it is output unproved. a
+  continuum of zeros is bisected to `tol` everywhere, and each of its boxes gives its simplest point
+  and up to 2n rest boxes, so the output is up to 2n + 1 times the boxes of width `tol` (not a
+  cascade: a rest box's closed hull holds the point, which is then its own simplest point and not
+  in it). an exact end beyond the doubles (`[10 ** 400, 10 ** 401]`) makes the float
+  preconditioner overflow `b` to `(1.8e308, inf)`, so such a box is bisected, not stepped (review
+  F2, F3; numbers in M16a's record)
 * **the direction tag stays under "later", now for n variables**: the step runs only on a box whose
   components are all bounded, where `F` is dac on the closed hull, so every real value and partial
   over it is bounded. the enclosures may still hold an open end at ±inf by overflow (`exp` over
@@ -138,13 +147,17 @@ build's defaults, open for the owner (Q12; D20):
   `_combine`, `_precondition`, `_krawczyk`, `_gauss_seidel`, `_width`, `_wide`, `_choose`,
   `_simplest_between`, `_simplest_point`, `_finish_box`, `_regions`, `_inflate`, `_rounded`,
   `_inflated_unique`, appended below `_bisect`; M15's functions reused unchanged (`newton`,
-  `_point_in`, `_magnitude_split`, `_bisect`, `_PAST_TOL`); the module docstring unchanged
+  `_magnitude_split`, `_bisect`, `_PAST_TOL`) but `_point_in`, whose `float(mid)` now falls back to
+  the exact midpoint where it overflows (review F2, which `newton` shared); the module docstring
+  unchanged
 * `intervals/__init__.py`: the four names imported and in `__all__`, under "M16: the solver stack's
   second part, several variables (H3)"
 * exit: the jacobian against arb (soundness at points of boxes, sharpness at a point) and equal to
   `derivative` at n == 1; `solve` sound and its uniqueness claims true on constructed systems with
-  every real zero known (rational and irrational, C¹ and not), under any `tol` and `max_steps`; the
-  C¹ gate shown necessary (the kink and a coupled kink); simple zeros proved, irrational ones by
+  every real zero known (rational and irrational), under any `tol` and `max_steps`, and with factors
+  not C¹ under a budget (`max_steps` up to 30); the C¹ gate shown necessary by examples (the pole,
+  the kink, a coupled kink, a jump: the random factors not C¹ do not detect it, review spec F1);
+  simple zeros proved, irrational ones by
   krawczyk (pinned coordinates included), simple rational ones as exact points; n == 1 equal to
   `newton`; the budgets pinned; the gate green; every new property sabotaged once and seen red
 
@@ -164,9 +177,11 @@ build's defaults, open for the owner (Q12; D20):
     `[pinned, then split]` (a gauss-seidel split: `(x - 1/4, x ** 2 + y ** 2 - 4)`, whose first step
     pins x in row 0 and splits y in row 1; the `- 1` variant does not split, row 1's `c` holding 0)
   * **the n-dimensional loop at n == 1 gives `newton`'s boxes** on all four functions of
-    `::test_n_equals_one_is_newton` (sabotage: green), at about 1.5x the calls (49 against 32 for
-    `x ** 2 - 2` on `[-10, 10]`, 145 against 93 for `sin`, 2026-09-28). the delegation is pinned by
-    the call counts as well as the boxes
+    `::test_n_equals_one_is_newton` (sabotage: green), at 1.4x to 2x the calls (49 against 32 for
+    `x ** 2 - 2` on `[-10, 10]`, 145 against 93 for `sin`, 32 against 16 for the kink, 47 against 33
+    for the pole; 2026-09-28, the review's `.scratch/h3b/review/nd-solver-spec/n1.py`, which execs
+    `solve` with `if n == 1:` made `if False:`; the first two pairs were quoted as "about 1.5x" until
+    review spec F4). the delegation is pinned by the call counts as well as the boxes
   * **cost** (2026-09-28, five streams sharing the laptop; `.scratch` timing scripts calling
     `tests/test_solve.py::system` and `::Counted`): unbudgeted constructed systems with two factors
     per coordinate have a tail (one of 11 draws: 4677 calls, 201 s); factors not C¹ at their zeros
@@ -175,7 +190,9 @@ build's defaults, open for the owner (Q12; D20):
     system with two zeros did not finish in 120 s (1464 calls in 66 s at `max_steps=400`). so the
     unbudgeted random test draws one factor per coordinate (its `@example`s keep two), the factors not
     C¹ are drawn only in the budgeted test, and `::test_three_variables` has one zero (0.4 s); the
-    sphere is the n = 3 system with two zeros
+    sphere is the n = 3 system with two zeros. so the `abs` and `cbrt` factors check soundness under
+    a budget only: they do not detect the C¹ gate removed (review spec F1: forced off, the budgeted
+    test and 25 draws at `max_steps` 100 to 400 stayed green); the gate is pinned by the examples
   * the gate found `tests/test_applicator.py::test_package_exports_unchanged` red: it pins
     `intervals.__all__`; the four names are added there
   * a split of a box already proved unique needs a step whose new preconditioner leaves 0 in a
@@ -214,20 +231,25 @@ build's defaults, open for the owner (Q12; D20):
     (the box case of critique B3), `::test_a_point_is_unique_only_when_f_is_exactly_zero`,
     `::test_inflation_is_clipped_to_the_region`, `::test_inflation_takes_its_own_jacobian` (a spy
     `F`), `::test_inflation_needs_the_c1_gate`, `::test_a_split_box_is_unproved`,
+    `::test_a_bisected_box_is_unproved` (review S3),
     `::test_the_simplest_points_rest_is_its_own_region`,
     `::test_choose_falls_through_to_the_other_components` (critique N1, N2);
     `::test_n_equals_one_is_newton`, `::test_multi_piece_input`, `::test_unbounded_input`,
     `::test_constant_and_continuum_systems`, `::test_overflow_box` (critique B4),
-    `::test_degenerate_input_component`, `::test_arguments_are_checked` (a decorated `xs` refused,
+    `::test_degenerate_input_component`, `::test_ends_beyond_the_doubles` (review F2),
+    `::test_arguments_are_checked` (a decorated `xs` refused,
     one wording for a wrong-length `F` at n == 1 and n == 2, critique N7), `::test_warnings_stay_inside`,
     `::test_results_are_outward`, `::test_evaluation_budgets`
 * **measured 2026-09-28** (five streams sharing the laptop):
   * `tests/test_gradient.py` 15 tests in 0.9 s; `tests/test_solve.py` 52 tests in 134 s
-    (`::test_every_zero_is_enclosed` 104 s of it); command
+    (`::test_every_zero_is_enclosed` 104 s of it); after the review (its fixes in the tree):
+    15 tests in 1.0 s and 54 tests in 66 s (`::test_every_zero_is_enclosed` 36 s; the laptop less
+    loaded, not a speed-up); command
     `C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q tests/test_solve.py --durations=8`
     (and the same for `tests/test_gradient.py`), `.hypothesis` cleared first
   * calls of `F` (every kind: plain, decorated, point), `tests/test_solve.py::_calls` with
-    `max_steps=20000`, against the bounds of `::test_evaluation_budgets`:
+    `max_steps=20000`, against the bounds of `::test_evaluation_budgets` (the five bounded rows
+    re-measured after the review, 2026-09-28: unchanged):
 
 | system | box | calls | bound | the break it catches |
 |---|---|---|---|---|
@@ -250,6 +272,13 @@ build's defaults, open for the owner (Q12; D20):
     (alphabetical): 2361 passed in 192.3 s; the other 13: 1460 passed in 245.3 s; `tests/oracles.py`
     (its doctests): 3 passed in 0.2 s. sum 4158 passed in 542 s. the whole tree collects 22404 in
     one process (test basenames unique)
+  * the gate after the review, from the worktree root, on the tree committed (2026-09-28, five
+    streams sharing the laptop): `tests/itf1788`: 18246 passed in 48.8 s; the rest (4160 collected)
+    in three calls, each with `--ignore=tests/itf1788` and explicit paths: the four solver test
+    files, `intervals` and `README.md`: 336 passed in 115.6 s; the first 14 other test files
+    (alphabetical): 2361 passed in 251.9 s; the other 13 and `tests/oracles.py`: 1463 passed in
+    292.7 s. sum 4160 passed in 660 s. the whole tree collects 22406 in one process
+    (`python -m pytest --collect-only -q`; basenames unique)
 * **sabotage** (a throwaway harness, M15's shape: each break alone, the one replacement matching
   exactly once, `.hypothesis` cleared, `tests/test_gradient.py`, `tests/test_solve.py`,
   `tests/test_solver.py`, `tests/test_autodiff.py` and the two modules' doctests with `-x` and a
@@ -307,14 +336,106 @@ build's defaults, open for the owner (Q12; D20):
 | the simplest point's rest keeps the whole region | green | red: `tests/test_solve.py::test_the_simplest_points_rest_is_its_own_region` |
 | `_choose`: no fall-through past unsplittable wide components (critique N1) | red | red: `tests/test_solve.py::test_choose_falls_through_to_the_other_components` |
 | simplest point on an unbounded component (critique N2) | red | red: `tests/test_solve.py::test_choose_falls_through_to_the_other_components` |
+| krawczyk `m + b` (review S1) | green (the reviewer's run) | red: `tests/test_solve.py::test_krawczyk_proves_only_inside_the_interior` |
+| the inflation of an unbounded box claims it (review S2) | green (the reviewer's run) | red: `tests/test_solve.py::test_choose_falls_through_to_the_other_components` |
+| a bisected box keeps unique (review S3) | green (the reviewer's run) | red: `tests/test_solve.py::test_a_bisected_box_is_unproved` |
+| the pass-length check removed (review S4, spec F2) | green (the reviewer's run) | red: `tests/test_gradient.py::test_arguments` |
+| `solve` takes a bool as a number (review S5) | green (the reviewer's run, and ours with `match='got bool'`) | red: `tests/test_solve.py::test_arguments_are_checked` |
+| `gradient` takes a bool as a number (review S5) | green (the reviewer's run, and ours with `match='got bool'`) | red: `tests/test_gradient.py::test_arguments` |
+| `_combine` multiplies by an exact 0 (review S6) | green (the reviewer's run) | red: `tests/test_solve.py::test_precondition_falls_back_to_the_identity` |
+| the step skips a `J` with an infinite end (review spec F5) | not run before | red: `tests/test_solve.py::test_overflow_box` |
+| the simplest point not checked inside its component (review F3's claim) | red (the reviewer's run, by `::test_every_zero_is_enclosed`) | red: `tests/test_solve.py::test_the_simplest_points_rest_is_its_own_region` |
+| `_point_in`'s `float(mid)` unguarded (review F2) | red (the crash itself) | red: `tests/test_solve.py::test_ends_beyond_the_doubles` |
+| `solve`'s width halved by float division (review F2) | red (the next crash) | red: `tests/test_solve.py::test_ends_beyond_the_doubles` |
 
-  47 breaks, 4 green at first, all red in the final runs. against the design's 36-row plan: its
+  47 breaks, 4 green at first, all red in the final runs; then the review's 11 (the rows from
+  "krawczyk `m + b`" on; "first run" is the reviewer's harness over the stream's tests, or the
+  crash before the fix; the final run is the closing test alone, `.scratch/fix/sab.py`,
+  2026-09-28): 7 green at first and 1 not run before; 58 breaks in all, all red in the final runs. against the design's 36-row plan: its
   rows 1 and 3 are one break here ("a constant coordinate seeded"), row 1's place taken by the
   transposed jacobian; the rows for critique B1, B2, B3, N1, N2 and for the regions are new
 * **the direction tag, not built**: the argument is in "design" above, corrected per critique B4 (an
   enclosure may hold an open end at inf by overflow, which keeps every real point; no degenerate
   `[±inf]` arises from a finite real), with the overflow box as a test (`::test_overflow_box`:
   `(exp x - y, x - 709.5)` over `[700, 720] × [1e307, 1.7e308]`, the zero enclosed)
+
+## review
+
+(2026-09-28, three read-only reviewers over `c8c9e08`, lenses soundness, sabotage-audit and
+spec/regression; each finding reproduced on `c8c9e08` before any change, by
+`.scratch/fix/repro.py` in the worktree (gitignored) or by the red run of its closing test; ids are
+the reviewers', the soundness and spec lenses both using F1 to F3). **no wrong answer in the
+solver**: every finding is a false claim in the text, a crash, a cost, or a property the tests did
+not pin. found and fixed:
+
+* **soundness F1 (blocking, a false claim)**: `autodiff.py::gradient`'s docstring and "design" above
+  said dac or better makes `F` C¹ "on an open set holding the box". decorations are relative to the
+  box: `gradient(lambda x, y: x ** 1.5 + y, [D(O(0, 1)), D(O(0, 1))])` is `[0.0, 1.5]_com
+  [1.0]_com` with no point below 0 in the domain, and `abs(Dual.variable(D(O(0))))` is `[0]_com d
+  [0]_dac`. both texts now say C¹ on the box relative to the box, which is what the mean value
+  theorem on `H` needs (one-sided at its faces); the solver's argument never used an open set, so no
+  answer changes
+* **soundness F2 (minor, a crash, shared with `newton` at `04946af`)**: `solve(lambda x, y: (x - 3 *
+  10 ** 400, y - x), [M(10 ** 400, 10 ** 401)] * 2)` and `newton(lambda x: x - 3 * 10 ** 400, M(10
+  ** 400, 10 ** 401))` raised `OverflowError` in `solver.py::_point_in`'s `float(mid)`. it now falls
+  back to the exact midpoint there; the next crash on the same input, `solve`'s `width <=
+  _width(box) / 2` (int true division), is now `2 * width <= _width(box)`. pinned by
+  `tests/test_solve.py::test_ends_beyond_the_doubles` (red before: `OverflowError`), n == 2 on a
+  budget (`max_steps=10`) since the unbudgeted solve costs 13669 calls, 27 to 46 s (2026-09-28, loaded
+  laptop; it ends with the exact point, unique): the float `Y` overflows `b` to `(1.8e308, inf)`, so
+  the step is idle and the box is bisected. recorded under known limits. `newton`'s own `width <=
+  piece.wid() / 2` is left as M15 wrote it (still owed)
+* **soundness F3 (minor, a cost)**: `solve(lambda x, y: (0, 0), [M(0, 1)] * 2, tol=1e-2)` returns
+  8056 boxes. measured (2026-09-28, `.scratch/fix/f3.py`): 8056 is `max_steps=10_000` cutting the
+  bisection short; with `max_steps=10 ** 6` it is 64720 boxes (12996 unique points), 492580 calls,
+  568 s; `tol` 0.25, 0.1, 0.05 give 34, 688, 3312 boxes. **the cascade the finding describes does not
+  happen**: a rest box's closed hull holds the point, the simplest rational of a larger set, so the
+  point is the rest box's simplest point too, and not inside it: `_simplest_point` is None there and
+  no second point is drawn. the output is at most 2n + 1 times the boxes of width `tol`, which a
+  continuum needs anyway. so the suggested fix (skip the point on rest boxes) would save no call of
+  `F`; not built. recorded under known limits, and the no-cascade claim pinned in
+  `tests/test_solve.py::test_the_simplest_points_rest_is_its_own_region`
+* **sabotage S1 (blocking)**: krawczyk's `m - b` made `m + b` stayed green: every unit case had `m`
+  at the midpoint, where the two mirror. pinned in
+  `tests/test_solve.py::test_krawczyk_proves_only_inside_the_interior` with `m = (1/4, 1/4)`: `b =
+  (-1/2, 0)` proves the zero `(3/4, 1/4)`, `b = (1/2, 0)` does not claim `(-1/4, 1/4)`
+* **sabotage S2 (blocking)**: `_inflated_unique` returning True where the inflation is None
+  stayed green: `tests/test_solve.py::test_choose_falls_through_to_the_other_components` now asserts
+  that no root of `(1 / x, y - 0.5)` over `(MAX, inf] × [-1, 1]` is unique (as built: one root,
+  unproved)
+* **sabotage S3 (blocking)**: a bisected box keeping its `unique` flag stayed green: the new
+  `tests/test_solve.py::test_a_bisected_box_is_unproved` makes `_krawczyk` claim the first box and
+  `_gauss_seidel` narrow it to `[0.5, 20] × [-1, 1]` (wide in x), which the next pop bisects; with
+  `max_steps=2` both halves are output unproved
+* **sabotage S4 and spec F2 (minor, one finding)**: `_passes`'s "F returned sequences of different
+  lengths" had no test: `tests/test_gradient.py::test_arguments` now calls `jacobian` with an `F`
+  of two outputs on pass 0 and one on pass 1 (under the break: `IndexError`)
+* **sabotage S5 (minor)**: the bool refusals in `solver.py::_input_box` and `autodiff.py::_box`
+  dropped stayed green. the reviewer's closing `match='got bool'` stays green too, since
+  `MultiInterval(True)` itself raises `TypeError: expected a real number, got bool: True`: the
+  break changes the wording, not the refusal. the tests (`::test_arguments_are_checked`,
+  `tests/test_gradient.py::test_arguments`) pin each function's own wording, `match='or a number,
+  got bool'`
+* **sabotage S6 (minor)**: `_combine`'s exact-0 skip made unconditional stayed green: `0.0 * (1,
+  inf)` is already `[0]`, and only `0 * [inf]` is `{}`. pinned in
+  `tests/test_solve.py::test_precondition_falls_back_to_the_identity` (`_combine((0.0, 1.0),
+  (O(inf), O(2))) == O(2)`), and the docstring narrowed to an entry `[±inf]`
+* **spec F1 (minor, an overstated exit)**: the random oracle's `abs` and `cbrt` factors run only
+  under a budget and do not detect the C¹ gate removed. the exit line and the cost bullet above now
+  say so; the gate stays pinned by the pole, kink, coupled kink and jump examples (the sabotage
+  table)
+* **spec F3 (minor)**: the README's package-layout line was missing from "readme"; added there
+* **spec F4 (minor, a number)**: "about 1.5x the calls" at n == 1 held for two of the four
+  functions; re-measured 2026-09-28 (49/32, 145/93, 32/16, 47/33), now "1.4x to 2x" with all four,
+  in the record and in `tests/test_solve.py::test_n_equals_one_is_newton`'s docstring
+* **spec F5 (minor, an unpinned docstring)**: `tests/test_solve.py::test_overflow_box` claimed the
+  step runs with an infinite end in `J` but asserted only the enclosure; a spy on
+  `solver._precondition` now asserts that some `J` it sees has one (red when the step skips such a
+  `J`)
+
+sabotage of the review's fixes: `.scratch/fix/sab.py` in the worktree (a throwaway harness, each
+break alone, its closing test run alone with `-x`, `.hypothesis` cleared, the file restored and
+compared; 2026-09-28). the rows are in the table above, from "krawczyk `m + b`" on
 
 ## readme
 
@@ -339,6 +460,10 @@ and a bullet for "what it does", after "interval newton (M15)":
   converged box, once more on the box inflated within the part of the input it stands for; a zero at
   a simple rational is output as that exact point. the step runs only where the decorations prove
   `F` C¹ on the box
+
+and in the package layout (README.md, the `intervals/` line; review spec F3): `autodiff` (`Dual`)
+becomes `autodiff` (`Dual`, `gradient`, `jacobian`), and `solver` (`newton`) becomes `solver`
+(`newton`, `solve`, `RootBox`)
 
 ## Q12
 
@@ -372,4 +497,13 @@ and a bullet for "what it does", after "interval newton (M15)":
 * the natural path to a split of a box already proved unique was not found; the rule is pinned by a
   monkeypatched `_krawczyk` only
 * sabotage rows red in the first run were not re-run after the four closing tests were added (those
-  tests only add red paths)
+  tests only add red paths), nor after the review's closing tests (the same reason)
+* `newton`'s `width <= piece.wid() / 2` (M15) would raise `OverflowError` on an exact piece wider
+  than the doubles once a step narrows without proving (int true division, as `solve`'s copy did
+  before the fix; not observed in `newton`); not reached by a linear `f` (proved at the
+  first step), and a nonlinear `f` there is impractical anyway (`x ** 2 - 9 * 10 ** 800` over
+  `[10 ** 400, 10 ** 401]` with `max_steps=10` did not finish in 2 minutes, 2026-09-28: the exact
+  fractions grow). `solve`'s copy of the line is fixed (review F2)
+* the review's F3: a continuum costs up to 2n + 1 output boxes per box of width `tol`; whether to
+  output a continuum differently (one box per connected unproved region) is not asked (Q12 has no
+  item for it)

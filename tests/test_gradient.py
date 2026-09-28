@@ -214,3 +214,10 @@ def test_arguments():
         jacobian(lambda: (), [])
     with pytest.raises(ValueError, match='at least one variable'):
         gradient(lambda: 1, ())
+    # a bool is not a number here, refused with gradient's own wording (review S5: MultiInterval's
+    # constructor refuses it too, as 'expected a real number, got bool')
+    with pytest.raises(TypeError, match='or a number, got bool'):
+        gradient(lambda x, y: x, [True, M(1, 2)])
+    # an F whose outputs change length from pass to pass (review S4, spec F2)
+    with pytest.raises(ValueError, match='different lengths'):
+        jacobian(lambda x, y: (x, y) if x.derivative == M(1) else (x,), [M(1, 2), M(3, 4)])
