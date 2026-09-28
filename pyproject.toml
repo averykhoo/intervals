@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "intervals"
 version = "2.0.0.dev0"
 description = "Multi-intervals over the affine extended reals, with open/closed endpoints"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 
 [project.optional-dependencies]
 # the gmpy2/mpfr backend (INTERVALS_BACKEND=gmpy2 or auto; see intervals/backend.py): the same doubles, faster

@@ -114,9 +114,8 @@ def python_number(np, s):
         ratio = s.as_integer_ratio()
     except (ValueError, OverflowError):  # a nan or an infinity; a finite s past the doubles has one
         return f
-    # decided on exact values, never by `f == s`: numpy 2.4 (the last for python 3.11) compares a
-    # wider long double with a float as equal to its double, so `1 + 2 ** -60` read as 1.0 (CI run
-    # 36402681261, 2026-09-28); the library itself decides exactly (`cuts.py::normalize_value`)
+    # decided on exact values, as the library does (`cuts.py::normalize_value`), not on how a numpy
+    # version compares a long double with a float
     exact = Fraction(*(int(k) for k in ratio))
     return f if math.isfinite(f) and Fraction(f) == exact else exact
 
@@ -202,8 +201,8 @@ def test_numpy_scalar_operators_are_python_numbers(np, kind, op, data):
 
 
 class _WideLongDouble:
-    """a long double wider than a double, compared with a float as numpy 2.4 does (as its double):
-    windows has no such long double, so this stands in for CI's linux one"""
+    """a long double wider than a double whose `==` reads it as its double (a comparison the oracle
+    must not rely on): windows has no such long double, so this stands in for linux's"""
 
     def __init__(self, ratio, rounded):
         self.ratio, self.rounded = ratio, rounded
@@ -219,8 +218,7 @@ class _WideLongDouble:
 
 
 def test_python_number_decides_exactly(np):
-    """the oracle of test 2 keeps a value that is not a double exact, whatever `==` says: CI run
-    36402681261 (python 3.11, numpy 2.4.6) drew `1 + 2 ** -60`, read as 1.0 by `f == s`"""
+    """the oracle of test 2 keeps a value that is not a double exact, whatever `==` says"""
     assert python_number(np, _WideLongDouble((2 ** 60 + 1, 2 ** 60), 1.0)) == Fraction(2 ** 60 + 1, 2 ** 60)
     assert python_number(np, _WideLongDouble((2 ** 2000, 1), INF)) == 2 ** 2000  # finite past the doubles
     assert python_number(np, np.float64(0.1)) == 0.1 and type(python_number(np, np.float64(0.1))) is float

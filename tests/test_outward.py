@@ -30,6 +30,19 @@ BINARY = [operator.add, operator.sub, operator.mul, operator.truediv, operator.m
           operator.or_, operator.and_, operator.xor]
 
 
+def test_a_fraction_base_stays_exact():
+    """`Fraction ** A` reaches `A.__rpow__` with the Fraction itself. on python 3.11 it did not:
+    `Fraction.__pow__` answered any non-rational exponent with `float(a) ** b`, so the base was
+    rounded before the library saw it and `Fraction(1, 3) ** O(2)` missed 1/9 (found by CI run
+    36406179185; CPython 3.12 returns NotImplemented instead). hence python >= 3.12 (owner,
+    2026-09-28); this is red on 3.11"""
+    from fractions import Fraction
+    from intervals.autodiff import Dual
+    assert Fraction(1, 3) ** O(2) == O.parse('[1/9]')
+    assert Fraction(1, 3) ** M(2) == M.parse('[1/9]')
+    assert Fraction(1, 9) in (Fraction(1, 3) ** Dual.variable(O(2))).value
+
+
 @pytest.mark.parametrize('op', BINARY, ids=lambda op: op.__name__)
 def test_mixed_operands_give_the_outward_class(op):
     a, b = M(0.5, 2.0), O(1.5, 3.0)
