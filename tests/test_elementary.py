@@ -18,6 +18,7 @@ from fractions import Fraction
 import pytest
 
 from intervals import MultiInterval
+from intervals import backend
 from intervals import elementary
 from intervals.elementary import compare
 from intervals.elementary import exact
@@ -504,9 +505,10 @@ def test_a_missed_exact_case_raises_instead_of_looping(monkeypatch):
     """ziv's loop cannot narrow onto a double that the value IS; the precision cap turns that into an error"""
     monkeypatch.setattr(elementary, '_MAX_PRECISION', 1 << 12)
     monkeypatch.setattr(elementary, 'exact', lambda name, x, base=None: None)
-    assert rounded('sqrt', 4, DOWN) == 2.0  # both ends of [2, 2 + tiny] round down to 2
-    with pytest.raises(ArithmeticError):
-        rounded('sqrt', 4, UP)
+    with backend._use('python'):  # the pure loop's guard; the gmpy2 backend's is test_backend's twin
+        assert rounded('sqrt', 4, DOWN) == 2.0  # both ends of [2, 2 + tiny] round down to 2
+        with pytest.raises(ArithmeticError):
+            rounded('sqrt', 4, UP)
 
 
 # THE HELPERS FOR SIN, COS, TAN

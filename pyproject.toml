@@ -9,7 +9,11 @@ description = "Multi-intervals over the affine extended reals, with open/closed 
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
-test = ["pytest", "hypothesis", "python-flint>=0.9"]
+# the gmpy2/mpfr backend (INTERVALS_BACKEND=gmpy2 or auto; see intervals/backend.py): the same doubles, faster
+fast = ["gmpy2>=2.3"]
+# gmpy2 is here so that tests/test_backend.py's differential never skips; pinned to the series
+# `auto` takes (backend.FLOOR <= version < backend.CEILING), so CI tests what auto would pick
+test = ["pytest", "hypothesis", "python-flint>=0.9", "gmpy2>=2.3,<3"]
 
 [tool.setuptools]
 packages = ["intervals"]

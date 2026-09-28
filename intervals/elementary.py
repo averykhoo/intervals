@@ -32,6 +32,7 @@ from intervals.rounding import NEAREST
 from intervals.rounding import UP
 from intervals.rounding import is_infinite
 from intervals.rounding import round_rational
+from intervals import backend
 
 INF = math.inf
 
@@ -712,6 +713,9 @@ def rounded(name: str, x, direction: int, base=None) -> float:
     outside = _beyond(name, x, base)
     if outside is not None:
         return _round_outside(outside, direction)
+    fast = backend.fast  # read at each call: the backend only picks the double (intervals._gmpy2)
+    if fast is not None and (answer := fast.rounded(name, x, direction, base)) is not None:
+        return answer
     return _ziv(lambda p: _enclose(name, x, p, base), direction)
 
 
@@ -817,6 +821,9 @@ def rounded_pow(x, y, direction: int) -> float:
         return _round_outside('overflow', direction)
     if hi < -800:
         return _round_outside('above 0', direction)
+    fast = backend.fast
+    if fast is not None and (answer := fast.rounded_pow(x, y, direction)) is not None:
+        return answer
     extra = max(0, abs(y.numerator).bit_length() - y.denominator.bit_length()) + 16
 
     def enclose(p):
@@ -853,6 +860,9 @@ def rounded_angle(q, m: int, direction: int) -> float:
     q = Fraction(q)
     if q == 0 and m == 0:
         return 0.0
+    fast = backend.fast
+    if fast is not None and (answer := fast.rounded_angle(q, m, direction)) is not None:
+        return answer
 
     def enclose(p):
         lo, hi = _fractions(_add(_atan_rational(q, p), _scale(_shift(_pi(p), -1), m)), p)
@@ -902,6 +912,9 @@ def rounded_inverse_trig(name: str, v, sign: int, k: int, direction: int) -> flo
     value = None if is_infinite(v) else exact(name, v)
     if value is not None and k == 0:
         return round_rational(sign * value, direction)
+    fast = backend.fast
+    if fast is not None and (answer := fast.rounded_inverse_trig(name, v, sign, k, direction)) is not None:
+        return answer
     extra = abs(k).bit_length() + 4
 
     def enclose(p):
