@@ -11,10 +11,15 @@ they are defined on cuts, not values: `before` is `A.end <= B.start`, so `[1, 2)
 
 the interval orders `weakly_less` and `strictly_less` (ieee 1788's `less` and `strictLess`) compare
 the ends, the infima and the suprema, so for a multi-interval they are its hull's; they return bool.
+
+`allen` needs two contiguous operands. `allen_matrix` and `allen_relations` take any: `allen` of each
+pair of pieces, as a matrix or as the set of relations holding.
 """
 import math
 from enum import Enum
 from typing import FrozenSet
+from typing import Iterator
+from typing import Tuple
 
 from intervals import kernel
 from intervals.kernel import Cuts
@@ -270,3 +275,55 @@ def allen(a: Cuts, b: Cuts) -> Allen:
     if s1 < s2:
         return Allen.OVERLAPS if e1 < e2 else Allen.CONTAINS
     return Allen.DURING if e1 < e2 else Allen.OVERLAPPED_BY
+
+
+def allen_matrix(a: Cuts, b: Cuts) -> Tuple[Tuple[Allen, ...], ...]:
+    """
+    `allen()` of every pair of pieces: row `i`, column `j` is the relation of piece `i` of `a` to
+    piece `j` of `b`, so `len(a) // 2` rows of `len(b) // 2` entries, each one of the 13 as `Allen`
+    reads them on cuts. an empty operand has no pairs, so no rows or rows of no entries, not a
+    raise. the plain loop, `n m` calls to `allen()`: it does not rely on the pieces being in
+    order, and `Θ(nm)` is the size of the answer anyway. for many pieces, `allen_relations`
+    """
+    pb = tuple(kernel.pairs(b))
+    return tuple(tuple(allen(p, q) for q in pb) for p in kernel.pairs(a))
+
+
+def allen_relations(a: Cuts, b: Cuts) -> FrozenSet[Allen]:
+    """
+    the relations holding between some piece of `a` and some piece of `b`: the entries of
+    `allen_matrix(a, b)`, found in `O(n + m)` without building it (`_allen_pairs`, then the two
+    corners). normalized operands; `frozenset()` when either is empty
+    """
+    pa, pb = tuple(kernel.pairs(a)), tuple(kernel.pairs(b))
+    if not pa or not pb:
+        return frozenset()
+    found = {relation for _, _, relation in _allen_pairs(pa, pb)}
+    # every pair the sweep skips is BEFORE or AFTER, and some piece of a is BEFORE some piece of b
+    # iff the first of a is BEFORE the last of b
+    if pa[0][1] < pb[-1][0]:
+        found.add(Allen.BEFORE)
+    if pb[0][1] < pa[-1][0]:
+        found.add(Allen.AFTER)
+    return frozenset(found)
+
+
+def _allen_pairs(pa, pb) -> Iterator[Tuple[int, int, Allen]]:
+    """
+    the merge sweep over the cut pairs of two normalized operands: `(i, j, allen(pa[i], pb[j]))`
+    for at most `n + m - 1` pairs, advancing the piece that ends first (both on a tie). every pair
+    it skips is BEFORE or AFTER: normalized pieces never meet, so every later piece of the other
+    operand starts beyond the end of the piece left behind. `allen` is looked up as the module
+    global, which `tests/test_relations.py::test_allen_relations_is_a_linear_sweep` counts
+    """
+    i = j = 0
+    while i < len(pa) and j < len(pb):
+        p, q = pa[i], pb[j]
+        yield i, j, allen(p, q)
+        if p[1] < q[1]:
+            i += 1
+        elif q[1] < p[1]:
+            j += 1
+        else:
+            i += 1
+            j += 1
