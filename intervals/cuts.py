@@ -15,12 +15,18 @@ tiles exactly because the end `(2, BELOW)` equals the start `(2, BELOW)`.
 
 values are int, Fraction or float, including `-inf` and `inf`. the constructor normalizes them:
 `-0.0` becomes `0.0` (there is one zero), a Fraction with denominator 1 becomes int, and `nan` is
-rejected.
+rejected. a *foreign* real (a `numbers.Real` that is no int, float or Fraction: numpy's scalars, gmpy2's
+numbers) is its exact value where it has one to give: a `numbers.Rational` is exact by type, as a
+Fraction is; any other real is the float it equals where it is a double (so `np.float32(0.1)` is the
+double it holds, as today), else its exact `as_integer_ratio()` (an `np.longdouble` wider than a
+double, a wide `mpfr`), where `float()` would have rounded it and an outward result would not hold it;
+a real with no `as_integer_ratio()` is `float()` of it, as before (M16d, 2026-09-28).
 """
 import math
 from enum import IntEnum
 from fractions import Fraction
 from numbers import Integral
+from numbers import Rational
 from numbers import Real
 from typing import NamedTuple
 from typing import Tuple
@@ -49,12 +55,38 @@ def normalize_value(value) -> Value:
         return int(value)
     if isinstance(value, Fraction):
         return int(value) if value.denominator == 1 else value
+    if not isinstance(value, float):  # a foreign real (the float path pays this one check only)
+        if isinstance(value, Rational):  # gmpy2's mpq: exact by type, as a Fraction
+            exact = Fraction(int(value.numerator), int(value.denominator))
+            return int(exact) if exact.denominator == 1 else exact
+        exact = _exact_value(value)  # exact where float() would round
+        if exact is not None:
+            try:
+                rounded = float(exact)  # correctly rounded
+            except OverflowError:  # past the doubles
+                rounded = None
+            if rounded != exact:  # float() would have moved it: keep it exact
+                return int(exact) if exact.denominator == 1 else exact
+            value = rounded  # a double: the float, as ever
     value = float(value)
     if math.isnan(value):
         raise ValueError('nan is not a point of the extended reals')
     if value == 0:
         return 0.0  # also turns -0.0 into 0.0
     return value
+
+
+def _exact_value(value) -> Union[Fraction, None]:
+    """a foreign real's exact value, its `as_integer_ratio()`; None for a nan or an infinity (which
+    raise there) or a real without one"""
+    ratio = getattr(value, 'as_integer_ratio', None)
+    if ratio is None:
+        return None
+    try:
+        numerator, denominator = ratio()
+    except (ValueError, OverflowError):
+        return None
+    return Fraction(int(numerator), int(denominator))
 
 
 class _CutBase(NamedTuple):

@@ -40,6 +40,8 @@ inverses, roots, and the two-argument atan2, pow and hypot
 import math
 from fractions import Fraction
 from itertools import product
+from numbers import Integral
+from numbers import Real
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -51,6 +53,7 @@ from intervals import ops
 from intervals.applicator import split_pieces
 from intervals.applicator import warn
 from intervals.cuts import Value
+from intervals.cuts import normalize_value
 from intervals.errors import DomainClippedWarning
 from intervals.errors import EmptySetPropagationWarning
 from intervals.errors import IndeterminateResultWarning
@@ -173,16 +176,24 @@ def apply(name: str, a: Cuts, outward: bool = False, base=None) -> Cuts:
 
 
 def _check_base(base) -> Value:
-    if isinstance(base, bool) or not isinstance(base, (int, float, Fraction)):
+    """any real but bool, as the python number `normalize_value` makes it (so a numpy float never
+    reaches the functions with numpy's own arithmetic)"""
+    if isinstance(base, bool) or not isinstance(base, Real):
         raise TypeError(f'the base must be a real number, got {type(base).__name__}')
-    if not (0 < base < INF) or base == 1:
+    try:
+        value = normalize_value(base)
+    except ValueError:  # nan
+        value = None
+    if value is None or not (0 < value < INF) or value == 1:
         raise ValueError(f'a logarithm needs a finite base > 0 other than 1, got {base!r}')
-    return base
+    return value
 
 
 def _check_degree(n) -> int:
-    if isinstance(n, bool) or not isinstance(n, int):
+    """any `Integral` but bool, as an int (numpy's ints included, as `ops.power` takes them)"""
+    if isinstance(n, bool) or not isinstance(n, Integral):
         raise TypeError(f'the degree of a root must be an int, got {type(n).__name__}')
+    n = int(n)
     if n == 0:
         raise ValueError('rootn(x, 0) has no value: the degree must be an int other than 0')
     return n

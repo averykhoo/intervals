@@ -28,6 +28,7 @@ numbers as constants (a `DecoratedInterval` refuses a bare `MultiInterval`, and 
 """
 from numbers import Real
 
+from intervals import numpy_compat
 from intervals.decorated import DecoratedInterval
 from intervals.multi_interval import MultiInterval
 from intervals.multi_interval import _is_integral
@@ -49,7 +50,7 @@ class Dual:
     functions of `MultiInterval`, each with its chain rule (see the module docstring)
     """
     __slots__ = ('_value', '_derivative')
-    __array_ufunc__ = None  # numpy defers to the reflected methods, as for MultiInterval
+    __array_ufunc__ = numpy_compat.array_ufunc  # numpy interop, as for MultiInterval (M16d)
 
     def __init__(self, value, derivative):
         if not isinstance(value, _PART) or not isinstance(derivative, _PART):
@@ -171,17 +172,25 @@ class Dual:
 
     def __pow__(self, exponent, modulo=None):
         """
-        a number exponent `n`: `n u ** (n - 1) u'`, the power as `MultiInterval.__pow__` reads it
-        (pown for an integral `n`, else pow, whose domain drops `u < 0`); `u ** 0` is the constant 1.
+        a number exponent `r`: `r u ** (r - 1) u'`, the power as `MultiInterval.__pow__` reads it
+        (pown for an integral `r`, else pow, whose domain drops `u < 0`); `u ** 0` is the constant 1.
+        `r - 1` is never computed in r's own arithmetic, which rounds to nearest (`2.0 ** 60 - 1` is
+        `2.0 ** 60`, and a rounded `0.1 - 1` let an outward derivative miss its true value, M15): an
+        integral `r` is the int `n`, so `n - 1` is exact, and any other `r` is a point set `e` of
+        u's kind, so `e - 1` is the library's own subtraction, exact or outward (M16d, 2026-09-28).
         a `Dual` or set exponent `v`: `u ** v (v' log u + v u' / u)`, pow over `u > 0`
         """
         if modulo is not None or isinstance(exponent, bool):
             return NotImplemented
         if isinstance(exponent, Real):
             value = self._value ** exponent
-            if _is_integral(exponent) and exponent == 0:
-                return Dual(value, _constant(self._value, 0))
-            return self._chain(value, exponent * self._value ** (exponent - 1))
+            if _is_integral(exponent):
+                n = int(exponent)
+                if n == 0:
+                    return Dual(value, _constant(self._value, 0))
+                return self._chain(value, n * self._value ** (n - 1))
+            e = _constant(self._value, exponent)
+            return self._chain(value, e * self._value ** (e - 1))
         exponent = self._coerce(exponent)
         if exponent is NotImplemented:
             return NotImplemented
@@ -204,7 +213,8 @@ class Dual:
         return self._chain(r, 1 / (3 * r ** 2))
 
     def rootn(self, n: int) -> 'Dual':
-        r = self._value.rootn(n)
+        r = self._value.rootn(n)  # the core checks n: any Integral but bool
+        n = int(n)  # so `n - 1` is exact, never an int64 that wraps (M16d)
         return self._chain(r, 1 / (n * r ** (n - 1)))
 
     def exp(self) -> 'Dual':

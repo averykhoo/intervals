@@ -70,6 +70,7 @@ from numbers import Real
 
 from intervals import elementary
 from intervals import kernel
+from intervals import numpy_compat
 from intervals.errors import UndefinedOperationError
 from intervals.functions import _inside_k
 from intervals.literals import _bare
@@ -203,7 +204,7 @@ class DecoratedInterval:
     # a DecoratedInterval or a real number (a point, as newDec makes it); a bare MultiInterval is
     # refused, as 1788 does not mix bare and decorated intervals
 
-    __array_ufunc__ = None  # numpy defers to the reflected methods, as for MultiInterval
+    __array_ufunc__ = numpy_compat.array_ufunc  # numpy interop, as for MultiInterval (M16d)
 
     def _coerce(self, other):
         """a DecoratedInterval as it is, a real number as newDec's point of this set's class, else

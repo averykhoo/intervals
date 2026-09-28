@@ -29,6 +29,7 @@ or for a piece reaching Â±inf, their hull is returned with a `HullWarning`. `f(Â
 """
 import math
 from fractions import Fraction
+from numbers import Integral
 from typing import Callable
 from typing import Optional
 from typing import Tuple
@@ -99,8 +100,9 @@ def step(name: str, a: Cuts, ndigits: Optional[int] = None, outward: bool = Fals
     if ndigits is not None:
         if name not in ('round', 'round_ties_away'):
             raise TypeError(f'{name}() takes no ndigits')
-        if isinstance(ndigits, bool) or not isinstance(ndigits, int):
+        if isinstance(ndigits, bool) or not isinstance(ndigits, Integral):
             raise TypeError(f'ndigits must be an int, got {type(ndigits).__name__}')
+        ndigits = int(ndigits)  # numpy's ints too
     if not a:
         warn(EmptySetPropagationWarning, f'{name}: the operand is empty, so the result is empty')
         return kernel.EMPTY

@@ -39,6 +39,7 @@ from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import kernel
 from intervals.autodiff import Dual
+from intervals.autodiff import _constant
 from intervals.autodiff import derivative
 
 O = OutwardMultiInterval
@@ -323,6 +324,65 @@ def test_derivative_helper():
 def test_pow_zero_is_the_constant_one():
     y = Dual.variable(MultiInterval(-1, 1)) ** 0
     assert (y.value, y.derivative) == (MultiInterval(1), MultiInterval(0))
+
+
+@pytest.mark.parametrize('zero', [0, 0.0, -0.0, Fraction(0)])
+@pytest.mark.parametrize('u', [MultiInterval(0), O(0), MultiInterval(-1, 1), DecoratedInterval(MultiInterval(0))])
+def test_pow_any_zero_is_the_constant_one(u, zero):
+    """`u ** 0` is the constant 1 whatever the zero's type: the chain rule's `0 * u ** -1` is empty
+    at u = 0, an unsound derivative (a gap the M16d review's sabotage found, 2026-09-28)"""
+    y = Dual.variable(u) ** zero
+    assert y.value == _constant(u, 1) and y.derivative == _constant(u, 0)
+
+
+@pytest.mark.parametrize('kind', ['outward', 'decorated outward'])
+@pytest.mark.parametrize('u', [2, 1e300, 1e-300])
+@pytest.mark.parametrize('r', [0.1, 1e-20, 0.3])
+def test_pow_number_exponent_derivative_encloses(r, u, kind):
+    """
+    `(u ** r)' = r u ** (r - 1)`, outward, bare and decorated: M15 computed `r - 1` in r's own
+    arithmetic, a float rounded to nearest, so the outward derivative missed the true value, 5 of
+    these 9 (r, u) in each kind at `04946af` (0.1 with 1e300 and 1e-300, 1e-20 with 2, 0.3 with 1e300
+    and 1e-300; python floats; 2026-09-28, found by the M16d critique). a number exponent is a point
+    set first. the decorated kind is the M16d review's (a break in that class alone stayed green)
+    """
+    x = O(u) if kind == 'outward' else DecoratedInterval(O(u))
+    d = (Dual.variable(x) ** r).derivative
+    d = d if kind == 'outward' else d.interval
+    old = ctx.prec
+    try:
+        ctx.prec = 400
+        verdict = _inside(d, _arb(r) * (_arb(u).log() * (_arb(r) - 1)).exp())
+    finally:
+        ctx.prec = old
+    assert verdict is True, f'{r} {u ** (r - 1)!r}: {d}'
+
+
+@pytest.mark.parametrize('r', [2.0 ** 60, 2 ** 60, Fraction(2 ** 60)])
+def test_pow_integral_exponent_derivative_is_exact(r):
+    """an integral exponent n is pown and `n - 1` is exact int arithmetic: the float `2.0 ** 60 - 1`
+    rounds to `2.0 ** 60`, which gave `(-1) ** (2 ** 60)`, the derivative's sign flipped (M15, found
+    2026-09-28). the base is -1 because `O(2) ** 2 ** 60` is an exact power too large to compute"""
+    y = Dual.variable(O(-1)) ** r
+    assert y.value == O(1) and y.derivative == O(-2 ** 60)
+
+
+@pytest.mark.filterwarnings('ignore::intervals.errors.IntervalWarning')  # pow drops u < 0
+def test_pow_number_exponent_nearest_examples():
+    """
+    the B1 fix in the nearest class (M16d review, 2026-09-28): an integral float exponent is the
+    int n, so the derivative `n u ** (n - 1)` is exact where the value is (M15: float ends,
+    `[0.6666666666666666, 6.0]`); a tiny r whose float `r - 1` is -1.0 is pow, as `r` itself is,
+    not pown(u, -1) (M15: `{ [-inf, -1e-20] , [1e-20, inf] }` over [-1, 1], and a derivative over
+    [-2, -1], where the value is empty)
+    """
+    y = Dual.variable(MultiInterval.parse('[1/3, 3]')) ** 2.0
+    assert repr(y.value) == "MultiInterval.parse('[1/9, 9]')"
+    assert repr(y.derivative) == "MultiInterval.parse('[2/3, 6]')"
+    y = Dual.variable(MultiInterval(-1, 1)) ** 1e-20
+    assert y.derivative == MultiInterval.parse('[1e-20, inf)')
+    y = Dual.variable(MultiInterval(-2, -1)) ** 1e-20
+    assert y.value == y.derivative == MultiInterval()
 
 
 def test_constants_mix_in():
