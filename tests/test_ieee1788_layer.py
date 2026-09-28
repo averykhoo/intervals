@@ -296,10 +296,11 @@ def test_flavours(name):
 
 
 def test_a_call_of_numbers_alone_is_bare():
-    """no operand is a decorated interval, so the call is bare (the review's S1)"""
-    assert ieee1788.add(1, 2) == Interval(3.0) and ieee1788.add(1, 2).decoration is None
-    assert ieee1788.sqrt(4.0) == Interval(2.0) and ieee1788.fma(1, 2, 3) == Interval(5.0)
-    assert ieee1788.mul_rev_to_pair(2.0, 4.0) == (Interval(2.0), Interval())
+    """no operand is a decorated interval, so the call is bare (the review's S1): each result, both
+    of the pair's included, has no decoration"""
+    results = [ieee1788.add(1, 2), ieee1788.sqrt(4.0), ieee1788.fma(1, 2, 3), *ieee1788.mul_rev_to_pair(2.0, 4.0)]
+    assert results == [Interval(3.0), Interval(2.0), Interval(5.0), Interval(2.0), Interval()]
+    assert [r.decoration for r in results] == [None] * 5
 
 
 LIBRARY_VALUES = [MultiInterval(1, 2), OutwardMultiInterval(1.0, 2.0), DecoratedInterval(MultiInterval(1, 2))]
