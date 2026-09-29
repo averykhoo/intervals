@@ -243,7 +243,8 @@ class _NotADouble:
     factor `m ** |n|`, not dyadic at all, while a double's odd part is below 2**53 and a midpoint's
     below 2**54. so the rounding hooks' ziv loop meets no breakpoint at the value either, and ends
     (`elementary.rounded_pow`). on one side of zero, or for an odd n > 0, `x ** n` is injective on
-    a box, so no other corner equals it
+    a box, so no other corner equals it. the proof's two premises on the limit are checked at import
+    (`_check_marker_premises`)
     """
     __slots__ = ()
 
@@ -260,6 +261,24 @@ class _NotADouble:
 
 
 _NOT_A_DOUBLE = _NotADouble()
+
+
+def _check_marker_premises(limit: int) -> None:
+    """
+    `_NotADouble`'s proof needs two things of `elementary.EXACT_POWER_LIMIT`: a power of two past it
+    lies outside the double range (`limit >= 2 * 1075`), and an odd part `m >= 3` of at most 1075
+    bits raised past it is over 2**54 (`3 ** (limit // 1075 + 1) > 2 ** 54`, so `limit >= 36550`).
+    under a smaller limit a marker could stand for a double or a midpoint, and the rounding hooks'
+    ziv loop would double its precision up to its cap instead of ending (a stall, not a red), so a
+    smaller limit stops the import instead
+    """
+    if limit < 2 * 1075 or 3 ** (limit // 1075 + 1) <= 2 ** 54:
+        raise RuntimeError(
+            f"elementary.EXACT_POWER_LIMIT = {limit} is below the floor of ops._NotADouble's proof "
+            '(36550 bits): pown of a float past it would not be sound')
+
+
+_check_marker_premises(elementary.EXACT_POWER_LIMIT)
 
 
 # python's `float ** int` converts the int to a double, which is exact up to here
@@ -290,7 +309,9 @@ def _exact_power_descriptor(n: int) -> OpDescriptor:
     n < 0 is `1 / x ** -n` in one step: the same set as `reciprocal(power(A, -n))` (a piece of A
     at 0 and its image at 0 lie on the same side), but a float `x ** -n` that underflows to 0 keeps
     the sign of its pole instead of rounding to a zero with no side. exact on int and Fraction, python's
-    `float ** int` (rounded to nearest) on a float
+    `float ** int` on a float: libm's `pow`, to nearest but not promised correctly rounded, and past
+    `|n| = 2 ** 53` python rounds n itself to a double. `_power_descriptor` never sends a float there:
+    its outward form rounds the exact power, and its nearest form uses this fn only up to 2 ** 53
     """
     k = abs(n)
     name = _power_name(n)
@@ -354,7 +375,8 @@ def _power_descriptor(n: int, rounds_outward: bool = False) -> OpDescriptor:
         return base._replace(fn=nearest)
 
     # a box asks for a corner's value up to four times (fn, both hooks, attainment): build it once.
-    # a box has at most two corners, and a value is at most EXACT_POWER_LIMIT bits (12.5 KB). the
+    # a box has at most two corners, and a value's numerator and denominator are each at most
+    # EXACT_POWER_LIMIT bits (about 25 KB together: exact_pow bounds the longer of the two). the
     # cache is this descriptor's, keyed on x: the value depends on n too
     @lru_cache(maxsize=4)
     def float_exact(x: float):

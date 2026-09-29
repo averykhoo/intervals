@@ -4076,6 +4076,43 @@ tree alone had a targeted run (the pown, backend, autodiff, class, ops, outward,
 and 1788-layer files and `ops.py`'s doctests: 2121 passed in 119 s); it differs from the final tree
 only in the descriptor's name. not pushed.
 
+**review** (2026-09-29, three read-only lenses on `a82545d`: soundness, sabotage, spec; then a fixer).
+no blocking finding, and no soundness defect: the soundness lens re-derived `_NotADouble`'s proof and
+`_ln_bracket`'s saturation bounds, and checked the branch against an independent oracle (binary powering
+on (mantissa, exponent) int pairs cut to bitlen(n) + 96 bits, floor and ceil, never the power; itself
+0 mismatches against exact rounding and MPFR on 600 + 600 cases): 2500 points on the pure backend and
+2540 under gmpy2 (the outward class, `D`, `np.power`, `ieee1788.pown`, `Interval ** n`, nearest past
+2**53, `Dual` values and derivatives), 4 x 2500 + 2 x 2500 random one-piece sets (optimal enclosure
+and flags, 74k sampled points, identity with the exact construction below 20000), and about 100
+hand-read rows, 0 mismatches; that probe went red under in-process breaks of the direction and of the
+marker's `__eq__` (53 and 278 reds). the sabotage lens re-ran S1-S11, N1-N4 and C3 red on the final
+tree (S1 and S7 with re-anchored texts, the recorded ones having moved), seven new value/flag/hang
+breaks red, and the equivalent greens explained (`+ 0.0`, the marker's `__hash__`/`__ne__`, nearest's
+`<=` at 2**53). the spec lens found no value regression (79 expressions, same reprs and warnings on
+`v2` and the branch), no fast case slower (outward small n about 2x faster; the only slower path,
+nearest past 2**53, was wrong before), and every named reproduction finishing in about 0.1 s. the
+findings, each reproduced on the branch first by the fixer:
+
+| id | lens | finding | outcome | pin |
+|---|---|---|---|---|
+| SND-1 | soundness | exact int operands still hang: `O(2) ** 2 ** 60`, `M(2) ** 2 ** 60`, `M(2) ** 1e300`, `O(0.5, 2) ** 2 ** 40` (the 2 an int) | **deferred**: owner question Q-exact below, recorded since the build; not a regression. reproduced: each a 10 s timeout on the branch. row 2 closes only with Q-exact carried forward | — |
+| SND-2 | soundness | the cache comment said a value is at most `EXACT_POWER_LIMIT` bits (12.5 KB); `exact_pow` bounds numerator and denominator each, so about 25 KB (`exact_pow(Fraction(1 - 2.0 ** -53), 1851)`: 98103 + 98104 bits) | fixed, comment only | none possible (the code is unchanged; memory stays bounded, 4 values x 64 descriptors) |
+| SAB-1 | sabotage | the bounded name was pinned only at `2 ** 20000` (6021 digits): `_power_name`'s threshold could move to `10 ** 6000` unseen | fixed | `::test_an_exponent_past_4300_digits` also at `10 ** 4300`, the smallest n python refuses to write: red under the threshold at `10 ** 6000`, where the old test stayed green |
+| SAB-2 | sabotage | nothing pinned "an int corner is the exact descriptor's" in the nearest class past 2**53 | fixed | `::test_nearest_past_2_53` + 4 exact-int rows (`M(1) ** 10 ** 400` = `[1]`, `M(-1) ** ±(2 ** 60 + 1)` = `[-1]`, `M(-1, 0.5) ** (2 ** 60 + 1)` = `[-1, 0.0]`) and a check of the end types: the 4 rows red with int corners sent to `rounded_pow`, the old file green |
+| SAB-3 | sabotage | `_NotADouble`'s proof rests on `EXACT_POWER_LIMIT`, unchecked; at 2000 the hooks' ziv loop stalls (no per-test timeout, so a stall, not a red) | fixed, a mechanical refusal | `ops._check_marker_premises`, run at import: `RuntimeError` unless `limit >= 2 * 1075` and `3 ** (limit // 1075 + 1) > 2 ** 54` (at least 36550, the floor of the proof as written; the lens's finer floor of about 2150 is not relied on). `::test_the_marker_proof_premises`; with the limit at 2000 the suite fails at collection in 0.4 s. a limit lowered at run time, after import, still stalls (`O(0.5, 1.0) ** 1074`, 60 s timeout): not guarded |
+| SAB-4, F1 | sabotage, spec | the comment "each hung before the fix" is false for `O(-1.0) ** (2 ** 60 + 1)`: `v2` gives `[-1.0]` in 0.08-0.17 s | fixed, comment only | none possible; the row stays as a parity pin |
+| SAB-5 | sabotage | "each corner's power is built once" (`float_exact`'s cache) was untested; without it about 5x slower near the limit | fixed | `::test_a_corner_power_is_built_once`: a spy on `elementary.exact_pow` over `O(1.2, 1.3) ** 1879` sees one build a corner; red with the cache at `maxsize=0`, the old file green |
+| F2 | spec | `@example((0.5, 100000))  # just under the limit` is on the marker side (2 bits x 100000 = twice the limit); no example sat on the built side | fixed | `@example`s `(0.5, 50000)` (the last built) and `(0.5, 50001)` (the first marker) and `::test_the_marker_boundary_of_one_half` against `exact_pow` directly |
+| F3 | spec | `HANDOFF.md` row 2 still says ready; Q-exact and Q-nearest-libm are not under its owner questions | **deferred**: this branch does not edit `HANDOFF.md`; owed when the branch is merged | — |
+| F4 | spec | `_exact_power_descriptor`'s docstring read as if python's `float ** int` were correctly rounded for any n | fixed, docstring only: libm's pow, not promised correctly rounded, n rounded to a double past 2**53, and `_power_descriptor` never sends a float there | none possible |
+
+each "red" above is the fixer's own run (2026-09-29, `.scratch/pown-huge/fix/sab.py`: one exact
+replacement, `__pycache__` cleared, restored with `copy2` and checked with `filecmp`, a control on the
+intact tree first), with the new `tests/test_pown_huge.py` and, beside it, the file as committed at
+`a82545d`, which stayed green under every break but the limit's (there the import refuses). gate on
+the fixed tree (2026-09-29, loaded shared laptop, rc captured without a pipe): `tests/itf1788` 27795
+passed in 55 s, the rest 5607 passed in 567 s (the 5596 before plus 11 new items) = 33402. not pushed.
+
 **left open** (owner questions, not built):
 * **Q-exact**, pown of exact int/Fraction operands: `M(2) ** 2 ** 60` and `M(2) ** 1e300` still
   never finish (their exact value does not fit in memory), and exact ends are common inside outward

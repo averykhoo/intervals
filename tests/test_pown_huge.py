@@ -34,6 +34,7 @@ from intervals import DecoratedInterval
 from intervals import IndeterminateResultWarning
 from intervals import MultiInterval
 from intervals import OutwardMultiInterval
+from intervals import elementary
 from intervals import kernel
 from intervals import ops
 from intervals.autodiff import Dual
@@ -53,9 +54,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # THE REPRODUCTIONS, UNDER A TIME BOUND
 
-# (the expression, the expected repr's expression): each hung before the fix (2026-09-29, more than
-# 15 s each on a loaded laptop, the review's and the designer's reproductions) and takes about 1 ms
-# after it
+# (the expression, the expected repr's expression): each but one hung before the fix (2026-09-29, more
+# than 15 s each on a loaded laptop, the review's and the designer's reproductions) and takes about
+# 1 ms after it. the one is `O(-1.0) ** (2 ** 60 + 1)`, a parity row: `Fraction(-1) ** n` is cheap,
+# so the old code gave the same `[-1.0]` in 0.17 s (the pown-huge review, SAB-4 and F1)
 REPRODUCTIONS = [
     ('O(0.5) ** (2 ** 31 - 1)', "O.parse('(0.0, 5e-324)')"),
     ('O(0.5, 1) ** (2 ** 31 - 1)', "O.parse('(0.0, 1]')"),
@@ -208,7 +210,9 @@ def boundary_cases(draw):
 @example((1.0, 100001))
 @example((-1.0, 100001))
 @example((-1.0, -100002))
-@example((0.5, 100000))  # just under the limit: 2 bits
+@example((0.5, 50000))  # 0.5 has 2 bits: the last n it is built for (50000 * 2 = the limit)
+@example((0.5, 50001))  # and the first past it, a marker
+@example((0.5, 100000))
 @example((TINY, 94))
 @example((-3.0, 50001))
 def test_marker_boundary(case):
@@ -218,6 +222,55 @@ def test_marker_boundary(case):
     if not got[1]:
         m, e = _split(x)
         assert not _is_double(m, e, n), (x, n)
+
+
+def test_the_marker_boundary_of_one_half():
+    """
+    `exact_pow` declines past `|n| max(bitlen(num), bitlen(den)) = EXACT_POWER_LIMIT`, so 0.5 (2
+    bits) is built up to n = 50000, not 100000 (an `@example` comment above said "just under the
+    limit" of (0.5, 100000), the pown-huge review's F2)
+    """
+    limit = elementary.EXACT_POWER_LIMIT
+    assert elementary.exact_pow(Fraction(1, 2), limit // 2) == Fraction(1, 2 ** (limit // 2))
+    assert elementary.exact_pow(Fraction(1, 2), limit // 2 + 1) is None
+    assert elementary.exact_pow(Fraction(1, 2), limit) is None
+
+
+@pytest.mark.parametrize('limit, holds', [
+    (elementary.EXACT_POWER_LIMIT, True), (36550, True), (36549, False), (2150, False), (2000, False)])
+def test_the_marker_proof_premises(limit, holds):
+    """
+    `ops._NotADouble`'s proof needs `EXACT_POWER_LIMIT >= 36550`: below it a marker could stand for a
+    double, and the rounding hooks' ziv loop stalled rather than failed (the review's SAB-3, the limit
+    at 2000). `ops` checks it at import, so a lowered limit is an import error, loud and at once
+    """
+    if holds:
+        ops._check_marker_premises(limit)
+    else:
+        with pytest.raises(RuntimeError, match='EXACT_POWER_LIMIT'):
+            ops._check_marker_premises(limit)
+
+
+def test_a_corner_power_is_built_once(monkeypatch):
+    """
+    a box asks for a corner's value up to four times (fn, both hooks, attainment); the outward
+    descriptor's `float_exact` cache builds each corner's exact power once. near the limit that is
+    about 5x the cost without it (the pown-huge review's SAB-5, the cache at `maxsize=0`)
+    """
+    calls = []
+    real = elementary.exact_pow
+
+    def spy(x, y):
+        calls.append((x, y))
+        return real(x, y)
+
+    n = 1879  # 1.2 and 1.3 have 53 bits, and 53 x 1879 is under the limit: both corners are built
+    ops._power_descriptor.cache_clear()
+    monkeypatch.setattr(elementary, 'exact_pow', spy)
+    a = O(1.2, 1.3) ** n
+    assert sorted(calls) == [(Fraction(1.2), n), (Fraction(1.3), n)], calls
+    assert _piece(a) == (round_rational(Fraction(1.2) ** n, DOWN), False,
+                         round_rational(Fraction(1.3) ** n, UP), False)
 
 
 # BELOW THE LIMIT: today's construction, exactly
@@ -311,9 +364,16 @@ def test_huge_exponent_against_mpfr(x, n):
     (M(-0.0), 10 ** 400 + 1, '[0.0]'),
     (M(0.0, 0.5), 10 ** 400, '[0.0]'),  # a wrong set, [0.0, inf], with the zero sent to python
     (M(-2.0, 0.0), -(10 ** 400 + 1), '[-inf, 0.0]'),  # the pole at the closed 0
+    # an exact int corner stays the exact descriptor's (an int, not rounded_pow's float: the review's SAB-2)
+    (M(1), 10 ** 400, '[1]'),
+    (M(-1), 2 ** 60 + 1, '[-1]'),
+    (M(-1), -(2 ** 60 + 1), '[-1]'),
+    (M(-1, 0.5), 2 ** 60 + 1, '[-1, 0.0]'),
 ])
 def test_nearest_past_2_53(a, n, want):
-    assert repr(a ** n) == repr(M.parse(want))
+    got, want = a ** n, M.parse(want)
+    assert repr(got) == repr(want)
+    assert [type(c.value) for c in got._cuts] == [type(c.value) for c in want._cuts]
 
 
 def test_nearest_zero_to_a_huge_negative_power_is_empty():
@@ -344,8 +404,11 @@ def test_nearest_huge_exponent_against_mpfr(x, n):
 
 def test_an_exponent_past_4300_digits():
     big = '1.7976931348623157e+308'
-    assert repr(O(1.5) ** 2 ** 20000) == repr(O.parse(f'({big}, inf)'))
-    assert repr(M(0.5) ** 2 ** 20000) == repr(M.parse('[0.0]'))
+    # 10 ** 4300 is the smallest n python refuses to write (4301 digits); 2 ** 20000 alone let the
+    # name's threshold move up to 10 ** 6020 unseen (the pown-huge review's SAB-1)
+    for n in (10 ** 4300, 2 ** 20000):
+        assert repr(O(1.5) ** n) == repr(O.parse(f'({big}, inf)'))
+        assert repr(M(0.5) ** n) == repr(M.parse('[0.0]'))
     y = Dual.variable(O(1.5)) ** 2 ** 20000
     assert y.value == y.derivative == O.parse(f'({big}, inf)')
     with pytest.warns(IndeterminateResultWarning, match='pow-<a 20001-bit int>'):
