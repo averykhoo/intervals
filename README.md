@@ -195,7 +195,11 @@ Interval(float('-inf'), float('inf'))
   object arrays of sets run numpy's own loops (`np.arcsin(arr)` and `np.round(A)` are TypeErrors)
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
-  open. mixing the two gives an `OutwardMultiInterval`
+  open. mixing the two gives an `OutwardMultiInterval`. to nearest, as python's float, a value past the
+  largest double is `inf` (`MultiInterval(1e308) * 10` is `[inf]`, the point, so `& (0, inf)` leaves
+  nothing); the outward class keeps it as `(MAX, inf)`. the reverse ops meet `x` before rounding, as
+  1788 does: a part of the answer inside `x` that rounds wholly onto one double is that double, even
+  an end `x` excludes (D26)
 * **a faster backend, optional** (M16e): `pip install intervals[fast]` adds gmpy2, and
   `INTERVALS_BACKEND=gmpy2` (or `auto`: gmpy2 when it imports) picks it at `import intervals`. it
   computes the same doubles as the default pure-python path, only faster (a few times for the

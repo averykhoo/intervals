@@ -41,6 +41,7 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D23 | **decided in the build 2026-09-28 (the session's defaults), open for the owner: `HANDOFF.md` Q15.** numpy interop (M16d): (a) `__array_ufunc__` on `MultiInterval`, `DecoratedInterval`, `Dual` (`intervals/numpy_compat.py`), operator ufuncs as python's operators on our dunders only, the others the method of the same set image, the rest `TypeError`; `__array__` on `MultiInterval` only (a 0-d object array); the array API standard not built (the alternative: an interval-array type); (b) a foreign real is its exact value (a `Rational` by type, else where `float()` would round), alternatives refuse or keep `float()`; (c) an ndarray meeting ours is elementwise into an object array, `==`/`!=` never broadcast; (d) no numpy-named alias methods; (e) `np.invert` the complement; (f) `fmin`/`fmax` not mapped; (g) numpy not in `[test]`; (h) both operands ours in a method ufunc (`hypot minimum maximum arctan2`): the subclass decides, as for the operators | as built | M16d |
 | D24 | **decided in the build 2026-09-28 (the session's defaults), open for the owner: `HANDOFF.md` Q16.** the gmpy2/mpfr backend (M16e): (a) the default is the pure path; `INTERVALS_BACKEND=gmpy2` forces gmpy2 (ImportError if missing or below 2.3 / MPFR 4.2), `auto` takes it if importable and `2.3 <= version < 3`; (b) public surface: the env var and the `[fast]` extra only; `intervals.backend.name()` not exported, no setter; (c) non-dyadic points stay pure (no mpfr ziv loop), but atan, acot, atan2's angles and the hook's mixed operands; (d) `gmpy2>=2.3,<3` in `[test]`; (e) CI unchanged: the whole suite on the pure path, `tests/test_backend.py` compares both in every job; no gmpy2 fuzz job; (f) ships in 2.0 as an opt-in, or waits under "later" | as built | M16e |
 | D25 | **decided 2026-09-28 by owner**: CPython 3.11's `Fraction.__pow__` rounds a Fraction base to a float before `MultiInterval.__rpow__` runs, so on 3.11 `Fraction(1, 3) ** OutwardMultiInterval(2)` misses 1/9, and nothing in the library can see it (the other Fraction operators defer correctly; 3.12 returns NotImplemented). drop 3.11, or keep it with `Fraction ** interval` documented as unsupported there? | **python >= 3.12**: `pyproject.toml` `requires-python`, CI's gate matrix 3.12-3.14; `tests/test_outward.py::test_a_fraction_base_stays_exact` is red on 3.11 | — |
+| D26 | **decided 2026-09-30 by owner** (fuzz-rev-inf): to nearest, a reverse op's exact preimage wholly past MAX squeezes to the point `[±inf]` (IEEE 754 rounds such a value to ±inf; `_widened` reads it as `[MAX, inf]`), and intersecting with `x` after that rounding lost it whenever `x` is open at that infinity: `pown_rev(c, -1, (-inf, -2))` for `c = (-2.2e-309, 0)` was `{}` though its exact answer `(-inf, -4.49e308)` is not empty; the same at a finite double (`sqr_rev([2, 2.0000000000000004], (1.4142135623730951, 2])` was `{}`). options weighed with the owner: (a) `x` meets the preimage before the rounding, 1788's order; (b) keep it and document it; (c) the nearest class saturates an overflow to `(MAX, inf)`, 1788's enclosure rule, no longer python's float | **(a)**, in the reverse ops only (`reverse._keep_squeezed`): a part of the exact answer inside `x` that rounds wholly onto one double is that double, as a point: an end `x` excludes (the case above; the one way a result leaves `x`), or a point of `x` where the rounding kept an end open (`mul_rev(10, (1, 2), [0.1])`, whose exact answer holds the double 0.1, was `{}`, now `[0.1]`; a known loss M13e's tests had worked around by leaving `x` out of their checks). the nearest class keeps IEEE 754 round-to-nearest (as python's float) everywhere; forward ops unchanged: `[inf] & (0, inf)` is still `{}` (documented, README "rounding"). not a 1788 divergence row: the vectors test the outward class, which was already right | `intervals/reverse.py`; `tests/test_reverse.py::test_float_operands` (two `@example`s), `::test_exactly_the_points_with_f_in_c` |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
 milestones below: infinite result endpoints always go through attainment (the corner-flag rule is
@@ -4210,6 +4211,41 @@ by `_python_floordiv`'s mixed path; the example pinned as an `@example` on `test
 red with the old `float(exact)` (`OverflowError`), green with the fix; `tests/test_modulo.py` 1003
 passed (2026-09-29). gate green on the fixed tree: `tests/itf1788` 27795 passed in 55 s, the rest
 5608 in 559 s = 33403 (an `@example` adds no item), 2026-09-29. not pushed.
+
+### fuzz-rev-inf: a squeezed reverse result lost to `x` (done 2026-09-30)
+
+**found** by the first push-triggered fuzz run (run 36580954134 at `97d9824`, ×10, 2026-09-29: `1 failed,
+33405 passed in 2945.29s`; the babysitter's `tools/ci_watch.sh`, the first run whose saved `.hypothesis`
+replays the failure unchanged): `tests/test_reverse.py::test_float_operands` on `op=('pown', -1)`,
+`c = (-2.225073858507203e-309, 0)`, `x = (-inf, -2)`, its last assert ("nothing of the exact result
+vanishes to nearest").
+
+**diagnosis**: the library's nearest class, by its order of operations. the exact result `(-inf,
+-4.49e308)` lies wholly past -MAX; outward gave `(-inf, -MAX)`; to nearest the preimage squeezes to
+`[-inf]` (both ends round to -inf, `branch_preimage`'s squeeze), and `_reverse` then intersected with an
+`x` open at -inf. the babysitter read the closed `-inf` as unsound and proposed not squeezing; checked by
+the session, that empties the result for every `x`, so it was not the fix. the same loss at a finite
+double: `sqr_rev([2, 2.0000000000000004], (1.4142135623730951, 2])` was `{}`.
+
+**decision**: D26 (a), the owner, 2026-09-30, after weighing 1788 (which intersects with `x` first and
+then encloses, never producing an infinite point) against python's float rounding.
+
+**fix and pins**: `reverse._keep_squeezed`, run by `_reverse` for the nearest class unless `x` is the
+default `[-inf, inf]`: a piece of the outward preimage inside `x` that the rounded result does not meet
+holds a part of the exact answer that rounds only onto that piece's ends, and each end in the closure of
+the rounded preimage (before `x` cuts it; for the periodic ops, computed over a one-double neighbourhood
+of `x`) is kept as a point. a first version took every end outside `x` and missed the second way (an end
+of `x` it holds, at an open rounded end: `mul_rev(10, (1, 2), [0.1])` stayed `{}`), found by the rewritten
+mul_rev test. the tests: `test_float_operands` gains the fuzz case and a finite one (`sqr_rev([2,
+2.0000000000000004], (1.4142135623730951, 2])`); the float tests of mul_rev and the trig ops, which pinned
+"x only intersects, after the rounding" (`== nearest_all & x`), now check D26 (`meets_x_as_d26`: the old
+answer kept, anything more a closed point of `x`'s closure within one double of the exact result, and no
+piece of the outward result in `x` without a point of the result, `no_piece_vanishes`); the trig test's
+`sin` sliver example (`x = (-inf, -5.6e-24)`) and mul_rev's `[0.1]` example now expect the point. each of
+the four red with `_keep_squeezed` a no-op and green with it (2026-09-30); the per-piece check was added
+after the `sin` example stayed green when sabotaged (its other pieces kept the result non-empty).
+`test_exactly_the_points_with_f_in_c` allows exactly the one way out of `x` (a closed point on `x`'s
+closure) and still refuses a stray point (checked with a planted `[5.0]`).
 
 ## 3. order and parallelism
 

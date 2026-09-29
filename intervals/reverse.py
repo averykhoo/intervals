@@ -39,7 +39,11 @@ ordinary answer (no solution there), with no warning
   `exact` and `rounded`: `_trig_branch`)
 * an op is the union of its branches' preimages, **then** the intersection with `x`, after the
   rounding: an end of `x` inside an enclosure's slack is kept as it is, so the result never leaves `x`
-  and is never looser than rounding then intersecting would make it
+  and is never looser than rounding then intersecting would make it. one exception, to nearest only
+  (D26, `_keep_squeezed`): a part of the preimage inside `x` that rounds wholly onto one double is
+  that double, as a point, as 1788's order (`x` first, then the rounding) gives it, where
+  intersecting after the rounding lost the part; when the double is an end `x` does not hold, the
+  result leaves `x` by that point
 * the four ops here are even or odd functions of one monotone branch on `[0, inf]`: an even one's
   preimage is `P ∪ -P` and an odd one's `P(c) ∪ -P(-c)`, P being the branch's (`_even`, `_odd`)
 * D12's cap (1000 pieces, then the hull and a `HullWarning`) is for the periodic ones, which have
@@ -94,6 +98,7 @@ from intervals.applicator import warn
 from intervals.cuts import Value
 from intervals.cuts import mirror
 from intervals.decorated import DecoratedInterval
+from intervals.decorated import _quietly
 from intervals.decorated import _trivial
 from intervals.errors import EmptySetPropagationWarning
 from intervals.errors import HullWarning
@@ -215,18 +220,63 @@ def _operands(name: str, *operands):
     return out, cls
 
 
-def _reverse(name: str, c, x, preimage: Callable[..., Cuts], given=()) -> MultiInterval:
-    """`preimage(*given, c, outward) ∩ x` on cut tuples; `given` holds a binary op's other operand (mul_rev's b)"""
+def _reverse(name: str, c, x, preimage: Callable[..., Cuts], given=(), x_given: bool = False) -> MultiInterval:
+    """`preimage(*given, c, outward) ∩ x` on cut tuples; `given` holds a binary op's other operand (mul_rev's
+    b), or `x` itself for the periodic ops, which list their branches from it (`x_given`)"""
     if any(isinstance(a, DecoratedInterval) for a in (*given, c, x)):
-        return _decorated(name, c, x, preimage, given)
+        return _decorated(name, c, x, preimage, given, x_given)
     (*given, c, x), cls = _operands(name, *given, c, x)
     if not c or not x or not all(given):
         warn(EmptySetPropagationWarning, f'{name}: an operand is empty, so the result is empty')
         return cls()
-    return cls.from_cuts(kernel.intersection(preimage(*(g.cuts for g in given), c.cuts, cls._outward), x.cuts))
+    raw = preimage(*(g.cuts for g in given), c.cuts, cls._outward)
+    result = kernel.intersection(raw, x.cuts)
+    if not cls._outward and x.cuts != kernel.REALS:
+        def rounded() -> Cuts:  # the rounded preimage, not cut to x, around every point of x
+            if not x_given:
+                return raw
+            return preimage(*(g.cuts for g in given[:-1]), _around(x.cuts), c.cuts, False)
+        result = _keep_squeezed(result, x.cuts, lambda: preimage(*(g.cuts for g in given), c.cuts, True), rounded)
+    return cls.from_cuts(result)
 
 
-def _decorated(name: str, c, x, preimage: Callable[..., Cuts], given) -> DecoratedInterval:
+def _around(x: Cuts) -> Cuts:
+    """x's closure, each finite end moved out past the next double: a neighbourhood of every point of x"""
+    def out(v, toward):
+        if is_infinite(v):
+            return v
+        return math.nextafter(math.nextafter(float(v), toward), toward)
+    return kernel.normalize([kernel.piece(out(lo, -INF), out(hi, INF)) for lo, _, hi, _ in kernel.pieces(x)])
+
+
+def _keep_squeezed(result: Cuts, x: Cuts, enclosure: Callable[[], Cuts], rounded: Callable[[], Cuts]) -> Cuts:
+    """
+    to nearest, `x` meets the exact preimage before it is rounded (D26, owner 2026-09-30, found as
+    fuzz-rev-inf): a part of the preimage inside x that rounds wholly onto one double `d` is the point
+    `[d]`, where intersecting after the rounding lost it. two ways: `d` is an end x does not hold, as
+    `pown_rev(c, -1, (-inf, -2))` for `c = (-2.2e-309, 0)`, whose exact answer `(-inf, -4.49e308)` is
+    wholly past -MAX and is now `[-inf]`, the one case where a result leaves x; or `d` is a point of x
+    at an end the rounding kept open, as `mul_rev(10, (1, 2), [0.1])`, whose exact answer holds the
+    double 0.1 (it is above 1/10) and is now `[0.1]`
+
+    found from the outward preimage in x, an enclosure whose ends are doubles or ends of x: a piece of
+    it the rounded result does not meet holds a part of the exact preimage that rounds only onto that
+    piece's ends (every double inside the piece is in x, where the result would hold it), and an end
+    it rounds onto is in the closure of the rounded preimage (`rounded`, before x cuts it). exact for x
+    with double or infinite ends, but that when both ends of such a piece are in that closure, both are
+    kept, one of them possibly a double no point of it rounds to (still within one double of it). the
+    default x, `[-inf, inf]`, loses nothing to the rounding, so it costs nothing
+    """
+    inside = kernel.intersection(_quietly(enclosure), x)  # its warnings were given by the rounded pass
+    missed = [(lo, hi) for lo, _, hi, _ in kernel.pieces(inside) if not kernel.intersection(result, _one(lo, hi))]
+    if not missed:
+        return result
+    reach = kernel.normalize([kernel.piece(lo, hi) for lo, _, hi, _ in kernel.pieces(_quietly(rounded))])
+    points = [_one(d, d) for lo, hi in missed for d in {lo, hi} if kernel.contains_point(reach, d)]
+    return kernel.union(result, *points)
+
+
+def _decorated(name: str, c, x, preimage: Callable[..., Cuts], given, x_given: bool) -> DecoratedInterval:
     """the decorated reverse op (M13's merge of M13e and M13g): the op on the operands' intervals,
     decorated trv as 1788 decorates a reverse op's result (`decorated.py::_trivial`). an operand is a
     DecoratedInterval or a real number (a point); a bare MultiInterval is refused, as the wrapper's
@@ -237,7 +287,7 @@ def _decorated(name: str, c, x, preimage: Callable[..., Cuts], given) -> Decorat
         if isinstance(a, MultiInterval) and a is not _REALS:
             raise TypeError(f'{name}: expected a DecoratedInterval or a real number, got {type(a).__name__}')
         return a  # a number, or the default x; anything else is refused by `_operands`
-    return _trivial(_reverse(name, interval(c), interval(x), preimage, tuple(map(interval, given))))
+    return _trivial(_reverse(name, interval(c), interval(x), preimage, tuple(map(interval, given)), x_given))
 
 
 def sqr_rev(c, x=_REALS) -> MultiInterval:
@@ -492,7 +542,7 @@ def sin_rev(c, x=_REALS) -> MultiInterval:
     >>> sin_rev(M(2))
     MultiInterval.parse('{}')
     """
-    return _reverse('sin_rev', c, x, _periodic(_SIN), given=(x,))
+    return _reverse('sin_rev', c, x, _periodic(_SIN), given=(x,), x_given=True)
 
 
 def cos_rev(c, x=_REALS) -> MultiInterval:
@@ -504,7 +554,7 @@ def cos_rev(c, x=_REALS) -> MultiInterval:
     >>> cos_rev(M(1), M(-1, 7))
     MultiInterval.parse('{ [0] , (6.283185307179586, 6.283185307179587) }')
     """
-    return _reverse('cos_rev', c, x, _periodic(_COS), given=(x,))
+    return _reverse('cos_rev', c, x, _periodic(_COS), given=(x,), x_given=True)
 
 
 def tan_rev(c, x=_REALS) -> MultiInterval:
@@ -520,7 +570,7 @@ def tan_rev(c, x=_REALS) -> MultiInterval:
     >>> tan_rev(M.parse('[inf]'))
     MultiInterval.parse('{}')
     """
-    return _reverse('tan_rev', c, x, _periodic(_TAN), given=(x,))
+    return _reverse('tan_rev', c, x, _periodic(_TAN), given=(x,), x_given=True)
 
 
 def _periodic(fn: _Periodic) -> Callable[[Cuts, Cuts, bool], Cuts]:

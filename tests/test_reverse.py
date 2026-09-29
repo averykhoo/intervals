@@ -188,6 +188,31 @@ def in_slack(t, result: MultiInterval) -> bool:
     return False
 
 
+def meets_x_as_d26(result: MultiInterval, nearest_all: MultiInterval, x: MultiInterval, exact: MultiInterval,
+                   outward: MultiInterval):
+    """to nearest, x meets the rounded preimage (`nearest_all & x`), and a part inside x that rounds
+    wholly onto one double is that double, as a point (D26, fuzz-rev-inf), in x or on an end x does not
+    hold: anything more than `nearest_all & x` is such a point, each within one double of a true point
+    in x; and nothing the outward class finds in x vanishes: the result meets the closure of each
+    piece of `outward` (the outward result in x)"""
+    near_x = nearest_all & x
+    assert near_x.issubset(result), (near_x, result)
+    x_closure = M.from_pieces((lo, hi) for lo, _, hi, _ in pieces(x.cuts))
+    for lo, lo_closed, hi, hi_closed in pieces(result.difference(near_x).cuts):
+        assert lo == hi and lo_closed and hi_closed and lo in x_closure, (lo, hi, result)
+        assert exact & _widened(M(lo)), (lo, exact)
+    if exact:
+        assert result, exact
+    no_piece_vanishes(result, outward)
+
+
+def no_piece_vanishes(nearest: MultiInterval, outward: MultiInterval):
+    """to nearest, each piece of the outward result (in x) keeps a point of the nearest result in its
+    closure: the part of the exact result there rounds onto a double of that closure (D26)"""
+    for lo, _, hi, _ in pieces(outward.cuts):
+        assert nearest & M(lo, hi), ((lo, hi), nearest)
+
+
 def probes(*cut_tuples_):
     """every end value, a point between each two, one beyond each end, ±inf, and points a fraction
     of an ulp on each side of every float end"""
@@ -331,13 +356,18 @@ def test_exactly_the_points_with_f_in_c(op, cut_tuples_c, cut_tuples_x):
     rounded end: the next double inward is a true point"""
     c, x = M.from_cuts(cut_tuples_c), M.from_cuts(cut_tuples_x)
     result = rev(op, c, x)
-    assert result.issubset(x)
+    # the one way out of x (D26, to nearest): a part inside x squeezed onto an end x does not hold is
+    # that end, as a point
+    squeezed = result.difference(x)
+    x_closure = M.from_pieces((lo, hi) for lo, _, hi, _ in pieces(x.cuts))
+    for lo, lo_closed, hi, hi_closed in pieces(squeezed.cuts):
+        assert lo == hi and lo_closed and hi_closed and lo in x_closure, (squeezed, result)
     for t in probes(cut_tuples_c, cut_tuples_x, result.cuts):
         truth = value_in(op, t, cut_tuples_c)
         if truth and t in x:
             assert t in result, (t, result)
         if t in result and truth is False:
-            assert in_slack(t, result), (t, result)
+            assert in_slack(t, result) or t in squeezed, (t, result)
     for lo, lo_closed, hi, hi_closed in pieces(result.cuts):
         for end, closed, toward in ((lo, lo_closed, INF), (hi, hi_closed, -INF)):
             if not closed and isinstance(end, float) and math.isfinite(end):
@@ -456,6 +486,13 @@ def _first_double_above(v) -> float:
 @example(op=('pown', -7), cut_tuples_c=one(0.0, H('0X0.0000000000001P-1022')), cut_tuples_x=ALL)  # :276
 @example(op=('pown', -1), cut_tuples_c=one(3.0, 3.0), cut_tuples_x=ALL)  # 1/3: both ends moved, open
 @example(op=('sqr', 2), cut_tuples_c=one(2.0, H('0x1.0000000000001p+1'), False, False), cut_tuples_x=ALL)  # squeezed
+# fuzz-rev-inf (fuzz run 36580954134; D26): the exact result, wholly past -MAX, squeezes to [-inf],
+# which an x open at -inf dropped after the rounding; x meets the preimage first, so [-inf] stays
+@example(op=('pown', -1), cut_tuples_c=one(-2.225073858507203e-309, 0.0, False, False),
+         cut_tuples_x=one(-INF, -2.0, False, False))
+# its finite form: sqrt of [2, 2.0000000000000004] rounds to one double e, the part above e is in x = (e, 2]
+@example(op=('sqr', 2), cut_tuples_c=one(2.0, 2.0000000000000004),
+         cut_tuples_x=one(1.4142135623730951, 2.0, False, True))
 def test_float_operands(op, cut_tuples_c, cut_tuples_x):
     """outward: the exact result of the same doubles is inside, what rounding adds holds no double
     strictly inside it, every finite end a float. to nearest: float ends, the exact result within one
@@ -478,6 +515,7 @@ def test_float_operands(op, cut_tuples_c, cut_tuples_x):
                 assert end in exact, (end, outward)
     if exact:  # nothing of the exact result vanishes to nearest, a squeezed piece included
         assert nearest
+    no_piece_vanishes(nearest, outward)  # nor any part of it (D26)
 
 
 @pytest.mark.parametrize('lo, hi', [(3.0, 7.0), (0.1, 10.0), (1e-300, 3.0)])
@@ -736,7 +774,8 @@ def test_mul_rev_float_operands(b, c, x):
     strictly inside it, a closed end is a point of the exact result. to nearest, x omitted (an end of
     x can fall in the half ulp a rounded end moved, as `0.1` in `(1/10, 1/5)` rounded to `(0.1, 0.2)`):
     the exact result within one double of each piece, inside the outward closure, not empty if it is
-    not; and x only intersects, after the rounding"""
+    not; and x meets it after the rounding, a part squeezed onto an end x excludes kept as that end
+    (D26: `meets_x_as_d26`)"""
     B, C, X = M.from_cuts(exact_cuts(b)), M.from_cuts(exact_cuts(c)), M.from_cuts(exact_cuts(x))
     exact = mrev(B, C, X)
     outward = mrev(O.from_cuts(b), O.from_cuts(c), O.from_cuts(x))
@@ -756,7 +795,7 @@ def test_mul_rev_float_operands(b, c, x):
     assert nearest_all.issubset(M.from_pieces((lo, hi) for lo, _, hi, _ in pieces(outward_all.cuts)))
     if exact_all:
         assert nearest_all
-    assert mrev(M.from_cuts(b), M.from_cuts(c), M.from_cuts(x)) == nearest_all & M.from_cuts(x)
+    meets_x_as_d26(mrev(M.from_cuts(b), M.from_cuts(c), M.from_cuts(x)), nearest_all, M.from_cuts(x), exact, outward)
 
 
 def test_mul_rev_1788_float_vector():
@@ -1238,14 +1277,14 @@ def test_trig_rev_symmetry(name, c, x):
 @example(name='tan', c=one(H('0X1.D02967C31CDB4P+53'), H('0X1.D02967C31CDB5P+53')), x=one(-1.5708, 1.5708))  # :711
 @example(name='sin', c=one(0.5, 1.0), x=one(0.0, 20.0))  # nearest: float ends, closed
 @example(name='sin', c=one(-5.614185657941294e-24, 0.0, False, False),
-         x=one(-INF, -5.614185657941294e-24, False, False))  # x's end in the half ulp nearest moves asin(c)
+         x=one(-INF, -5.614185657941294e-24, False, False))  # x's end in the half ulp: kept as a point (D26)
 def test_trig_rev_float_operands(name, c, x):
     """over a bounded x: outward holds the exact result of the same doubles, adds no double strictly inside
     what it adds, and closes only exact points. to nearest, x taken as the whole box (an end of x can
     fall in the half ulp a rounded end moved, as mul_rev's test says: asin(-5.6e-24) rounds onto the
-    double -5.6e-24 itself, so x = (-inf, -5.6e-24) loses the exact sliver between them): float ends
-    within one double of the exact result, inside the outward closure, not empty when it is not; and
-    x only intersects, after the rounding"""
+    double -5.6e-24 itself, and x = (-inf, -5.6e-24) holds only the exact sliver between them): float
+    ends within one double of the exact result, inside the outward closure, not empty when it is not;
+    and x meets it after the rounding, the sliver kept as the point -5.6e-24 (D26: `meets_x_as_d26`)"""
     box = lambda cls: cls.from_cuts(BOX.cuts)  # noqa: E731
     exact = trev(name, M.from_cuts(exact_cuts(c)), M.from_cuts(exact_cuts(x)) & BOX)
     outward = trev(name, O.from_cuts(c), O.from_cuts(x) & box(O))
@@ -1266,7 +1305,7 @@ def test_trig_rev_float_operands(name, c, x):
     if exact_all:
         assert nearest_all
     X = M.from_cuts(x) & BOX
-    assert trev(name, M.from_cuts(c), X) == nearest_all & X
+    meets_x_as_d26(trev(name, M.from_cuts(c), X), nearest_all, X, exact, outward)
 
 
 @settings(max_examples=100, deadline=None)
