@@ -305,7 +305,9 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   **`OutwardMultiInterval`** (M12) is the subclass that rounds outward: its class attribute
   `_outward` reaches every op as `outward=`, and the `ops.OUTWARD` descriptors evaluate a float corner
   exactly (each float as the Fraction it denotes) and round it down for a low end and up for a high
-  end (`rounding.round_rational`). that is the tightest float enclosure. the same doubles can come
+  end (`rounding.round_rational`). that is the tightest float enclosure (pown's float corners past
+  `elementary.EXACT_POWER_LIMIT` bits reach the same doubles through `elementary.rounded_pow`:
+  "power" below). the same doubles can come
   from gmpy2/mpfr, faster (the backend, "elementary and step functions" below); it never makes one
   tighter or looser. mixed with a `MultiInterval` on either side, the result is outward: the
   subclass overrides every reflected dunder, which python requires before it tries the right
@@ -314,7 +316,8 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   or outward by type. poles never go through the hook, and a float piece that rounding squeezes to
   one point keeps that point, closed
 * **flags at rounded ends**: outward, attainment is decided on exact values (an `OUTWARD`
-  descriptor's `fn` is exact too), so an end that directed rounding moved is **open** — nothing
+  descriptor's `fn` is exact too; pown's, past that limit, is a marker equal to nothing, which is
+  the exact value's answer, `ops._NOT_A_DOUBLE`), so an end that directed rounding moved is **open** — nothing
   attains it (`OutwardMultiInterval(0.1) + 0.2` = `(0.3, 0.30000000000000004)`), and an end that is a
   double already keeps its flag. to nearest, flags are conservative, not a promise (the suite checks
   the nearest mode against the closure). an irrational value of an exact operand is its tightest
@@ -327,7 +330,15 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   1788's **pow** (`functions.pow_`, "elementary and step functions" below), so `[-3, 1] ** [2]` =
   `[0, 1]`. `b ** A` for a real `b` is `MultiInterval(b) ** A`, in `A`'s class, and a subclass's
   `__rpow__` keeps `MultiInterval(2) ** OutwardMultiInterval(...)` outward. 3-argument `pow` is a
-  `TypeError`: dropped (not 1788; v1 had it on integers only)
+  `TypeError`: dropped (not 1788; v1 had it on integers only). pown's float corners never build a
+  power longer than `elementary.EXACT_POWER_LIMIT` bits (pown-huge, 2026-09-29;
+  `intervals/ops.py::_power_descriptor`): outward, a float corner's power is exact while
+  `elementary.exact_pow` builds it and otherwise `elementary.rounded_pow` in each direction (1788's
+  pow route, the same doubles), with attainment against `ops._NOT_A_DOUBLE`, a marker equal to
+  nothing (such a power is neither a double nor a midpoint); to nearest, python's `float ** int`
+  while `|n| <= 2 ** 53`, past it `rounded_pow` to nearest with the int n's parity (python rounds n
+  to a double there: `M(-1.0) ** (2 ** 60 + 1)` was `[1.0]`). int and Fraction operands are still
+  exact, so `M(2) ** 2 ** 60` does not finish (open question Q-exact, plan §2 "pown-huge")
 * **reductions** (M13h, 2026-09-26; `intervals/reductions.py`): 1788's `sum`, `sumAbs`,
   `sumSquare`, `dot` as `sum_(xs)`, `sum_abs(xs)`, `sum_sqr(xs)`, `dot(xs, ys)`, exported from
   `intervals`. point ops over any iterable of real numbers, not interval ops: each operand is held
@@ -1182,7 +1193,8 @@ imports only point downward.
                            test_ieee1788_layer.py and itf1788/test_ieee1788.py, the 1788
                            layer and its conformance pass, M16b; test_relations.py gained
                            the allen matrix, M16c; test_numpy_compat.py, numpy, M16d;
-                           test_backend.py, the backend differential, M16e)
+                           test_backend.py, the backend differential, M16e;
+                           test_pown_huge.py, pown with a huge exponent, pown-huge)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
@@ -1391,6 +1403,23 @@ imports only point downward.
       exact text and interchange conversions, and every inf-sup type but binary64 (M16b)
 
 ## decision log
+
+### 2026-09-29 revision: pown-huge, built
+
+* pown (`A ** n` for an integral n, and every path to it: `ieee1788.pown`, `Interval ** n`,
+  `DecoratedInterval`, `Dual`, `np.power`) of a float corner with a huge n never finished: the outward
+  descriptor built the exact `Fraction(x) ** n`. it now builds it only within `EXACT_POWER_LIMIT` bits
+  and otherwise rounds with `elementary.rounded_pow`, the route pow already took, so pown and pow give
+  the same doubles; the design, its proof and the tests are plan §2 "pown-huge". "rounding"'s "fn is
+  exact" holds for pown up to that limit; past it attainment is against a marker equal to nothing,
+  which the proof shows is the exact value's answer
+* the nearest class past `|n| = 2 ** 53` is `rounded_pow` to nearest: python's `float ** int` lost the
+  parity (a wrong sign) or read an int past the double range as an overflow (`M(0.5) ** 10 ** 400` was
+  `[inf]`). up to 2**53 it is python's `float ** int` as before (whether that promises correct
+  rounding is open, Q-nearest-libm)
+* the descriptor's name is bounded (`pow<a 20001-bit int>`): `f'pow{n}'` raised python's 4300-digit
+  ValueError in every class
+* exact int/Fraction operands are unchanged and still huge by nature (Q-exact, for the owner)
 
 ### 2026-09-28 revision: python 3.12 minimum (owner, D25)
 

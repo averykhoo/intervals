@@ -3942,6 +3942,156 @@ reviewers' own, prefixed by lens, since three lenses reused `F1`:
 | spec F1 | spec | the record says `fuzz.yml`'s x10 run fuzzes the differential, with no cost | fixed (a number) | the spec lens measured `tests/test_backend.py` under `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10` at 579.47 s (717 passed, loaded); re-measured on the fixed tree 2026-09-28 10:14-10:20, beside this fix's gate: 735 passed in 387.51 s. with the last whole x10 run at 5037 s (`HANDOFF.md` M14-run, 2026-09-27) that is about 5400-5600 s against `fuzz.yml`'s 180 min; in "measured" above, `HANDOFF.md` Q16(e) and "still owed" |
 | spec S1 | spec | the speed table and the class-15 cost cited gitignored `.scratch` scripts | fixed | the loop is now tracked, `tools/backend_speed.py` (and `--bound` for the class-15 cost; run 2026-09-28 10:03, loaded: at `2**16` bits sin 3.46 s, exp 1.46 s, 5.94 s for the list; `2**20` cheap 0.15 s). the set-level `+ * /` claim softened to about 1.0-1.3x, with the spec lens's 0.72x-1.4x re-runs |
 
+### pown-huge: pown with a huge integral exponent (done 2026-09-29)
+
+HANDOFF row 2 (found by the M16b review, F4, and by M16d's build). `A ** n` for an integral n
+(`ops.power` -> `ops._power_descriptor`, reached through `MultiInterval`/`OutwardMultiInterval`
+`__pow__`, `DecoratedInterval`, `Dual`, `ieee1788.pown` and `Interval.__pow__`, numpy's `power`)
+formed the exact `Fraction(x) ** n` of every float corner in the outward class (`ops.outward`'s
+`exact`), so `O(0.5) ** (2 ** 31 - 1)`, `O(2.0) ** 2 ** 60`, `O(0.5) ** 1e20` (an integral float
+exponent is the int) never finished; and a base just above 1 never saturates
+(`O(1.0000000000000002) ** 10 ** 9`), so no range check alone was the fix. two designs, one
+critique, then this build, all 2026-09-29, in the worktree `intervals-pown-huge` (branch `pown-huge`
+off `v2` at `7288e81`).
+
+**the designs.** A, directed binary powering (squarings cut to p bits toward the bound, ziv doubling
+p), and B, `elementary.rounded_pow` (1788's pow route: `exact_pow` while the power is at most
+`EXACT_POWER_LIMIT` bits, then `_ln_bracket`'s range shortcuts, then ziv over `exp(n ln |x|)`) with a
+marker for attainment. the critique (read-only, adversarial) found no unsound end and no wrong flag
+in either: each agreed with MPFR on 63000 random points (bases over the whole range, subnormals,
+1 ± ulps, negatives; n from 1 to 2**64, 2**k ± 2, 10**20 to 10**300, both signs) and with each other
+on all 54 outward/1788 cases of a 58-case adversarial sweep; on the 30 cases today's code finished
+they equalled today in values and flags. B was chosen:
+* A's cost grows about cubically in bitlen(n), since it checks the range only after powering (C2,
+  one corner: 0.105 s at `O(1.5) ** 2 ** 4000`, 0.64 s at `2 ** 8000`, 2.89 s at `2 ** 14000`,
+  38.3 s at `2 ** 30000`, past 120 s at `2 ** 60000`; B 0.4 to 3 ms on the same, 2026-09-29, loaded)
+* A's own unsound-direction mutants went red only in white-box checks, so its new numerics could
+  only ever be pinned by internal tests; B adds none (`rounded_pow` is pinned by `pow_`, the itf1788
+  vectors and the MPFR tests, and has a backend)
+* B saturates in O(1) through `_ln_bracket`, and the designer's full gate with the prototype
+  installed as a plugin was 27795 + 5537 = 33332 passed (2026-09-29)
+
+three grafts from the critique: C4 (the nearest fix at a zero base, below), C3 (a bounded
+descriptor name, below) and, from A, its O(1) `is_double` and its exact-double rows as test oracles
+only. the critique also refuted "extend the M16d pin to u in {2, 1e300, 1e-300}" twice (C1): `O(2)`
+holds an exact int (the pin would hang under both designs; it must be `O(2.0)`), and at those three
+bases `u ** (2 ** 60 - 1)` and `u ** 2 ** 60` give the same saturated enclosure, so the B1 break
+stays green there; only a negative base or one near 1 tells them apart.
+
+**what was built** (`intervals/ops.py` only; the applicator, `elementary`, `_gmpy2` and the class
+layers are unchanged):
+* `_exact_power_descriptor(n)` is the old body (fn, pole, split points byte for byte);
+  `_power_descriptor(n, rounds_outward)` (still `lru_cache(64)`) dispatches
+* outward: `base._replace(fn=exact, rounded=(hook(DOWN), hook(UP)))`. a finite float corner's
+  `exact` is a per-descriptor `lru_cache(maxsize=4)` `float_exact(x)`: `s * elementary.exact_pow(|x|, n)`
+  (s = -1 iff x < 0 and the int n is odd), or the marker `_NOT_A_DOUBLE` where `exact_pow` declines.
+  a hook rounds the cached value with `round_rational` (today's value, built once instead of four
+  times a corner), and for the marker is `s * rounded_pow(|x|, n, d * s) + 0.0` (negating swaps DOWN
+  and UP). int, Fraction and ±inf corners go to `base.fn` as before
+* `_NOT_A_DOUBLE` equals nothing, and its docstring carries the proof: once `exact_pow` declines
+  (`|n| max(bitlen(num), bitlen(den)) > 100000`), `x ** n` is neither a double nor a midpoint. x = ±1
+  never declines; a power of two 2**e has `|e n| > 50000`, outside the float range; any other double
+  has an odd m >= 3 and at most 1075 bits, so `|n| >= 94` and the odd part `m ** n > 2 ** 54` (n > 0)
+  or the value is not dyadic (n < 0). so the marker's flags are the exact value's, and the hooks'
+  ziv loop meets no breakpoint at the value. `ops.outward`'s "fn is exact" now says pown is built there
+* N1 (found by the designer): to nearest, python's `float ** int` converts n to a double, so past
+  2**53 the parity was lost (`M(-1.0) ** (2 ** 60 + 1)` = `[1.0]`,
+  `M(-1.0000000000000002) ** (2 ** 53 + 1)` = `[7.389056098930649]`, wrong sign) and past about 1.8e308 the
+  conversion raised OverflowError, read as an overflow (`M(0.5) ** 10 ** 400` = `[inf]`). for
+  `|n| > 2 ** 53` a float corner is now `s * rounded_pow(|x|, n, NEAREST) + 0.0`; up to 2**53 the
+  descriptor is the old object. C4 (the critique): a zero base with n > 0 is 0.0 there (B's first
+  N1 sent it to python, `M(0.0) ** 10 ** 400` = `[inf]` and `M(0.0, 0.5) ** 10 ** 400` = `[0.0, inf]`, a
+  wrong set); n < 0 keeps None and the pole rule
+* C3 (the critique, pre-existing in every class): the name `f'pow{n}'` raised python's 4300-digit
+  ValueError for `|n| >= 10 ** 4300` (`O(1.5) ** 2 ** 20000`, `M(0.5) ** 2 ** 20000`, the `Dual`
+  form). `_power_name(n)` is `pow{n}` while `|n| < 10 ** 18`, else `pow[-]<a {bit_length}-bit int>`
+
+**what the build found**
+* a DEGENERATE result is closed whatever attainment says (`applicator.evaluate_box` keeps the point
+  of a squeezed piece), so `O(0.5) ** 1074` = `[5e-324]` does not observe the flag: a marker returned
+  for a representable power still gives it. the exact-double rows therefore take pieces with width
+  too (`O(0.5, 1.0) ** 1074` = `[5e-324, 1.0]`, `** 1075` = `(0.0, 1.0]`, `O(2.0, 4.0) ** 500` closed
+  at both ends), and they are what catches "marker whenever |n| > 93" (S3 below); the marker-boundary
+  property alone stays green there (S3b)
+* `O(0.0, 0.5) ** -(2 ** 61)`, `O(-1.0, 0.5) ** (2 ** 1000 + 1)` and `O(1.0, 1.0000000000000002) ** 10 ** 30`
+  hang on the old code too, so they are in the subprocess list, not in-process rows
+* the u = 1.0000000000000002 derivative of the M16d pin checked against MPFR: ieee(64) RoundDown/RoundUp
+  of `u ** (2 ** 60 - 1)` times 2**60 are 1.7425574576408943e+129 and 1.7425574576408946e+129, the pinned ends
+
+**tests** (`tests/test_pown_huge.py`, new, unless noted):
+* `::test_reproductions_finish`: 23 expressions in one subprocess, `timeout=60` (the pattern of
+  `tests/test_backend.py::_run`): the outward class through `**`, `ieee1788.pown`, `Interval ** 1e300`,
+  `DecoratedInterval` (COM and TRV), `Dual` (value and derivative), `np.power`, and the pole rows.
+  red on the old code: `TimeoutExpired` after 60 s
+* `::test_exact_double_boundaries`: 18 rows (A's plus the width rows), green on the old code (they are its values)
+* `::test_marker_boundary`: `@given` x and n with `100000 < |n| bits(x) <= 400000`: the piece is the
+  exact power rounded both ways, closed iff it is a double, and A's `_is_double` is False wherever it is open
+* `::test_identity_with_the_exact_construction`: random 1-3 piece outward sets (float, int, Fraction
+  and ±inf ends, random flags), three n an example in ±1..400 and ±1800..4000: `ops.power(a, n, True)`
+  equals `apply_unary(ops.outward(ops._exact_power_descriptor(n)), a)` in values, types and flags
+* `::test_huge_exponent_against_mpfr`: points against MPFR ieee(64) RoundDown/RoundUp, n an exact-width
+  mpfr, closed iff the ternary value is 0; n from 2**31..2**40, 1..2**64, 2**k ± 2, int(10.0**j), both signs
+* `::test_pown_matches_pow`: `A ** n` and `A ** O(n)` (1788's pow) agree on positive float points and one-ulp pieces
+* `::test_nearest_past_2_53` (12 rows), `::test_nearest_zero_to_a_huge_negative_power_is_empty`,
+  `::test_nearest_huge_exponent_against_mpfr` (MPFR RoundToNearest, |n| > 2**53); the nearest rows
+  were red on commit 1's library: 10 of 12 rows and the property (the other two are python's own
+  value at 2**53 and a pole row, the same before and after)
+* `::test_an_exponent_past_4300_digits`, red on commit 2's library with the 4300-digit ValueError
+* `tests/test_backend.py::test_huge_pown_is_the_same_on_both_backends`, `::test_huge_pown_reaches_the_backend`
+  (a spy: `_gmpy2.rounded_pow` is not called for `O(0.5) ** (2 ** 31 - 1)`, a range shortcut, and is
+  called once a direction for `O(1.0000000000000002) ** 10 ** 9`); `::test_power_descriptors_decline`'s docstring amended
+* `tests/test_autodiff.py::test_pow_integral_exponent_derivative_is_exact`: u over `O(-1)` and the
+  floats 2.0, 1e300, 1e-300 (they finish), -2.0, -1e-300, 1.0000000000000002 (they tell `n - 1` from `n`), times r
+
+**sabotage** (plan §2's rule, 2026-09-29: a throwaway harness under `.scratch/pown-huge/build/`,
+`__pycache__` cleared before and after each break, `PYTHONDONTWRITEBYTECODE=1`, one exact
+replacement matching once, restored with `copy2` and checked with `filecmp`, a control row on the
+intact code first, each targeted run in its own subprocess stopped by its own PID). every control
+green; every break below red unless marked:
+
+| id | break | red by |
+|---|---|---|
+| S1 | the outward descriptor back to `outward(_exact_power_descriptor(n))` (the old code) | `::test_reproductions_finish`, `TimeoutExpired` at 60 s |
+| S2 | the marker's `__eq__` True | `::test_marker_boundary` |
+| S3 | the marker whenever `abs(n) > 93` instead of where `exact_pow` declines | `::test_exact_double_boundaries[... O(0.5, 1.0) ** 1074]`, a width row |
+| S3b | S3, run against `::test_marker_boundary` alone | **green, as expected**: at ±1.0 the result is degenerate and closed anyway, and a power of two past the limit is out of range; the width rows are the guard |
+| S4 | the cached exact value without its sign | `::test_identity_with_the_exact_construction` |
+| S5 | the cache at module level, keyed on x alone | `::test_identity_with_the_exact_construction` (three n an example) |
+| S6 | the rounded path's direction not flipped for a negative result | `::test_huge_exponent_against_mpfr` (ValueError, start after end) |
+| S7 | the rounded path's sign dropped | `::test_huge_exponent_against_mpfr` |
+| S8 | the parity from `float(n)` | `::test_huge_exponent_against_mpfr` (the `@example` at `2 ** 60 + 1`) |
+| S9 | the two hooks swapped | `::test_pown_matches_pow` |
+| S10 | the backend's `_gmpy2._int` at 53 bits | `tests/test_backend.py::test_huge_pown_is_the_same_on_both_backends` |
+| S11 | autodiff's `n - 1` in float (`int(float(n) - 1)`) | `tests/test_autodiff.py::test_pow_integral_exponent_derivative_is_exact`, 12 of 21: u = `O(-1)`, -2.0, -1e-300, 1.0000000000000002 at each r; **green at 2.0, 1e300, 1e-300, as expected** (saturated: C1) |
+| N1 | the nearest threshold at 2**63 | `::test_nearest_past_2_53` (the 2**60 + 1 and 2**53 + 1 rows) and `::test_nearest_huge_exponent_against_mpfr` |
+| N2 | a zero base sent to python (the design's first N1) | `::test_nearest_past_2_53`, the three zero rows (C4) |
+| N3 | the zero guard removed (zero reaches `rounded_pow`, whose `exact_pow` answers 0 for any n) | the pole row `M(-2.0, 0.0) ** -(10 ** 400 + 1)` and `::test_nearest_zero_to_a_huge_negative_power_is_empty` |
+| N4 | the nearest sign dropped | `::test_nearest_past_2_53` (the negative rows) and the MPFR property |
+| C3 | the name back to `f'pow{n}'` | `::test_an_exponent_past_4300_digits` (the 4300-digit ValueError) |
+
+**gate** (2026-09-29, loaded shared laptop, `tests/itf1788` alone and the rest in the background,
+rc captured without a pipe): commit 1's tree 27795 passed in 50 s + 5580 in 513 s = 33375 (the 33332
+before, plus 43 new items); the final tree (commits 1-3) 27795 in 51 s + 5596 in 504 s = 33391. commit 2's
+tree alone had a targeted run (the pown, backend, autodiff, class, ops, outward, extreme-float, numpy
+and 1788-layer files and `ops.py`'s doctests: 2121 passed in 119 s); it differs from the final tree
+only in the descriptor's name. not pushed.
+
+**left open** (owner questions, not built):
+* **Q-exact**, pown of exact int/Fraction operands: `M(2) ** 2 ** 60` and `M(2) ** 1e300` still
+  never finish (their exact value does not fit in memory), and exact ends are common inside outward
+  intervals: `O(0.5, 2)` and `O.parse('[0.5, 2]')` store the 2 as an int, so `O(0.5, 2) ** 2 ** 40`
+  still hangs, and `O(0.5, 3) ** 2 ** 22` returns an interval whose repr raises the 4300-digit
+  error. `functions.pow_` already rounds exact operands past `EXACT_POWER_LIMIT`
+  (`M(2) ** M(2 ** 60)` = `(MAX, inf)`). options: (a) keep exact and document the limit, (b) raise
+  OverflowError up front past a bit budget, (c) past a limit shared with pow_, the tightest open
+  float enclosure, (d) (c) in the outward class only with (a) or (b) in the exact class. both
+  designers recommend (c); (d) is the minimum that makes `O(0.5, 2) ** 2 ** 40` finish. a separate
+  commit whichever is chosen
+* **Q-nearest-libm**: the nearest class keeps python's `float ** int` (libm's `pow`) for
+  `|n| <= 2 ** 53`; libm's pow is not promised correctly rounded (3000 of 3000 random near-1 bases
+  agreed with `rounded_pow(.., NEAREST)` on this laptop, 2026-09-29). is correctly rounded pown a
+  promise of the nearest class? no change made
+
 ## 3. order and parallelism
 
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is

@@ -36,6 +36,7 @@ from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import kernel
 from intervals import ops
+from intervals.autodiff import Dual
 from intervals.applicator import apply_unary
 from intervals.cuts import above
 from intervals.cuts import below
@@ -337,6 +338,18 @@ def test_nearest_huge_exponent_against_mpfr(x, n):
     ctx.round = gmpy2.RoundToNearest
     want = float(ctx.pow(gmpy2.mpfr(x, 53, gmpy2.context()), gmpy2.mpfr(n, abs(n).bit_length(), gmpy2.context()))) + 0.0
     assert repr(M(x) ** n) == repr(M.parse(f'[{want!r}]')), (x, n)
+
+
+# AN EXPONENT PAST 4300 DIGITS: the descriptor's name was `f'pow{n}'`, which python refuses to write
+
+def test_an_exponent_past_4300_digits():
+    big = '1.7976931348623157e+308'
+    assert repr(O(1.5) ** 2 ** 20000) == repr(O.parse(f'({big}, inf)'))
+    assert repr(M(0.5) ** 2 ** 20000) == repr(M.parse('[0.0]'))
+    y = Dual.variable(O(1.5)) ** 2 ** 20000
+    assert y.value == y.derivative == O.parse(f'({big}, inf)')
+    with pytest.warns(IndeterminateResultWarning, match='pow-<a 20001-bit int>'):
+        assert O(0.0) ** -(2 ** 20000) == O()
 
 
 # POWN AGAINST 1788'S POW (D11): two routes to the same `rounded_pow`

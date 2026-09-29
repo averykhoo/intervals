@@ -271,6 +271,19 @@ def _power_sign(x, n: int) -> int:
     return -1 if x < 0 and n % 2 else 1
 
 
+def _power_name(n: int) -> str:
+    """
+    `pow{n}`, or its sign and bit length for an n past 18 digits: python refuses to write an int of
+    more than 4300 digits as a string, so `f'pow{n}'` raised ValueError for `A ** 2 ** 20000`
+
+    >>> _power_name(-3), _power_name(-(2 ** 20000))
+    ('pow-3', 'pow-<a 20001-bit int>')
+    """
+    if abs(n) < 10 ** 18:
+        return f'pow{n}'
+    return f"pow{'-' if n < 0 else ''}<a {abs(n).bit_length()}-bit int>"
+
+
 def _exact_power_descriptor(n: int) -> OpDescriptor:
     """
     `x ** n` for `n != 0`: monotone on each side of zero, so split there for even n and for n < 0.
@@ -280,6 +293,7 @@ def _exact_power_descriptor(n: int) -> OpDescriptor:
     `float ** int` (rounded to nearest) on a float
     """
     k = abs(n)
+    name = _power_name(n)
 
     def fn(x):
         if is_infinite(x):
@@ -290,7 +304,7 @@ def _exact_power_descriptor(n: int) -> OpDescriptor:
             return signed_inf(1 if x > 0 or k % 2 == 0 else -1)
 
     if n > 0:
-        return OpDescriptor(f'pow{n}', fn, split_points=(0,) if n % 2 == 0 else ())
+        return OpDescriptor(name, fn, split_points=(0,) if n % 2 == 0 else ())
 
     def fn_negative(x):
         if x == 0:
@@ -305,7 +319,7 @@ def _exact_power_descriptor(n: int) -> OpDescriptor:
     def pole(args, dirs):
         return signed_inf(dirs[0] ** k) if args[0] == 0 and dirs[0] else None
 
-    return OpDescriptor(f'pow{n}', fn_negative, split_points=(0,), pole=pole)
+    return OpDescriptor(name, fn_negative, split_points=(0,), pole=pole)
 
 
 @lru_cache(maxsize=64)
