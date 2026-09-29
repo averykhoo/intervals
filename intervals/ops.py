@@ -58,6 +58,7 @@ from intervals.cuts import Cut
 from intervals.cuts import Side
 from intervals.cuts import above
 from intervals.cuts import below
+from intervals.cuts import mirror
 from intervals.errors import EmptySetPropagationWarning
 from intervals.kernel import Cuts
 from intervals.rounding import DOWN
@@ -402,11 +403,26 @@ def _power_descriptor(n: int, rounds_outward: bool = False) -> OpDescriptor:
 # OPS OVER CUT TUPLES
 
 def neg(a: Cuts) -> Cuts:
-    return apply_unary(NEG, a)
+    """
+    each cut mirrored, keeping its number's type (a double's negation is a double), as the applicator
+    does for a piece with two ends; the applicator reads a point by its low cut alone, so a point whose
+    cuts hold one value in two types (an exact 1/2 and a float 0.5, as an intersection can make) would
+    come back in one type, and a reverse op, which reads each end by its own type, would not be odd:
+    `pown_rev(-c, -7) != -pown_rev(c, -7)` (fuzz-symmetry, 2026-09-29)
+    """
+    return _exactly(NEG, a, lambda cuts: tuple(mirror(cut) for cut in reversed(cuts)))
 
 
 def pos(a: Cuts) -> Cuts:
-    return apply_unary(POS, a)
+    """the operand as it is (see `neg`)"""
+    return _exactly(POS, a, lambda cuts: cuts)
+
+
+def _exactly(desc: OpDescriptor, a: Cuts, fn) -> Cuts:
+    if not a:
+        warn(EmptySetPropagationWarning, f'{desc.name}: an operand is empty, so the result is empty')
+        return kernel.EMPTY
+    return fn(a)
 
 
 def absolute(a: Cuts) -> Cuts:

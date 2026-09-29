@@ -394,6 +394,7 @@ def test_union_and_x(op, cut_tuples_c, cut_tuples_d, cut_tuples_x):
 
 
 @given(op=ops, cut_tuples_c=cut_tuples())
+@example(op=('pown', -7), cut_tuples_c=one(Fraction(1, 2), 0.5))  # fuzz-symmetry: a mixed point
 def test_symmetry(op, cut_tuples_c):
     c = M.from_cuts(cut_tuples_c)
     r = rev(op, c)
@@ -1216,9 +1217,9 @@ def test_trig_rev_union_and_x(name, c, d, x):
 def test_trig_rev_symmetry(name, c, x):
     """sin and tan are odd, cos is even: `rev(-c, -x) = -rev(c, x)` and `cos_rev(c, -x) = -cos_rev(c, x)`,
     hulls and float operands included (a branch's mirror is a branch, and rounding is symmetric). the
-    mirror is taken cut by cut (`reverse.negate`), which keeps each end's type: the class's `-` rebuilds a
-    point whose ends differ in type (`[0, 0.0]`) with one value, so an end would change from float to exact
-    and round differently"""
+    mirror is taken cut by cut (`reverse.negate`), which keeps each end's type; the class's `-` does too
+    since fuzz-symmetry (2026-09-29), but before it rebuilt a point whose ends differ in type (`[0, 0.0]`)
+    with one value, so an end changed from float to exact and rounded differently (`test_symmetry`)"""
     C, X = M.from_cuts(c), M.from_cuts(x)
     neg = lambda a: M.from_cuts(negate(a.cuts))  # noqa: E731
     r = _quiet(TRIG[name], C, X)

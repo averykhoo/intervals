@@ -23,6 +23,8 @@ from hypothesis import strategies as st
 from intervals import ops
 from intervals.applicator import apply_binary
 from intervals.applicator import apply_unary
+from intervals.cuts import Cut
+from intervals.cuts import Side
 from intervals.fmt import parse
 from intervals.kernel import EMPTY
 from intervals.kernel import REALS
@@ -326,6 +328,26 @@ def test_mixed_pair_rounded_once():
     assert value != Fraction(1, 3) / 2.75
     assert values_of('div', Fraction(1, 3), 2.75, a, b) == [value]
     assert contains_point(closed(apply('div', a, b)), value), show(apply('div', a, b))
+
+
+_MIXED_POINT = (Cut(Fraction(1, 2), Side.BELOW), Cut(0.5, Side.ABOVE))
+
+
+@given(a=cut_tuples())
+@example(a=_MIXED_POINT)
+@example(a=(Cut(0.5, Side.BELOW), Cut(Fraction(1, 2), Side.ABOVE), Cut(2, Side.BELOW), Cut(3.0, Side.ABOVE)))
+def test_neg_and_pos_keep_each_cuts_type(a):
+    """
+    found by M14's first GitHub fuzz run (2026-09-29, fuzz-symmetry): `-` of a point whose cuts hold
+    one value in two types (an exact 1/2 and a float 0.5) came back in its low cut's type alone, so
+    `pown_rev(-c, -7)`, which reads each end by its own type, was not `-pown_rev(c, -7)`. negation is
+    the cut mirror, type by type, and an involution; `+` is the identity
+    """
+    types = lambda cuts: [type(cut.value) for cut in cuts]  # noqa: E731
+    mirrored = tuple(Cut(-cut.value, Side.ABOVE if cut.side is Side.BELOW else Side.BELOW) for cut in reversed(a))
+    assert ops.neg(a) == mirrored and types(ops.neg(a)) == types(mirrored)
+    assert ops.neg(ops.neg(a)) == a and types(ops.neg(ops.neg(a))) == types(a)
+    assert ops.pos(a) == a and types(ops.pos(a)) == types(a)
 
 
 # SHARPNESS: on exact operands the result is exactly the attained set

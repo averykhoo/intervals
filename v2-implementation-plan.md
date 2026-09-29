@@ -4129,6 +4129,49 @@ passed in 55 s, the rest 5607 passed in 567 s (the 5596 before plus 11 new items
   agreed with `rounded_pow(.., NEAREST)` on this laptop, 2026-09-29). is correctly rounded pown a
   promise of the nearest class? no change made
 
+### fuzz-symmetry: `-` of a mixed point (done 2026-09-29)
+
+**found** by M14's first GitHub fuzz run (run 36507253782, branch `fuzz-run` = `v2` at `7288e81` plus
+a temporary trigger, ×10, 2026-09-29: `1 failed, 33331 passed in 3216.59s`):
+`tests/test_reverse.py::test_symmetry` red on `op=('pown', -7)`, `c` the point 1/2 as
+`(Cut(Fraction(1, 2), BELOW), Cut(0.5, ABOVE))` (`@reproduce_failure('6.168.3',
+b'AEEEAUEAQQRBAyg/4AAAAAAAAAEBAA==')`). `pown_rev(c, -7)` was `[1.1040895136738123,
+1.1040895136738125)` (the float end to nearest, closed; the exact end directed, open), but
+`pown_rev(-c, -7)` was `(-1.1040895136738125, -1.1040895136738123)`, so `rev(-c) != -rev(c)`.
+reproduced locally at `7288e81`, before pown-huge.
+
+**diagnosis**: the library, not the test. the class's `-` went through the applicator, which reads
+a point by its low cut alone (`applicator._ends`: `lo == hi` gives one end), so `-c` came back as
+`[-1/2]` with both cuts exact: the float end lost its type. every other forward op reads a point so
+too (`c ** -7`, `sqrt`, `c * 1` of `[1/2, 0.5]` all see an exact 1/2, and of `[0.5, 1/2]` a float
+0.5); the reverse ops read each end by its own type (`reverse._end`), so a mixed point's preimage
+has one float end and one exact end, and the mirror of that is not the preimage of `-c` as the
+class built it. the trig reverse ops met the same point before (`[0, 0.0]`) and
+`tests/test_reverse.py::test_trig_rev_symmetry` worked around it by mirroring with `reverse.negate`,
+its docstring naming the class's `-` as the cause. a probe of every reverse op on six mixed points,
+in both classes (`rev(mixed)` against `rev(the point at its low cut)`), found 45 disagreements, the
+two-variable ops included: the per-end reading is the reverse engine's throughout, and sound.
+
+**options weighed**: (a) the reverse ops read a point at its low cut too (a canonicalization in
+`reverse._reverse`, tried: the probe's 45 went to 0 and `test_symmetry` passed, but
+`test_trig_rev_symmetry`'s own `@example`, the cut mirror of `[0, 0.0]`, would then fail: the cut
+mirror and the low-cut reading are not compatible); (b) the test mirrors with `reverse.negate`, as
+the trig test does, leaving `-` inconsistent between a point and a piece; (c) **chosen**: `-` is the
+cut mirror and `+` the identity, each cut keeping its type (`ops.neg`, `ops.pos`, no longer through
+the applicator; the empty operand still warns). this is what `-` already did for a piece with two
+ends, makes `-` an involution on the representation, and makes both symmetry tests hold with the
+class's `-`. the other forward ops keep the low-cut reading, the reverse ops the per-end one; a mixed
+point is sound either way, only its rounding differs.
+
+**pins**: `tests/test_reverse.py::test_symmetry`'s `@example(op=('pown', -7),
+cut_tuples_c=one(Fraction(1, 2), 0.5))`; `tests/test_ops_properties.py::test_neg_and_pos_keep_each_cuts_type`
+(`-` is the typed cut mirror and an involution, `+` the identity; two mixed-point `@example`s). both
+red with `intervals/ops.py` as at `548ac78` (`__pycache__` cleared, `PYTHONDONTWRITEBYTECODE=1`),
+green with the fix. `test_trig_rev_symmetry`'s docstring updated (its `negate` stays).
+
+**gate**: green, 2026-09-29 on the fixed tree (shared laptop, rc captured without a pipe): `tests/itf1788` 27795 passed in 57 s, the rest 5608 passed in 591 s (5607 before plus the new neg/pos test) = 33403; `test_trig_rev_symmetry`'s docstring was edited during the second call (text only). the fuzz rerun on `fuzz-run` against the saved hypothesis cache is owed
+(`HANDOFF.md` row M14-run).
+
 ## 3. order and parallelism
 
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
