@@ -561,7 +561,15 @@ def _python_floordiv(x, y):
         q = -1 if (x > 0 and y < 0) or (x < 0 and y > 0) else 0
         return float(q) if isinstance(x, float) else q
     q = math.floor(Fraction(x) / Fraction(y))
-    return float(q) if isinstance(x, float) or isinstance(y, float) else q
+    return _nearest(q) if isinstance(x, float) or isinstance(y, float) else q
+
+
+def _nearest(q):
+    """an exact floor rounded to the nearest double, past MAX an infinity (python's `float` raises)"""
+    try:
+        return float(q)
+    except OverflowError:
+        return math.inf if q > 0 else -math.inf
 
 
 @pytest.mark.parametrize('x', scalars)
@@ -582,6 +590,9 @@ def test_scalar_floordiv_matches_python(x, y):
 @settings(max_examples=150, deadline=None)
 @given(a=cut_tuples(max_pieces=2), b=cut_tuples(max_pieces=2), rng=st.randoms(use_true_random=False))
 @example(a=parse('[1]'), b=one(0.001, True, 0.001, True), rng=random.Random(0))  # float 1 / 0.001 is 1000.0
+# fuzz (run 36540588320): a floor past MAX rounds to inf, where python's float() raises
+@example(a=one(Fraction(1, 2), True, 1, False), b=one(-math.inf, False, 2.2250738585e-313, True),
+         rng=random.Random(0))
 @pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
 @pytest.mark.filterwarnings('ignore::intervals.errors.HullWarning')
 def test_floordiv_sound_float(a, b, rng):
@@ -593,7 +604,7 @@ def test_floordiv_sound_float(a, b, rng):
                 continue  # a pole (div's rule) and an indeterminate pair
             exact = _python_floordiv(*(Fraction(v) if isinstance(v, float) and math.isfinite(v) else v
                                        for v in (x, y)))
-            assert contains_point(result, exact) or contains_point(result, float(exact)), (x, y, exact, show(result))
+            assert contains_point(result, exact) or contains_point(result, _nearest(exact)), (x, y, exact, show(result))
 
 
 def test_floordiv_is_not_floor_div_at_an_infinite_divisor():

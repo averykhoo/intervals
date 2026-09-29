@@ -4183,8 +4183,29 @@ cut_tuples_c=one(Fraction(1, 2), 0.5))`; `tests/test_ops_properties.py::test_neg
 red with `intervals/ops.py` as at `548ac78` (`__pycache__` cleared, `PYTHONDONTWRITEBYTECODE=1`),
 green with the fix. `test_trig_rev_symmetry`'s docstring updated (its `negate` stays).
 
-**gate**: green, 2026-09-29 on the fixed tree (shared laptop, rc captured without a pipe): `tests/itf1788` 27795 passed in 57 s, the rest 5608 passed in 591 s (5607 before plus the new neg/pos test) = 33403; `test_trig_rev_symmetry`'s docstring was edited during the second call (text only). the fuzz rerun on `fuzz-run` against the saved hypothesis cache is owed
+**gate**: green, 2026-09-29 on the fixed tree (shared laptop, rc captured without a pipe): `tests/itf1788` 27795 passed in 57 s, the rest 5608 passed in 591 s (5607 before plus the new neg/pos test) = 33403; `test_trig_rev_symmetry`'s docstring was edited during the second call (text only). the fuzz rerun on `fuzz-run` against the saved hypothesis cache (run 36540588320, 2026-09-29) passed `test_symmetry` and found fuzz-floordiv-overflow below
 (`HANDOFF.md` row M14-run).
+
+### fuzz-floordiv-overflow: a test-oracle overflow (done 2026-09-29)
+
+**found** by the fuzz rerun (run 36540588320, branch `fuzz-run` = `master` at `8a4cc2f` plus the
+trigger, ×10, the first run's `.hypothesis` cache restored, 2026-09-29: `1 failed, 33402 passed in
+3364.07s`, the job 56 min 25 s; `test_symmetry` passed): `tests/test_modulo.py::test_floordiv_sound_float`
+raised `OverflowError: int too large to convert to float` on `a = [1/2, 1)`, `b = (-inf,
+2.2250738585e-313]` (`@reproduce_failure('6.168.3',
+b'AXicY3RkcGQBYlZGBgZGIM3gyKzBwMDAVRN1pIiBkcGRXMgIAABYC3Q=')`).
+
+**diagnosis**: the test, not the library. `floordiv(a, b)` is `[-inf, -1.0] ∪ {inf}`: over the
+divisor's positive part the exact floor is a finite int past 2.2e312 (1038 bits), whose nearest
+double is inf, as python's own `0.5 // 2.2250738585e-313` is. the oracle checked the rounded value
+with `float(exact)`, which raises past MAX instead of rounding to ±inf (`tests/oracles.py::_once`
+already maps the overflow to ±inf).
+
+**fix and pin**: `tests/test_modulo.py::_nearest` (float, past MAX ±inf), used by the property and
+by `_python_floordiv`'s mixed path; the example pinned as an `@example` on `test_floordiv_sound_float`,
+red with the old `float(exact)` (`OverflowError`), green with the fix; `tests/test_modulo.py` 1003
+passed (2026-09-29). gate green on the fixed tree: `tests/itf1788` 27795 passed in 55 s, the rest
+5608 in 559 s = 33403 (an `@example` adds no item), 2026-09-29. not pushed.
 
 ## 3. order and parallelism
 
