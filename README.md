@@ -277,5 +277,5 @@ C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q
 needs `pytest`, `hypothesis`, `python-flint` and `gmpy2` (`pip install -e .[test]`). the numpy
 tests skip without numpy; CI installs it beside the extra. the library's own
 warnings are errors inside the suite. `HYPOTHESIS_PROFILE=fuzz` runs every hypothesis test
-randomized at `FUZZ_MULTIPLIER` (default 10; 100 until 2026-09-27) times its examples, as the weekly
-`.github/workflows/fuzz.yml` does.
+randomized at `FUZZ_MULTIPLIER` (default 10; 100 until 2026-09-27) times its examples, as
+`.github/workflows/fuzz.yml` does on every push to `master` and `tools/prepush.sh` does locally.

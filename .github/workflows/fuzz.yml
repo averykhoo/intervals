@@ -1,14 +1,17 @@
-# weekly randomized fuzzing, not in the gate: HYPOTHESIS_PROFILE=fuzz makes tests/conftest.py run
-# every hypothesis test randomized with FUZZ_MULTIPLIER (default 10) times its gate examples.
-# the ci profile the gate gets is derandomized, so only this job tries new inputs in CI.
-# .hypothesis/ (the example database) is carried between runs, so a failing example found once is
+# randomized fuzzing on every push to master, not in the gate: HYPOTHESIS_PROFILE=fuzz makes
+# tests/conftest.py run every hypothesis test randomized with FUZZ_MULTIPLIER (default 10) times its
+# gate examples. the ci profile the gate gets is derandomized, so only this job tries new inputs in
+# CI. no schedule (the owner, 2026-09-29: it runs autonomously or not at all, and nobody reads a
+# scheduled run's email): the same run happens locally before each push (tools/prepush.sh), and the
+# session that pushed watches this one (tools/ci_watch.sh). .hypothesis/ (the example database,
+# kept under CI by the fuzz profile) is carried between runs, so a failing example found once is
 # replayed first by every later run until it is fixed; each one found is pinned as an @example on
 # the gate test that found it.
 name: fuzz
 
 on:
-  schedule:
-    - cron: "23 3 * * 1"
+  push:
+    branches: [master]
   workflow_dispatch:
     inputs:
       multiplier:

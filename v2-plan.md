@@ -1366,9 +1366,10 @@ imports only point downward.
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
   every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 10; 100 until
   2026-09-27) times its own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
-  derandomized `ci` under GitHub Actions. `.github/workflows/fuzz.yml` runs it weekly and on
-  `workflow_dispatch`, never on push, carrying `.hypothesis/` between runs and uploading it with
-  the log on a failure
+  derandomized `ci` under GitHub Actions. `.github/workflows/fuzz.yml` runs it on every push to
+  `master` and on `workflow_dispatch` (not weekly since 2026-09-29), carrying `.hypothesis/` (the
+  profile's own example database) between runs and uploading it with the log on a failure;
+  `tools/prepush.sh` runs the same locally before a push
 
 ### later (not in v2.0)
 
@@ -1403,6 +1404,20 @@ imports only point downward.
       exact text and interchange conversions, and every inf-sup type but binary64 (M16b)
 
 ## decision log
+
+### 2026-09-29 revision: fuzz on push, not on a schedule
+
+* the owner: the fuzz runs "fully autonomously or not at all"; nobody reads a scheduled run's
+  failure email. so `fuzz.yml` runs on every push to `master` (and `workflow_dispatch`), not weekly;
+  the same fuzz run happens locally before each push (`tools/prepush.sh`), and the session that
+  pushed watches both workflows to the end (`tools/ci_watch.sh`, a babysitter agent), debugging a red
+  run from its log and artifact. the push procedure is in `CLAUDE.md`
+* the fuzz database was never kept on CI: hypothesis loads its `ci` profile at import under
+  GitHub Actions, whose database is None, and the `fuzz` profile, registered without one, inherited
+  it, so the first two GitHub runs saved no example and the carried `.hypothesis` held only
+  hypothesis's constants cache (their artifacts have no `examples/`). found 2026-09-29 by replaying
+  the second run's artifact locally, which replayed nothing. the profile now names its database;
+  `tests/test_fuzz_profile.py` pins it (red without it, under a simulated CI)
 
 ### 2026-09-29 revision: `-` and `+` keep each cut's type (fuzz-symmetry)
 

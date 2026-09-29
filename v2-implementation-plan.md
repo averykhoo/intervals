@@ -73,7 +73,9 @@ vendoring.
   `tests/conftest.py` (M14, 2026-09-26) loads nothing unless `HYPOTHESIS_PROFILE` is set, so the
   gate still gets hypothesis's own choice (`default` locally, `ci` under Actions); set to `fuzz` it
   runs every hypothesis test randomized at `FUZZ_MULTIPLIER` (default 10; 100 until 2026-09-27) times its examples,
-  which `.github/workflows/fuzz.yml` does weekly and on `workflow_dispatch`, never on push (M14).
+  which `.github/workflows/fuzz.yml` does on every push to `master` and on `workflow_dispatch`
+  (weekly and never on push until 2026-09-29, `v2-plan.md` "2026-09-29 revision: fuzz on push"), and
+  `tools/prepush.sh` locally before a push (M14).
   first run 2026-09-25 at `d232b78` (run 36091651163), all 8 jobs green:
   the gate took 71-94 s on each python, and on the runners the exhaustive jobs took 21 s
   (sabotage), 5 min (float), 6½ min (exact) and 12½ min (modulo). each harness exits nonzero on a
@@ -4183,13 +4185,15 @@ cut_tuples_c=one(Fraction(1, 2), 0.5))`; `tests/test_ops_properties.py::test_neg
 red with `intervals/ops.py` as at `548ac78` (`__pycache__` cleared, `PYTHONDONTWRITEBYTECODE=1`),
 green with the fix. `test_trig_rev_symmetry`'s docstring updated (its `negate` stays).
 
-**gate**: green, 2026-09-29 on the fixed tree (shared laptop, rc captured without a pipe): `tests/itf1788` 27795 passed in 57 s, the rest 5608 passed in 591 s (5607 before plus the new neg/pos test) = 33403; `test_trig_rev_symmetry`'s docstring was edited during the second call (text only). the fuzz rerun on `fuzz-run` against the saved hypothesis cache (run 36540588320, 2026-09-29) passed `test_symmetry` and found fuzz-floordiv-overflow below
+**gate**: green, 2026-09-29 on the fixed tree (shared laptop, rc captured without a pipe): `tests/itf1788` 27795 passed in 57 s, the rest 5608 passed in 591 s (5607 before plus the new neg/pos test) = 33403; `test_trig_rev_symmetry`'s docstring was edited during the second call (text only). the fuzz rerun on `fuzz-run` (run 36540588320, 2026-09-29) passed `test_symmetry` (on its `@example`: the saved cache held no examples) and found fuzz-floordiv-overflow below
 (`HANDOFF.md` row M14-run).
 
 ### fuzz-floordiv-overflow: a test-oracle overflow (done 2026-09-29)
 
 **found** by the fuzz rerun (run 36540588320, branch `fuzz-run` = `master` at `8a4cc2f` plus the
-trigger, ×10, the first run's `.hypothesis` cache restored, 2026-09-29: `1 failed, 33402 passed in
+trigger, ×10, the first run's `.hypothesis` cache restored but holding no examples, as the first
+run's did not: the profile had no database on CI, `v2-plan.md` "2026-09-29 revision: fuzz on push";
+`test_symmetry` passed on its `@example`, not a replay; 2026-09-29: `1 failed, 33402 passed in
 3364.07s`, the job 56 min 25 s; `test_symmetry` passed): `tests/test_modulo.py::test_floordiv_sound_float`
 raised `OverflowError: int too large to convert to float` on `a = [1/2, 1)`, `b = (-inf,
 2.2250738585e-313]` (`@reproduce_failure('6.168.3',

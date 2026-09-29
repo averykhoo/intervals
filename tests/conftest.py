@@ -5,12 +5,18 @@
 import os
 
 from hypothesis import HealthCheck, settings
+from hypothesis.database import DirectoryBasedExampleDatabase
 
 PROFILE = os.environ.get('HYPOTHESIS_PROFILE')
 FUZZ = PROFILE == 'fuzz'
 
+# the database is named, not inherited: under GitHub Actions hypothesis loads its `ci` profile at
+# import, whose database is None, and a profile registered without one inherits that, so the fuzz
+# job saved nothing and its carried .hypothesis replayed nothing (found 2026-09-29).
+# tests/test_fuzz_profile.py pins it
 settings.register_profile(
     'fuzz',
+    database=DirectoryBasedExampleDatabase(os.path.join('.hypothesis', 'examples')),
     derandomize=False,
     deadline=None,
     print_blob=True,
