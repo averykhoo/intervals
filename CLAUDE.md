@@ -13,7 +13,8 @@ laptop it runs past the 10-minute tool limit, so run it as two calls, `tests/itf
 
 nobody reads CI email. a push is only done by a session that stays to see its runs finish:
 
-1. **before**: `tools/prepush.sh` on the committed tree (background it; it takes over an hour). it is
+1. **before**: `tools/prepush.sh` on the committed tree (background it: at x10, 27795 in 53 s + 5611 in 4899 s,
+   about 83 min on this laptop, 2026-09-29 at `97d9824`). it is
    the fuzz job of `.github/workflows/fuzz.yml` run locally (`HYPOTHESIS_PROFILE=fuzz`, x10), every
    test included, so it covers the gate. push only if it exits 0.
 2. **push** `master` (pushing still needs the owner's go).

@@ -44,7 +44,21 @@ it prints `ok` for all 22 files (python 3.9 or later; the GitHub API needs no to
 
 ## how they are used
 
-`test_itf1788.py` runs every vector of the ops the package implements through the conformance
-adapter described in its docstring (and in `v2-plan.md`, "ieee 1788"); `itl.py` is the parser, which
-reads every statement of every file. the statements of ops not implemented yet (the reverse ops, the
-text constructors, the decoration ops) are counted in `SKIPPED` and not run.
+`test_itf1788.py` runs every vector through the conformance adapter described in its docstring (and
+in `v2-plan.md`, "ieee 1788"); `itl.py` is the parser, which reads every statement of every file.
+since M13 (2026-09-27) every statement runs: 9542 vectors of 111 ops, `SKIPPED` empty, pinned by
+`test_itf1788.py::test_nothing_is_skipped`.
+
+## known upstream errata
+
+two vectors are wrong upstream (oheim/ITF1788 issue #16, unanswered; fixed in IntervalArithmetic.jl
+at `a6991258`, 2023-12-13). the files here stay the upstream bytes:
+
+* `libieeep1788_num.itl:168` `midRad [nai] [nai] = NaN NaN;` should be `midRad [nai] = NaN NaN;`
+  (midRad takes one operand). the package has no NaI (D16), so the adapter reads the vector as a
+  "no NaI" row, not a midRad result
+* `mpfi.itl:603` `wid [0.0, 0.0] = -0;` should be `= 0` (the width of a point, rounded up, is +0).
+  `itl.py` reads a number exactly, so `-0` parses as 0 (the vector's `expected` is `0`) and the
+  vector checks the corrected value
+
+the whole survey (other test sets, and what could be pulled in) is `references/test-vector-sources.md`.
