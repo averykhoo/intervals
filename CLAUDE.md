@@ -31,10 +31,11 @@ nobody reads CI email. a push is only done by a session that stays to see its ru
 * reproduce with the log's "Falsifying example" pasted as an `@example` on the failing test (an
   `st.randoms()` argument prints as `HypothesisRandom(...)`: give it `random.Random(0)` and check the
   example still fails). the `@reproduce_failure` blob only works with CI's exact hypothesis version.
-  the artifact's `.hypothesis/` copied into the repo root should replay the run's examples (the fuzz
-  profile keeps a database on CI since 2026-09-29; the runs before that saved none). not yet tried
-  on a run that saved one, and a database from a different hypothesis version may not replay: fall
-  back to the `@example`.
+  the artifact's `.hypothesis/` replays the run's examples: the test run unchanged fails on the
+  saved example (checked 2026-09-29 on run 36580954134, saved by hypothesis 6.168.3, replayed by
+  6.167.1 here). copy it into a throwaway worktree with NO `.hypothesis/` of its own (`rm -rf
+  .hypothesis` first): `cp -r <artifact>/.hypothesis .hypothesis` onto an existing one nests it as
+  `.hypothesis/.hypothesis`, and the test then passes as if nothing were saved.
 * decide library or oracle before fixing; keep the `@example` as the pin, and show it red on the old
   code (clear `__pycache__`, `PYTHONDONTWRITEBYTECODE=1`) and green with the fix. record the find in
   `v2-implementation-plan.md` §2 (as "fuzz-symmetry" and "fuzz-floordiv-overflow" are) and in
