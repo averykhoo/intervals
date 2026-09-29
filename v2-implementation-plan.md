@@ -4017,6 +4017,12 @@ layers are unchanged):
   hang on the old code too, so they are in the subprocess list, not in-process rows
 * the u = 1.0000000000000002 derivative of the M16d pin checked against MPFR: ieee(64) RoundDown/RoundUp
   of `u ** (2 ** 60 - 1)` times 2**60 are 1.7425574576408943e+129 and 1.7425574576408946e+129, the pinned ends
+* `pown_rev` with a huge n was never part of the hang (it is a root, not a power):
+  `pown_rev(O(0.5, 1), 2 ** 31 - 1)` = `(0.9999999996772282, 1]`, and `pown_rev(O(0.5, 1), 2 ** 61)`,
+  `pown_rev(O(0.5, 1), -(2 ** 61 + 1))`, `pown_rev(O(1e300), 2 ** 61 + 1)` and
+  `ieee1788.pown_rev(Interval(0.5, 1), 2 ** 31 - 1)` each take about a millisecond, before and after
+  the build (the critique, 2026-09-29; re-measured at `4f51e86`, 0.7-1.3 ms under a gate's load,
+  2026-09-29)
 
 **tests** (`tests/test_pown_huge.py`, new, unless noted):
 * `::test_reproductions_finish`: 23 expressions in one subprocess, `timeout=60` (the pattern of
@@ -4123,7 +4129,15 @@ passed in 55 s, the rest 5607 passed in 567 s (the 5596 before plus 11 new items
   OverflowError up front past a bit budget, (c) past a limit shared with pow_, the tightest open
   float enclosure, (d) (c) in the outward class only with (a) or (b) in the exact class. both
   designers recommend (c); (d) is the minimum that makes `O(0.5, 2) ** 2 ** 40` finish. a separate
-  commit whichever is chosen
+  commit whichever is chosen. pown and 1788's pow already answer the same exact point in different
+  kinds: `M(3) ** 70000` is the exact 110948-bit int (about 9 ms under load), `M(3) ** M(70000)` is
+  `(MAX, inf)` (2026-09-29 at `4f51e86`), so (c) at today's limit also changes cheap exact results
+  that finish now (int ends become float ends). the exp/log designer recommended (c) with ONE limit
+  shared by pown and pow, raised well above what builds quickly (about 2 ** 20 to 2 ** 24 bits
+  instead of 100000), which changes pow's answers between the old and the new limit; (b)'s budget was
+  sketched at about 2 ** 26 bits and would need a rule for `DecoratedInterval` and the 1788 layer (an
+  error, or `[entire]`/NaI). the 1788 layer is outside the question: `ieee1788.Interval` stores every
+  end as a float, so `ieee1788.pown(Interval(2, 3), 2 ** 40)` = `[MAX, inf]` in about a millisecond
 * **Q-nearest-libm**: the nearest class keeps python's `float ** int` (libm's `pow`) for
   `|n| <= 2 ** 53`; libm's pow is not promised correctly rounded (3000 of 3000 random near-1 bases
   agreed with `rounded_pow(.., NEAREST)` on this laptop, 2026-09-29). is correctly rounded pown a
