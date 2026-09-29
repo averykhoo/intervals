@@ -68,6 +68,7 @@ from intervals.rounding import has_finite_float
 from intervals.rounding import is_float
 from intervals.rounding import round_rational
 from intervals import backend
+from intervals import elementary
 
 
 # POINTWISE (None where the op has no value)
@@ -191,7 +192,9 @@ def outward(desc: OpDescriptor) -> OpDescriptor:
     """
     the descriptor with a directed rounding hook: a float corner is evaluated exactly (each float as
     the Fraction it denotes) and rounded down for a result's low end, up for its high end. `fn` is
-    exact too, so attainment is decided on exact values: an end that rounding moved is open. the five
+    exact too, so attainment is decided on exact values: an end that rounding moved is open (pown's
+    outward descriptor is built by `_power_descriptor` instead: its `fn` is exact while the power is
+    short enough to build, and past that a marker equal to nothing, `_NOT_A_DOUBLE`). the five
     arithmetic descriptors (keyed on the object, not its name) ask the backend for the double first
     (`intervals._gmpy2.outward`), read at each call; any other, and a None, keeps the pure rounding
     """
@@ -223,13 +226,53 @@ def _pick(desc: OpDescriptor, outward_rounding: bool) -> OpDescriptor:
     return OUTWARD[desc.name] if outward_rounding else desc
 
 
-@lru_cache(maxsize=64)
-def _power_descriptor(n: int, rounds_outward: bool = False) -> OpDescriptor:
+class _NotADouble:
+    """
+    the exact value of `x ** n` for a finite float x whose power is too long to build
+    (`elementary.exact_pow` declined: more than `EXACT_POWER_LIMIT` bits). it equals nothing, which is
+    the truth: such a power is neither a double nor the midpoint of two, so no rounded end (and no
+    ±inf) is attained by it, and no other corner of the box has the same value
+
+    the proof, |x| = num/den in lowest terms, `|n| max(bitlen(num), bitlen(den)) > EXACT_POWER_LIMIT`
+    (100000): x = ±1 never gets here (`exact_pow` answers 1 for every n). |x| = 2**e with e != 0 has
+    max bitlen `|e| + 1 <= 2 |e|`, so `|e n| > 50000` and `2 ** (e n)` lies outside
+    `[2**-1075, 2**1024]`, where there is no double and no midpoint. otherwise |x| = m 2**e with m odd
+    >= 3 and max bitlen <= 1075 (a subnormal's denominator is 2**1074), so `|n| > 93`: for n > 0 the
+    odd part of the power is `m ** n >= 3 ** 94 > 2 ** 54`, and for n < 0 its denominator has the odd
+    factor `m ** |n|`, not dyadic at all, while a double's odd part is below 2**53 and a midpoint's
+    below 2**54. so the rounding hooks' ziv loop meets no breakpoint at the value either, and ends
+    (`elementary.rounded_pow`). on one side of zero, or for an odd n > 0, `x ** n` is injective on
+    a box, so no other corner equals it
+    """
+    __slots__ = ()
+
+    def __eq__(self, other):
+        return False
+
+    def __ne__(self, other):
+        return True
+
+    __hash__ = object.__hash__
+
+    def __repr__(self):
+        return '<a power longer than EXACT_POWER_LIMIT bits>'
+
+
+_NOT_A_DOUBLE = _NotADouble()
+
+
+def _power_sign(x, n: int) -> int:
+    """the sign of `x ** n` for x != 0: the int n's own parity, never a float's"""
+    return -1 if x < 0 and n % 2 else 1
+
+
+def _exact_power_descriptor(n: int) -> OpDescriptor:
     """
     `x ** n` for `n != 0`: monotone on each side of zero, so split there for even n and for n < 0.
     n < 0 is `1 / x ** -n` in one step: the same set as `reciprocal(power(A, -n))` (a piece of A
     at 0 and its image at 0 lie on the same side), but a float `x ** -n` that underflows to 0 keeps
-    the sign of its pole instead of rounding to a zero with no side
+    the sign of its pole instead of rounding to a zero with no side. exact on int and Fraction, python's
+    `float ** int` (rounded to nearest) on a float
     """
     k = abs(n)
 
@@ -241,8 +284,6 @@ def _power_descriptor(n: int, rounds_outward: bool = False) -> OpDescriptor:
         except OverflowError:  # float ** int raises where float * float gives inf
             return signed_inf(1 if x > 0 or k % 2 == 0 else -1)
 
-    if rounds_outward:
-        return outward(_power_descriptor(n))
     if n > 0:
         return OpDescriptor(f'pow{n}', fn, split_points=(0,) if n % 2 == 0 else ())
 
@@ -260,6 +301,46 @@ def _power_descriptor(n: int, rounds_outward: bool = False) -> OpDescriptor:
         return signed_inf(dirs[0] ** k) if args[0] == 0 and dirs[0] else None
 
     return OpDescriptor(f'pow{n}', fn_negative, split_points=(0,), pole=pole)
+
+
+@lru_cache(maxsize=64)
+def _power_descriptor(n: int, rounds_outward: bool = False) -> OpDescriptor:
+    """
+    `x ** n` for `n != 0` (`_exact_power_descriptor`), and its outward form. the outward form never
+    builds a float corner's power past `elementary.EXACT_POWER_LIMIT` bits: `O(0.5) ** (2 ** 31 - 1)`
+    and a base just above 1, which never saturates (`O(1.0000000000000002) ** 10 ** 9`), used to build
+    it exactly and never finish (pown-huge). a finite float corner's exact power is built once, by
+    `elementary.exact_pow`, where it is short, and rounded down and up from there, exactly as
+    `outward` would; past that each end is `elementary.rounded_pow` (the range shortcuts or ziv over
+    `exp(n ln |x|)`, 1788's pow route), the same double `round_rational` gives, and attainment sees
+    `_NOT_A_DOUBLE`. int, Fraction and ±inf corners are the exact descriptor's
+    """
+    base = _exact_power_descriptor(n)
+    if not rounds_outward:
+        return base
+
+    # a box asks for a corner's value up to four times (fn, both hooks, attainment): build it once.
+    # a box has at most two corners, and a value is at most EXACT_POWER_LIMIT bits (12.5 KB). the
+    # cache is this descriptor's, keyed on x: the value depends on n too
+    @lru_cache(maxsize=4)
+    def float_exact(x: float):
+        if x == 0:
+            return base.fn(Fraction(0))
+        v = elementary.exact_pow(abs(Fraction(x)), n)
+        return _NOT_A_DOUBLE if v is None else _power_sign(x, n) * v
+
+    def exact(x):
+        return float_exact(x) if is_float(x) else base.fn(x)
+
+    def hook(direction):
+        def rounded(x):  # a finite float corner with a value (x != 0 when n < 0)
+            v = float_exact(x)
+            if v is not _NOT_A_DOUBLE:
+                return round_rational(v, direction)
+            s = _power_sign(x, n)  # round(s v, d) is s round(v, s d): negating swaps DOWN and UP
+            return s * elementary.rounded_pow(abs(Fraction(x)), n, direction * s) + 0.0
+        return rounded
+    return base._replace(fn=exact, rounded=(hook(DOWN), hook(UP)))
 
 
 # OPS OVER CUT TUPLES

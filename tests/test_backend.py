@@ -520,7 +520,11 @@ def test_backend_declines_where_it_should(kind, args):
 
 
 def test_power_descriptors_decline(monkeypatch):
-    """the `pow{n}` descriptors (`ops._power_descriptor`, outward) keep the pure hook"""
+    """
+    the `pow{n}` descriptors (`ops._power_descriptor`, outward) never call `_gmpy2.outward`: an
+    exact-sized power keeps the pure hook, and past `EXACT_POWER_LIMIT` bits the hook is
+    `elementary.rounded_pow`, which reaches `_gmpy2.rounded_pow` (`test_huge_pown_reaches_the_backend`)
+    """
     calls = _spy(monkeypatch, 'outward')
     with backend._use('gmpy2'):
         for n in (2, 3, -2):
@@ -528,6 +532,33 @@ def test_power_descriptors_decline(monkeypatch):
             for i, d in enumerate((DOWN, UP)):
                 assert same(desc.rounded[i](0.1), round_rational(desc.fn(Fraction(0.1)), d))
     assert calls == []
+
+
+# pown with a huge exponent (pown-huge, 2026-09-29): the series cases, the shortcut cases, both signs
+HUGE_POWN = [
+    (OutwardMultiInterval(1.0000000000000002), 10 ** 9), (OutwardMultiInterval(-1.0000000000000002), 2 ** 60 + 1),
+    (OutwardMultiInterval(0.9999999999999999, 1.0), -(10 ** 20)), (OutwardMultiInterval(0.5), 2 ** 31 - 1),
+    (OutwardMultiInterval(-3.0, 0.5), 2 ** 61), (OutwardMultiInterval(1e-300, 1e300), 2 ** 40 + 1),
+    (MultiInterval(-1.0000000000000002, 0.25), 2 ** 53 + 1),
+]
+
+
+def test_huge_pown_is_the_same_on_both_backends():
+    for a, n in HUGE_POWN:
+        with backend._use('python'):
+            pure = repr(a ** n)
+        with backend._use('gmpy2'):
+            assert repr(a ** n) == pure, (a, n)
+
+
+def test_huge_pown_reaches_the_backend(monkeypatch):
+    """past `EXACT_POWER_LIMIT` a float corner is `rounded_pow`: its range shortcuts first, then the backend"""
+    calls = _spy(monkeypatch, 'rounded_pow')
+    with backend._use('gmpy2'):
+        assert OutwardMultiInterval(0.5) ** (2 ** 31 - 1) == OutwardMultiInterval.parse('(0.0, 5e-324)')
+        assert calls == []
+        OutwardMultiInterval(1.0000000000000002) ** 10 ** 9
+    assert len(calls) == 2  # one a direction
 
 
 def test_the_shortcuts_run_before_the_backend(monkeypatch):

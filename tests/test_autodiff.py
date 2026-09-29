@@ -358,13 +358,31 @@ def test_pow_number_exponent_derivative_encloses(r, u, kind):
     assert verdict is True, f'{r} {u ** (r - 1)!r}: {d}'
 
 
+_BIG = '1.7976931348623157e+308'
+
+
+@pytest.mark.parametrize('u, value, derivative', [
+    (O(-1), '[1]', '[-1152921504606846976]'),
+    # a float base is rounded (pown-huge, 2026-09-29): these three saturate, so they check that it
+    # finishes, and `u ** 2 ** 60` would give the same answer as `u ** (2 ** 60 - 1)` there
+    (O(2.0), f'({_BIG}, inf)', f'({_BIG}, inf)'),
+    (O(1e300), f'({_BIG}, inf)', f'({_BIG}, inf)'),
+    (O(1e-300), '(0.0, 5e-324)', '(0.0, 5.696189077778436e-306)'),
+    # these tell `n - 1` from `n`: the parity flips the sign, or the power is in range
+    (O(-2.0), f'({_BIG}, inf)', f'(-inf, -{_BIG})'),
+    (O(-1e-300), '(0.0, 5e-324)', '(-5.696189077778436e-306, 0.0)'),
+    (O(1.0000000000000002), '(1.5114276650040605e+111, 1.5114276650040608e+111)',
+     '(1.7425574576408943e+129, 1.7425574576408946e+129)'),  # MPFR's, 2026-09-29
+])
 @pytest.mark.parametrize('r', [2.0 ** 60, 2 ** 60, Fraction(2 ** 60)])
-def test_pow_integral_exponent_derivative_is_exact(r):
+def test_pow_integral_exponent_derivative_is_exact(r, u, value, derivative):
     """an integral exponent n is pown and `n - 1` is exact int arithmetic: the float `2.0 ** 60 - 1`
     rounds to `2.0 ** 60`, which gave `(-1) ** (2 ** 60)`, the derivative's sign flipped (M15, found
-    2026-09-28). the base is -1 because `O(2) ** 2 ** 60` is an exact power too large to compute"""
-    y = Dual.variable(O(-1)) ** r
-    assert y.value == O(1) and y.derivative == O(-2 ** 60)
+    2026-09-28). `O(-1)` is an exact int, and `O(2) ** 2 ** 60` an exact power too large to compute;
+    a float base is rounded, so it finishes"""
+    y = Dual.variable(u) ** r
+    assert y.value == O.parse(value) and y.derivative == O.parse(derivative)
+    assert repr(y.value) == repr(O.parse(value)) and repr(y.derivative) == repr(O.parse(derivative))
 
 
 @pytest.mark.filterwarnings('ignore::intervals.errors.IntervalWarning')  # pow drops u < 0
