@@ -11,6 +11,12 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-09-29)
 
+* **everything is on `master` (2026-09-29, the owner: "make sure everything is on the master
+  branch")**: `master` fast-forwarded to `v2` at `8a506f3` (it was `v2`'s ancestor) and pushed after
+  a green gate (27795 + 5608 = 33403 passed at `4f51e86`, 2026-09-29; the one commit after it is
+  docs only). branches `v2` and `pown-huge` deleted (both contained in `master`); `master` is the
+  working branch from here. `fuzz.yml` is on the default branch now, so its weekly `schedule` and
+  `workflow_dispatch` are live. branch names `v2` below are history
 * **fuzz-symmetry fixed on `v2`, not pushed (2026-09-29)**: the fuzz run's one failure was the
   library's: `-` of a point whose cuts differ in type (an exact 1/2 and a float 0.5) came back in one
   type, so a reverse op was not odd. `-` is now the typed cut mirror and `+` the identity
@@ -61,7 +67,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
-| 1 | M14-run | the fuzz workflow's first green run on GitHub; record its example count and time, dated. **the default is ×10 since 2026-09-27** (the owner's choice, to keep runs cheap; `fuzz.yml` and `tests/conftest.py`, `timeout-minutes: 180`), because ×100, the old default, does not fit the 350-min timeout. measured locally 2026-09-27 at `dbec908` (the workflow's command, `FUZZ_MULTIPLIER=10`, python 3.13, shared laptop under another session's load): `22166 passed in 5036.97s` (1 h 24 min), no failures; it did not find the H2' example. linear fit through the ×1 gate (691 s non-vector, same day) and ×10 (4971 s), itf1788's 66 s held fixed: ×100 ≈ 47800 s (13.3 h); ×1 fuzz of `test_reverse.py`/`test_orders.py` scaled 12.0× to ×10 (per test 9.1-23.6×), so slightly superlinear, ≈ 16 h. with 25% headroom (≤ 262 min) ×25 fits (≈ 204 min), ×30 is the edge. laptop timings, not the runner's; the old 2.2-3.4 h estimate is withdrawn. since M16e the run also fuzzes the backend differential: `tests/test_backend.py` alone 735 passed in 387.5 s at ×10 locally (2026-09-28, loaded), about 5400-5600 s for the whole run with the last ×10's 5037 s, against the 180-min timeout | **first GitHub run 2026-09-29, red on a real find (fuzz-symmetry)**: run 36507253782 at `8a8abf8` (branch `fuzz-run` = `v2` at `7288e81` plus a temporary `push` trigger in `fuzz.yml` and `ci.yml` skipping the branch; the owner chose this over putting `fuzz.yml` on master), ×10, python 3.13: `1 failed, 33331 passed in 3216.59s (0:53:36)`, the job 53 min 59 s; the `.hypothesis` cache saved (scoped to the branch `fuzz-run`) and the artifact `fuzz-failure-36507253782-1` uploaded. the failure is fixed on `v2` (fuzz-symmetry, 2026-09-29); open: a green run (next: `fuzz-run` rebuilt as `v2` plus its trigger commit and pushed, so the saved `.hypothesis` cache replays this run's examples; a push, the owner's call), and `schedule`/`workflow_dispatch` still unreachable until `fuzz.yml` is on `master` (GitHub has only `ci` registered, checked 2026-09-27) — the owner's call | plan §2 M14 "exit" and "**the fuzz job, built 2026-09-26**" |
+| 1 | M14-run | the fuzz workflow's first green run on GitHub; record its example count and time, dated. **the default is ×10 since 2026-09-27** (the owner's choice, to keep runs cheap; `fuzz.yml` and `tests/conftest.py`, `timeout-minutes: 180`), because ×100, the old default, does not fit the 350-min timeout. measured locally 2026-09-27 at `dbec908` (the workflow's command, `FUZZ_MULTIPLIER=10`, python 3.13, shared laptop under another session's load): `22166 passed in 5036.97s` (1 h 24 min), no failures; it did not find the H2' example. linear fit through the ×1 gate (691 s non-vector, same day) and ×10 (4971 s), itf1788's 66 s held fixed: ×100 ≈ 47800 s (13.3 h); ×1 fuzz of `test_reverse.py`/`test_orders.py` scaled 12.0× to ×10 (per test 9.1-23.6×), so slightly superlinear, ≈ 16 h. with 25% headroom (≤ 262 min) ×25 fits (≈ 204 min), ×30 is the edge. laptop timings, not the runner's; the old 2.2-3.4 h estimate is withdrawn. since M16e the run also fuzzes the backend differential: `tests/test_backend.py` alone 735 passed in 387.5 s at ×10 locally (2026-09-28, loaded), about 5400-5600 s for the whole run with the last ×10's 5037 s, against the 180-min timeout | **first GitHub run 2026-09-29, red on a real find (fuzz-symmetry)**: run 36507253782 at `8a8abf8` (branch `fuzz-run` = `v2` at `7288e81` plus a temporary `push` trigger in `fuzz.yml` and `ci.yml` skipping the branch; the owner chose this over putting `fuzz.yml` on master), ×10, python 3.13: `1 failed, 33331 passed in 3216.59s (0:53:36)`, the job 53 min 59 s; the `.hypothesis` cache saved (scoped to the branch `fuzz-run`) and the artifact `fuzz-failure-36507253782-1` uploaded. the failure is fixed on `v2` (fuzz-symmetry, 2026-09-29); open: a green run. the rerun (2026-09-29): `fuzz-run` rebuilt as `master` plus the trigger commit (cherry-picked `8a8abf8`) and force-pushed, so the `.hypothesis` cache saved under `fuzz-run` replays the first run's examples; `fuzz-run` is deleted once it finishes. `fuzz.yml` is on `master` since 2026-09-29, so later runs need no branch (weekly `schedule`, or `workflow_dispatch`; a run on `master` starts from `master`'s own cache) | plan §2 M14 "exit" and "**the fuzz job, built 2026-09-26**" |
 | 2 | trig-rev-far | a periodic reverse op whose domain piece reaches far from 0 is pure-path slow, then effectively hangs: `tan_rev(MultiInterval.parse('[-40.0, 0.1]'), MultiInterval.parse('(-X, -7.582732456406029]'))` took 1.6 s at X = 1e20, 3.4 s at 1e21, and ran past a 30 s timeout from 1e22 and a 60 s one at 1e300 (2026-09-28 at `7e148a2`, loaded laptop; reproduced by the session: 0.35 s at 1e20, past 30 s at 1e22; a stack sample sat in `reverse.py::_periodic_hull`'s branch walk, in `elementary._atan_rational`). found by M16e's soundness reviewer, whose set-level probe hung past 15 min on `sin_rev`/`tan_rev` with an end at 1e300 or 10**400. the backend declines `k != 0`, so both backends hang alike | not scheduled; measure where the time goes first | `v2-plan.md` "elementary and step functions" (D12's cap for the periodic ones) |
 | 3 | M14-breadth | fuzz where it is thin: `tests/test_extreme_floats.py` extended to the functions, `minimum`/`maximum`/`fma`, `%`, `//` and `OutwardMultiInterval`; more `@given` in `test_outward`, `test_steps`, `test_fmt`, `test_applicator` | ready | plan §2 M14 "**breadth where fuzz is thin**" |
 | 4 | newton-width | `newton`'s `width <= piece.wid() / 2` (`intervals/solver.py`, M15) is int true division, so an exact piece wider than the doubles would raise `OverflowError` once a step narrows without proving; not observed (a linear `f` is proved at the first step; `x ** 2 - 9 * 10 ** 800` over `[10 ** 400, 10 ** 401]` with `max_steps=10` did not finish in 2 minutes, 2026-09-28: the exact fractions grow). `solve`'s copy is already `2 * width <= _width(box)` (M16a review F2) | ready, small | plan §2 M16a review (soundness F2) |
@@ -284,19 +290,25 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
   README. gmpy2 3: `auto` and `[test]` stop below it; when it ships, run the differential against it
   before `backend.CEILING` and the `[test]` pin move together
   (`tests/test_backend.py::test_the_test_extra_installs_what_auto_takes` keeps them equal)
-* `.scratch/h3b/` in the main checkout holds M16's designs and critiques (`design/`), review probes
-  and harness logs, cited by the plan's M16 records as gitignored sources; audit it before recycling
-  (the records took what the builds used from it)
 
 * pown-huge: `ops._check_marker_premises` refuses at import an `EXACT_POWER_LIMIT` below the
   marker proof's floor (36550 bits), but a limit lowered at run time, after import, still stalls
   (`O(0.5, 1.0) ** 1074` past a 60 s timeout; review SAB-3). recorded, not guarded
-* `.scratch/pown-huge/` (the designs, prototypes, sabotage harnesses and gate logs of the pown-huge
-  workflow) and `.scratch/m14-run/` are owed a delete once their conclusions are in the plan record
-  (the plan's pown-huge subsection took them 2026-09-29)
 
 ## session log (newest first)
 
+* **2026-09-29** cleanup and `master` (the owner: clean up, "make sure everything is on the master
+  branch", run hypothesis again). a read-only audit of `.scratch/pown-huge/` and `.scratch/m14-run/`
+  found three things tracked nowhere, re-checked and transcribed (`8a506f3`: plan "pown-huge",
+  Q17, T1); the fuzz failure was already pinned. then `.scratch/` emptied to the Recycle Bin
+  (pown-huge, m14-run, h3, h3b, m13, the audit's own report). why the Recycle Bin "did not work"
+  before: sixteen orphaned `tail -f` watchers from 2026-09-26..28 sessions (monitors on sabotage and
+  review logs) still held files and working directories in `.scratch/h3`, `h3b`, `m13` and two gone
+  worktrees; stopped by PID (each checked to be a `tail.exe` on this repo's paths), after which the
+  VisualBasic recycle call worked. a monitor's `tail -f` outlives its session: stop it by PID when
+  done. worktree `../intervals-pown-huge` removed; gate green at `4f51e86` (27795 in 70 s + 5608 in
+  829 s = 33403); `master` fast-forwarded to `v2` and pushed; `v2` and `pown-huge` deleted; the fuzz
+  rerun started on `fuzz-run` (M14-run row)
 * **2026-09-29** merged `pown-huge` into `v2` (`git merge --ff-only`, the owner's go; not pushed).
   fuzz-symmetry diagnosed and fixed: the library's `-`, which read a mixed exact/float point by its
   low cut, not the test; `-`/`+` now keep each cut's type. a first fix in the reverse ops (read a
