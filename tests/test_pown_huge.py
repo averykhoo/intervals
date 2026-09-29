@@ -31,6 +31,7 @@ from hypothesis import settings
 from hypothesis import strategies as st
 
 from intervals import DecoratedInterval
+from intervals import IndeterminateResultWarning
 from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import kernel
@@ -292,6 +293,50 @@ HUGE = st.one_of(
 @example(1.0000000000000002, 10 ** 9)
 def test_huge_exponent_against_mpfr(x, n):
     assert _piece(O(x) ** n) == _mpfr_piece(x, n), (x, n)
+
+
+# TO NEAREST PAST 2 ** 53: python's `float ** int` rounds the exponent to a double there
+
+@pytest.mark.parametrize('a, n, want', [
+    (M(0.5), 10 ** 400, '[0.0]'),  # was [inf]: python could not convert the int
+    (M(0.5), -(10 ** 400), '[inf]'),
+    (M(1.0), 10 ** 400, '[1.0]'),
+    (M(-1.0), 2 ** 60 + 1, '[-1.0]'),  # was [1.0]: 2 ** 60 + 1 rounds to an even double
+    (M(-1.0), -(2 ** 60 + 1), '[-1.0]'),
+    (M(1.0000000000000002), 2 ** 53 + 1, '[7.38905609893065]'),  # was 7.389056098930649, at 2 ** 53
+    (M(-1.0000000000000002), 2 ** 53 + 1, '[-7.38905609893065]'),  # was positive
+    (M(-1.0000000000000002), 2 ** 53, '[7.389056098930649]'),  # python's own, still
+    (M(0.0), 10 ** 400, '[0.0]'),
+    (M(-0.0), 10 ** 400 + 1, '[0.0]'),
+    (M(0.0, 0.5), 10 ** 400, '[0.0]'),  # a wrong set, [0.0, inf], with the zero sent to python
+    (M(-2.0, 0.0), -(10 ** 400 + 1), '[-inf, 0.0]'),  # the pole at the closed 0
+])
+def test_nearest_past_2_53(a, n, want):
+    assert repr(a ** n) == repr(M.parse(want))
+
+
+def test_nearest_zero_to_a_huge_negative_power_is_empty():
+    with pytest.warns(IndeterminateResultWarning):
+        assert M(0.0) ** -(10 ** 400) == M()
+
+
+PAST_2_53 = st.one_of(
+    st.integers(2 ** 53 + 1, 2 ** 64),
+    st.tuples(st.integers(54, 70), st.integers(-2, 2)).map(lambda t: 2 ** t[0] + t[1]),
+    st.integers(16, 300).map(lambda j: int(10.0 ** j)),
+).flatmap(lambda k: st.sampled_from([k, -k]))
+
+
+@settings(max_examples=100, deadline=None)
+@given(FLOATS, PAST_2_53)
+@example(-1.0000000000000002, 2 ** 53 + 1)
+@example(-1.0, -(2 ** 60 + 1))
+def test_nearest_huge_exponent_against_mpfr(x, n):
+    gmpy2 = pytest.importorskip('gmpy2')
+    ctx = gmpy2.ieee(64)
+    ctx.round = gmpy2.RoundToNearest
+    want = float(ctx.pow(gmpy2.mpfr(x, 53, gmpy2.context()), gmpy2.mpfr(n, abs(n).bit_length(), gmpy2.context()))) + 0.0
+    assert repr(M(x) ** n) == repr(M.parse(f'[{want!r}]')), (x, n)
 
 
 # POWN AGAINST 1788'S POW (D11): two routes to the same `rounded_pow`

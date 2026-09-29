@@ -61,6 +61,7 @@ from intervals.cuts import below
 from intervals.errors import EmptySetPropagationWarning
 from intervals.kernel import Cuts
 from intervals.rounding import DOWN
+from intervals.rounding import NEAREST
 from intervals.rounding import UP
 from intervals.rounding import exact_cuts
 from intervals.rounding import float_cuts
@@ -261,6 +262,10 @@ class _NotADouble:
 _NOT_A_DOUBLE = _NotADouble()
 
 
+# python's `float ** int` converts the int to a double, which is exact up to here
+_FLOAT_EXACT_EXPONENT = 2 ** 53
+
+
 def _power_sign(x, n: int) -> int:
     """the sign of `x ** n` for x != 0: the int n's own parity, never a float's"""
     return -1 if x < 0 and n % 2 else 1
@@ -314,10 +319,25 @@ def _power_descriptor(n: int, rounds_outward: bool = False) -> OpDescriptor:
     `outward` would; past that each end is `elementary.rounded_pow` (the range shortcuts or ziv over
     `exp(n ln |x|)`, 1788's pow route), the same double `round_rational` gives, and attainment sees
     `_NOT_A_DOUBLE`. int, Fraction and ±inf corners are the exact descriptor's
+
+    to nearest, a float corner is python's `float ** int` while `|n| <= 2 ** 53`. past that python
+    rounds n to a double (the parity lost: `(-1.0) ** (2 ** 60 + 1)` is 1.0) or cannot convert it
+    (`0.5 ** 10 ** 400` raises OverflowError, which read as an overflow gave inf), so a float corner
+    is `rounded_pow` to nearest with the int n's sign, and a zero base with n > 0 is 0.0
     """
     base = _exact_power_descriptor(n)
     if not rounds_outward:
-        return base
+        if abs(n) <= _FLOAT_EXACT_EXPONENT:
+            return base
+
+        def nearest(x):
+            if not is_float(x):
+                return base.fn(x)
+            if x == 0:
+                return 0.0 if n > 0 else base.fn(x)  # n < 0: None, and the pole decides
+            s = _power_sign(x, n)
+            return s * elementary.rounded_pow(abs(Fraction(x)), n, NEAREST) + 0.0
+        return base._replace(fn=nearest)
 
     # a box asks for a corner's value up to four times (fn, both hooks, attainment): build it once.
     # a box has at most two corners, and a value is at most EXACT_POWER_LIMIT bits (12.5 KB). the
