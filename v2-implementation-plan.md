@@ -2335,7 +2335,15 @@ land with M13a so that every later M13 op arrives with them
       a to-nearest result with the exact value where it is rational (`exp10(-1.0)` = 1/10, below
       the double 0.1 that ends the result) instead of with the nearest double the docstring promises.
       it now always uses `rounded(..., NEAREST)`, which rounds the rational value itself
-    * the exit's green GitHub run: not yet, `HANDOFF.md` M14-run
+    * the exit's green GitHub run, **met 2026-09-30**: run 36654816589 at `697abdd` (`master`, on push),
+      x10, python 3.13: `33406 passed in 1765.10s (0:29:25)`, the job 29 min 41 s; its cache restore
+      took `fuzz-hypothesis-36580954134-1`, the database the red run before it saved (holding the
+      fuzz-rev-inf example, which it replayed). the runs before it, all x10 on GitHub: 36507253782
+      (branch `fuzz-run`, red: fuzz-symmetry, 53 min 36 s), 36540588320 (`fuzz-run`, red:
+      fuzz-floordiv-overflow, a test oracle, 56 min 4 s; it also showed the fuzz profile kept no
+      database on CI, fixed 2026-09-29), 36580954134 (`master`, the first on push, red: fuzz-rev-inf,
+      D26, 49 min 5 s). since 2026-09-29 the job runs on every push to `master` after the same run
+      locally (`tools/prepush.sh`), not weekly (`v2-plan.md` "2026-09-29 revision: fuzz on push")
 * **the flint oracle, built 2026-09-26** (`tests/test_oracle_flint.py`, 9 test functions, 122
   tests parametrised; python-flint 0.9.0 in the env and `python-flint>=0.9` in the `[test]` extra;
   `intervals/` unchanged):
