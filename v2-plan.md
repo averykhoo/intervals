@@ -500,7 +500,9 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
       a float operand, to nearest in `MultiInterval` (flags kept) and outward in
       `OutwardMultiInterval` (a moved end open), the functions' rule (`reverse._end` is
       `functions._Function.end`'s). the union is intersected with `x` **after** rounding, so the
-      result never leaves `x`. the result is an `OutwardMultiInterval` if either operand is one
+      result never leaves `x`, but for one case, to nearest only (D26, 2026-09-30): a part of the
+      exact preimage inside `x` that rounds wholly onto one double is that double, as a point, even
+      an end `x` excludes (`reverse._keep_squeezed`; decision log "2026-09-30 revision"). the result is an `OutwardMultiInterval` if either operand is one
     * an empty operand gives `∅` and an `EmptySetPropagationWarning`, as the functions do; an empty
       answer from non-empty operands (no solution) warns nothing. a number is a point; `n` must be
       an `Integral` (not bool; numpy's ints since M16d, "numpy" below), else `TypeError`

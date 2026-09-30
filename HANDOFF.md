@@ -297,6 +297,13 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
   marker proof's floor (36550 bits), but a limit lowered at run time, after import, still stalls
   (`O(0.5, 1.0) ** 1074` past a 60 s timeout; review SAB-3). recorded, not guarded
 
+* the 1788 departures census (2026-09-30, README "departures from ieee 1788"): four departures were
+  build choices never put to the owner, as D13 and D18 were: step functions as point sets
+  (`floor([-1.5, 1.5])` is four points, 1788 `[-2, 1]`), a rounded end open (M12), and the divergence
+  categories "degenerate infinities" and "cut-based relations" (M12, from the 2026-08-16 principles).
+  and `tests/itf1788/test_itf1788.py` lists a "domain-clipped functions" category in `REASONS` with no
+  row (every pow vector matches since M13d): stale, or keep as a slot. recorded, not asked
+
 ## session log (newest first)
 
 * **2026-09-30** fuzz-rev-inf closed (plan §2 "fuzz-rev-inf", D26): the owner weighed 1788 (intersect with
@@ -307,7 +314,9 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
   ops unchanged, documented (README "rounding", `v2-plan.md` decision log). four pins, each red with the fix a
   no-op; the float tests of mul_rev and the trig ops, which pinned the old order, now check D26 and that no
   piece of the outward result in `x` vanishes. there is no single list of where the library departs from
-  1788: they are in the README's bullets, the D table and `v2-plan.md` "ieee 1788"
+  1788 until the owner asked for one: README "departures from ieee 1788" (a census agent, every
+  pointer checked). `tools/prepush.sh` at `697abdd` green, x10: 27795 in 53 s + 5611 in 4975 s = 33406,
+  2026-09-30; pushed (`97d9824..697abdd`), a babysitter on `tools/ci_watch.sh`
 * **2026-09-29** the new push procedure, first use: `tools/prepush.sh` at `97d9824` green, x10: 27795 passed
   in 53 s + 5611 in 4899 s (1 h 22 min) = 33406, 2026-09-29; `master` pushed (`8a4cc2f..97d9824`, the
   owner's go), a babysitter agent on `tools/ci_watch.sh`. the owner asked whether the 1788 set is

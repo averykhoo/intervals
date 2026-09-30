@@ -241,6 +241,43 @@ Interval(float('-inf'), float('inf'))
   all match but 104 vectors under 94 rows (no NaI, tighter than the vector, exact parsing;
   2026-09-28)
 
+## departures from ieee 1788
+
+where the library answers otherwise than 1788, on purpose, and where each choice is recorded: `D` rows
+are `v2-implementation-plan.md` §0, headings are `v2-plan.md`'s, `Q` items are open questions in
+`HANDOFF.md`. 1788's own answers are in `intervals.ieee1788`, the thin layer. the itf1788 adapter
+(`tests/itf1788/test_itf1788.py`) names the rows each departure produces; most produce none, since the
+adapter compares closed hulls in binary64 (`v2-plan.md` "ieee 1788"). surveyed 2026-09-30.
+
+| | 1788 | this library | recorded |
+|---|---|---|---|
+| sets | connected intervals; a hull (`1/[-1, 1]` is entire) | finite unions (`[-inf, -1] ∪ [1, inf]`); reverse ops give the union | "ieee 1788"; "division semantics vs ieee 1788" |
+| ends | closed; infinity never attained | open or closed; ±inf are points, `[inf]` is legal | D1, D6; "domain and semantics" |
+| numbers | a floating-point format | int and Fraction exact, never rounded | D3 |
+| indeterminate points | not writable | `[0] * [inf]`, `1/[0]` are empty, with a warning | D2, D7 |
+| a domain end with no value | dropped (`log([0])` empty) | its limit, a point (`log([0])` is `[-inf]`) | "elementary and step functions"; rows: degenerate infinities |
+| rounded ends | closed | outward, a moved end is open | "arithmetic" (flags at rounded ends) |
+| rounding | every result encloses | `MultiInterval` rounds to nearest as python's float (overflow is the point `inf`); `OutwardMultiInterval` encloses | "arithmetic" (rounding); Q18 open |
+| reverse ops and `x`, to nearest | `x` first, then enclose | `x` first, then round to nearest: a part rounding onto one double is kept, even an end `x` excludes | D26 |
+| periodic reverse ops | the hull | exact pieces; the hull past 1000 or over an unbounded `x` | D12 |
+| step functions | `floor([-1.5, 1.5])` is `[-2, 1]` | the points `{-2, -1, 0, 1}`; the hull past 1000 | "elementary and step functions" (no decision of its own) |
+| cancellation | entire as "no answer" | the Minkowski difference | D13; rows: cancellation as a Minkowski difference |
+| relations | `overlap([1, 2], [2, 3])` is meets | overlaps: they share the point 2 | "comparisons"; rows: cut-based relations |
+| interval orders | `less`, `strictLess` | `weakly_less()`, `strictly_less()`; `<` is pointwise, a `TruthSet` | D10 |
+| NaI and signals | NaI; signals are flags | no NaI; UndefinedOperation raises, PossiblyUndefined warns | D16; "2026-09-26 revision: owner answers to the open questions" (Q1, Q8); rows: no NaI |
+| parsing | may round first | exact: validity decided on the exact bounds | D18(b); rows: exact parsing decides validity |
+| constructors | the binary64 hull | the exact set (`[0.1, infinity]` is `[1/10, inf)`) | "2026-09-26 revision: M13g part 1"; Q10 open |
+| tightness | some vectors 1-2 doubles loose | the tightest enclosure | D18(a); rows: tighter than the vector |
+| decorations | on every op; decided in binary64 | only on `DecoratedInterval`; decided on the exact set, per piece | D16, D18(c), D18(d); "2026-09-26 revision: M13g part 3" |
+| mulRevToPair's decoration | the first interval as `c / b` | `mul_rev` is one op, trv | Q9 open (pending Q13(c)); rows: decoration expectations |
+| numbers of the empty set | NaN | `ValueError`; `mig`/`mag` of the set, not the hull | D9 |
+| reductions | NaN for nan, `inf + -inf`, `0 * inf` | `ValueError` | "2026-09-26 revision: owner answers to the open questions" (Q2) |
+| zero | signed | one zero | "2026-09-22 revision: signed zero dropped" |
+| warnings | none | `EmptySetPropagationWarning`, `DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning` | "empties and warnings" |
+
+not departures but additions with no 1788 counterpart: `%`, `//`, `divmod`, `round(ndigits)`, the
+Allen relations and matrices, `TruthSet` comparisons.
+
 ## layout
 
 * `intervals/` — the package: `cuts` (the representation), `kernel` (set algebra on cut tuples),
@@ -259,7 +296,7 @@ Interval(float('-inf'), float('inf'))
 * `v2-plan.md` — the design. its "current design" section is normative: where it and the code
   disagree, one of them is a bug
 * `v2-implementation-plan.md` — milestones (each one's spec and, once built, its record), decisions
-  D1–D24
+  D1–D26
 * `HANDOFF.md` — what is open now: ranked items, questions for the owner, a session log
 * `references/` — papers and the modulo derivations
 * `archive/v1/` — the previous implementation, kept unchanged as a reference: `multi_interval.py`,
