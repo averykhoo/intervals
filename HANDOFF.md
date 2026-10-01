@@ -310,6 +310,13 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
 
 ## session log (newest first)
 
+* **2026-10-01** docs-only pushes skip the fuzz (the owner, 2026-09-30): `tools/prepush.sh` compares with
+  `origin/master` and, when every changed file is `*.md` or under `references/`, runs only the changed
+  READMEs' doctests (each path checked in a throwaway worktree; a broken README doctest turns it red);
+  `fuzz.yml` skips such a push (`paths-ignore`). a repo skill, `testing` (`.claude/skills/testing/`),
+  holds how to run each kind of test; `CLAUDE.md` keeps the rules and points at it. `.git/info/exclude`
+  narrowed from `.claude/` to `.claude/worktrees/` and `settings.local.json`, so the skill is tracked.
+  `9b58329` and `93d9e3e` pushed by the docs path
 * **2026-09-30** M14-run closed, M14's exit met: fuzz run 36654816589 at `697abdd` green, x10, `33406 passed
   in 1765.10s`, the job 29 min 41 s, having restored the red run's saved database; CI run 36654816564
   green (33406 passed on python 3.12-3.14 in 345-427 s). a babysitter agent watched both

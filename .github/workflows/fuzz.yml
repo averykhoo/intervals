@@ -12,6 +12,9 @@ name: fuzz
 on:
   push:
     branches: [master]
+    # a push of markdown and references/ only cannot change what the fuzz finds (owner, 2026-09-30):
+    # skipped, as tools/prepush.sh skips it locally. github skips only if every changed file matches
+    paths-ignore: ["**.md", "references/**"]
   workflow_dispatch:
     inputs:
       multiplier:

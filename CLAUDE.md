@@ -16,7 +16,9 @@ nobody reads CI email. a push is only done by a session that stays to see its ru
 1. **before**: `tools/prepush.sh` on the committed tree (background it: at x10, 27795 in 53 s + 5611 in 4899 s,
    about 83 min on this laptop, 2026-09-29 at `97d9824`). it is
    the fuzz job of `.github/workflows/fuzz.yml` run locally (`HYPOTHESIS_PROFILE=fuzz`, x10), every
-   test included, so it covers the gate. push only if it exits 0.
+   test included, so it covers the gate. push only if it exits 0. docs only (owner, 2026-09-30):
+   when every changed file is `*.md` or under `references/`, it skips the fuzz and runs only the changed
+   READMEs' doctests (the script decides, from the diff against `origin/master`).
 2. **push** `master` (pushing still needs the owner's go).
 3. **after**: a babysitter agent runs `tools/ci_watch.sh <sha>` in the background: it waits for both
    workflows of the commit (`ci`, about 12 min; `fuzz`, about an hour), prints each result, and for
@@ -26,20 +28,10 @@ nobody reads CI email. a push is only done by a session that stays to see its ru
 4. **at session start**, if the last push's runs were not seen to finish: `tools/ci_watch.sh`
    (origin/master's commit).
 
-## fixing a fuzz failure
+## how to run each test
 
-* reproduce with the log's "Falsifying example" pasted as an `@example` on the failing test (an
-  `st.randoms()` argument prints as `HypothesisRandom(...)`: give it `random.Random(0)` and check the
-  example still fails). the `@reproduce_failure` blob only works with CI's exact hypothesis version.
-  the artifact's `.hypothesis/` replays the run's examples: the test run unchanged fails on the
-  saved example (checked 2026-09-29 on run 36580954134, saved by hypothesis 6.168.3, replayed by
-  6.167.1 here). copy it into a throwaway worktree with NO `.hypothesis/` of its own (`rm -rf
-  .hypothesis` first): `cp -r <artifact>/.hypothesis .hypothesis` onto an existing one nests it as
-  `.hypothesis/.hypothesis`, and the test then passes as if nothing were saved.
-* decide library or oracle before fixing; keep the `@example` as the pin, and show it red on the old
-  code (clear `__pycache__`, `PYTHONDONTWRITEBYTECODE=1`) and green with the fix. record the find in
-  `v2-implementation-plan.md` §2 (as "fuzz-symmetry" and "fuzz-floordiv-overflow" are) and in
-  `HANDOFF.md`.
+the repo skill `testing` (`.claude/skills/testing/SKILL.md`): the gate, the fuzz profile, prepush,
+the CI watch, reproducing and pinning a fuzz failure, sabotage checks, the exhaustive harnesses.
 
 ## hygiene
 
