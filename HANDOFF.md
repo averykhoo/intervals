@@ -316,7 +316,11 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
   `fuzz.yml` skips such a push (`paths-ignore`). a repo skill, `testing` (`.claude/skills/testing/`),
   holds how to run each kind of test; `CLAUDE.md` keeps the rules and points at it. `.git/info/exclude`
   narrowed from `.claude/` to `.claude/worktrees/` and `settings.local.json`, so the skill is tracked.
-  `9b58329` and `93d9e3e` pushed by the docs path
+  `9b58329` and `93d9e3e` pushed by the docs path; their runs green, checked by the session: CI run
+  36800145512 (33406 passed on python 3.12-3.14 in 299-414 s) and fuzz run 36800145572 (`33406 passed in
+  3123.63s`, x10, restored from the first green run's database), the second green fuzz run in a row. `ccc6c3f` (the
+  tooling and the skill): `tools/prepush.sh` green, x10, 27795 in 53 s + 5611 in 4906 s = 33406,
+  2026-10-01; not pushed, awaiting the owner's go
 * **2026-09-30** M14-run closed, M14's exit met: fuzz run 36654816589 at `697abdd` green, x10, `33406 passed
   in 1765.10s`, the job 29 min 41 s, having restored the red run's saved database; CI run 36654816564
   green (33406 passed on python 3.12-3.14 in 345-427 s). a babysitter agent watched both
