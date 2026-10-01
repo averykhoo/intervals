@@ -9,13 +9,17 @@ the open-items table: its record goes in the plan's milestone section, with a on
 session log below; nothing is listed as open and done at once), and list anything skipped as
 "Still owed:".
 
-## banner (2026-09-29)
+## banner (2026-10-01)
 
-* **fuzzing is green on GitHub (2026-09-30)**: `master` at `697abdd` (D26), CI and fuzz green, M14's exit
-  met (the session log's top entry). the push procedure (`CLAUDE.md` "push": `tools/prepush.sh`, push,
-  a babysitter on `tools/ci_watch.sh`) has run twice end to end. `9b58329` (README "departures from ieee
-  1788", docs only) is committed, not pushed: the owner is asked whether a docs-only push may skip
-  prepush
+* **what has run on this code is in the run ledger (2026-10-01)**: `tools/gate.py status` (read it at
+  session start). every gate and fuzz run goes through `tools/gate.py run <phase>`, and
+  `tools/prepush.sh` runs only what the ledger says a push still needs (`CLAUDE.md`; the testing skill;
+  plan §2 "run ledger"). a run made before the ledger existed is not in it: the first fuzz-x10 rows
+  come from the next prepush
+* **fuzzing is green on GitHub**: `origin/master` at `93d9e3e`, CI and fuzz green (fuzz twice in a row,
+  2026-09-30 and 10-01). docs-only pushes skip the fuzz: the owner confirmed it 2026-10-01 ("yes docs
+  can skip that"), as built in `ccc6c3f`. `ccc6c3f`, `8be9bd1` and the ledger's commit are not pushed,
+  awaiting the owner's go; the ledger's commit changes source, so its prepush is a full fuzz run
 * **everything is on `master` (2026-09-29, the owner: "make sure everything is on the master
   branch")**: `master` fast-forwarded to `v2` at `8a506f3` (it was `v2`'s ancestor) and pushed after
   a green gate (27795 + 5608 = 33403 passed at `4f51e86`, 2026-09-29; the one commit after it is
@@ -256,6 +260,10 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
 
 ## still owed
 
+* the run ledger (2026-10-01) knows local runs only: a push whose src is unchanged since `origin/master`
+  trusts that master's fuzz run was green on CI (every push is watched to the end), it does not check.
+  count floors (zanzibar's `MIN_TESTS_ALL`) are recorded in each row, not enforced: a gate that
+  collected fewer tests would still read green
 * the M12 taylor loops' error bounds are argued in docstrings, not pinned: removing them keeps every
   test green (plan §2 M12 "evidence", sabotage bullet). recorded, not scheduled
 * M13d's extra working bits near 0 for expm1 and log1p (`elementary.py::_tiny_bits`) are a speed
@@ -310,6 +318,15 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
 
 ## session log (newest first)
 
+* **2026-10-01** the run ledger (the owner: "machinery to know whats run and not on the current code",
+  adapted from the zanzibar repo's): `tools/gate.py` records each gate, docs and fuzz run against two
+  content ids of the code (`src`, `code`), reports what is green here, and plans a push;
+  `tools/prepush.sh` now runs only what it plans and exits with its verdict. `tests/test_gate_ledger.py`
+  (45 tests) pins it; 13 sabotage breaks each red, after the first round found a bug in the tool itself
+  (the log header read as the run's summary), fixed and pinned. record: plan §2 "run ledger". the
+  owner answered the banner's question: docs-only pushes skip the fuzz (built in `ccc6c3f`). gate
+  through the ledger: gate:itf 27795 passed in 63 s + gate:rest 5656 in 596 s = 33451, green on
+  `c:b80c4e5d48d7` (2026-10-01). Still owed: the push (needs the owner's go; prepush is a full x10 fuzz)
 * **2026-10-01** docs-only pushes skip the fuzz (the owner, 2026-09-30): `tools/prepush.sh` compares with
   `origin/master` and, when every changed file is `*.md` or under `references/`, runs only the changed
   READMEs' doctests (each path checked in a throwaway worktree; a broken README doctest turns it red);

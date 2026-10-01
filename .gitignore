@@ -132,3 +132,6 @@ dmypy.json
 
 # throwaway area
 .scratch/
+
+# the run ledger (tools/gate.py); must stay ignored: the tree ids hash every non-ignored file
+.gate-runs/

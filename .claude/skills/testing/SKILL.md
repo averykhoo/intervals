@@ -1,6 +1,6 @@
 ---
 name: testing
-description: How to run, read and extend this repo's tests: the gate, the fuzz profile, the pre-push run (tools/prepush.sh), watching CI after a push (tools/ci_watch.sh), reproducing and pinning a hypothesis failure from CI, sabotage checks that prove a test can fail, the exhaustive differential harnesses, the itf1788 census and the gmpy2 backend runs. Use before running any test here, when a test or a fuzz run is red, when adding a property or a pin, and around every push.
+description: How to run, read and extend this repo's tests: the run ledger of what has run on the current code (tools/gate.py), the gate, the fuzz profile, the pre-push run (tools/prepush.sh), watching CI after a push (tools/ci_watch.sh), reproducing and pinning a hypothesis failure from CI, sabotage checks that prove a test can fail, the exhaustive differential harnesses, the itf1788 census and the gmpy2 backend runs. Use before running any test here, when a test or a fuzz run is red, when adding a property or a pin, and around every push.
 ---
 
 # testing in this repo
@@ -13,19 +13,23 @@ repo root. timings are from this shared laptop under load, 2026-09-30.
 
 | moment | run | time |
 |---|---|---|
+| session start, before a commit or push | `$PY tools/gate.py status` | under a second |
 | while editing | the touched test file(s): `$PY -m pytest -q tests/test_x.py` | seconds to minutes |
-| before a commit | the gate, in two calls (below) | ~1 min + ~10-14 min |
+| before a commit | the gate, in two recorded calls (below) | ~1 min + ~10-14 min |
 | before a push | `bash tools/prepush.sh`, in the background | ~83 min; docs only: seconds |
 | after a push | a babysitter agent on `bash tools/ci_watch.sh <sha>` | ci ~12 min, fuzz ~30-56 min |
 | CI only | the exhaustive harnesses (below) | 20 s to 12 min each on CI |
 
 ## the gate
 
-`$PY -m pytest -q` is the whole gate, but past the 10-minute tool limit here, so two calls, each with
-its rc captured into the log (a pipe through `tail` reports the pipe's status, not pytest's):
+`$PY -m pytest -q` is the whole gate, but past the 10-minute tool limit here, so two calls, each
+through the ledger (it captures pytest's rc itself, so no pipe can hide it):
 
-    $PY -m pytest -q -p no:cacheprovider tests/itf1788 > .scratch/gate/itf.log 2>&1; echo "rc=$?" >> .scratch/gate/itf.log
-    $PY -m pytest -q -p no:cacheprovider --ignore=tests/itf1788 > .scratch/gate/rest.log 2>&1; echo "rc=$?" >> .scratch/gate/rest.log
+    $PY tools/gate.py run gate:itf      # ~1 min
+    $PY tools/gate.py run gate:rest     # ~10-14 min: in the background
+
+then `$PY tools/gate.py status --require commit` (exit 0: commit). a bare `$PY -m pytest` is fine
+while iterating but is not recorded, so it never counts as the gate.
 
 the gate also collects `README.md` and `tests/itf1788/README.md` as doctests and every module's
 docstrings (`pyproject.toml`), so a prose edit to a README can break it. 33406 items (2026-09-30).
@@ -42,12 +46,40 @@ in `.hypothesis/examples` (on CI too, since 2026-09-29: `tests/test_fuzz_profile
 
 the local database replays what earlier local runs found; delete `.hypothesis/` only on purpose.
 
+## the run ledger: tools/gate.py
+
+every recorded run appends a row to `.gate-runs/ledger.tsv` (gitignored) and keeps its whole output
+beside it. a row names the code by two content ids, not by the commit:
+
+* `s:` (src): every file but `*.md` and `references/`, the paths fuzz.yml skips. a fuzz verdict is
+  keyed by it.
+* `c:` (code): src plus the `README.md` files pytest runs as doctests. gate and docs verdicts are
+  keyed by it.
+
+so a run made before `git commit` still counts after it; a HANDOFF or plan edit stales nothing; a
+README edit stales only the doctests (`$PY tools/gate.py run docs`, seconds). phases: `gate:itf`,
+`gate:rest`, `docs`, `fuzz-x<N>:itf`, `fuzz-x<N>:rest` (only N >= 10, fuzz.yml's, clears a push).
+
+    $PY tools/gate.py status                   # each phase on this code, the commit and push verdicts
+    $PY tools/gate.py status --require commit  # exit 1 unless the gate is green on this code
+    $PY tools/gate.py status --require push    # exit 1 unless a push needs nothing more
+    $PY tools/gate.py plan                     # nothing / docs / fuzz / dirty, what prepush reads
+
+statuses: PASSED (rc 0 and a passing pytest summary), FAILED, INCONSISTENT (rc 0 without one),
+MOVED (the code changed while it ran: it counts for nothing; do not edit sources during a run),
+INTERRUPTED. a log with no row is a run killed or still running. the run removes
+`INTERVALS_BACKEND` (CI's gate runs the pure path) and sets the fuzz variables from the phase name.
+the ids do not see `.hypothesis/` or the installed packages (recorded in each row, not matched).
+`tests/test_gate_ledger.py` pins all of it; its sabotage table (13 breaks, each red) is in
+`v2-implementation-plan.md` §2 "run ledger".
+
 ## before a push: tools/prepush.sh
 
-refuses an uncommitted tree; compares with `origin/master` (fetched). if every changed file is `*.md`
-or under `references/`, it runs only the changed READMEs' doctests; otherwise the whole suite under
-the fuzz profile at x10, logs in `.scratch/prepush/<sha>/`. `PREPUSH_DRY=1` prints the decision,
-`PREPUSH_FULL=1` forces the full run. push only on exit 0.
+refuses uncommitted changes outside markdown and `references/` (untracked files too); compares with
+`origin/master` (fetched); runs what `tools/gate.py plan` says is missing: the fuzz at x10 if the
+src changed and no green x10 run on it is recorded, the docs phase if only READMEs changed since,
+nothing if only prose did. logs in `.gate-runs/`. its exit is `tools/gate.py status --require push`.
+`PREPUSH_DRY=1` prints the decision, `PREPUSH_FULL=1` forces the fuzz run. push only on exit 0.
 
 ## after a push: tools/ci_watch.sh
 

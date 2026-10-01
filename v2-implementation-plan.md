@@ -4255,6 +4255,47 @@ after the `sin` example stayed green when sabotaged (its other pieces kept the r
 `test_exactly_the_points_with_f_in_c` allows exactly the one way out of `x` (a closed point on `x`'s
 closure) and still refuses a stray point (checked with a planted `[5.0]`).
 
+### run ledger: what has run on this code (done 2026-10-01)
+
+**why**: the owner, 2026-10-01: "i need some machinery to know whats run and not on the current code ...
+so we know if we need to rerun before a push". until then the answer was memory and `.scratch/` logs
+named by commit; `tools/prepush.sh` re-ran the 83-minute fuzz on every non-docs push, even when the same
+code had just passed it.
+
+**built**, adapted from the sibling repo graph-reachability-zanzibar-index (`scripts/gate_status.py` and
+the ledger block of `formal/verify.sh`, 2026-08-16..09-10): `tools/gate.py`, recorder and reader in one
+file. `run <phase>` (`gate:itf`, `gate:rest`, `docs`, `fuzz-x<N>:itf`, `fuzz-x<N>:rest`) runs pytest
+with the phase's environment, keeps the output in `.gate-runs/` and appends a row (verdict, counts,
+versions, and two content ids taken at the start and checked again at the end). `status` reports each
+phase on the current code and the commit and push verdicts; `plan` is what `tools/prepush.sh` reads.
+taken from zanzibar: the content address over tracked and untracked-not-ignored bytes (it survives
+`git commit`; a committed deletion hashes as the pending one, their 2026-09-05b hole); refusing to guess
+an id when git fails; verdicts keyed by (phase, id); per-phase scopes; a killed run is a log without a
+row. two scopes here: `src` (all but `*.md` and `references/`, fuzz.yml's `paths-ignore`, pinned equal)
+keys a fuzz verdict, `code` (src plus every `README.md`, the doctest glob, pinned) keys a gate or docs
+verdict, so the owner's docs-only rule (2026-09-30) became a property of the ids: a README edit after a
+fuzz run needs only the docs phase. not taken: zanzibar's run lock (its defect was two runs sharing one
+fixed log path; here each run has its own log and its own row); count floors (recorded, not enforced).
+added here: a run whose ids moved while it ran is MOVED and counts for nothing (agents edit this tree
+in parallel); `INTERVALS_BACKEND` is removed for a run; a fuzz run below fuzz.yml's x10 does not clear
+a push (before, `FUZZ_MULTIPLIER=1 tools/prepush.sh` exited 0).
+
+**the scope survey** (2026-10-01; an exclusion is a fail-open surface): the suite reads `pyproject.toml`,
+`tests/itf1788`'s data and `archive/v1` (pythonpath), and collects exactly `README.md` and
+`tests/itf1788/README.md` as doctests; nothing under `tests/`, `intervals/` or `archive/` names another
+markdown file or `references/`. `tests/test_gate_ledger.py::test_no_source_names_a_prose_path` re-runs
+that survey on every gate (red on a probe file naming `HANDOFF.md`, 2026-10-01).
+
+**sabotage** (each break alone in `tools/gate.py`, `tests/test_gate_ledger.py` run, 2026-10-01; control
+45 passed): README classed as prose (9 red); no MOVED (1); keyed by phase only (2); any multiplier clears
+a push (1); a deletion hashed as absent (1); rc 0 alone passes (3); the backend variable kept (1); a git
+failure ignored (1); a README change needs nothing (2); untracked files not hashed (2); the multiplier
+drifting from fuzz.yml's (1); the log header parsed as output (1); prose counted as dirty (1). the first
+round had "backend kept" green, and that was a bug in the tool, not a gap in the test: the summary parser
+read the log's header, which echoes the command, so a command whose text held "3 passed in 0.1s" was
+recorded PASSED. fixed (only the run's own output is parsed) and pinned
+(`::test_the_command_line_is_not_the_verdict`).
+
 ## 3. order and parallelism
 
 M1 → M2 → M3 → M4 → M5 → M6 → {M7a → M7b, M9} → M10, all done by 2026-09-25; M8 deferred; M11 is
