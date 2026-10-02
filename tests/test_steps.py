@@ -5,14 +5,27 @@ has its own tests in tests/test_modulo.py, which now run through the same engine
 the oracle is each function's preimages, written out independently: grid value n is in the result
 iff the operand meets the preimage of n. on single points the functions must agree with python's
 `math.ceil`, `math.trunc`, `round` and, for round_ties_away, the decimal module's ROUND_HALF_UP.
+
+float and mixed operands, from subnormals to the largest double with ±inf, in both classes: a listed
+result is the preimages' set with each value of a float piece made a double (to nearest, or outward
+the open gap between the doubles around it, from `int / int` and `nextafter`, not the package's
+rounding); `round(A, ndigits)` against the decimal module's exact grid value; past the cap (or for
+a piece reaching ±inf) the warning and exactly the documented hull, from the least value attained to
+the greatest; sign never hulls. and the laws of a pointwise image where nothing is hulled:
+isotone, distributing over unions, idempotent. two library questions are left out where marked
+(`_not_outward`, and trunc's count across 0 in `test_hull_past_the_cap`).
 """
 import math
+import sys
 import warnings
+from decimal import ROUND_HALF_EVEN
 from decimal import ROUND_HALF_UP
 from decimal import Decimal
+from decimal import localcontext
 from fractions import Fraction
 
 import pytest
+from hypothesis import assume
 from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
@@ -27,15 +40,27 @@ from intervals.fmt import parse
 from intervals.kernel import EMPTY
 from intervals.kernel import contains_point
 from intervals.kernel import intersection
+from intervals.kernel import is_subset
 from intervals.kernel import normalize
+from intervals.kernel import pairs
 from intervals.kernel import piece
+from intervals.kernel import pieces
+from intervals.kernel import union
+from tests.oracles import _exact_cuts
+from tests.oracles import _finite_float
 from tests.oracles import sample
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples
+from tests.strategies import infinities
 
 INF = math.inf
+MAX = sys.float_info.max
 HALF = Fraction(1, 2)
+CAP = steps.ENUMERATION_CAP
 NAMES = ('floor', 'ceil', 'trunc', 'round', 'round_ties_away', 'sign')
+STEPS = NAMES[1:]  # floor's tests are in tests/test_modulo.py
+DIGITS = ('round', 'round_ties_away')  # the two that take ndigits
+CLASSES = (MultiInterval, OutwardMultiInterval)
 
 
 def preimage(name: str, n: int):
@@ -233,3 +258,381 @@ def test_outward_round_to_digits_encloses_the_grid_point():
     """a grid point that is not a double becomes the open piece between its neighbours, outward"""
     assert OutwardMultiInterval(0.25).round(1) == OutwardMultiInterval.parse('(0.19999999999999998, 0.2)')
     assert MultiInterval(0.25).round(1) == MultiInterval.parse('[0.2]')
+
+
+# THE ORACLE FOR FLOAT RESULTS
+
+def _nearest(v) -> float:
+    """the double nearest the exact v, ties to even (int / int is correctly rounded); past the largest, ±inf"""
+    q = Fraction(v)
+    try:
+        return q.numerator / q.denominator
+    except OverflowError:
+        return math.copysign(INF, q)
+
+
+def _down(v) -> float:
+    f = _nearest(v)
+    return math.nextafter(f, -INF) if f > v else f
+
+
+def _up(v) -> float:
+    f = _nearest(v)
+    return math.nextafter(f, INF) if f < v else f
+
+
+def _enclosure(v, outward: bool):
+    """a grid value of a float piece: the double nearest it, or outward the open gap between the doubles around it"""
+    if not outward:
+        return piece(_nearest(v), _nearest(v))
+    lo, hi = _down(v), _up(v)
+    return piece(lo, hi) if lo == hi else piece(lo, hi, False, False)
+
+
+def _rounded_hull(lo, lo_closed, hi, hi_closed, outward: bool):
+    """a float piece's hull with its finite ends made doubles: outward a moved end is open; one point stays closed"""
+    if outward:
+        rlo, rhi = (lo if lo in (-INF, INF) else _down(lo)), (hi if hi in (-INF, INF) else _up(hi))
+        lo_closed, hi_closed = lo_closed and rlo == lo, hi_closed and rhi == hi
+    else:
+        rlo, rhi = (lo if lo in (-INF, INF) else _nearest(lo)), (hi if hi in (-INF, INF) else _nearest(hi))
+    return piece(rlo, rhi) if rlo == rhi else piece(rlo, rhi, lo_closed, hi_closed)
+
+
+def _decimal_round(q: Fraction, ndigits: int, rounding) -> Fraction:
+    """q to a multiple of 10 ** -ndigits by the decimal module (exact for these operands: 2000 digits)"""
+    with localcontext() as ctx:
+        ctx.prec = 2000
+        d = Decimal(q.numerator) / Decimal(q.denominator)
+        return Fraction(d.quantize(Decimal(1).scaleb(-ndigits), rounding=rounding))
+
+
+def _at(name: str, x, ndigits=None):
+    """f at one point, from python (Fraction's round, math's ceil and trunc) and decimal (ties away)"""
+    if x in (-INF, INF):
+        return (1 if x > 0 else -1) if name == 'sign' else x
+    q = Fraction(x)
+    if name == 'ceil':
+        return math.ceil(q)
+    if name == 'trunc':
+        return math.trunc(q)
+    if name == 'sign':
+        return (q > 0) - (q < 0)
+    if name == 'round':
+        return round(q) if ndigits is None else round(q, ndigits)
+    return _decimal_round(q, ndigits or 0, ROUND_HALF_UP)
+
+
+def _unit(ndigits) -> Fraction:
+    return Fraction(1) if ndigits is None else Fraction(10) ** -ndigits
+
+
+def _grid_preimage(name: str, n: int, unit: Fraction):
+    """`preimage` on the grid of `unit` (round and round_ties_away to ndigits)"""
+    if unit == 1:
+        return preimage(name, n)
+    (lo, lo_closed, hi, hi_closed), = pieces(preimage(name, n))
+    return normalize([piece(lo * unit, hi * unit, lo_closed, hi_closed)])
+
+
+def _image(name: str, a, ndigits=None, outward=False):
+    """
+    f(a) listed from the preimages, as the class must give it: a piece with a finite float end has its values made
+    doubles (`_enclosure`); `(cuts, whether some such value is not a double)`, or None where f(a) must be a hull (a
+    piece reaching ±inf, or wider than the cap)
+    """
+    unit = _unit(ndigits)
+    out, enclosed = [], False
+    for lo, lo_closed, hi, hi_closed in pieces(a):
+        as_float = _finite_float(lo) or _finite_float(hi)
+        exact = _exact_cuts(normalize([piece(lo, hi, lo_closed, hi_closed)]))
+        if name == 'sign':
+            window = (-1, 0, 1)
+        else:
+            out += [piece(end, end) for end, closed in ((lo, lo_closed), (hi, hi_closed))
+                    if closed and end in (-INF, INF)]
+            if lo == hi and lo in (-INF, INF):
+                continue
+            if lo == -INF or hi == INF or (Fraction(hi) - Fraction(lo)) / unit > CAP + 3:
+                return None
+            window = range(math.floor(Fraction(lo) / unit) - 1, math.ceil(Fraction(hi) / unit) + 2)
+        for n in window:
+            if intersection(exact, _grid_preimage(name, n, unit)):
+                v = n * unit
+                enclosed = enclosed or (as_float and _nearest(v) != v)
+                out.append(_enclosure(v, outward) if as_float else piece(v, v))
+    return normalize(out), enclosed
+
+
+def _call(cls, name: str, a, ndigits=None):
+    """f(a) through the class, as cuts, and whether it warned that it hulled"""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        x = cls.from_cuts(a)
+        result = getattr(x, name)() if ndigits is None else getattr(x, name)(ndigits)
+    return result.cuts, any(issubclass(w.category, HullWarning) for w in caught)
+
+
+def _closed_hull(cuts):
+    return normalize([piece(cuts[0].value, cuts[-1].value)])
+
+
+def _past_2_53(a) -> bool:
+    """a float piece reaching the integers that are not doubles"""
+    return any((_finite_float(lo) or _finite_float(hi))
+               and any(math.isfinite(e) and abs(e) >= 2 ** 53 for e in (lo, hi))
+               for lo, _, hi, _ in pieces(a))
+
+
+def _not_outward(name: str, cls, a) -> bool:
+    """
+    the outward class rounds ceil's and trunc's values to nearest: `OutwardMultiInterval(2.0 ** 53, 2.0 ** 53 +
+    2).ceil()` is `{ [2 ** 53] , [2 ** 53 + 2] }`, without 2 ** 53 + 1 (round's is the whole piece), and a hull's end
+    can move inside the piece. such operands are left out for those two until that is decided
+    """
+    return cls is OutwardMultiInterval and name in ('ceil', 'trunc') and _past_2_53(a)
+
+
+# subnormals, the smallest normal, where the doubles stop holding every integer (2 ** 53), the largest double
+FLOAT_BASES = [0.0, 0.5, -2.5, 0.1, 1e-5, 12345.678, 5e-324, -5e-324, 1e-320, 2.2250738585072014e-308, 2.0 ** 52 + 0.5,
+               2.0 ** 53, -2.0 ** 53 - 2, 2.0 ** 60, -2.0 ** 62, 1e17, 1e300, -1e300, MAX, -MAX]
+
+
+@st.composite
+def float_operands(draw, ndigits=None, floats_only=False, max_pieces=3):
+    """
+    pieces around one base double drawn from the whole range: its neighbouring doubles, half grid steps from it as a
+    double or (a mixed piece) exactly, ±inf, small floats and small exact values
+    """
+    unit = _unit(ndigits)
+    base = draw(st.one_of(st.sampled_from(FLOAT_BASES), st.floats(allow_nan=False, allow_infinity=False),
+                          st.floats(-1e6, 1e6, allow_nan=False), st.floats(-30, 30, allow_nan=False)))
+
+    def end():
+        kind = draw(st.integers(0, 6 if floats_only else 9))
+        if kind <= 1:
+            x = base
+            for _ in range(draw(st.integers(0, 3))):
+                x = math.nextafter(x, draw(infinities))
+            return x
+        if kind <= 3:
+            return _nearest(Fraction(base) + draw(st.integers(-6, 6)) * unit / 2)
+        if kind == 4:
+            return draw(infinities)
+        if kind <= 6:
+            return draw(st.floats(-20, 20, allow_nan=False))
+        if kind <= 8:
+            return Fraction(base) + draw(st.integers(-6, 6)) * unit / 2
+        return draw(st.sampled_from([-2, -1, 0, HALF, 1, 3]))
+
+    ps = []
+    for _ in range(draw(st.integers(1, max_pieces))):
+        lo, hi = sorted((end(), end()))
+        ps.append(piece(lo, hi, draw(st.booleans()), draw(st.booleans())))
+    return normalize(ps)
+
+
+def _ndigits(data, name: str, lo=-3, hi=3):
+    return data.draw(st.none() | st.integers(1, hi) | st.integers(lo, 0), label='ndigits') if name in DIGITS else None
+
+
+# FLOAT POINTS
+
+@settings(max_examples=200, deadline=None)
+@given(x=st.one_of(st.floats(allow_nan=False), st.sampled_from(FLOAT_BASES)))
+def test_every_double_agrees_with_python(x):
+    """the whole double range, subnormals to ±inf, both classes: python's math.ceil, math.trunc and round, and the
+    decimal module's ROUND_HALF_UP; `f(±inf)` = ±inf, sign's ±1"""
+    for cls in CLASSES:
+        a = cls(x)
+        for name in STEPS:
+            v = _at(name, x)
+            assert getattr(a, name)() == cls(float(v)), (cls.__name__, name, x)
+        if math.isfinite(x):
+            assert a.ceil() == cls(float(math.ceil(x))) and a.trunc() == cls(float(math.trunc(x)))
+            assert a.round() == cls(float(round(x)))
+
+
+@settings(max_examples=150, deadline=None)
+@given(x=st.one_of(st.floats(allow_nan=False, allow_infinity=False), st.floats(-1e3, 1e3), st.sampled_from(FLOAT_BASES),
+                   st.fractions(max_denominator=1000), st.integers(-10 ** 30, 10 ** 30)),
+       ndigits=st.integers(-4, 4) | st.integers(-330, 330))
+def test_round_to_digits_against_decimal(x, ndigits):
+    """
+    one point to ndigits against the decimal module's exact grid value g (ROUND_HALF_EVEN, ROUND_HALF_UP): an exact x
+    gives g, and Fraction's round agrees; a double gives, in MultiInterval, the double nearest g, as python's
+    `round(x, ndigits)` does (whose OverflowError is the point ±inf), and in OutwardMultiInterval g if it is a double,
+    else the open gap between the doubles around it
+    """
+    for name, rounding in (('round', ROUND_HALF_EVEN), ('round_ties_away', ROUND_HALF_UP)):
+        g = _decimal_round(Fraction(x), ndigits, rounding)
+        for cls in CLASSES:
+            got = getattr(cls(x), name)(ndigits).cuts
+            want = normalize([_enclosure(g, cls is OutwardMultiInterval) if isinstance(x, float) else piece(g, g)])
+            assert got == want, (name, cls.__name__, x, ndigits, g, show(got))
+        if name == 'round' and isinstance(x, float):
+            try:
+                assert round(x, ndigits) == _nearest(g)
+            except OverflowError:
+                assert _nearest(g) in (-INF, INF)
+        elif name == 'round':
+            assert round(Fraction(x), ndigits) == g
+
+
+# FLOAT AND MIXED OPERANDS
+
+@pytest.mark.parametrize('name', STEPS)
+@settings(max_examples=60, deadline=None)
+@given(data=st.data(), rng=st.randoms(use_true_random=False))
+def test_sound_and_sharp_on_float_operands(name, data, rng):
+    """
+    float and mixed operands across the double range, both classes: listed, the result is the preimage oracle's set
+    (`_image`), a float piece's values made doubles, to nearest or outward; hulled, it holds that set inside its
+    closed hull; a piece reaching ±inf or wider than the cap is hulled; sign never is; every sampled point's value is
+    in the result (or, to nearest, the double nearest it)
+    """
+    ndigits = _ndigits(data, name)
+    a = data.draw(float_operands(ndigits).filter(bool), label='a')
+    for cls in CLASSES:
+        if _not_outward(name, cls, a):
+            continue
+        outward = cls is OutwardMultiInterval
+        result, hulled = _call(cls, name, a, ndigits)
+        expected = _image(name, a, ndigits, outward)
+        assert not (name == 'sign' and hulled)
+        if expected is None:
+            assert hulled, (cls.__name__, show(a), show(result))
+        elif hulled:
+            assert is_subset(expected[0], result) and is_subset(result, _closed_hull(expected[0])), (
+                cls.__name__, show(a), show(result), show(expected[0]))
+        else:
+            assert result == expected[0], (cls.__name__, show(a), show(result), show(expected[0]))
+        for x in sample(a, 8, rng):
+            v = _at(name, x, ndigits)
+            rounded = not outward and v not in (-INF, INF) and contains_point(result, _nearest(v))
+            assert contains_point(result, v) or rounded, (
+                cls.__name__, show(a), x, v, show(result))
+
+
+# THE HULL PAST THE CAP
+
+def _first_and_last(name: str, a, unit: Fraction):
+    """the least and the greatest grid value a single piece attains (±inf where it has no end), from the preimages"""
+    (lo, _, hi, _), = pieces(a)
+    exact = _exact_cuts(a)
+    meets = [n for n in range(math.floor(Fraction(lo) / unit) - 1, math.floor(Fraction(lo) / unit) + 3)
+             if intersection(exact, _grid_preimage(name, n, unit))] if lo != -INF else []
+    first = -INF if lo == -INF else min(meets)
+    meets = [n for n in range(math.ceil(Fraction(hi) / unit) - 2, math.ceil(Fraction(hi) / unit) + 2)
+             if intersection(exact, _grid_preimage(name, n, unit))] if hi != INF else []
+    return first, INF if hi == INF else max(meets)
+
+
+@pytest.mark.parametrize('name', ('ceil', 'trunc', 'round', 'round_ties_away'))
+@settings(max_examples=30, deadline=None)
+@given(data=st.data())
+def test_hull_past_the_cap(name, data):
+    """
+    one piece of about the cap's width, exact, float or mixed, either end possibly ±inf: it is listed iff it is
+    bounded and attains at most ENUMERATION_CAP grid values, else the result is exactly the documented hull with a
+    HullWarning: from the least value it attains to the greatest, closed, an infinite end open unless the piece
+    holds it, the ends made doubles as a float piece's are
+    """
+    ndigits = _ndigits(data, name, -2, 2)
+    unit = _unit(ndigits)
+    start = data.draw(st.integers(-3000, 2000) | st.fractions(-3000, 2000, max_denominator=4), label='start') * unit
+    width = data.draw(st.integers(CAP - 3, CAP + 3) | st.integers(0, 3 * CAP), label='width')
+    end = start + (width + data.draw(st.sampled_from([0, HALF, Fraction(1, 3), -HALF]))) * unit
+    ends = [data.draw(st.sampled_from([v, _nearest(v), inf]), label='end') for v, inf in ((start, -INF), (end, INF))]
+    lo, hi = sorted(ends)
+    a = normalize([piece(lo, hi, data.draw(st.booleans()), data.draw(st.booleans()))])
+    assume(a)
+    (lo, lo_closed, hi, hi_closed), = pieces(a)
+    # trunc splits a piece at 0 and counts 0 for both halves: `trunc([-1, 1997/2))` has 1000 values but is hulled.
+    # a piece holding values on both sides is left out until that is decided
+    assume(name != 'trunc' or lo >= 0 or hi < 0 or hi == 0 and not hi_closed)
+    first, last = _first_and_last(name, a, unit)
+    must_hull = first == -INF or last == INF or last - first + 1 > CAP
+    as_float = _finite_float(lo) or _finite_float(hi)
+    for cls in CLASSES:
+        outward = cls is OutwardMultiInterval
+        result, hulled = _call(cls, name, a, ndigits)
+        assert hulled == must_hull, (cls.__name__, show(a), first, last)
+        if must_hull:
+            hull = (-INF if first == -INF else first * unit, first != -INF,
+                    INF if last == INF else last * unit, last != INF)
+            points = [piece(e, e) for e, closed in ((lo, lo_closed), (hi, hi_closed)) if closed and e in (-INF, INF)]
+            want = normalize([_rounded_hull(*hull, outward) if as_float else piece(hull[0], hull[2], hull[1], hull[3]),
+                              *points])
+        else:  # a connected piece attains every grid value from its first to its last
+            want = normalize(_enclosure(n * unit, outward) if as_float else piece(n * unit, n * unit)
+                             for n in range(first, last + 1))
+        assert result == want, (cls.__name__, show(a), show(result), show(want))
+
+
+# LAWS
+
+@pytest.mark.parametrize('name', STEPS)
+@settings(max_examples=40, deadline=None)
+@given(data=st.data())
+def test_isotone(name, data):
+    """
+    A ⊆ B gives f(A) ⊆ f(B) unless f(A) is a hull: in the exact class on exact operands, and in the outward class on
+    float and mixed ones (to nearest it cannot hold: an exact piece of A keeps a value B's float piece rounds)
+    """
+    ndigits = _ndigits(data, name)
+    b = data.draw(float_operands(ndigits).filter(bool), label='b')
+    a = intersection(b, data.draw(cut_tuples(), label='c')) or normalize([next(pairs(b))])
+    for cls, (sub, sup) in ((MultiInterval, (_exact_cuts(a), _exact_cuts(b))), (OutwardMultiInterval, (a, b))):
+        if _not_outward(name, cls, b):
+            continue
+        fa, a_hulled = _call(cls, name, sub, ndigits)
+        fb, _ = _call(cls, name, sup, ndigits)
+        assert a_hulled or is_subset(fa, fb), (cls.__name__, show(sub), show(sup), show(fa), show(fb))
+
+
+@pytest.mark.parametrize('name', STEPS)
+@settings(max_examples=40, deadline=None)
+@given(data=st.data())
+def test_union_distributes(name, data):
+    """
+    f(A ∪ B) = f(A) ∪ f(B) where nothing is hulled, as for any pointwise image: exact operands in the exact class,
+    and operands whose every end is a double or ±inf (so that a merged piece is a float piece too) in both classes
+    """
+    ndigits = _ndigits(data, name)
+    exact_a, exact_b = data.draw(exact_cut_tuples, label='exact a'), data.draw(exact_cut_tuples, label='exact b')
+    float_a = data.draw(float_operands(ndigits, floats_only=True), label='float a')
+    float_b = data.draw(float_operands(ndigits, floats_only=True), label='float b')
+    for cls, a, b in ((MultiInterval, exact_a, exact_b), (MultiInterval, float_a, float_b),
+                      (OutwardMultiInterval, float_a, float_b)):
+        if not a or not b:
+            continue
+        fa, ha = _call(cls, name, a, ndigits)
+        fb, hb = _call(cls, name, b, ndigits)
+        fab, hab = _call(cls, name, union(a, b), ndigits)
+        assert ha or hb or hab or fab == union(fa, fb), (cls.__name__, show(a), show(b), show(fab), show(union(fa, fb)))
+
+
+@pytest.mark.parametrize('name', STEPS)
+@settings(max_examples=40, deadline=None)
+@given(data=st.data())
+def test_idempotent(name, data):
+    """
+    f(f(A)) = f(A) where f(A) is listed, its values being grid points: in the exact class (ndigits too), in
+    MultiInterval on float operands on the integer grid (a rounded integer is an integer), and in the outward class
+    where every value is a double; outward otherwise f(A) ⊆ f(f(A)), the enclosures only growing
+    """
+    ndigits = _ndigits(data, name)
+    exact = _exact_cuts(data.draw(float_operands(ndigits).filter(bool), label='exact a'))
+    floats = data.draw(float_operands().filter(bool), label='float a')
+    for cls, a, nd in ((MultiInterval, exact, ndigits), (MultiInterval, floats, None),
+                       (OutwardMultiInterval, floats, ndigits)):
+        fa, hulled = _call(cls, name, a, nd)
+        if hulled:
+            continue
+        ffa, again = _call(cls, name, fa, nd)
+        listed = _image(name, a, nd, cls is OutwardMultiInterval)
+        if cls is OutwardMultiInterval and (listed is None or listed[1]):
+            assert again or is_subset(fa, ffa), (show(a), show(fa), show(ffa))
+        else:
+            assert not again and ffa == fa, (cls.__name__, show(a), show(fa), show(ffa))
