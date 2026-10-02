@@ -157,6 +157,21 @@ the owner asked: is there a licence for Lefevre's data anywhere, and if not, COR
   cases for sin (smallest |x/(2 pi) cmod 1| per binade), special values, non-regression inputs, and some "AI
   generated" coverage inputs (log.wc, atan.wc), which are not worst cases.
 
+## 3g. CORE-MATH worst cases through our evaluator: a probe (the session, 2026-10-02)
+
+CORE-MATH master `284b3b0e198042c38f5c30316f696786b10816b0`; seven binary64 `.wc` files fetched whole (finite
+inputs: log 134,951, cbrt 106,248, atan 55,764, exp2 77,176, cosh 36,686, sin 1,975,921, exp 1,129,426). 300
+inputs sampled per file (seed 1), each through `elementary.rounded` DOWN and UP on the pure path
+(`backend.fast` None), the final Ziv precision recorded by wrapping `elementary._ziv`, each result compared with
+MPFR (gmpy2, 53 bits, emin -1073, emax 1024, subnormalize, RoundDown/RoundUp). 4,200 calls, 0 mismatches.
+per call: median 0.0-0.1 ms, p99 0.1-1.0 ms, max 1 ms (this laptop). final p (64 is `_START_PRECISION`):
+log 64: 316, 128: 284; exp 298/302; sin 244/356; cosh 326/272; exp2 348/230 (22 exact); atan 64: 210, 128: 376,
+256: 2, 1024: 2, 2048: 2, 4096: 8; cbrt 590 of 600 never reach the Ziv loop: most of `cbrt.wc` is its
+"exact cases in [1,8)" block (exact cubes, answered by `exact`). so about half the worst cases end at 128 bits
+and a few atan inputs go to 4096; a uniform sample of a file follows its biggest block, not its hardest one.
+cost of the whole set for our functions, estimated from the survey's sizes (about 250 MB, about 11M inputs, x2
+directions, about 0.15 ms each): about an hour on one process, before pow's bivariate rows are measured.
+
 ## Summary / ranking (2026-09-29)
 Answer: yes, we have the full ITF1788 vector set (no fork, branch, PR or downstream adds .itl vectors to those 19 files; Octave's itl.mat is the same data). Known upstream errata: 2 (midRad [nai] [nai]; mpfi wid [0,0] = -0), fixed in IA.jl/ITF1788.jl/maryada, not upstream.
 Pull-in order: (1) glibc auto-libm-test-out binary64 directed rows; (2) Lefevre testlibm-data + hrcases (licence question first); (3) CRlibm testdata RU/RD (GPL-2 header); (4) CORE-MATH .wc sampled + own MPFR/arb oracle; (5) TestFloat-generated f64 -rmin/-rmax + UCBTest eq rows for + - * / sqrt fma; (6) cuinterval custom.itl + IA.jl-derived rootn/tan rows; (7) MPFI exp10/hypot/mixed-scalar .dat rows. Skip FPgen (b32 only), LLVM libc, RLIBM, JInterval, kv, Paranoia, Octave %! tests.
