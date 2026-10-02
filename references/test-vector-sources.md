@@ -172,6 +172,29 @@ and a few atan inputs go to 4096; a uniform sample of a file follows its biggest
 cost of the whole set for our functions, estimated from the survey's sizes (about 250 MB, about 11M inputs, x2
 directions, about 0.15 ms each): about an hour on one process, before pow's bivariate rows are measured.
 
+## 3h. second opinion: what the worst cases can catch (a review agent, 2026-10-02; the session re-checked the starred items)
+
+- sabotage, exp, 3000 BaCSeL worst cases and 3000 random doubles, DOWN/NEAREST/UP against MPFR (*): with no
+  `_widen` at all, with `_guard` = 0, and with `_exp_fix`'s guard `q = p`, both sets stay green; with `_ziv`
+  returning at p = 64 without doubling, 2138 of 9000 worst-case calls go red and 0 of 9000 random ones. so the
+  worst cases pin that the p > 64 path exists and works; a wider-but-rigorous enclosure is absorbed by the
+  doubling and no binary64 input sees it (they sit 2^-97..2^-113 from a boundary, the second step decides at
+  2^-128 or finer).
+- within one BaCSeL block the inputs end about half at 64 and half at 128 bits whatever the block's `-m`; whole-file
+  runs of atan, cosh, exp2, log and cbrt (410k inputs, ~1.23M calls, three directions): 0 mismatches. the inputs
+  that behave differently are in the small blocks (special values, thresholds, non-regression, argument-reduction
+  extremes, subnormal outputs); atan's ±2^e block is the one reaching 512-4096 bits.
+- bivariate files map onto our scalar calls with 0 mismatches on the rows run: atan2.wc via
+  `elementary.rounded_angle`, hypot.wc via `rounded('sqrt', x*x + y*y)`, a pow.wc sample via `rounded_pow`.
+- (*) `elementary.rounded('log', Fraction(-1), DOWN)` never returns (timed out at 20 s; the scalar's contract is
+  "x inside the domain", the set layer clips first), and log.wc's special-values block has negative inputs.
+- the ledger: `tools/gate.py::read_ledger` skips any row whose width is not `len(COLUMNS)` (*), so a third
+  content-id scope as a new column would orphan every recorded row without a migration.
+- its recommendation: a vendored gate sample by block (small blocks whole, ~200 per large block, three
+  directions, a floor on rows ending at p >= 128), a `tools/coremath.py` that fetches at a pinned commit with a
+  sha256 manifest and runs `--all` once as a dated census here, and automation through the ledger only if the
+  census ever finds what the sample did not.
+
 ## Summary / ranking (2026-09-29)
 Answer: yes, we have the full ITF1788 vector set (no fork, branch, PR or downstream adds .itl vectors to those 19 files; Octave's itl.mat is the same data). Known upstream errata: 2 (midRad [nai] [nai]; mpfi wid [0,0] = -0), fixed in IA.jl/ITF1788.jl/maryada, not upstream.
 Pull-in order: (1) glibc auto-libm-test-out binary64 directed rows; (2) Lefevre testlibm-data + hrcases (licence question first); (3) CRlibm testdata RU/RD (GPL-2 header); (4) CORE-MATH .wc sampled + own MPFR/arb oracle; (5) TestFloat-generated f64 -rmin/-rmax + UCBTest eq rows for + - * / sqrt fma; (6) cuinterval custom.itl + IA.jl-derived rootn/tan rows; (7) MPFI exp10/hypot/mixed-scalar .dat rows. Skip FPgen (b32 only), LLVM libc, RLIBM, JInterval, kv, Paranoia, Octave %! tests.
