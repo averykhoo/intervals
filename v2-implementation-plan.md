@@ -4294,6 +4294,35 @@ rounding" after D26; a randomized local run drew `pow_rev1([-2.86e-115, 0.0], (-
 `[inf]`, which D26 keeps. it now checks `meets_x_as_d26`, with the example pinned (red with
 `reverse._keep_squeezed` a no-op).
 
+**the first fuzz x10 run of the merged tree** (`fuzz-x10:rest` at `6f9fd09`, 2026-10-02: `4 failed, 5910 passed`
+in 6559 s; the prepush refused the push) found four more, each fixed and pinned red-on-old:
+
+* **library**: a point whose two cuts differ in type (`[1.0, 1]`, a float and an int end) formatted as `[1.0]`,
+  so `repr` lost a type and the round trip failed (`parse('[0E0-0]')`; an outward `(2.0, 2)` through `repr`).
+  `fmt.format_piece` writes such a point with both numbers. pins: `@example`s of
+  `tests/test_fmt.py::test_any_text_parses_or_raises_value_error` and
+  `tests/test_outward.py::test_pickle_copy_and_repr_round_trip`
+* **test oracle, older than M14-breadth**: `tests/oracles.py` computed a float `x ** -n` as `1 / x ** n`,
+  the double rounding just removed from the library, so `test_ops_properties.py::test_sound_float_identity_rounding[pow]`
+  went red on `0.6 ** -2` (nearest double 2.777777777777778, the oracle's 2.7777777777777777). the oracle now
+  takes python's `x ** n`. pin `tests/test_oracles.py::test_a_float_negative_power_is_python_s_value`
+* **test oracle, new**: `test_extreme_floats.py::test_nearest_class_rounds_the_exact_result_to_nearest` zipped
+  hull ends in order, but to nearest rounding can carry one end past the other (`M((1/3, 1.0)) + 10 ** 20`: the
+  float corner rounds to 1e20, below the exact corner 10 ** 20 + 1/3), and then a hull end can be another
+  corner's value (`(-TINY, 0) - 1/3` ends at the exact -1/3: found by the next x10 run, after a first fix that
+  only allowed the two ends to swap). each end is now checked to lie between the exact end and its nearest
+  double (every corner lies beyond the exact end, rounding is monotone), exactly the nearest double where
+  mod, `//` and fma round once; both cases pinned by `@example`s, and `_pick` always outward still turns it red
+  on add, sub, mul, div and reciprocal (as in the builder's table)
+
+**the third x10 run** (`fuzz-x10:rest` on `s:c967ae7f2f46`, 2026-10-02: `2 failed, 5913 passed` in 6581 s), two
+more test oracles, both new: `tests/test_steps.py::_nearest` caught the overflow of a value past the doubles and
+then called `math.copysign(INF, q)`, which converts q and overflows again (`round(1.7976931348623155e308, -293)`;
+pinned by an `@example`); and the applicator's hook property expected the hook at a float corner that is a split
+point (`abs` of `[0, 0.0]`), which the applicator reads as the split point, an int, so nothing rounds: the type
+quirk below, no wrong value. that property now requires every other float corner (still red when the hook skips
+mixed corners).
+
 **left open, not fixed** (rows in `HANDOFF.md`): an int past python's 4300-digit `str()` limit cannot be formatted
 (`repr(MultiInterval(10 ** 4300))` raises; with Q17); `parse(' ' * 30000 + 'x')` takes 37 s (the tokenizer's
 regex is quadratic on leading whitespace, the answer right); number-type quirks with no wrong value (a 0 end

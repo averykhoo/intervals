@@ -42,7 +42,7 @@ def format_value(value: Value) -> str:
 def format_piece(start, end) -> str:
     lo, lo_closed = as_start(start)
     hi, hi_closed = as_end(end)
-    if lo == hi:
+    if lo == hi and type(lo) is type(hi):  # a point whose cuts differ in type (`[1.0, 1]`) keeps both
         return f'[{format_value(lo)}]'
     return f'{"[" if lo_closed else "("}{format_value(lo)}, {format_value(hi)}{"]" if hi_closed else ")"}'
 

@@ -35,6 +35,7 @@ import warnings
 from fractions import Fraction
 
 import pytest
+from hypothesis import example
 from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
@@ -454,6 +455,11 @@ def test_outward_class_is_the_tightest_enclosure(op, form, a, b, c, n, float_n, 
 @settings(max_examples=25, deadline=None)
 @given(form=st.sampled_from(NEAREST_FORMS), rng=st.randoms(use_true_random=False), **operations)
 @pytest.mark.filterwarnings('ignore')
+@example(form='Ms', rng=random.Random(0), a=normalize([piece(Fraction(1, 3), 1.0, False, False)]),  # ends cross (fuzz x10)
+         b=normalize([piece(0.0, 1.0, False, False)]), c=normalize([piece(1e-320, 2.2250738585072014e-308, False, True)]),
+         n=-3, float_n=False, scalar=10 ** 20)
+@example(form='Ms', rng=random.Random(0), a=normalize([piece(-TINY, 0, False, False), piece(0.0, 1.0, False, False)]),
+         b=normalize([piece(0.0, 0.0)]), c=normalize([piece(0.0, 0.0)]), n=-3, float_n=False, scalar=Fraction(1, 3))
 def test_nearest_class_rounds_the_exact_result_to_nearest(op, form, rng, a, b, c, n, float_n, scalar):
     """
     MultiInterval promises no enclosure: its float results round to nearest, python's own float ops
@@ -476,8 +482,14 @@ def test_nearest_class_rounds_the_exact_result_to_nearest(op, form, rng, a, b, c
             assert r == x, why
         assert bool(r) == bool(x), why
         once = part in ('mod', 'floordiv', 'fma') and _has_float(*operands)
+        # to nearest each float corner rounds on its own, so a piece's ends can cross (`M((1/3, 1.0)) + 10 ** 20`: the
+        # float corner rounds to 1e20, below the exact corner 10 ** 20 + 1/3) and a hull end can be another corner's
+        # value (`(-TINY, 0) - 1/3` ends at the exact -1/3). every corner lies beyond the exact end and rounding is
+        # monotone, so each end lies between the exact end and its nearest double; exactly the nearest double where
+        # mod, // and fma round the whole result once (M14-breadth's fuzz x10, 2026-10-02, twice)
         for end, got in zip(_ends(x)[::2], _ends(r)[::2]) if x else ():
-            assert got == _nearest(end) or (got == end and not once), (end, got, why)
+            near = _nearest(end)
+            assert got == near if once else min(end, near) <= got <= max(end, near), (end, got, why)
     closed = {part: _closure(result.cuts) for part, result in results.items()}
     for x, y, z, values in _attained_points(op, a, b, c, n, rng, 8 if op != 'fma' else 5):
         for part, v in values:

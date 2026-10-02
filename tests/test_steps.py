@@ -28,6 +28,7 @@ from fractions import Fraction
 
 import pytest
 from hypothesis import assume
+from hypothesis import example
 from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
@@ -269,8 +270,8 @@ def _nearest(v) -> float:
     q = Fraction(v)
     try:
         return q.numerator / q.denominator
-    except OverflowError:
-        return math.copysign(INF, q)
+    except OverflowError:  # int / int returns MAX where the value rounds to it: this is past it
+        return INF if q > 0 else -INF  # not copysign, which converts q and overflows again (fuzz x10)
 
 
 def _down(v) -> float:
@@ -443,6 +444,7 @@ def test_every_double_agrees_with_python(x):
 @given(x=st.one_of(st.floats(allow_nan=False, allow_infinity=False), st.floats(-1e3, 1e3), st.sampled_from(FLOAT_BASES),
                    st.fractions(max_denominator=1000), st.integers(-10 ** 30, 10 ** 30)),
        ndigits=st.integers(-4, 4) | st.integers(-330, 330))
+@example(x=1.7976931348623155e+308, ndigits=-293)  # the grid value 1.797693134862316e308 overflows (fuzz x10)
 def test_round_to_digits_against_decimal(x, ndigits):
     """
     one point to ndigits against the decimal module's exact grid value g (ROUND_HALF_EVEN, ROUND_HALF_UP): an exact x

@@ -394,3 +394,10 @@ def test_sample_favours_points_near_the_ends():
     assert min(points) < Fraction(1, 1000) and max(points) > 1 - Fraction(1, 1000)
     far = sample(P('(-inf, 0)'), 300, rng)
     assert min(far) < -10 ** 6 and max(far) > -Fraction(1, 1000)
+
+
+def test_a_float_negative_power_is_python_s_value():
+    """a float x ** -n is python's `x ** -n`, one rounding: `1 / x ** n` rounds twice and gave 2.7777777777777777
+    for 0.6 ** -2, whose nearest double is 2.777777777777778 (M14-breadth's fuzz x10, 2026-10-02)"""
+    a = normalize([piece(0.6, 0.6)])
+    assert pointwise('pow', 0.6, -2, a=a) == [0.6 ** -2] == [2.777777777777778]

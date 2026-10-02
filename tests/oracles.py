@@ -225,6 +225,13 @@ def _pow(x, n, a) -> list:
         return [1]
     if a is None:
         raise ValueError('a negative exponent needs the base set for the pole direction')
+    if _finite_float(x) and x != 0:
+        # python's float value is x ** n, one rounding; `1 / x ** -n` rounds twice and can miss the nearest
+        # double (0.6 ** -2), as the library did until M14-breadth (2026-10-02)
+        try:
+            return [normalize_value(x ** n)]
+        except OverflowError:  # x ** -n underflows: the pole's side decides, below
+            pass
     return _div(1, _power(x, -n), power_image(a, -n))
 
 

@@ -361,6 +361,8 @@ def mutated_outputs(draw):
 @example('0/0')
 @example('[] , [1]')  # an empty item then a separator was refused (M14-breadth)
 @example('{() ∪ (), [2]}')
+@example('[0E0-0]')  # a point whose cuts differ in type: format wrote [0.0], losing the int (fuzz x10, 2026-10-02)
+@example('[1.0, 1]')
 def test_any_text_parses_or_raises_value_error(text):
     try:
         cuts = parse(text)

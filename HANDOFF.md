@@ -12,10 +12,10 @@ session log below; nothing is listed as open and done at once), and list anythin
 ## banner (2026-10-02)
 
 * **M14-breadth done (2026-10-02)**: six streams of properties (plan §2 "M14-breadth"); five library bugs it
-  found are fixed and pinned, one a soundness hole (outward floor/ceil/trunc past 2 ** 53). not pushed: the
-  prepush of `fa59944` was stopped for it (the owner: "pause the fuzzing, lets do M14-breadth finished then run
-  fuzzing"); the next step is `tools/prepush.sh` on the new commit, then the push (the owner's go stands,
-  2026-10-02: "Okay go")
+  found are fixed and pinned, one a soundness hole (outward floor/ceil/trunc past 2 ** 53); the x10 fuzz found one
+  more (a mixed-type point's `repr`) and six test oracles, all fixed. green at x10 on the committed code; pushed
+  with the owner's go (2026-10-02: "Okay go", after "pause the fuzzing, lets do M14-breadth finished then run
+  fuzzing")
 * **what has run on this code is in the run ledger (2026-10-01)**: `tools/gate.py status` (read it at
   session start). every gate and fuzz run goes through `tools/gate.py run <phase>`, and
   `tools/prepush.sh` runs only what the ledger says a push still needs (`CLAUDE.md`; the testing skill;
@@ -323,6 +323,14 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
 
 ## session log (newest first)
 
+* **2026-10-02** the prepush of `6f9fd09` went red (`fuzz-x10:rest`: 4 failed; the ledger recorded FAILED while
+  the background task reported exit 0, the trailing-`echo` trap): a mixed-type point lost a type in `repr`
+  (library, fixed), the shared oracle's float `x ** -n` rounded twice as the library had (fixed), and the new
+  nearest-ends oracle assumed rounded ends keep their order (fixed); each pinned red-on-old (plan §2
+  "M14-breadth"). the fuzz x10 then ran on the fixed tree before its commit (the ledger keys by content):
+  red again twice, on test oracles only (a too-narrow fix of the nearest-ends oracle; an overflow in a steps helper;
+  the applicator hook at a split point, the m14b-open type quirk), each fixed and pinned; the fourth run green:
+  fuzz-x10:itf 27795 passed in 56 s + fuzz-x10:rest 5915 in 5959 s = 33710 on `s:8f11144ba309` (2026-10-02)
 * **2026-10-02** M14-breadth (the owner paused the push's fuzz run for it): six builders in worktrees, one
   per thin file, each property sabotaged (122 breaks, all red); merged by cherry-pick. the session verified and
   fixed five library bugs they reported, each pinned red-on-old: outward `floor`/`ceil`/`trunc` rounded their

@@ -30,6 +30,7 @@ import warnings
 from fractions import Fraction
 
 import pytest
+from hypothesis import example
 from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
@@ -37,6 +38,8 @@ from hypothesis import strategies as st
 from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import kernel
+from intervals.cuts import Cut
+from intervals.cuts import Side
 from intervals.fmt import format_cuts
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples
@@ -336,6 +339,7 @@ def number_types(x):
 
 @settings(max_examples=60, deadline=None)
 @given(a=any_operands)
+@example(a=(Cut(2.0, Side.BELOW), Cut(2, Side.ABOVE)))  # a point whose cuts differ in type: repr wrote [2.0] (fuzz x10)
 def test_pickle_copy_and_repr_round_trip(a):
     """the same class, set and number type at every end (a float end read back as an int would stop
     rounding, an int one read back as a float would start)"""
