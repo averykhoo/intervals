@@ -487,6 +487,29 @@ def _hyperbolic(name: str, x: Fraction, p: int) -> Tuple[Fraction, Fraction]:
 
 # EXACT VALUES
 
+# each function's domain where it is not the whole extended line, its ends included (each holds a value or a
+# one-sided limit): the set layer's (`functions.domain`), which clips before it calls here. pinned to it by
+# tests/test_elementary.py::test_the_scalar_domain_is_the_set_layers
+_DOMAIN = {'sqrt': (0, INF), 'log': (0, INF), 'log2': (0, INF), 'log10': (0, INF), 'log1p': (-1, INF),
+           'asin': (-1, 1), 'acos': (-1, 1), 'acosh': (1, INF), 'atanh': (-1, 1)}
+_FINITE_ONLY = ('sin', 'cos', 'tan', 'cot', 'sec', 'csc')
+
+
+def _check_domain(name: str, x, base) -> None:
+    """a ValueError where x is outside f's domain: past it the series and ziv's loop never settle"""
+    if name == 'rootn':
+        outside = base % 2 == 0 and x < 0
+    elif name == 'acoth':
+        outside = -1 < x < 1
+    elif name in _FINITE_ONLY:
+        outside = is_infinite(x)
+    else:
+        low, high = _DOMAIN.get(name, (-INF, INF))
+        outside = not low <= x <= high
+    if outside:
+        raise ValueError(f'{name} has no value at {x}, outside its domain')
+
+
 def exact(name: str, x, base=None):
     """
     `f(x)` where it is rational or ±inf, None where it is irrational (then `rounded` is needed). x is
@@ -497,6 +520,7 @@ def exact(name: str, x, base=None):
     >>> exact('exp', 1) is None
     True
     """
+    _check_domain(name, x, base)
     if name == 'rootn':
         return _exact_rootn(x, base)
     if is_infinite(x):

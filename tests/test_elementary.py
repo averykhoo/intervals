@@ -445,6 +445,40 @@ def test_exact(name, x, value):
     assert exact(name, x) == value
 
 
+@pytest.mark.parametrize('name, x, base', [
+    # each of these hung (log, log2, log10, log1p, atanh, acoth), answered wrongly (acos(-2) was 0.0) or raised
+    # a misleading error before the domain check (2026-10-02)
+    ('log', -1, None), ('log', -1, 2), ('log2', -1, None), ('log10', Fraction(-1, 3), None), ('log1p', -2, None),
+    ('sqrt', -1, None), ('asin', 2, None), ('acos', -2, None), ('acosh', 0, None), ('atanh', 2, None),
+    ('acoth', Fraction(1, 2), None), ('sin', INF, None), ('rootn', -8, 2),
+])
+def test_outside_the_domain_raises(name, x, base):
+    with pytest.raises(ValueError, match='outside its domain'):
+        exact(name, x, base)
+    with pytest.raises(ValueError, match='outside its domain'):
+        rounded(name, x, DOWN, base)
+
+
+def test_the_scalar_domain_is_the_set_layers():
+    """`elementary._check_domain` refuses exactly the points outside `functions.domain`, which clips first"""
+    from intervals import functions
+    from intervals import kernel
+    tiny = Fraction(1, 2 ** 60)
+    points = [-INF, INF, 0, tiny, -tiny]
+    for k in (Fraction(1, 2), 1, 2, 3):
+        points += [k, -k, k + tiny, k - tiny, -k + tiny, -k - tiny]
+    cases = [(name, None) for name in elementary.NAMES] + [('rootn', n) for n in (2, 3, -2, -3)]
+    for name, base in cases:
+        for x in points:
+            inside = kernel.contains_point(functions.domain(name, base), x)
+            try:
+                elementary._check_domain(name, x, base)
+                refused = False
+            except ValueError:
+                refused = True
+            assert refused == (not inside), (name, base, x)
+
+
 @pytest.mark.parametrize('x, base, value', [
     (Fraction(81), 3, 4), (Fraction(1, 27), 3, -3), (Fraction(8), Fraction(1, 2), -3), (0, Fraction(1, 2), INF),
     (0, 10, -INF), (INF, Fraction(1, 3), -INF), (Fraction(25, 4), Fraction(5, 2), 2), (Fraction(7), 3, None),
