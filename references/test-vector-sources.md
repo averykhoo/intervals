@@ -195,6 +195,20 @@ directions, about 0.15 ms each): about an hour on one process, before pow's biva
   sha256 manifest and runs `--all` once as a dated census here, and automation through the ledger only if the
   census ever finds what the sample did not.
 
+## 3i. built: tools/coremath.py, the gate sample, the first full check (the session, 2026-10-02)
+
+- `tools/coremath.py` (`fetch`, `sample [--check]`, `check`, `status`, `pin`) at CORE-MATH `284b3b0e1980` (24 files,
+  236 MB in `.scratch/coremath-cache/`, kept; sha256 in `tests/coremath/MANIFEST.tsv`); 16 of the 24 are
+  WORST_SYMMETRIC upstream, so their inputs are also checked at -x. one parser trap: a unary line may carry a
+  trailing bit count (`0x1.4f1d73be27a31p+1 44` in sin.wc), so a unary line's operand is its first token only.
+- the gate sample `tests/coremath/*.tsv`: 29,054 rows (2.7 MB), every one right on the pure path, 12 s for the 24
+  functions; calls past 64 bits per function from 56 (hypot) to 7,224 (atan). sabotage table in the commit
+  `3044197` (4 breaks, each red).
+- the first full check, `check --jobs 4` at `3044197`: 17,077,691 inputs (sign mirrors included), 51,233,073 calls
+  (DOWN, NEAREST, UP), 0 mismatches against MPFR, none over 1 s, 2547 s (`references/coremath-runs.tsv`).
+- `elementary` now refuses a point outside a function's domain (`008fa4a`): log, log2, log10, log1p, atanh and
+  acoth used to loop forever there, asin and acosh raised a misleading error, and acos(-2) answered 0.0.
+
 ## Summary / ranking (2026-09-29)
 Answer: yes, we have the full ITF1788 vector set (no fork, branch, PR or downstream adds .itl vectors to those 19 files; Octave's itl.mat is the same data). Known upstream errata: 2 (midRad [nai] [nai]; mpfi wid [0,0] = -0), fixed in IA.jl/ITF1788.jl/maryada, not upstream.
 Pull-in order: (1) glibc auto-libm-test-out binary64 directed rows; (2) Lefevre testlibm-data + hrcases (licence question first); (3) CRlibm testdata RU/RD (GPL-2 header); (4) CORE-MATH .wc sampled + own MPFR/arb oracle; (5) TestFloat-generated f64 -rmin/-rmax + UCBTest eq rows for + - * / sqrt fma; (6) cuinterval custom.itl + IA.jl-derived rootn/tan rows; (7) MPFI exp10/hypot/mixed-scalar .dat rows. Skip FPgen (b32 only), LLVM libc, RLIBM, JInterval, kv, Paranoia, Octave %! tests.

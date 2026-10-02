@@ -1,3 +1,4 @@
 # tools/coremath.py check appends one row per run: when, our commit, whether the scalar files were dirty, the
 # CORE-MATH commit, which functions, inputs, mismatches, calls over 1 s, seconds, jobs
 # when	ours	scalar files	core-math	functions	inputs	mismatches	slow	seconds	jobs
+2026-10-02 22:58	3044197	clean	284b3b0e1980	all	17077691	0	0	2547	4
