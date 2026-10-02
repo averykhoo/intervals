@@ -2,15 +2,26 @@
 applicator mechanics: splitting, corners, D2 limits, closure, warnings, number types, rounding hook,
 and the arithmetic dunders on the class. worked-example tables and the laws live in
 test_ops_examples.py and test_ops_properties.py
+
+the tables pin each mechanic on chosen operands; the hypothesis tests check the same mechanics on random
+ones, each against the design rather than the code: splitting at random points is a partition of the
+input with its flags kept; one box's image (`evaluate_box`) is exactly the set of values its defined
+pairs attain, by the independent oracle in `tests.oracles` (sampled values inside it, each end closed iff
+attained, points just inside each end attained); the monotone fast path matches every corner on floats,
+under a rounding hook and for min/max; a recording hook sees every finite float corner and nothing else;
+exact operands give exact ends and float operands float ends (D3); each warning fires once per call, iff
+an operand is empty or some box has no defined pair (D7); and every result is canonical
 """
 import math
 import sys
 import warnings
 from fractions import Fraction
+from itertools import product
 
 import pytest
 from hypothesis import given
 from hypothesis import settings
+from hypothesis import strategies as st
 
 import intervals
 from intervals import EMPTY
@@ -28,6 +39,11 @@ from intervals.errors import EmptySetPropagationWarning
 from intervals.errors import IndeterminateResultWarning
 from intervals.fmt import format_cuts
 from intervals.fmt import parse
+from tests.oracles import BINARY
+from tests.oracles import attained
+from tests.oracles import pointwise
+from tests.oracles import sample
+from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples
 
 inf = math.inf
@@ -36,6 +52,120 @@ P = MultiInterval.parse
 
 def run(op, *texts):
     return format_cuts(op(*map(parse, texts)))
+
+
+# RANDOMIZED: strategies and helpers for the hypothesis tests below
+
+# the special points of the arithmetic: poles, indeterminate corners, flat spots
+SPECIAL = (-inf, -1, 0, 1, inf)
+exact_ends = st.one_of(st.sampled_from(SPECIAL), st.sampled_from(SPECIAL), st.integers(-6, 6),
+                       st.fractions(min_value=-6, max_value=6, max_denominator=4))
+
+
+@st.composite
+def exact_pieces(draw, one_in=4):
+    """a non-empty `(lo, lo_closed, hi, hi_closed)` with exact ends; a degenerate special point one time in `one_in`"""
+    if draw(st.integers(1, one_in)) == 1:
+        v = draw(st.sampled_from(SPECIAL))
+        return v, True, v, True
+    lo, hi = sorted((draw(exact_ends), draw(exact_ends)))
+    if lo == hi:
+        return lo, True, hi, True
+    return lo, draw(st.booleans()), hi, draw(st.booleans())
+
+
+def as_cuts(*ps):
+    return kernel.normalize(kernel.piece(lo, hi, lc, hc) for lo, lc, hi, hc in ps)
+
+
+# one to three pieces, half of them a lone [0], [inf] or [-inf]: the shapes D7 is about
+special_operands = st.lists(exact_pieces(one_in=2), min_size=1, max_size=3).map(lambda ps: as_cuts(*ps))
+
+# every finite end a float, the infinities as points
+float_ends = st.one_of(st.sampled_from([-inf, -1.0, 0.0, 0.5, 2.0, inf]), st.floats(-20, 20, allow_nan=False))
+float_cut_tuples = cut_tuples(values=float_ends, max_pieces=3)
+
+# (oracle name, descriptor): the ops the pointwise oracle knows, each evaluated by the applicator
+ORACLE_OPS = [('add', ops.ADD), ('sub', ops.SUB), ('mul', ops.MUL), ('div', ops.DIV),
+              ('reciprocal', ops.RECIPROCAL), ('abs', ops.ABS), ('neg', ops.NEG), ('pos', ops.POS)]
+MINMAX_OPS = [('min', ops.MIN), ('max', ops.MAX)]
+OUTWARD_OPS = [(f'outward-{name}', desc) for name, desc in ops.OUTWARD.items()]
+ALL_OPS = ORACLE_OPS + MINMAX_OPS + OUTWARD_OPS
+OP_IDS = [name for name, _ in ALL_OPS]
+
+
+def arity(desc):
+    return 1 if desc.name in ('reciprocal', 'abs', 'neg', 'pos') else 2
+
+
+def apply(desc, operands):
+    return apply_unary(desc, *operands) if arity(desc) == 1 else apply_binary(desc, *operands)
+
+
+def values_at(name, x, y, a, b):
+    """the values one pair gives, by the oracle; `a`, `b` are the operands' sets (for a pole's direction)"""
+    if name == 'min':
+        return [min(x, y)]
+    if name == 'max':
+        return [max(x, y)]
+    if name in BINARY:
+        return pointwise(name, x, y, a, b)
+    return pointwise(name, x, a=a)
+
+
+def one_side(p, side):
+    """the half of p on the given side of 0 (-1 below, +1 above), the 0 included; p itself if 0 is not inside"""
+    lo, lc, hi, hc = p
+    if lo < 0 < hi:
+        return (lo, lc, 0, True) if side < 0 else (0, True, hi, hc)
+    return p
+
+
+def halves(p):
+    """the sign-pure pieces the design splits p into: both halves if 0 is strictly inside"""
+    lo, lc, hi, hc = p
+    return [(lo, lc, 0, True), (0, True, hi, hc)] if lo < 0 < hi else [p]
+
+
+def representatives(p):
+    """
+    p's closed ends and two finite interior points, one of them nonzero. a box has a defined pair iff a pair
+    of these does: in the pointwise table a pair with no value (inf - inf, 0 * inf, inf / inf, 0 / 0) has
+    every coordinate at an end, except x over a lone [0], where no pair has one; a finite nonzero interior
+    point has a value with any partner
+    """
+    lo, lc, hi, hc = p
+    out = [v for v, closed in ((lo, lc), (hi, hc)) if closed]
+    if lo < hi:
+        if lo == -inf and hi == inf:
+            out += [-1, 1]
+        elif lo == -inf:
+            out += [hi - 1, hi - 2]
+        elif hi == inf:
+            out += [lo + 1, lo + 2]
+        else:
+            out += [lo + Fraction(hi - lo) / 3, lo + 2 * Fraction(hi - lo) / 3]
+    return out
+
+
+def has_value(name, box):
+    sets = [as_cuts(p) for p in box]
+    b = sets[1] if len(box) == 2 else None
+    return any(values_at(name, x, y, sets[0], b)
+               for x, y in product(representatives(box[0]), representatives(box[1]) if b else [None]))
+
+
+def inside(lo, hi, end):
+    """an exact point strictly inside (lo, hi), within 1e-9 of the low end (end -1) or the high end (+1)"""
+    eps, far = Fraction(1, 10 ** 9), 10 ** 12
+    if end < 0:
+        return min(hi, 0) - far if lo == -inf else lo + (min(eps, Fraction(hi - lo) / 2) if hi != inf else eps)
+    return max(lo, 0) + far if hi == inf else hi - (min(eps, Fraction(hi - lo) / 2) if lo != -inf else eps)
+
+
+def holds(p, v):
+    lo, lc, hi, hc = p
+    return lo < v < hi or (v == lo and lc) or (v == hi and hc)
 
 
 # SPLITTING
@@ -55,6 +185,36 @@ def test_split_at_zero(pieces, expected):
 def test_split_at_several_points():
     assert split_pieces([(0, False, 3, False)], (1, 2)) == [
         (0, False, 1, True), (1, True, 2, True), (2, True, 3, False)]
+
+
+split_points = st.lists(st.one_of(st.sampled_from([-2, -1, 0, 0.0, Fraction(1, 2), 1, 1.0, 3]),
+                                  st.floats(-20, 20, allow_nan=False, allow_infinity=False)), max_size=4)
+
+
+@settings(max_examples=200, deadline=None)
+@given(cut_tuples(), split_points)
+def test_split_is_a_partition(cuts, points):
+    """
+    each piece becomes, in order, a chain of pieces covering it exactly: one more than the distinct points
+    strictly inside it, consecutive ones sharing just that point (closed in both), none with a point
+    strictly inside, the piece's own ends and flags on the first and last
+    """
+    original = list(kernel.pieces(cuts))
+    out = split_pieces(original, tuple(points))
+    assert as_cuts(*out) == cuts
+    rest = list(out)
+    for lo, lc, hi, hc in original:
+        n = len({s for s in points if lo < s < hi})
+        chain, rest = rest[:n + 1], rest[n + 1:]
+        assert len(chain) == n + 1
+        assert chain[0][:2] == (lo, lc) and type(chain[0][0]) is type(lo)
+        assert chain[-1][2:] == (hi, hc) and type(chain[-1][2]) is type(hi)
+        for (_, _, end, end_closed), (start, start_closed, _, _) in zip(chain, chain[1:]):
+            assert end == start and end_closed and start_closed and end in points
+        for p in chain:
+            assert p[0] < p[2] or (p[0] == p[2] and p[1] and p[3]), p
+            assert not any(p[0] < s < p[2] for s in points), p
+    assert rest == []
 
 
 def test_mul_splits_both_operands():
@@ -100,6 +260,36 @@ def test_a_box_with_no_value_anywhere_is_none(desc, box):
     assert evaluate_box(desc, box) is None
 
 
+@pytest.mark.parametrize('name, desc', ORACLE_OPS, ids=[name for name, _ in ORACLE_OPS])
+@settings(max_examples=60, deadline=None)
+@given(data=st.data(), rng=st.randoms(use_true_random=False))
+def test_evaluate_box_is_the_attained_set(name, desc, data, rng):
+    """
+    one box, its pieces on one side of every split point as the applicator hands them over: the image is
+    exactly the set of values its defined pairs attain (exact operands), or None if no pair has a value
+    """
+    assert desc.split_points in ((), (0,))
+    box = tuple(one_side(data.draw(exact_pieces()), data.draw(st.sampled_from((-1, 1)))) if desc.split_points
+                else data.draw(exact_pieces()) for _ in range(arity(desc)))
+    a, b = as_cuts(box[0]), (as_cuts(box[1]) if len(box) == 2 else None)
+    result = evaluate_box(desc, box)
+    xs = sample(a, 6, rng)
+    found = [v for x, y in product(xs, sample(b, 6, rng) if b else [None]) for v in values_at(name, x, y, a, b)]
+    if result is None:
+        assert not found and not has_value(name, box), box
+        return
+    lo, lo_closed, hi, hi_closed = result
+    assert all(holds(result, v) for v in found), (box, result, [v for v in found if not holds(result, v)])
+    assert attained(name, lo, a, b) == lo_closed, (box, result)
+    assert attained(name, hi, a, b) == hi_closed, (box, result)
+    if lo < hi:
+        # the image of a box is connected, so a wrong end shows as an unattained point just inside it
+        for end in (-1, 1):
+            assert attained(name, inside(lo, hi, end), a, b), (box, result, end)
+    else:
+        assert lo_closed and hi_closed
+
+
 @settings(max_examples=150, deadline=None)
 @given(exact_cut_tuples, exact_cut_tuples)
 @pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
@@ -107,6 +297,21 @@ def test_a_box_with_no_value_anywhere_is_none(desc, box):
 def test_monotone_fast_path_matches_every_corner(a, b):
     for desc in (ops.ADD, ops.SUB):
         assert apply_binary(desc, a, b) == apply_binary(desc._replace(monotone=None), a, b)
+
+
+def types(cuts):
+    return [type(cut.value) for cut in cuts]
+
+
+@settings(max_examples=60, deadline=None)
+@given(float_cut_tuples, float_cut_tuples)
+@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')
+def test_monotone_fast_path_matches_every_corner_on_floats(a, b):
+    # float corners, the outward hooks and min/max's own attainment: the same set, in the same types
+    for desc in (ops.ADD, ops.SUB, ops.MIN, ops.MAX, ops.OUTWARD['add'], ops.OUTWARD['sub']):
+        fast, full = apply_binary(desc, a, b), apply_binary(desc._replace(monotone=None), a, b)
+        assert fast == full and types(fast) == types(full), desc.name
 
 
 def test_div_is_evaluated_at_the_corners_not_through_the_reciprocal():
@@ -223,10 +428,32 @@ def test_warnings_point_at_the_caller():
     assert record[0].filename == __file__
 
 
-# NUMBER TYPES (D3)
+@pytest.mark.parametrize('name, desc', ORACLE_OPS + MINMAX_OPS, ids=[name for name, _ in ORACLE_OPS + MINMAX_OPS])
+@settings(max_examples=60, deadline=None)
+@given(data=st.data())
+def test_each_warning_fires_once_exactly_when_due(name, desc, data):
+    """
+    an empty operand: the empty set and one EmptySetPropagationWarning, nothing else. otherwise one
+    IndeterminateResultWarning iff some box (a piece of each operand, split at the op's points) has no
+    defined pair by the table, and the empty set iff every box has none (D7)
+    """
+    operands = [data.draw(special_operands, label=f'operand {i}') for i in range(arity(desc))]
+    if data.draw(st.integers(0, 4), label='empty one') == 0:
+        operands[data.draw(st.integers(0, len(operands) - 1), label='which')] = kernel.EMPTY
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter('always')
+        result = apply(desc, operands)
+    raised = [w.category for w in record]
+    if not all(operands):
+        assert result == kernel.EMPTY and raised == [EmptySetPropagationWarning]
+        return
+    split = [[h for p in kernel.pieces(cuts) for h in (halves(p) if desc.split_points else [p])] for cuts in operands]
+    dead = [box for box in product(*split) if not has_value(name, box)]
+    assert raised == ([IndeterminateResultWarning] if dead else []), (operands, dead)
+    assert (result == kernel.EMPTY) == (len(dead) == len(list(product(*split)))), (operands, dead, result)
 
-def types(cuts):
-    return [type(cut.value) for cut in cuts]
+
+# NUMBER TYPES (D3)
 
 
 @pytest.mark.parametrize('op, a, b, expected', [
@@ -259,6 +486,31 @@ def test_pow_types():
     assert types(ops.power(parse('[2]'), -2)) == [Fraction, Fraction]
     assert types(ops.power(parse('[2.0]'), 2)) == [float, float]
     assert ops.power(parse('[1e200]'), 2) == parse('[inf]')  # float ** int overflow, as float * float
+
+
+def finite_ends(cuts):
+    return [cut.value for cut in cuts if not math.isinf(cut.value)]
+
+
+@pytest.mark.parametrize('name, desc', ALL_OPS, ids=OP_IDS)
+@settings(max_examples=40, deadline=None)
+@given(data=st.data())
+@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')
+def test_number_types_follow_the_operands(name, desc, data):
+    """
+    D3: exact operands (int, Fraction, +-inf) give exact finite ends, an integral one as int, and are
+    never rounded; operands whose finite ends are all floats give float ends, but for a 0, which an exact
+    corner may give: +-inf (`1 / [2.0, inf]` is `[0, 0.5]`), the split point (`abs((-1.0, 1.0))` is
+    `[0, 1.0)`), or a D2 limit evaluated exactly (outward `[0.0, 1.0] / [0.0, 1.0]` is `[0, inf]`, to
+    nearest `[0.0, inf]`; reported 2026-10-02, M14-breadth)
+    """
+    exact = [data.draw(exact_cut_tuples, label=f'exact {i}') for i in range(arity(desc))]
+    for v in finite_ends(apply(desc, exact)):
+        assert type(v) is int or (type(v) is Fraction and v.denominator != 1), (exact, v)
+    floats = [data.draw(float_cut_tuples, label=f'float {i}') for i in range(arity(desc))]
+    for v in finite_ends(apply(desc, floats)):
+        assert type(v) is float or v == 0, (floats, v)
 
 
 # ROUNDING HOOK
@@ -309,6 +561,63 @@ def test_rounding_hook_unary():
     outward = ops.NEG._replace(rounded=(lambda x: math.nextafter(-x, -inf), lambda x: math.nextafter(-x, inf)))
     result = apply_unary(outward, parse('[1, 2.0]'))
     assert result == kernel.normalize([kernel.piece(math.nextafter(-2.0, -inf), -1, False, True)])
+
+
+def typed(args):
+    """a corner with its types: as a set member, 2 and 2.0 are different corners (one goes through the hook)"""
+    return tuple((type(x), x) for x in args)
+
+
+def corners(desc, operands):
+    """every corner of every box: one end of one sign-pure piece of each operand"""
+    ends = [[v for p in kernel.pieces(cuts) for h in (halves(p) if desc.split_points else [p]) for v in (h[0], h[2])]
+            for cuts in operands]
+    return list(product(*ends))
+
+
+mixed_cut_tuples = st.one_of(float_cut_tuples, cut_tuples(max_pieces=3))
+
+
+@pytest.mark.parametrize('name, desc', ORACLE_OPS + MINMAX_OPS, ids=[name for name, _ in ORACLE_OPS + MINMAX_OPS])
+@settings(max_examples=40, deadline=None)
+@given(data=st.data())
+@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')
+def test_rounding_hook_sees_every_finite_float_corner_and_nothing_else(name, desc, data):
+    """
+    a recording hook: each call is a corner of a box with a value, every coordinate finite and one a
+    float; down and up see the same corners; and without the monotone fast path every such corner is seen
+    """
+    seen = {-1: [], 1: []}
+
+    def hook(direction):
+        def rounded(*args):
+            seen[direction].append(args)
+            return desc.fn(*args)
+        return rounded
+
+    operands = [data.draw(mixed_cut_tuples, label=f'operand {i}') for i in range(arity(desc))]
+    apply(desc._replace(rounded=(hook(-1), hook(1))), operands)
+    assert sorted(map(repr, seen[-1])) == sorted(map(repr, seen[1]))
+    due = {typed(c) for c in corners(desc, operands) if all(operands) and desc.fn(*c) is not None
+           and all(not math.isinf(x) for x in c) and any(isinstance(x, float) for x in c)}
+    for args in seen[-1]:
+        assert all(not math.isinf(x) for x in args) and any(isinstance(x, float) for x in args), args
+        assert typed(args) in due, (args, operands)
+    if desc.monotone is None:
+        assert {typed(args) for args in seen[-1]} == due, (due - {typed(args) for args in seen[-1]}, operands)
+
+
+@pytest.mark.parametrize('name, desc', ALL_OPS, ids=OP_IDS)
+@settings(max_examples=40, deadline=None)
+@given(data=st.data())
+@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')
+def test_result_is_canonical(name, desc, data):
+    # the union of the boxes, normalized: strictly increasing cuts, so no empty, overlapping or touching pieces
+    operands = [data.draw(st.one_of(mixed_cut_tuples, special_operands), label=f'operand {i}')
+                for i in range(arity(desc))]
+    assert kernel.is_valid(apply(desc, operands))
 
 
 # THE CLASS
