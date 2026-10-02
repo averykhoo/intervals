@@ -32,7 +32,7 @@ then `$PY tools/gate.py status --require commit` (exit 0: commit). a bare `$PY -
 while iterating but is not recorded, so it never counts as the gate.
 
 the gate also collects `README.md` and `tests/itf1788/README.md` as doctests and every module's
-docstrings (`pyproject.toml`), so a prose edit to a README can break it. 33406 items (2026-09-30).
+docstrings (`pyproject.toml`), so a prose edit to a README can break it. 33710 items (2026-10-02 at `233fdd4`, CI and local).
 the library's warnings are errors inside the suite: a test that provokes one says so with
 `pytest.warns` or a `filterwarnings` mark.
 
