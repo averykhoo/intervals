@@ -1,0 +1,3 @@
+# the vendored rows stay LF in the working tree whatever core.autocrlf says, so tools/coremath.py sample --check
+# compares the bytes it writes
+* -text

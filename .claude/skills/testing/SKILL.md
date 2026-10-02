@@ -140,6 +140,21 @@ each docstring has its measured run time: the ops runs 11-18 minutes (2026-09-25
 boxes at a few minutes per 10k. `--sample N` checks N random cases. run them in the background, and
 only when `ops`, the applicator or `modulo` changed.
 
+## CORE-MATH worst cases: tools/coremath.py (manual, local only)
+
+    $PY tools/coremath.py status             # pin vs upstream, last full check, scalar changes since
+    $PY tools/coremath.py check --jobs 4     # every input of the pinned files, DOWN/NEAREST/UP vs MPFR
+    $PY tools/coremath.py sample --check     # the vendored rows are what the files and MPFR give
+    $PY tools/coremath.py pin [<commit>]     # move to a newer CORE-MATH, then `sample` and a full check
+
+the gate's part is `tests/test_coremath.py`: about 29k vendored rows (`tests/coremath/*.tsv`, every row
+of a small block, 200 seeded rows of a big one), 12 s. it catches a Ziv loop that stops or computes
+wrongly past its first precision (sabotaged 2026-10-02: 24 of 24 functions red), not a slightly loose
+error bound, which the loop absorbs (`references/test-vector-sources.md` §3h). `check` is never in CI
+or prepush: run it when `status` shows the scalar evaluator changed a lot or upstream changed our
+files, after asking the owner (`CLAUDE.md`). it appends its verdict to `references/coremath-runs.tsv`;
+commit that row. the files live in `.scratch/coremath-cache/` (kept; `fetch` restores it).
+
 ## other tools
 
 * `$PY tools/itf1788_census.py`: the itf1788 counts quoted in the docs (vectors, ops, divergence keys

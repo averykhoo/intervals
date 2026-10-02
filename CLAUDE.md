@@ -40,6 +40,14 @@ nobody reads CI email. a push is only done by a session that stays to see its ru
 4. **at session start**, if the last push's runs were not seen to finish: `tools/ci_watch.sh`
    (origin/master's commit).
 
+## CORE-MATH worst cases: a manual check, local only (owner, 2026-10-02)
+
+the gate runs a vendored sample of CORE-MATH's hard-to-round inputs (`tests/test_coremath.py`, rows in
+`tests/coremath/`). every input of the pinned files, three directions against MPFR, is `tools/coremath.py check
+--jobs N`: never in CI, never in prepush, run by hand. at session start, beside `tools/gate.py status`, read
+`tools/coremath.py status`; when it shows the scalar evaluator (elementary and what it imports) changed a lot since
+the last full check, or CORE-MATH changed our functions' files upstream, ask the owner whether to run it.
+
 ## how to run each test
 
 the repo skill `testing` (`.claude/skills/testing/SKILL.md`): the gate, the fuzz profile, prepush,
@@ -48,6 +56,9 @@ the CI watch, reproducing and pinning a fuzz failure, sabotage checks, the exhau
 ## hygiene
 
 * `.scratch/` is the gitignored throwaway area; a finding recorded only there is lost.
+* except `.scratch/coremath-cache/`: do not delete it, not in a `.scratch/` sweep either. it holds the pinned
+  CORE-MATH files `tools/coremath.py` reads (about 280 MB, their sha256 in `tests/coremath/MANIFEST.tsv`); if lost,
+  `tools/coremath.py fetch` downloads them again.
 * stop a background process by the PID it had at launch, never by image name or command-line match.
   a monitor's `tail -f` outlives its session: stop it when done (sixteen orphans from earlier
   sessions held `.scratch/` open until 2026-09-29).
