@@ -151,8 +151,8 @@ the gate's part is `tests/test_coremath.py`: about 29k vendored rows (`tests/cor
 of a small block, 200 seeded rows of a big one), 12 s. it catches a Ziv loop that stops or computes
 wrongly past its first precision (sabotaged 2026-10-02: 24 of 24 functions red), not a slightly loose
 error bound, which the loop absorbs (`references/test-vector-sources.md` §3h). `check` is never in CI
-or prepush: run it when `status` shows the scalar evaluator changed a lot or upstream changed our
-files, after asking the owner (`CLAUDE.md`). it appends its verdict to `references/coremath-runs.tsv`;
+or prepush: at the end of a session that changed the scalar evaluator, ask the owner whether to run
+it (`CLAUDE.md`; 2547 s at 4 jobs, 2026-10-02). it appends its verdict to `references/coremath-runs.tsv`;
 commit that row. the files live in `.scratch/coremath-cache/` (kept; `fetch` restores it).
 
 ## other tools

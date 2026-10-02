@@ -44,9 +44,9 @@ nobody reads CI email. a push is only done by a session that stays to see its ru
 
 the gate runs a vendored sample of CORE-MATH's hard-to-round inputs (`tests/test_coremath.py`, rows in
 `tests/coremath/`). every input of the pinned files, three directions against MPFR, is `tools/coremath.py check
---jobs N`: never in CI, never in prepush, run by hand. at session start, beside `tools/gate.py status`, read
-`tools/coremath.py status`; when it shows the scalar evaluator (elementary and what it imports) changed a lot since
-the last full check, or CORE-MATH changed our functions' files upstream, ask the owner whether to run it.
+--jobs N`: never in CI, never in prepush, run by hand. nothing to read at session start: at the END of a session
+that changed the scalar evaluator (`elementary` and what it imports; `tools/coremath.py status` lists the files and
+the commits since the last full check), ask the owner whether to run it (2547 s at 4 jobs, 2026-10-02).
 
 ## how to run each test
 

@@ -11,7 +11,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-10-02)
 
-* **CORE-MATH worst cases built (2026-10-02), not pushed**: a gate sample (`tests/test_coremath.py`) and a manual full check (`tools/coremath.py check`; read `tools/coremath.py status` at session start, `CLAUDE.md`); the first full check found 0 mismatches in 51M calls. `.scratch/coremath-cache/` is kept on purpose
+* **CORE-MATH worst cases built (2026-10-02), not pushed**: a gate sample (`tests/test_coremath.py`) and a manual full check (`tools/coremath.py check`; asked for at the end of a session that changed the scalar evaluator, `CLAUDE.md`); the first full check found 0 mismatches in 51M calls. `.scratch/coremath-cache/` is kept on purpose
 * **M14-breadth done (2026-10-02)**: six streams of properties (plan §2 "M14-breadth"); five library bugs it
   found are fixed and pinned, one a soundness hole (outward floor/ceil/trunc past 2 ** 53); the x10 fuzz found one
   more (a mixed-type point's `repr`) and six test oracles, all fixed. pushed at `233fdd4` with the owner's go
