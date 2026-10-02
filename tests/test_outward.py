@@ -155,6 +155,8 @@ METHODS = {
     'fma': lambda a, b, c, n: a.fma(b, c),
     'cancel_minus': lambda a, b, c, n: a.cancel_minus(b),
     'cancel_plus': lambda a, b, c, n: a.cancel_plus(b),
+    # an exact distance (it is not read through `exact_value`); a third makes a float end round
+    'expand': lambda a, b, c, n: a.expand((0, 1, Fraction(1, 3), 3)[abs(n)]),
 }
 CASES = sorted([*OPERATORS, *METHODS])
 

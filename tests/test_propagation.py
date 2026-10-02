@@ -534,7 +534,7 @@ def test_a_sub_box_never_decorates_worse(op, x, y, sx, sy):
     assert part >= whole, (op, box, sub, whole, part)
 
 
-@pytest.mark.parametrize('op, args', [
+SET_OPS = [
     (lambda a, b: a & b, 2), (lambda a, b: a | b, 2), (lambda a, b: a ^ b, 2), (lambda a, b: a.difference(b), 2),
     (lambda a: a.complement(), 1), (lambda a: ~a, 1), (lambda a: a.hull, 1), (lambda a: a.closed_hull, 1),
     (lambda a: a.interior, 1), (lambda a, b: a.cancel_minus(b), 2), (lambda a, b: a.cancel_plus(b), 2),
@@ -544,7 +544,10 @@ def test_a_sub_box_never_decorates_worse(op, x, y, sx, sy):
     (lambda a, b: a.symmetric_difference(b, 1), 2), (lambda a: a.union(), 1), (lambda a: a.positive, 1),
     (lambda a: a.negative, 1), (lambda a: a.finite, 1), (lambda a: a.expand(1), 1), (lambda a: a.expand(0), 1),
     (lambda a: a[0:Fraction(5, 2)], 1), (lambda a: a[:1], 1),
-])
+]
+
+
+@pytest.mark.parametrize('op, args', SET_OPS)
 @pytest.mark.parametrize('x, y', [(M(1, 3), M(2, 4)), (M(1, 3), M()), (M.parse('(-inf, inf)'), M(1, 2)),
                                   (M.parse('{ [0, 1] , [3, 4] }'), M(0, 1))])
 def test_set_operations_are_trv(op, args, x, y):
@@ -554,6 +557,16 @@ def test_set_operations_are_trv(op, args, x, y):
     result = _run(op, *(a, b)[:args])
     assert result.decoration is TRV
     assert result.interval == _run(op, *(x, y)[:args])
+
+
+@pytest.mark.parametrize('op, args', SET_OPS)
+@settings(max_examples=10, deadline=None)
+@given(a=decorated(grid_sets()), b=decorated(grid_sets()))
+def test_set_operations_are_trv_anywhere(op, args, a, b):
+    """the same at random decorated sets, any decoration: trv, and the bare operation's set"""
+    result = _run(op, *(a, b)[:args])
+    assert result.decoration is TRV
+    assert result.interval == _run(op, *(a.interval, b.interval)[:args])
 
 
 def test_the_set_keeps_its_class():

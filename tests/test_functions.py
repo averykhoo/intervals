@@ -50,6 +50,8 @@ from intervals.rounding import UP
 from tests.oracles import sample
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples
+from tests.test_elementary import _atan  # at import time: decorating its @given tests inside a
+from tests.test_elementary import _pi  # running one is hypothesis's nested-@given error
 
 INF = math.inf
 FINITE = normalize([piece(-INF, INF, False, False)])
@@ -556,8 +558,6 @@ def _true_angle(v, u):
     """the angle of (u, v) as a Decimal, or 0 exactly, from the decimal oracle in test_elementary"""
     from decimal import Decimal
     from decimal import localcontext
-    from tests.test_elementary import _atan
-    from tests.test_elementary import _pi
     with localcontext() as ctx:
         ctx.prec = 60
         pi = _pi(60)

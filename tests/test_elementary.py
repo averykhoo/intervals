@@ -16,6 +16,8 @@ from decimal import localcontext
 from fractions import Fraction
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from intervals import MultiInterval
 from intervals import backend
@@ -477,6 +479,29 @@ def test_the_scalar_domain_is_the_set_layers():
             except ValueError:
                 refused = True
             assert refused == (not inside), (name, base, x)
+
+
+_DOMAIN_CASES = [(name, None) for name in elementary.NAMES] + [('rootn', n) for n in range(-9, 10) if n]
+
+
+@given(case=st.sampled_from(_DOMAIN_CASES),
+       x=st.one_of(st.floats(allow_nan=False), st.fractions(max_denominator=10 ** 6), st.integers(-10 ** 6, 10 ** 6),
+                   st.sampled_from([-1, 1]).flatmap(lambda s: st.integers(1, 60).map(lambda k: s * (1 + Fraction(s, 2 ** k))))))
+def test_the_scalar_domain_is_the_set_layers_anywhere(case, x):
+    """the same agreement at random points, the last strategy hugging -1 and 1, where four domains end; inside
+    it, the scalar answers (a pole at 0 aside) rather than raising"""
+    from intervals import functions
+    from intervals import kernel
+    name, base = case
+    inside = kernel.contains_point(functions.domain(name, base), x)
+    try:
+        elementary._check_domain(name, x, base)
+    except ValueError:
+        assert not inside, (name, base, x)
+        return
+    assert inside, (name, base, x)
+    if not (x == 0 and name in elementary.POLE_AT_ZERO) and not (abs(x) > 2 ** 1000 and name in ('sin', 'cos', 'tan', 'cot', 'sec', 'csc')):
+        rounded(name, x, DOWN, base)
 
 
 @pytest.mark.parametrize('x, base, value', [

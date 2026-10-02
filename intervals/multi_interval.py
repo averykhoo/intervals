@@ -994,6 +994,21 @@ class OutwardMultiInterval(MultiInterval):
     __slots__ = ()
     _outward = True
 
+    def expand(self, distance) -> 'OutwardMultiInterval':
+        """
+        widen every piece by `distance` on both sides: the set plus `[-distance, distance]`, so a moved
+        float end rounds outward like any sum (`MultiInterval.expand` rounds it to nearest)
+
+        >>> OutwardMultiInterval(0.1, 0.2).expand(1)
+        OutwardMultiInterval.parse('(-0.9, 1.2000000000000002)')
+        """
+        distance = normalize_value(distance)
+        if not (0 <= distance < math.inf):
+            raise ValueError('expand() needs a finite, non-negative distance')
+        if not self or distance == 0:
+            return self
+        return self + MultiInterval(-distance, distance)
+
     # python tries the right operand's reflected method first only if a subclass overrides it
     def __radd__(self, other):
         return MultiInterval.__radd__(self, other)

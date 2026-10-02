@@ -569,8 +569,12 @@ def _root_ball(x, n: int) -> arb:
 @settings(max_examples=80, deadline=None)
 @given(x=st.one_of(st.floats(allow_nan=False, allow_infinity=False), st.fractions(max_denominator=10 ** 9),
                    st.fractions(max_denominator=10 ** 6).map(lambda q: q ** 3)),
-       n=st.sampled_from([2, 3, 4, 5, 7, 10, -2, -3, -4, -7]))
+       n=st.one_of(st.sampled_from([2, 3, 4, 5, 7, 10, -2, -3, -4, -7]),  # the degrees cbrt's worst cases skip
+                   st.integers(1, 10 ** 4).flatmap(lambda k: st.sampled_from([k, -k]))))
 @example(x=27.0, n=3)
+@example(x=2.0 ** 100, n=50)
+@example(x=2.0 ** -1000, n=-125)
+@example(x=3.0, n=9999)
 @example(x=1024.0, n=10)
 @example(x=5e-324, n=-3)
 @example(x=MAX, n=-2)
