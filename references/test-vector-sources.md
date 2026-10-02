@@ -136,6 +136,27 @@ Repo https://gitlab.inria.fr/mpfi/mpfi (GitLab 28417), active: "Version 1.5.5" c
     - cot [0x13a28c59d5433bp-44, 0x9d9462ceaa19dp-43]: lo/pi = 100.000000000000000625 > 100, hi/pi = 100.318 -> no multiple of pi inside; cuinterval's `[entire]` claim ("float64(100*pi) < 100*pi so we cross the asymptote") is false; ITF's finite result stands.
   -> worth pulling: custom.itl (26) + the rootn/tan rows of intervalarithmeticjl.itl (33); NOT the edits.
 
+## 3f. licence search for Lefevre's data, and CORE-MATH's provenance (the session, 2026-10-02)
+
+the owner asked: is there a licence for Lefevre's data anywhere, and if not, CORE-MATH. fetched and searched 2026-10-02:
+
+- Lefevre: NO licence anywhere. searched: the testlibm page (index.en) and the site home page; all 10 data files
+  decompressed (`testlibm-data` 53,355 lines, `hrcases-*` 194,340 lines: every line is a data row, no header or
+  comment); `hrtests.tar.xz` (mktestlibm, mktestmpfr, testlibm.c, testmpfr.c, version-info.h: the programs are
+  GPL-3-or-later, "Copyright (c) 2003-2015 Vincent Lefevre", no README, nothing about the data); the four papers the
+  page links (arith13, arith15, arith17, ieeetc1998-tcrt; no terms for the data). the page notes that some
+  `testlibm-data` rows are not true worst cases (an old filter turned a worst case of f into one of f^-1; fixed in
+  2007, the file kept as is so old machines' results stay comparable), and that `hrcases/` is "not all the
+  hard-to-round cases I have found, but at least the most important ones", subnormals ignored.
+- CORE-MATH: LICENSE at master is MIT ("The CORE-MATH code is distributed under the following license"), and the
+  `.wc` files carry no other terms. their comments give each block's source: most are CORE-MATH's own BaCSeL runs
+  (e.g. cbrt.wc records the bacsel command lines, >= 44 identical bits after the round bit; exp.wc >= 41 bits), and
+  some blocks are LEFEVRE'S, cited by URL: `log.wc` "worst cases from .../hrcases/hrcases-explog.xz", `sin.wc`
+  "worst cases from .../testlibm-data.xz (update from 2020-11-27), from 0 to pi, with 46 to 59 identical bits".
+  so part of Lefevre's data already ships under CORE-MATH's MIT notice. also in the files: argument-reduction worst
+  cases for sin (smallest |x/(2 pi) cmod 1| per binade), special values, non-regression inputs, and some "AI
+  generated" coverage inputs (log.wc, atan.wc), which are not worst cases.
+
 ## Summary / ranking (2026-09-29)
 Answer: yes, we have the full ITF1788 vector set (no fork, branch, PR or downstream adds .itl vectors to those 19 files; Octave's itl.mat is the same data). Known upstream errata: 2 (midRad [nai] [nai]; mpfi wid [0,0] = -0), fixed in IA.jl/ITF1788.jl/maryada, not upstream.
 Pull-in order: (1) glibc auto-libm-test-out binary64 directed rows; (2) Lefevre testlibm-data + hrcases (licence question first); (3) CRlibm testdata RU/RD (GPL-2 header); (4) CORE-MATH .wc sampled + own MPFR/arb oracle; (5) TestFloat-generated f64 -rmin/-rmax + UCBTest eq rows for + - * / sqrt fma; (6) cuinterval custom.itl + IA.jl-derived rootn/tan rows; (7) MPFI exp10/hypot/mixed-scalar .dat rows. Skip FPgen (b32 only), LLVM libc, RLIBM, JInterval, kv, Paranoia, Octave %! tests.
