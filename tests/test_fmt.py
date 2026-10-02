@@ -19,12 +19,11 @@ the package's own text form: `intervals.fmt` (`format_cuts`, `parse`, `parse_val
   canonical, or raises ValueError, never anything else (texts of at most a few hundred characters)
 * the tables: v1's parser comments and the separators v2 adds
 
-findings of M14-breadth (2026-10-02), held out of the properties and named where they are: a zero
-denominator raises ZeroDivisionError (`_zero_denominator`), an int part past python's 4300-digit `str()`
-limit cannot be formatted (`BIG`), and a separator after a leading `[]` or `()` is refused (`_NUMBERLESS`)
+findings of M14-breadth (2026-10-02): a zero denominator raised ZeroDivisionError and a separator after a
+leading `[]` or `()` was refused, both fixed (the `@example`s of the any-text property); an int part past
+python's 4300-digit `str()` limit cannot be formatted, held out of the round trip (`BIG`), an open question
 """
 import math
-import re
 import struct
 import sys
 from fractions import Fraction
@@ -281,9 +280,6 @@ def spelled_empty(draw):
         f'({a},{space()}{b})', f'[{a},{space()}{b})', f'({a},{space()}{b}]']))
 
 
-_NUMBERLESS = re.compile(r'[\[(]\s*[\])]')
-
-
 @st.composite
 def spelled_set(draw, cuts):
     """the set every documented way: its pieces, some repeated, empty pieces mixed in, shuffled, between
@@ -300,8 +296,6 @@ def spelled_set(draw, cuts):
     text = items[0] if items else ''
     for at, item in enumerate(items[1:], 1):
         separator = draw(st.sampled_from([',', ';', '|', '∪', '']))
-        if all(_NUMBERLESS.fullmatch(before) for before in items[:at]):
-            separator = ''  # finding F5: `[] , [1]` is refused, `[1] , []` and `[] [1]` are not
         text += (f'{space()}{separator}{space()}' if separator else draw(_SPACED)) + item
     if not items or draw(st.booleans()):
         text = f'{{{space()}{text}{space()}}}'
@@ -340,15 +334,6 @@ def test_parse_value_round_trip(data, value):
 # ANY TEXT
 
 _GRAMMAR = '0123456789 .eE+-/[](){},;|∪∞infINFty\t\n'
-_DENOMINATOR = re.compile(r'/\s*(\d+)')
-
-
-def _zero_denominator(text):
-    """finding F1 of M14-breadth fmt (2026-10-02): `parse('[1/0]')` raises ZeroDivisionError (from
-    `Fraction('1/0')`), where the module docstring says anything it cannot read is a ValueError"""
-    return any(int(match[1]) == 0 for match in _DENOMINATOR.finditer(text))
-
-
 @st.composite
 def mutated_outputs(draw):
     """a valid output with a few characters inserted, deleted or replaced, or a slice repeated"""
@@ -372,13 +357,14 @@ def mutated_outputs(draw):
 @example('[1e400, 1/3]')
 @example('٣/٤')  # unicode digits are digits to python's int()
 @example('[ınf]')  # a dotless i matches `i` under re.IGNORECASE
+@example('[1/0]')  # raised ZeroDivisionError (M14-breadth)
+@example('0/0')
+@example('[] , [1]')  # an empty item then a separator was refused (M14-breadth)
+@example('{() ∪ (), [2]}')
 def test_any_text_parses_or_raises_value_error(text):
     try:
         cuts = parse(text)
     except ValueError:
-        return
-    except ZeroDivisionError:
-        assert _zero_denominator(text)  # F1, tolerated only where the text has a zero denominator
         return
     assert is_valid(cuts)
     assert_values_normal(cuts)

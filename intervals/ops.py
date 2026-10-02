@@ -331,6 +331,13 @@ def _exact_power_descriptor(n: int) -> OpDescriptor:
     def fn_negative(x):
         if x == 0:
             return None
+        if is_float(x) and not is_infinite(x):
+            # python's `float ** int` in one rounding: `1 / x ** k` rounded twice and missed the nearest
+            # double (`5.155830884225402 ** -3`, M14-breadth). a result past MAX raises: the signed infinity
+            try:
+                return x ** n + 0.0
+            except OverflowError:
+                return signed_inf(sign(x) ** k)
         p = fn(x)
         if is_infinite(p):
             return 0.0 if isinstance(x, float) and not is_infinite(x) else 0

@@ -2275,7 +2275,7 @@ land with M13a so that every later M13 op arrives with them
       the function at about 200 bits as a ball proven to contain the true value, and the test
       asserts the ball is inside our enclosure (soundness) and each end of ours is within one ulp
       outside the ball (sharpness). every function M12 built and every function M13d adds
-* **breadth where fuzz is thin**: `tests/test_outward.py` has 1 `@given`, `tests/test_steps.py` 3,
+* **breadth where fuzz is thin** (done 2026-10-02: the record is "M14-breadth" below): `tests/test_outward.py` has 1 `@given`, `tests/test_steps.py` 3,
   `tests/test_fmt.py` 1 (the parse/format round trip), `tests/test_applicator.py` 1.
   `tests/test_extreme_floats.py` covers add, sub, mul, div, reciprocal, neg, abs and pow only:
   extend it to the functions, `minimum`/`maximum`/`fma`, `%` and `//`, and `OutwardMultiInterval`
@@ -4254,6 +4254,53 @@ the four red with `_keep_squeezed` a no-op and green with it (2026-09-30); the p
 after the `sin` example stayed green when sabotaged (its other pieces kept the result non-empty).
 `test_exactly_the_points_with_f_in_c` allows exactly the one way out of `x` (a closed point on `x`'s
 closure) and still refuses a stray point (checked with a planted `[5.0]`).
+
+### M14-breadth: fuzz where it was thin (done 2026-10-02)
+
+**the owner**, 2026-10-02: "lets do M14-breadth finished then run fuzzing" (the push's prepush was paused
+for it). the spec is M14's bullet "**breadth where fuzz is thin**". six builders, one per file, each in its
+own worktree off `fa59944` (sabotage edits library files: T1's hazard), each writing properties from the
+design, measuring them under the default profile and the fuzz profile at x10, and sabotaging each; a red
+property on the intact library was reported, not fixed. the session verified every library finding
+first-hand, fixed and pinned it, and removed the builders' narrowings.
+
+| stream | file | properties | sabotage | default / fuzz x10 (2026-10-02, loaded laptop) |
+|---|---|---|---|---|
+| extreme-functions | `tests/test_extreme_floats_functions.py` (new) | every function of `functions.py::NAMES`, `log(base)`, `rootn`, `atan2`, `hypot`, `**` on extreme operands against arb: values in the result, ends sharp where monotone | 26 breaks, all red | 8.0 s / 101 s |
+| extreme-ops | `tests/test_extreme_floats.py` | both classes end to end (operators, reflected, scalars) for `+ - * /`, reciprocal, pow, `%`, `//`, divmod, fma, neg, abs, minimum, maximum: sound, tightest, nearest is the exact result rounded | 23, all red | +12 s / 106 s |
+| outward | `tests/test_outward.py` | exact ⊆ outward ⊆ the tightest cover (16 ops), nearest inside outward's closure, the class closed, pickle/repr, `==` and hash across classes | 23, all red | +16 s / 234 s |
+| steps | `tests/test_steps.py` | every double against python, `ndigits` against decimal, float and mixed operands, the hull past the cap, isotone, unions, idempotent | 15, all red | +12 s / 268 s |
+| fmt | `tests/test_fmt.py` | round trip over extremes with types, repr in both classes, every spelling, `parse_value`, any text parses or raises ValueError | 15, all red | +10.5 s / 127 s |
+| applicator | `tests/test_applicator.py` | split is a partition, `evaluate_box` against the oracle, the hook sees every finite float corner and nothing else, number types, warnings once, results canonical | 20, all red | +20 s / 239 s |
+
+**library bugs found and fixed** (each pin red on the old code, green on the fix, 2026-10-02):
+
+* **outward floor, ceil, trunc rounded to nearest** (soundness): `MultiInterval.floor/ceil/trunc` never passed
+  `outward` to the step engine, so `OutwardMultiInterval(2.0 ** 53, 2.0 ** 53 + 2).ceil()` was `{ [2 ** 53] ,
+  [2 ** 53 + 2] }`, missing 2 ** 53 + 1 (round was right). `steps.floor/ceil/trunc` and `modulo.floor` take
+  `outward`. pin `tests/test_steps.py::test_outward_lists_what_no_double_holds`
+* **the cap counted a shared value twice**: `ceil({ [0, 1/2] , [7/10, 999] })` (1000 values) and trunc's 0 on
+  both sides of its split hulled at 999. `steps.step` counts distinct values (the functions are
+  non-decreasing, the pieces in order). pin `::test_the_cap_counts_distinct_values`
+* **nearest pown with n < 0 rounded twice**: `M(5.155830884225402) ** -3` was `1 / x ** 3`, an ulp below the
+  nearest double; it is python's `x ** n` now, as the design says (`ops._exact_power_descriptor`). pin
+  `tests/test_outward.py::test_a_negative_power_rounds_once`
+* **fmt**: a zero denominator raised `ZeroDivisionError` (`parse('[1/0]')`), and a separator after a leading
+  empty item was refused (`parse('[] , [1]')`). pins: `@example`s of
+  `tests/test_fmt.py::test_any_text_parses_or_raises_value_error`; `::test_spellings` red on the old parser
+
+**a test-oracle bug found**: `tests/test_pow_rev.py::test_pow_rev_float_operands` still read "x after the
+rounding" after D26; a randomized local run drew `pow_rev1([-2.86e-115, 0.0], (-inf, 0.5), (-inf, inf))`,
+`[inf]`, which D26 keeps. it now checks `meets_x_as_d26`, with the example pinned (red with
+`reverse._keep_squeezed` a no-op).
+
+**left open, not fixed** (rows in `HANDOFF.md`): an int past python's 4300-digit `str()` limit cannot be formatted
+(`repr(MultiInterval(10 ** 4300))` raises; with Q17); `parse(' ' * 30000 + 'x')` takes 37 s (the tokenizer's
+regex is quadratic on leading whitespace, the answer right); number-type quirks with no wrong value (a 0 end
+exact among float operands, `abs(M(-1.0, 1.0))` is `[0, 1.0]`; trunc's non-negative side ints, `trunc([-2.5,
+3])`; a one-point domain clip takes its low cut's type, `M(-1.0000000000000002, -1.0).acos()` open);
+`parse_value('+-5')` is 5 and `'1 2'` is 12; `tests/test_extreme_floats.py::_float_samples` raises
+`OverflowError` on an exact piece wider than the doubles.
 
 ### run ledger: what has run on this code (done 2026-10-01)
 

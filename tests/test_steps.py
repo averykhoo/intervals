@@ -12,8 +12,10 @@ the open gap between the doubles around it, from `int / int` and `nextafter`, no
 rounding); `round(A, ndigits)` against the decimal module's exact grid value; past the cap (or for
 a piece reaching ±inf) the warning and exactly the documented hull, from the least value attained to
 the greatest; sign never hulls. and the laws of a pointwise image where nothing is hulled:
-isotone, distributing over unions, idempotent. two library questions are left out where marked
-(`_not_outward`, and trunc's count across 0 in `test_hull_past_the_cap`).
+isotone, distributing over unions, idempotent. two library bugs they found are fixed and pinned
+(M14-breadth, 2026-10-02): the outward class's floor, ceil and trunc rounded their values to nearest
+(`test_outward_lists_what_no_double_holds`), and the cap counted a value two pieces share twice
+(`test_the_cap_counts_distinct_values`).
 """
 import math
 import sys
@@ -377,22 +379,6 @@ def _closed_hull(cuts):
     return normalize([piece(cuts[0].value, cuts[-1].value)])
 
 
-def _past_2_53(a) -> bool:
-    """a float piece reaching the integers that are not doubles"""
-    return any((_finite_float(lo) or _finite_float(hi))
-               and any(math.isfinite(e) and abs(e) >= 2 ** 53 for e in (lo, hi))
-               for lo, _, hi, _ in pieces(a))
-
-
-def _not_outward(name: str, cls, a) -> bool:
-    """
-    the outward class rounds ceil's and trunc's values to nearest: `OutwardMultiInterval(2.0 ** 53, 2.0 ** 53 +
-    2).ceil()` is `{ [2 ** 53] , [2 ** 53 + 2] }`, without 2 ** 53 + 1 (round's is the whole piece), and a hull's end
-    can move inside the piece. such operands are left out for those two until that is decided
-    """
-    return cls is OutwardMultiInterval and name in ('ceil', 'trunc') and _past_2_53(a)
-
-
 # subnormals, the smallest normal, where the doubles stop holding every integer (2 ** 53), the largest double
 FLOAT_BASES = [0.0, 0.5, -2.5, 0.1, 1e-5, 12345.678, 5e-324, -5e-324, 1e-320, 2.2250738585072014e-308, 2.0 ** 52 + 0.5,
                2.0 ** 53, -2.0 ** 53 - 2, 2.0 ** 60, -2.0 ** 62, 1e17, 1e300, -1e300, MAX, -MAX]
@@ -494,8 +480,6 @@ def test_sound_and_sharp_on_float_operands(name, data, rng):
     ndigits = _ndigits(data, name)
     a = data.draw(float_operands(ndigits).filter(bool), label='a')
     for cls in CLASSES:
-        if _not_outward(name, cls, a):
-            continue
         outward = cls is OutwardMultiInterval
         result, hulled = _call(cls, name, a, ndigits)
         expected = _image(name, a, ndigits, outward)
@@ -548,8 +532,9 @@ def test_hull_past_the_cap(name, data):
     a = normalize([piece(lo, hi, data.draw(st.booleans()), data.draw(st.booleans()))])
     assume(a)
     (lo, lo_closed, hi, hi_closed), = pieces(a)
-    # trunc splits a piece at 0 and counts 0 for both halves: `trunc([-1, 1997/2))` has 1000 values but is hulled.
-    # a piece holding values on both sides is left out until that is decided
+    # trunc splits a piece at 0 and hulls each half on its own (`trunc((-inf, 997))` is `(-inf, 0]` and the listed
+    # 1..996), tighter than the one hull this oracle models: such a piece is left out here; the count of a value both
+    # halves share is `test_the_cap_counts_distinct_values`'s
     assume(name != 'trunc' or lo >= 0 or hi < 0 or hi == 0 and not hi_closed)
     first, last = _first_and_last(name, a, unit)
     must_hull = first == -INF or last == INF or last - first + 1 > CAP
@@ -570,6 +555,28 @@ def test_hull_past_the_cap(name, data):
         assert result == want, (cls.__name__, show(a), show(result), show(want))
 
 
+
+def test_outward_lists_what_no_double_holds():
+    """past 2 ** 53 a float piece meets integers that are not doubles: outward, floor, ceil and trunc enclose
+    each in the open gap around it, as round does; they rounded it to nearest, so `ceil` of [2 ** 53, 2 ** 53 + 2]
+    missed 2 ** 53 + 1 (M14-breadth, 2026-10-02)"""
+    a = OutwardMultiInterval(2.0 ** 53, 2.0 ** 53 + 2)
+    for f in (a.floor, a.ceil, a.trunc, a.round):
+        assert f() == a, f
+    assert (-a).trunc() == -a
+
+
+@pytest.mark.parametrize('name, text', [('ceil', '{ [0, 1/2] , [7/10, 999] }'), ('trunc', '[-1, 1997/2)'),
+                                        ('floor', '{ [0, 1/2] , [3/4, 999] }')])
+def test_the_cap_counts_distinct_values(name, text):
+    """1000 distinct values are listed, not hulled: two pieces sharing a value (ceil's 1, floor's 0) or trunc's
+    split sharing 0 counted it twice and hulled at 999 (M14-breadth, 2026-10-02)"""
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        result = getattr(MultiInterval.parse(text), name)()
+    assert len(result.cuts) == 2 * CAP
+
+
 # LAWS
 
 @pytest.mark.parametrize('name', STEPS)
@@ -584,8 +591,6 @@ def test_isotone(name, data):
     b = data.draw(float_operands(ndigits).filter(bool), label='b')
     a = intersection(b, data.draw(cut_tuples(), label='c')) or normalize([next(pairs(b))])
     for cls, (sub, sup) in ((MultiInterval, (_exact_cuts(a), _exact_cuts(b))), (OutwardMultiInterval, (a, b))):
-        if _not_outward(name, cls, b):
-            continue
         fa, a_hulled = _call(cls, name, sub, ndigits)
         fb, _ = _call(cls, name, sup, ndigits)
         assert a_hulled or is_subset(fa, fb), (cls.__name__, show(sub), show(sup), show(fa), show(fb))

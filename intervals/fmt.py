@@ -71,7 +71,10 @@ def parse_value(text: str) -> Value:
     if body in ('inf', 'infinity', '∞'):
         return sign * math.inf
     if '/' in body:
-        return sign * Fraction(body)
+        try:
+            return sign * Fraction(body)
+        except ZeroDivisionError:  # a zero denominator is bad text like any other (M14-breadth)
+            raise ValueError(f'cannot parse {text!r}: a zero denominator') from None
     if any(c in body for c in '.e'):
         return sign * float(body)
     return sign * int(body)
@@ -110,7 +113,7 @@ class _Parser:
         braced = self.peek() == ('punct', '{')
         if braced:
             self.take()
-        found = []
+        found, items = [], 0  # an empty piece is an item that adds nothing to found
         while True:
             kind, value = self.peek()
             if kind is None:
@@ -123,11 +126,12 @@ class _Parser:
                     raise self.error('text after "}"')
                 break
             if kind == 'punct' and value in _SEPARATORS:
-                if not found:
+                if not items:
                     raise self.error(f'{value!r} before the first item')
                 self.take()
                 continue
             found.extend(self.item())
+            items += 1
         return normalize(found)
 
     def item(self):

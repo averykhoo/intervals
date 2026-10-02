@@ -344,15 +344,15 @@ class MultiInterval:
         >>> MultiInterval.parse('[-1/2, 2)').floor()
         MultiInterval.parse('{ [-1] , [0] , [1] }')
         """
-        return self._wrap(modulo.floor(self._cuts))
+        return self._wrap(modulo.floor(self._cuts, outward=self._outward))
 
     def ceil(self) -> 'MultiInterval':
         """the integers `ceil(x)` for x in self (as `floor()`); `math.ceil(A)` is the same"""
-        return self._wrap(steps.ceil(self._cuts))
+        return self._wrap(steps.ceil(self._cuts, outward=self._outward))
 
     def trunc(self) -> 'MultiInterval':
         """floor above 0 and ceil below; `math.trunc(A)` is the same"""
-        return self._wrap(steps.trunc(self._cuts))
+        return self._wrap(steps.trunc(self._cuts, outward=self._outward))
 
     def round(self, ndigits=None) -> 'MultiInterval':
         """

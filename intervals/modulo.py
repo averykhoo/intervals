@@ -298,7 +298,7 @@ def _meet(p: Piece, q: Piece) -> Piece:
 
 # FLOOR, FLOORDIV, DIVMOD
 
-def floor(a: Cuts) -> Cuts:
+def floor(a: Cuts, outward: bool = False) -> Cuts:
     """
     `{floor(x) : x in a}`, with floor(±inf) = ±inf; a float keeps its type (`floor(2.5)` is 2.0)
 
@@ -306,7 +306,7 @@ def floor(a: Cuts) -> Cuts:
     >>> format_cuts(floor(parse('{ (-1, 1/2] , (2, 3) }')))
     '{ [-1] , [0] , [2] }'
     """
-    return steps.floor(a)
+    return steps.floor(a, outward)
 
 
 def floordiv(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:

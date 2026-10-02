@@ -9,8 +9,13 @@ the open-items table: its record goes in the plan's milestone section, with a on
 session log below; nothing is listed as open and done at once), and list anything skipped as
 "Still owed:".
 
-## banner (2026-10-01)
+## banner (2026-10-02)
 
+* **M14-breadth done (2026-10-02)**: six streams of properties (plan §2 "M14-breadth"); five library bugs it
+  found are fixed and pinned, one a soundness hole (outward floor/ceil/trunc past 2 ** 53). not pushed: the
+  prepush of `fa59944` was stopped for it (the owner: "pause the fuzzing, lets do M14-breadth finished then run
+  fuzzing"); the next step is `tools/prepush.sh` on the new commit, then the push (the owner's go stands,
+  2026-10-02: "Okay go")
 * **what has run on this code is in the run ledger (2026-10-01)**: `tools/gate.py status` (read it at
   session start). every gate and fuzz run goes through `tools/gate.py run <phase>`, and
   `tools/prepush.sh` runs only what the ledger says a push still needs (`CLAUDE.md`; the testing skill;
@@ -78,7 +83,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
 | 1 | trig-rev-far | a periodic reverse op whose domain piece reaches far from 0 is pure-path slow, then effectively hangs: `tan_rev(MultiInterval.parse('[-40.0, 0.1]'), MultiInterval.parse('(-X, -7.582732456406029]'))` took 1.6 s at X = 1e20, 3.4 s at 1e21, and ran past a 30 s timeout from 1e22 and a 60 s one at 1e300 (2026-09-28 at `7e148a2`, loaded laptop; reproduced by the session: 0.35 s at 1e20, past 30 s at 1e22; a stack sample sat in `reverse.py::_periodic_hull`'s branch walk, in `elementary._atan_rational`). found by M16e's soundness reviewer, whose set-level probe hung past 15 min on `sin_rev`/`tan_rev` with an end at 1e300 or 10**400. the backend declines `k != 0`, so both backends hang alike | not scheduled; measure where the time goes first | `v2-plan.md` "elementary and step functions" (D12's cap for the periodic ones) |
-| 2 | M14-breadth | fuzz where it is thin: `tests/test_extreme_floats.py` extended to the functions, `minimum`/`maximum`/`fma`, `%`, `//` and `OutwardMultiInterval`; more `@given` in `test_outward`, `test_steps`, `test_fmt`, `test_applicator` | ready | plan §2 M14 "**breadth where fuzz is thin**" |
+| 2 | m14b-open | what M14-breadth found and left (2026-10-02): `repr`/`format` of an int past python's 4300-digit `str()` limit raises (`repr(MultiInterval(10 ** 4300))`; decide with Q17); `parse(' ' * 30000 + 'x')` takes 37 s (quadratic tokenizer regex, answer right); number-type quirks with no wrong value (a 0 end exact among float operands: `abs(M(-1.0, 1.0))` is `[0, 1.0]`; trunc's non-negative side ints; a one-point domain clip takes its low cut's type); `parse_value('+-5')` is 5, `'1 2'` is 12; `tests/test_extreme_floats.py::_float_samples` overflows on an exact piece wider than the doubles | the 4300 digits with Q17 (owner); the rest ready, small | plan §2 "M14-breadth" (left open) |
 | 3 | vectors-ext | test data beyond ITF1788, surveyed 2026-09-29 (`references/test-vector-sources.md`): the 1788 set is complete (ITF1788 head is still the vendored `b6ee1e2`; no fork, branch, PR or downstream copy adds vectors; Octave's `itl.mat` is the same data). what would add depth is correctly rounded function data, in the survey's order: (1) glibc `math/auto-libm-test-out-*` binary64 downward/upward rows, about 5,400 over 28 of our ops incl. pown, rootn, hypot, fma, sqrt (LGPL-2.1+); (2) Lefevre's testlibm-data and hrcases, 247,695 hard-to-round cases whose rounding bit fixes RD/RU (no licence stated: ask first); (3) CRlibm `.testdata`, 63,617 vectors, 14 of our functions (GPL-2 header); (4) a sample of CORE-MATH `.wc` worst-case inputs (MIT; inputs only, our MPFR/arb oracle); (5) TestFloat-generated f64 `-rmin`/`-rmax` and UCBTest `eq` rows for `+ - * / sqrt fma`; (6) cuinterval `custom.itl` (26) and the rootn/tan rows of its `intervalarithmeticjl.itl`, NOT its three value edits (all three wrong, adjudicated at 300 bits); (7) MPFI 1.5.5 `exp10`/`hypot`/mixed-scalar `.dat` rows. also: `tests/itf1788/itl.py::parse_file` collapses whitespace inside quoted strings, so 40 textToInterval vectors (e.g. `"[ Empty  ]"`) run weaker than upstream; the two upstream errata are noted in `tests/itf1788/README.md` | owner's call on each source's licence (GPL test data in the repo; Lefevre's unstated); the parser fix is ready, small | `references/test-vector-sources.md`; plan §2 M13a (the vendoring) |
 | 4 | newton-width | `newton`'s `width <= piece.wid() / 2` (`intervals/solver.py`, M15) is int true division, so an exact piece wider than the doubles would raise `OverflowError` once a step narrows without proving; not observed (a linear `f` is proved at the first step; `x ** 2 - 9 * 10 ** 800` over `[10 ** 400, 10 ** 401]` with `max_steps=10` did not finish in 2 minutes, 2026-09-28: the exact fractions grow). `solve`'s copy is already `2 * width <= _width(box)` (M16a review F2) | ready, small | plan §2 M16a review (soundness F2) |
 | 5 | Q6-shift | port v1's `<<` and `>>` (owner 2026-09-26: "for sure"); choose the meaning on real sets when built (`A * 2**n`; `>>` exact or floored). when they land, `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers` derives them and goes red until `numpy_compat.py::_OPERATORS` gains `left_shift`/`right_shift` (M16d) | ready | plan §4 (the `<<`, `>>` row); `v2-plan.md` "2026-09-26 revision: owner answers" |
@@ -318,6 +323,16 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
 
 ## session log (newest first)
 
+* **2026-10-02** M14-breadth (the owner paused the push's fuzz run for it): six builders in worktrees, one
+  per thin file, each property sabotaged (122 breaks, all red); merged by cherry-pick. the session verified and
+  fixed five library bugs they reported, each pinned red-on-old: outward `floor`/`ceil`/`trunc` rounded their
+  values to nearest (unsound past 2 ** 53), the step cap counted a shared value twice, nearest `x ** -n` rounded
+  twice, and two fmt parse bugs (`[1/0]` raised ZeroDivisionError, `[] , [1]` refused); and one stale D26
+  oracle in `tests/test_pow_rev.py` a randomized gate run can draw. what is left is row m14b-open. the owner
+  asked whether ITF1788 is complete and what else exists: answered from the census (19 files, 9542 vectors,
+  0 skipped, 185 rows in 7 categories) and `references/test-vector-sources.md`; vectors-ext unchanged. gate:
+  gate:itf 27795 passed in 61 s + gate:rest 5914 in 687 s = 33709, green on `c:52ebf09347e6`
+  (2026-10-02; gate:rest was 596 s before: the new properties cost about 90 s)
 * **2026-10-01** the run ledger (the owner: "machinery to know whats run and not on the current code",
   adapted from the zanzibar repo's): `tools/gate.py` records each gate, docs and fuzz run against two
   content ids of the code (`src`, `code`), reports what is green here, and plans a push;

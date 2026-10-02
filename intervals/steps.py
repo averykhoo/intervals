@@ -111,7 +111,10 @@ def step(name: str, a: Cuts, ndigits: Optional[int] = None, outward: bool = Fals
         tagged = [('floor' if q[0] >= 0 else 'ceil', q) for q in split_pieces(kernel.pieces(a), (0,))]
     else:
         tagged = [(name, p) for p in kernel.pieces(a)]
-    out, count, hulled = [], 0, False
+    # count counts distinct grid values: every f here is non-decreasing and the pieces are in order, so
+    # a piece's values start at or after the last one listed, and a value two pieces share (`ceil` of
+    # `[0, 1/2]` and `[7/10, 2]`, or trunc's 0 on each side of its split) is counted once (M14-breadth)
+    out, count, hulled, listed = [], 0, False, None
     for rule, (lo, lo_closed, hi, hi_closed) in tagged:
         as_float = is_float(lo) or is_float(hi)
         if name != 'sign':  # f(±inf) = ±inf, and a piece reaching ±inf holds unboundedly many values
@@ -122,12 +125,15 @@ def step(name: str, a: Cuts, ndigits: Optional[int] = None, outward: bool = Fals
                 continue
         first = -INF if lo == -INF and name != 'sign' else RULES[rule][0](_units(lo, unit), lo_closed)
         last = INF if hi == INF and name != 'sign' else RULES[rule][1](_units(hi, unit), hi_closed)
-        if is_infinite(first) or is_infinite(last) or count + last - first + 1 > ENUMERATION_CAP:
+        start = first if listed is None else max(first, listed + 1)
+        new = 0 if is_infinite(first) or is_infinite(last) else last - start + 1
+        if is_infinite(first) or is_infinite(last) or count + new > ENUMERATION_CAP:
             hulled = True
             hull = (_value(first, unit), not is_infinite(first), _value(last, unit), not is_infinite(last))
             out.append(round_piece(hull, outward) if as_float else hull)
             continue
-        count += last - first + 1
+        count += max(new, 0)
+        listed = last
         for n in range(first, last + 1):
             v = _value(n, unit)
             out.append(round_piece((v, True, v, True), outward) if as_float else (v, True, v, True))
@@ -151,26 +157,26 @@ def _value(n, unit: Fraction):
     return n * unit
 
 
-def floor(a: Cuts) -> Cuts:
+def floor(a: Cuts, outward: bool = False) -> Cuts:
     """
     >>> from intervals.fmt import format_cuts, parse
     >>> format_cuts(floor(parse('{ (-1, 1/2] , (2, 3) }')))
     '{ [-1] , [0] , [2] }'
     """
-    return step('floor', a)
+    return step('floor', a, outward=outward)
 
 
-def ceil(a: Cuts) -> Cuts:
-    return step('ceil', a)
+def ceil(a: Cuts, outward: bool = False) -> Cuts:
+    return step('ceil', a, outward=outward)
 
 
-def trunc(a: Cuts) -> Cuts:
+def trunc(a: Cuts, outward: bool = False) -> Cuts:
     """
     >>> from intervals.fmt import format_cuts, parse
     >>> format_cuts(trunc(parse('(-2, 2)')))
     '{ [-1] , [0] , [1] }'
     """
-    return step('trunc', a)
+    return step('trunc', a, outward=outward)
 
 
 def round_(a: Cuts, ndigits: Optional[int] = None, outward: bool = False) -> Cuts:

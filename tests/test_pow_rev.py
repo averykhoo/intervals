@@ -54,6 +54,7 @@ from tests.test_reverse import _exact
 from tests.test_reverse import _first_double_above
 from tests.test_reverse import _quiet
 from tests.test_reverse import float_cut_tuples
+from tests.test_reverse import meets_x_as_d26
 from tests.test_reverse import one
 from tests.test_reverse import trig_in_slack as in_slack
 from tests.test_reverse import v1788
@@ -584,11 +585,14 @@ def widened(r: MultiInterval) -> MultiInterval:
 @example(b=one(H('0x1.0000000000001p+0'), H('0x1.0000000000001p+0')), c=one(1e300, 1e300), x=ALL, which=2)
 @example(b=one(8.0, 8.0), c=one(2.0, 2.0), x=ALL, which=2)  # log_8 2 = 1/3, rational: outward open (C14)
 @example(b=one(3.0, 3.0), c=one(1e300, math.nextafter(1e300, INF), False, False), x=ALL, which=2)  # squeezed (C16)
+# D26: to nearest the answer squeezes to [inf], a point the open x leaves out, and is kept (M14-breadth, 2026-10-02:
+# a randomized local gate run drew it; the oracle still read 1788's order, x after the rounding)
+@example(b=one(-2.864181782656617e-115, 0.0), c=one(-INF, 0.5, False, False), x=one(-INF, INF, False, False), which=1)
 def test_pow_rev_float_operands(b, c, x, which):
     """outward: the exact result of the same doubles is inside, what rounding adds holds no double
     strictly inside it, a closed end is a point of the exact result. to nearest, x omitted (an end of x can
     fall in the half ulp a rounded end moved): the exact result within one double of each piece, inside the
-    outward closure, not empty if it is not; and x only intersects, after the rounding"""
+    outward closure, not empty if it is not; and with x, x meets the result before the rounding (D26)"""
     rev = prev1 if which == 1 else prev2
     B, C, X = M.from_cuts(exact_cuts(b)), M.from_cuts(exact_cuts(c)), M.from_cuts(exact_cuts(x))
     exact = rev(B, C, X)
@@ -609,7 +613,7 @@ def test_pow_rev_float_operands(b, c, x, which):
     assert nearest_all.issubset(M.from_pieces((lo, hi) for lo, _, hi, _ in pieces(outward_all.cuts)))
     if exact_all:
         assert nearest_all
-    assert rev(M.from_cuts(b), M.from_cuts(c), M.from_cuts(x)) == nearest_all & M.from_cuts(x)
+    meets_x_as_d26(rev(M.from_cuts(b), M.from_cuts(c), M.from_cuts(x)), nearest_all, M.from_cuts(x), exact, outward)
 
 
 @pytest.mark.parametrize('a, lo, hi', [(8.0, 2.0, 4.0), (8.0, 0.5, 2.0), (0.125, 2.0, 32.0), (27.0, 3.0, 9.0)])
