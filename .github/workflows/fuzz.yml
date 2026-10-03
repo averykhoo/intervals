@@ -43,7 +43,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - run: python -m pip install -e ".[test]" numpy
+      - run: python -m pip install -e ".[test]"
       # a cache entry is immutable, so each run saves a fresh key and restores the newest by prefix
       - uses: actions/cache/restore@v4
         with:

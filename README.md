@@ -185,17 +185,40 @@ Interval(float('-inf'), float('inf'))
   converged box, once more on the box inflated within the part of the input it stands for; a zero at
   a simple rational is output as that exact point. the step runs only where the decorations prove
   `F` C¹ on the box
-* **numpy** (M16d, optional): a numpy scalar is a python number to every op (`np.float32(0.1)` is
-  the double it holds; an `np.longdouble` wider than a double is exact, as any foreign real);
-  ufuncs on a set are its methods (`np.sin(A)` is `A.sin()`, `np.arcsin(A)` is `A.asin()`,
-  `np.square(A)` is `A ** 2`) or python's operators (`np.add(M, O)` is `M + O`), anything else a
-  `TypeError`; an ndarray meeting a set is elementwise into an object array
-  (`np.linspace(0, 1, 3) + A`), except `==`, which stays structural; `np.array([A, B])` holds the
-  sets as elements. `np.asarray(x, dtype=float)` rounds each point to nearest, in both classes.
-  object arrays of sets run numpy's own loops (`np.arcsin(arr)` and `np.round(A)` are TypeErrors)
+* **numpy** (M16d, optional: the library never imports it; the `[test]` extra installs it for the
+  gate): a numpy scalar is a python number to every op (`np.float32(0.1)` is the double it holds; an
+  `np.longdouble` wider than a double is exact, as any foreign real); ufuncs on a set are its methods
+  (`np.sin(A)` is `A.sin()`, `np.arcsin(A)` is `A.asin()`, `np.square(A)` is `A ** 2`, `np.fmin` is
+  `minimum`, a nan refused as everywhere) or python's operators (`np.add(M, O)` is `M + O`), anything
+  else a `TypeError`; an ndarray meeting a set is elementwise into an object array, and `==` into a
+  bool array, as numpy compares any element type (each element structurally); `np.array([A, B])`
+  holds the sets as elements. `np.asarray(x, dtype=float)` rounds each point to nearest, in both
+  classes. object arrays of sets run numpy's own loops, which look for numpy's names
+  (`np.arcsin(arr)` and `np.round(A)` are TypeErrors; `np.frompyfunc` reaches the method):
+
+  ```python
+  >>> import numpy as np
+  >>> np.float32(0.1) + MI(0)                        # the double a float32 holds, exactly
+  MultiInterval.parse('[0.10000000149011612]')
+  >>> np.arcsin(MI(0, 1)) == MI(0, 1).asin()
+  True
+  >>> np.hypot(MI(0.1), OMI(0.1)) == MI(0.1).hypot(OMI(0.1)) == OMI(0.1).hypot(MI(0.1))
+  True
+  >>> print(np.fmin(MI(1, 2), 1.5))
+  [1, 1.5]
+  >>> print(*(np.linspace(0, 1, 3) + MI(1, 2)))       # elementwise, an object array
+  [1.0, 2.0] [1.5, 2.5] [2.0, 3.0]
+  >>> arr = np.array([MI(1, 2), MI(3)])              # two elements, not their pieces
+  >>> arr.shape, arr == MI(3), MI(3) in arr
+  ((2,), array([False,  True]), True)
+  >>> print(*np.frompyfunc(MI.asin, 1, 1)(np.array([MI(0), MI(1)])))
+  [0] (1.5707963267948966, 1.5707963267948968)
+
+  ```
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
-  open. mixing the two gives an `OutwardMultiInterval`. to nearest, as python's float, a value past the
+  open. mixing the two gives an `OutwardMultiInterval`, by an operator or by a method taking another
+  set (`MI(0.1).hypot(OMI(0.1))` is outward, as `OMI(0.1).hypot(MI(0.1))`). to nearest, as python's float, a value past the
   largest double is `inf` (`MultiInterval(1e308) * 10` is `[inf]`, the point, so `& (0, inf)` leaves
   nothing); the outward class keeps it as `(MAX, inf)`. the reverse ops meet `x` before rounding, as
   1788 does: a part of the answer inside `x` that rounds wholly onto one double is that double, even

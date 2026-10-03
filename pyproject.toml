@@ -13,7 +13,10 @@ requires-python = ">=3.12"
 fast = ["gmpy2>=2.3"]
 # gmpy2 is here so that tests/test_backend.py's differential never skips; pinned to the series
 # `auto` takes (backend.FLOOR <= version < backend.CEILING), so CI tests what auto would pick
-test = ["pytest", "hypothesis", "python-flint>=0.9", "gmpy2>=2.3,<3"]
+test = ["pytest", "hypothesis", "python-flint>=0.9", "gmpy2>=2.3,<3",
+        # numpy for the same reason: tests/test_numpy_compat.py never skips, and README's numpy
+        # section runs as doctests. the library itself never needs it (not in `dependencies`)
+        "numpy"]
 
 [tool.setuptools]
 packages = ["intervals"]

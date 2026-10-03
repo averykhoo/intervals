@@ -2,9 +2,9 @@
 numpy interop (M16d, H3's second part): `intervals/numpy_compat.py`, the foreign-real rule of
 `cuts.normalize_value` and the integer arguments that take any `Integral`
 
-numpy is a test-time import only, through the `np` fixture, so the numpy-free tests (numpy never
-imported at load, the foreign-real stubs) run without it and the rest skip. every property names
-its oracle, and none is the hook itself:
+numpy is in the `[test]` extra (Q15(g), 2026-10-03), and a test-time import only, through the `np`
+fixture, so without it the numpy-free tests (numpy never imported at load, the foreign-real stubs)
+still run and the rest skip. every property names its oracle, and none is the hook itself:
 
 * a numpy scalar in an operator: the same operator on the python number of the same value, which
   never touches numpy (`python_number`)
@@ -177,10 +177,20 @@ def test_numpy_is_never_imported_at_load():
             'assert not bad, bad\n')
     done = subprocess.run([sys.executable, '-c', code], cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert done.returncode == 0, done.stderr
+    assert not [r for r in _project().get('dependencies', []) if re.match(r'numpy\b', r)]
+
+
+def _project() -> dict:
     with open(os.path.join(ROOT, 'pyproject.toml'), 'rb') as f:
-        project = tomllib.load(f)['project']
-    requirements = project.get('dependencies', []) + project.get('optional-dependencies', {}).get('test', [])
-    assert not [r for r in requirements if re.match(r'numpy\b', r)]
+        return tomllib.load(f)['project']
+
+
+def test_the_gate_needs_numpy():
+    """numpy is in the `[test]` extra (owner, 2026-10-03, Q15(g)), as gmpy2 is for the backend's
+    differential: the gate's numpy tests do not skip on a `pip install -e .[test]` machine, and
+    README's numpy section is doctests, which fail loudly without it. the library never needs it:
+    `dependencies` has no numpy (the test above)"""
+    assert [r for r in _project()['optional-dependencies']['test'] if re.match(r'numpy\b', r)]
 
 
 # 2. A NUMPY SCALAR IS A PYTHON NUMBER TO EVERY OPERATOR
@@ -272,7 +282,8 @@ UNARY_METHODS = {
 }
 UNARY_OPERATORS = {'negative': operator.neg, 'positive': operator.pos, 'absolute': abs, 'fabs': abs,
                    'invert': operator.invert, 'square': lambda x: x ** 2}
-BINARY_METHODS = {'minimum': 'minimum', 'maximum': 'maximum', 'hypot': 'hypot'}
+# fmin/fmax: minimum/maximum (owner, 2026-10-03, Q15(f)), a nan the library's ValueError
+BINARY_METHODS = {'minimum': 'minimum', 'maximum': 'maximum', 'hypot': 'hypot', 'fmin': 'minimum', 'fmax': 'maximum'}
 # the binary operator ufuncs and python's operator for each
 BINARY_OPERATORS = {
     'add': operator.add, 'subtract': operator.sub, 'multiply': operator.mul, 'divide': operator.truediv,
@@ -311,17 +322,13 @@ def _binary_oracle(name):
         fn = BINARY_OPERATORS[name]
         return fn
     if name in BINARY_METHODS:
-        def symmetric(a, b):
+        def symmetric(a, b):  # the first operand of ours, its method: both ours, the method's own rule
             x, y = (a, b) if _is_ours(a) else (b, a)
-            if _is_ours(y) and type(y) is not type(x) and issubclass(type(y), type(x)):
-                x, y = y, x  # both ours: the subclass decides, as for the operators
             return _method(x, BINARY_METHODS[name])(y)
         return symmetric
     assert name == 'arctan2'
 
     def arctan2(y, x):
-        if _is_ours(y) and _is_ours(x) and type(x) is not type(y) and issubclass(type(x), type(y)):
-            y = type(x).from_cuts(y.cuts)  # both ours: the subclass decides, as for the operators
         if not _is_ours(y):
             if not hasattr(x, 'atan2'):
                 raise TypeError
@@ -372,22 +379,22 @@ def test_both_ours_examples(np):
     assert np.less(M(1, 2), O(3)) == (M(1, 2) < O(3))
 
 
-def test_both_ours_methods_are_subclass_first(np):
-    """the method ufuncs take the operators' rule (the M16d review, 2026-09-28): with a MultiInterval
-    and an OutwardMultiInterval, the outward class decides in either order, so the result holds the
-    true value; M's method, called directly, is still M's and rounds to nearest"""
+def test_both_ours_method_ufunc_is_the_method(np):
+    """the method ufuncs take the operators' rule (the M16d review, 2026-09-28), and since the owner's
+    Q15(h) answer (2026-10-03) the methods do too: with a MultiInterval and an OutwardMultiInterval
+    the outward class decides in either order, so the result holds the true value, and the ufunc is
+    the method called directly (it was M's, rounded to nearest: the point [0.1414213562373095])"""
     a, b = M(0.1), O(0.1)
     true_square = 2 * Fraction(0.1) ** 2  # hypot(0.1, 0.1) ** 2
-    for h in (np.hypot(a, b), np.hypot(b, a)):
+    for h in (np.hypot(a, b), np.hypot(b, a), a.hypot(b), b.hypot(a)):
         assert type(h) is O and h == b.hypot(b)
         assert Fraction(h.cuts[0].value) ** 2 < true_square < Fraction(h.cuts[-1].value) ** 2
-    direct = a.hypot(b)
-    assert type(direct) is M and Fraction(direct.cuts[0].value) ** 2 != true_square  # [0.1414213562373095]
-    for f in (np.minimum, np.maximum):
+    assert _form(np.hypot(a, b)) == _form(a.hypot(b))
+    for f, name in ((np.minimum, 'minimum'), (np.maximum, 'maximum')):
         assert type(f(M(0.1), O(0.2))) is O and type(f(O(0.2), M(0.1))) is O
-        assert f(M(0.1), O(0.2)) == f(O(0.1), O(0.2))
+        assert f(M(0.1), O(0.2)) == f(O(0.1), O(0.2)) == getattr(M(0.1), name)(O(0.2))
     t = np.arctan2(a, b)
-    assert type(t) is O and t == b.atan2(b) and t != a.atan2(b)  # atan2(M, O): y as an O first
+    assert type(t) is O and t == b.atan2(b) == a.atan2(b)  # atan2(M, O): y as an O first
     assert type(np.arctan2(b, a)) is O and np.arctan2(b, a) == b.atan2(a)
     with pytest.raises(TypeError):
         np.hypot(a, D(a))  # no subclass: the first operand's method, which refuses a decorated set
@@ -414,7 +421,6 @@ def test_unmapped_ufuncs_and_forms_are_type_errors(np):
     refused = [
         lambda: np.fmod(a, 2), lambda: np.float_power(a, 2), lambda: np.deg2rad(a), lambda: np.isnan(a),
         lambda: np.matmul(a, a), lambda: np.logaddexp(a, 1), lambda: np.copysign(a, 1),
-        lambda: np.fmin(a, 1), lambda: np.fmax(a, 1), lambda: np.fmax(1, a),  # fmin/fmax: not minimum/maximum
         lambda: np.add.reduce(a), lambda: np.add.outer(a, a), lambda: np.add.accumulate(a),
         lambda: np.add(a, 1, out=np.empty((), dtype=object)), lambda: np.add(a, 1, where=True),
         lambda: np.add(a, 1, dtype=object), lambda: np.add(a, 1, casting='unsafe'),
@@ -426,6 +432,21 @@ def test_unmapped_ufuncs_and_forms_are_type_errors(np):
         with pytest.raises(TypeError):
             thunk()
     assert np.fmax(1, 2) == 2  # numpy's own, untouched
+
+
+def test_fmin_fmax_are_minimum_maximum(np):
+    """Q15(f) (owner, 2026-10-03): mapped, where they were TypeErrors; they agree with minimum/maximum
+    wherever there is no nan, and a nan is refused as everywhere, never skipped as numpy's fmin skips it"""
+    a = M(1, 2)
+    assert np.fmin(a, 1.5) == np.minimum(a, 1.5) == a.minimum(1.5) == M(1, 1.5)
+    assert np.fmax(1.5, a) == a.maximum(1.5) == M(1.5, 2)
+    assert type(np.fmin(M(0.1), O(0.2))) is O and np.fmax(M(0.1), O(0.2)) == M(0.1).maximum(O(0.2))
+    assert np.fmin(D(a), 0).decoration is D(a).minimum(0).decoration
+    assert (np.fmin(np.array([0.0, 3.0]), a)).tolist() == [a.minimum(0.0), a.minimum(3.0)]
+    for thunk in (lambda: np.fmin(a, math.nan), lambda: np.fmax(math.nan, a),
+                  lambda: np.fmin(np.array([1.0, math.nan]), a)):
+        with pytest.raises(ValueError, match='nan'):
+            thunk()
 
 
 def test_the_table_is_keyed_by_the_ufunc_object(np):
@@ -444,18 +465,33 @@ def test_the_table_answers_numpys_sin(np):
     assert numpy_compat.array_ufunc(a, np.sin, '__call__', a) == a.sin()
 
 
-# 5. == AND != NEVER BROADCAST
+# 5. == AND != AGAINST AN ARRAY: ELEMENTWISE, A BOOL ARRAY (Q15(c), owner 2026-10-03)
 
-def test_equality_never_broadcasts(np):
+def test_equality_against_an_array_is_elementwise(np):
+    """numpy's convention, as for every other element type (`np.array([Fraction(1, 2)]) == Fraction(1, 2)`
+    is `[True]`) and as `arr == arr2` and pandas already were; until 2026-10-03 `arr == A` was the scalar
+    False (identity) although arr held A. each element still compares structurally; the scalar path
+    is unchanged"""
     a = M(2)
     f = np.array([2.0, 3.0])
-    assert (np.float64(2) == a) is False and (np.float64(2) != a) is True
+    assert (np.float64(2) == a) is False and (np.float64(2) != a) is True  # the scalar path: identity
     assert (np.float64(1) in [M(1)]) is False
-    assert (f == a) is False and (a == f) is False and (f != a) is True and (a != f) is True
-    assert (a in f) is False
     assert np.equal(a, a) is True and np.not_equal(a, M(2)) is False  # structural, as a == M(2)
-    arr = np.array([a])
-    assert (arr == a) is False and (a in arr) is False  # identity, as today, although arr holds a
+    assert (np.array(a) == a) is True  # 0-d: the scalar path
+    for got, expected in ((f == a, [False, False]), (a == f, [False, False]), (f != a, [True, True]),
+                          (a != f, [True, True])):
+        assert got.dtype == bool and got.tolist() == expected  # a float is never equal to a set
+    assert (a in f) is False  # unchanged: every element is unequal
+    arr = np.array([M(1, 2), a, M.parse('[0, 1] | [2]')])
+    assert (arr == a).tolist() == [False, True, False] and (a == arr).tolist() == [False, True, False]
+    assert (arr != a).tolist() == [True, False, True]
+    assert (a in arr) is True and (M(2.5) in arr) is False
+    assert np.flatnonzero(arr == a).tolist() == [1]
+    assert (arr == O(2)).tolist() == [False, True, False]  # structural across the classes, as O(2) == M(2)
+    grid = np.array([[a, M(3)], [M(3), a]])
+    assert (grid == a).shape == (2, 2) and (grid == a).tolist() == [[True, False], [False, True]]
+    dual = Dual.variable(a)
+    assert (np.array([dual, 1.0], dtype=object) == dual).tolist() == [True, False]  # Dual: identity per element
 
 
 # 6. ARRAYS HOLD OURS AS ELEMENTS
@@ -498,7 +534,7 @@ def test_object_array_loops_are_numpys(np):
 
 # 8. AN NDARRAY MEETING ONE OF OURS: ELEMENTWISE INTO AN OBJECT ARRAY
 
-ELEMENTWISE = sorted(set(BINARY_OPERATORS) - {'equal', 'not_equal'}) + sorted(BINARY_METHODS) + ['arctan2']
+ELEMENTWISE = sorted(BINARY_OPERATORS) + sorted(BINARY_METHODS) + ['arctan2']
 
 
 @st.composite
@@ -518,7 +554,8 @@ def arrays(draw, np):
 @given(data=st.data())
 def test_ndarray_and_interval_elementwise(np, name, data):
     """both orders: an object array of f's shape whose element i is the scalar path on the python
-    number f.tolist()[i]; an element that raises raises the whole op (the first, in C order)"""
+    number f.tolist()[i]; an element that raises raises the whole op (the first, in C order). `==` and
+    `!=` give a bool array of the same elements (Q15(c))"""
     f = data.draw(arrays(np))
     x = data.draw(ours())
     ufunc, oracle = getattr(np, name), _binary_oracle(name)
@@ -539,6 +576,8 @@ def test_ndarray_and_interval_elementwise(np, name, data):
                 r = oracle(x, a) if flip else oracle(a, x)
                 for k, part in enumerate(r if ufunc.nout == 2 else (r,)):
                     out[k][index] = part
+            if name in ('equal', 'not_equal'):
+                return out[0].astype(bool)
             return tuple(out) if ufunc.nout == 2 else out[0]
         got = outcome(lambda: ufunc(x, f) if flip else ufunc(f, x))
         assert_same_outcome(got, outcome(expected))

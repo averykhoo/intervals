@@ -64,6 +64,7 @@ Decoration.TRV
 """
 import enum
 import math
+import operator
 import warnings
 from fractions import Fraction
 from numbers import Real
@@ -403,24 +404,25 @@ class DecoratedInterval:
 
     # set operations are not point functions: 1788 decorates intersection, convexHull, cancelMinus and
     # cancelPlus trv, whatever the operands, and so does every set operation here
+    # (python's operator on the two sets, so `D(M) & D(O)` holds an OutwardMultiInterval, as `M & O` is one)
 
     def __and__(self, other):
-        return self._set_operation(other, MultiInterval.__and__)
+        return self._set_operation(other, operator.and_)
 
     def __rand__(self, other):
-        return self._set_operation(other, MultiInterval.__and__, reflected=True)
+        return self._set_operation(other, operator.and_, reflected=True)
 
     def __or__(self, other):
-        return self._set_operation(other, MultiInterval.__or__)
+        return self._set_operation(other, operator.or_)
 
     def __ror__(self, other):
-        return self._set_operation(other, MultiInterval.__or__, reflected=True)
+        return self._set_operation(other, operator.or_, reflected=True)
 
     def __xor__(self, other):
-        return self._set_operation(other, MultiInterval.__xor__)
+        return self._set_operation(other, operator.xor)
 
     def __rxor__(self, other):
-        return self._set_operation(other, MultiInterval.__xor__, reflected=True)
+        return self._set_operation(other, operator.xor, reflected=True)
 
     # the named, n-ary forms, as the core's (M13g review): every operand a DecoratedInterval or a number
     def union(self, *others) -> 'DecoratedInterval':

@@ -504,7 +504,7 @@ def test_methods_keep_the_class():
     assert a.exp() == MultiInterval.from_cuts(apply('exp', a.cuts, outward=True))
     assert MultiInterval(0.5, 2.0).exp() == MultiInterval.from_cuts(apply('exp', a.cuts))
     assert type(a.rootn(3)) is OutwardMultiInterval and type(a.hypot(MultiInterval(1))) is OutwardMultiInterval
-    assert type(MultiInterval(1).hypot(a)) is MultiInterval  # the receiver's class, as atan2
+    assert type(MultiInterval(1).hypot(a)) is OutwardMultiInterval  # the operators' class (Q15(h), 2026-10-03)
 
 
 # ATAN2
