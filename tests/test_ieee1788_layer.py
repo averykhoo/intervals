@@ -174,6 +174,10 @@ LIBRARY = [
 ]
 # the periodic reverse ops over a huge x list up to 1000 branches (D12), so their x is kept small
 _SMALL_X = {'sinRev', 'cosRev', 'tanRev'}
+# an exponent: about half the draws small, the rest up to ±40, where pown's results reach the ends of
+# the doubles (x ** 40 overflows once |x| > 2 ** 25.6, x ** -40 underflows) and rootn's are near 1
+EXPONENTS = st.one_of(st.integers(-4, 4), st.integers(-40, 40))
+ROOTS = st.one_of(st.sampled_from([-3, -2, -1, 1, 2, 3]), st.integers(-40, 40).filter(bool))
 
 
 @st.composite
@@ -185,9 +189,9 @@ def operands(draw, kinds, name):
             small = name in _SMALL_X and i == 1
             out.append(draw(intervals_1788(decorated, bounded=small)))
         elif kind == 'n':
-            out.append(draw(st.integers(-4, 4)))
+            out.append(draw(EXPONENTS))
         else:
-            out.append(draw(st.sampled_from([-3, -2, -1, 1, 2, 3])))
+            out.append(draw(ROOTS))
     return out
 
 
@@ -443,6 +447,46 @@ def test_overlap_on_the_grid():
     assert seen == set(ieee1788.Overlap) and len(ieee1788.Overlap) == 16
 
 
+@st.composite
+def overlap_pairs(draw):
+    """two 1788-form intervals of one flavour, each end mostly drawn from a pool of up to three of
+    ENDS, so equal ends (every touching state) come on random doubles too, not only on the grid's"""
+    decorated = draw(flavours)
+    pool = draw(st.lists(ENDS, min_size=1, max_size=3))
+    pair = []
+    for _ in range(2):
+        if draw(st.integers(0, 3)) == 0:
+            pair.append(draw(intervals_1788(decorated)))
+            continue
+        if draw(st.integers(0, 9)) == 0:
+            pair.append(Interval(decoration='trv' if decorated else None))
+            continue
+        a, b = sorted((draw(st.sampled_from(pool)), draw(st.sampled_from(pool))))
+        if a == INF or b == -INF:  # no 1788 interval holds an infinity alone
+            a, b = (-INF, b) if a == INF else (a, INF)
+        x = Interval(a, b)
+        if decorated:
+            x = Interval(a, b, draw(st.sampled_from([d for d in Decoration if d <= new_dec(x)])))
+        pair.append(x)
+    return tuple(pair)
+
+
+@settings(max_examples=200, deadline=None)
+@given(overlap_pairs())
+@example((Interval(-0.0, 1.0), Interval(-1.0, 0.0)))  # meets, at a zero of either sign
+@example((Interval(MAX, INF, 'dac'), Interval(-INF, MAX, 'dac')))
+@example((Interval(TINY, TINY), Interval(TINY, 2.0)))
+def test_overlap_is_the_table(ab):
+    """random intervals of either flavour, ends often shared: the state is the table's on the signs of
+    the ends' comparisons (decorated: on the interval parts), and overlap(b, a) is its converse"""
+    a, b = ab
+    state = ieee1788.overlap(a, b)
+    assert isinstance(state, ieee1788.Overlap) and state.value == overlap_oracle(a, b), (a, b, state)
+    assert ieee1788.overlap(b, a).value == CONVERSE[state.value] == overlap_oracle(b, a)
+    if a.decoration is not None:
+        assert state == ieee1788.overlap(bare_and(a), bare_and(b))
+
+
 @pytest.mark.parametrize('a, b, want', [
     ((1.0, 2.0), (2.0, 3.0), 'meets'), ((1.0, 1.0), (1.0, 3.0), 'starts'), ((0.0, 2.0), (2.0, 2.0), 'finishedBy'),
     ((2.0, 3.0), (1.0, 2.0), 'metBy'), ((-INF, 2.0), (2.0, 3.0), 'meets'), ((1.0, 3.0), (1.0, 2.0), 'startedBy'),
@@ -603,6 +647,40 @@ def test_is_member(m, want):
     assert ieee1788.is_member(m, ieee1788.entire()) is (want or m in (3,))
     with pytest.raises(TypeError):
         ieee1788.is_member(Interval(1.0), Interval(1.0, 2.0))
+
+
+@st.composite
+def member_cases(draw):
+    """an interval of either flavour and a real m: often an end or a double next to one, else any
+    double, ±inf or nan, a Fraction or an int (2 ** 1100 included)"""
+    x = draw(intervals_1788(draw(flavours)))
+    near = []
+    if ends(x) is not None:
+        near = [v for e in ends(x) for v in (e, math.nextafter(e, -INF), math.nextafter(e, INF))]
+        third = Fraction(TINY) / 3
+        near += [Fraction(e) + d for e in ends(x) if math.isfinite(e) for d in (third, -third)]
+    m = draw(st.one_of(
+        *([st.sampled_from(near)] * 2 if near else []),
+        ENDS, st.just(math.nan), st.integers(-2 ** 1100, 2 ** 1100), st.integers(-3, 3),
+        st.fractions()))
+    return m, x
+
+
+@settings(max_examples=200, deadline=None)
+@given(member_cases())
+@example((MAX, Interval(1.0, INF)))
+@example((Fraction(MAX) + 1, Interval(1.0, MAX, 'com')))
+@example((-0.0, Interval(0.0, 1.0)))
+def test_is_member_is_1788s(case):
+    """1788's isMember (§10.6.3): m a real number, so nan and ±inf never members, and a member iff
+    inf(x) <= m <= sup(x), compared exactly (a Fraction a third of TINY outside an end is outside);
+    the empty set has none; decorated, the interval part's"""
+    m, x = case
+    e = ends(x)
+    want = m == m and m not in (-INF, INF) and e is not None and e[0] <= m <= e[1]
+    assert ieee1788.is_member(m, x) is want, (m, x)
+    if x.decoration is not None:
+        assert ieee1788.is_member(m, bare_and(x)) is want
 
 
 # CONSTRUCTORS AND DECORATIONS

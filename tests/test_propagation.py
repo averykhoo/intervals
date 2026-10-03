@@ -386,9 +386,14 @@ def test_slow_binary_ops_decorate_as_1788(name, a, b):
     _check(name, BINARY[name], (a, b))
 
 
+# an exponent: about half the draws in [-4, 4], the rest up to ±40 (3 ** 40 and (1/4) ** -40 are far
+# off the grid's magnitudes, and each parity and sign is as likely as among the small ones)
+EXPONENTS = st.one_of(st.integers(-4, 4), st.integers(-40, 40))
+
+
 @quiet
 @settings(max_examples=40, deadline=None)
-@given(decorated(grid_sets()), st.integers(-4, 4))
+@given(decorated(grid_sets()), EXPONENTS)
 @example(set_dec(M(-5, 10), COM), 0)  # elem.itl:1588: pown [-5.0,10.0]_com 0 = [1.0,1.0]_com
 @example(set_dec(M.parse('(-inf, 15]'), DAC), 0)  # :1589: _dac
 @example(set_dec(M(-5, 3), COM), -2)  # :1596: _trv
@@ -400,7 +405,7 @@ def test_pown_decorates_as_1788(x, n):
 
 @quiet
 @settings(max_examples=60, deadline=None)
-@given(decorated(grid_sets()), st.integers(-4, 4).filter(bool))
+@given(decorated(grid_sets()), EXPONENTS.filter(bool))
 @example(set_dec(M(0, 16), COM), 4)  # an even root from 0: com
 @example(set_dec(M(-1, 4), COM), 2)  # below 0: trv
 @example(set_dec(M(-1, 1), COM), -3)  # an odd negative root at 0: trv

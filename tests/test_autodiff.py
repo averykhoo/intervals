@@ -196,6 +196,54 @@ def test_op_derivative_is_tight_at_a_point(name, data):
     assert d.wid() <= 1e-10 * scale, (name, x, d)
 
 
+def _power(s: arb_series, n: int) -> arb_series:
+    """s ** n by repeated products, 1 / s ** -n for n < 0: no arb power"""
+    out = arb_series([1], prec=2)
+    for _ in range(abs(n)):
+        out = out * s
+    return out if n >= 0 else 1 / out
+
+
+def _root(s: arb_series, n: int) -> arb_series:
+    """the real nth root, through exp and log: of -s and negated for s < 0 (n odd there)"""
+    if _coefficient(s, 0) > 0:
+        return (s.log() / n).exp()
+    return -((-s).log() / n).exp()
+
+
+@st.composite
+def power_cases(draw):
+    """(name, n, lo, hi, p) for `u ** n` or `u.rootn(n)`, n in [-12, 12] (not 0 for a root): a box of
+    either sign off the domain's edges (0 for n < 0 and for a root, which has no derivative there;
+    below 0 only for an odd root). outward, as the table's ops: a `MultiInterval` rounds float ends
+    to nearest, and the derivative of a root, `1 / (n r ** (n - 1))`, is in floats even from an exact
+    operand (r is the root's float enclosure), so neither is an enclosure to check"""
+    name, n = draw(st.sampled_from(['pown', 'rootn'])), draw(st.integers(-12, 12))
+    if name == 'rootn' and n == 0:
+        n = draw(st.sampled_from([-12, -1, 1, 12]))
+    positive = draw(st.booleans()) or (name == 'rootn' and n % 2 == 0)
+    bounds = (-20, 20) if name == 'pown' and n >= 0 else (0.01, 20) if positive else (-20, -0.01)
+    return (name, n, *draw(boxes(bounds)))
+
+
+@settings(max_examples=150, deadline=None)
+@given(power_cases())
+@example(('pown', -12, 0.01, 19.99, Fraction(0.01)))
+@example(('pown', 12, -20.0, 20.0, Fraction(-20)))
+@example(('pown', 11, -20.0, -19.0, Fraction(-20)))
+@example(('rootn', -11, -20.0, -0.01, Fraction(-0.01)))
+@example(('rootn', 12, 0.01, 20.0, Fraction(20)))
+def test_pown_and_rootn_enclose_value_and_derivative(case):
+    """`u ** n` and `u.rootn(n)` for n in [-12, 12], against arb's products and exp/log of the variable
+    at a point of the box: the value and the derivative there are in Dual's sets"""
+    name, n, lo, hi, p = case
+    y = Dual.variable(O(lo, hi))
+    y = y ** n if name == 'pown' else y.rootn(n)
+    theirs = (lambda s: _power(s, n)) if name == 'pown' else (lambda s: _root(s, n))
+    _check(y.value, lambda: _coefficient(theirs(_variable(p)), 0), f'{name} {n} value at {p}')
+    _check(y.derivative, lambda: _coefficient(theirs(_variable(p)), 1), f'{name} {n} derivative at {p}')
+
+
 def test_every_op_of_the_table_is_a_dual_method():
     """the table above covers every elementary method of Dual (so a new one needs a row)"""
     methods = {name for name in vars(Dual) if not name.startswith('_')} - {'variable', 'constant', 'value', 'derivative'}

@@ -49,8 +49,13 @@ D = DecoratedInterval
 # EXPRESSION TREES IN TWO VARIABLES: (ours of two Duals, arb's of two series, text)
 
 def _lift(v, x: Dual) -> Dual:
-    """a constant as a constant Dual of the variables' class, so the methods apply to it"""
-    return v if isinstance(v, Dual) else Dual.constant(type(x.value)(v))
+    """a constant as a constant Dual of the variables' class, so the methods apply to it (decorated:
+    the point of the interval's class, newDec'd)"""
+    if isinstance(v, Dual):
+        return v
+    if isinstance(x.value, D):
+        return Dual.constant(D(type(x.value.interval)(v)))
+    return Dual.constant(type(x.value)(v))
 
 
 LEAVES = st.one_of(
@@ -151,6 +156,29 @@ FUNCTIONS = [
 @pytest.mark.parametrize('f, xs', FUNCTIONS)
 def test_gradient_is_the_jacobian_row(f, xs):
     assert gradient(f, xs) == jacobian(lambda *a: [f(*a)], xs)[0]
+
+
+KINDS = {
+    'outward': lambda lo, hi: O(lo, hi),
+    'exact': lambda lo, hi: M(Fraction(lo), Fraction(hi)),
+    'decorated': lambda lo, hi: D(O(lo, hi)),
+    'decorated exact': lambda lo, hi: D(M(Fraction(lo), Fraction(hi))),
+}
+
+
+@settings(max_examples=60, deadline=None)
+@given(expressions, st.sampled_from(sorted(KINDS)), boxes((-2, 2)), boxes((-2, 2)), st.sampled_from([None, 0, 1]))
+def test_gradient_is_the_jacobian_row_on_trees(e, kind, bx, by, point):
+    """the random trees of ::test_jacobian_encloses_the_partials over a drawn box of each kind, one
+    coordinate sometimes a number: the gradient is the one-row jacobian's row, as sets and, decorated,
+    in the decoration, of the same class"""
+    f = e[0]
+    xs = [KINDS[kind](lo, hi) for lo, hi, _ in (bx, by)]
+    if point is not None:
+        xs[point] = (bx, by)[point][2]  # a Fraction, a point of the box
+    g, row = gradient(f, xs), jacobian(lambda *a: [f(*a)], xs)[0]
+    assert len(g) == 2 and g == row, (e[2], xs, g, row)
+    assert [type(d) for d in g] == [type(d) for d in row]
 
 
 @pytest.mark.parametrize('f, x', [
