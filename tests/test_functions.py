@@ -695,6 +695,19 @@ def test_rootn_isotone(a, b, n):
         assert is_subset(apply('rootn', intersection(a, b), base=n), apply('rootn', a, base=n))
 
 
+@pytest.mark.parametrize('n, a, nearest, outward', [
+    # fuzz x10 on CI (run 37098878528, 2026-10-03): the exact end gives 1/10 ** 6 exactly, the float end rounds to
+    # nearest onto 1e-06, below it, and the reversed piece raised ValueError
+    (5, '(1/1000000000000000000000000000000, 1.0000000000000003e-30]', '[1e-06, 1/1000000)',
+     '(1/1000000, 1.0000000000000002e-06)'),
+])
+def test_rootn_ends_crossed_by_rounding(n, a, nearest, outward):
+    """to nearest, a float end can round past an exact one: the piece is between the two values, each keeping its
+    flag, as the applicator's least and greatest corner values are. outward rounding never crosses"""
+    assert show(apply('rootn', parse(a), base=n)) == nearest
+    assert show(apply('rootn', parse(a), outward=True, base=n)) == outward
+
+
 def test_cbrt_is_rootn_3():
     for text in ('[-27, 8]', '[2, 3]', '(-inf, 1/3]', '{ [-1] , (2, 5) }', '[0.1, 7.5]'):
         assert apply('cbrt', parse(text)) == apply('rootn', parse(text), base=3), text

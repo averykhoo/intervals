@@ -572,6 +572,17 @@ def test_the_rows_differ_only_at_the_infinities():
         assert ours != theirs and ours.difference(theirs).issubset(M(-INF) | M(INF)), v.text
 
 
+def test_pown_rev_ends_crossed_by_rounding():
+    """
+    the preimage of a mixed piece under x ** 5: its exact end maps to 1/10 ** 6 exactly and its float end rounds to
+    nearest onto 1e-06, below it (the case of fuzz run 37098878528's `rootn`, 2026-10-03, which raised here too).
+    the piece is between the two values, each keeping its flag (`functions._settled`); outward never crosses
+    """
+    c = '(1/1000000000000000000000000000000, 1.0000000000000003e-30]'
+    assert pown_rev(M.parse(c), 5) == M.parse('[1e-06, 1/1000000)')
+    assert pown_rev(OutwardMultiInterval.parse(c), 5) == OutwardMultiInterval.parse('(1/1000000, 1.0000000000000002e-06)')
+
+
 def test_pown_rev_is_tighter_than_the_vector():
     """rev.itl:276, :277 (and :477, :478 decorated): 1788's end for 2 ** (1074/7) is one double outside
     the tightest enclosure. arb puts the true value strictly inside ours, so ours is right and tight;

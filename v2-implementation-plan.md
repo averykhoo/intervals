@@ -4388,6 +4388,31 @@ exemption); the applicator skipping the hook on every negative float, the new ho
 the mixed-point `mul` (`add` takes the monotone fast path, outside that clause); the `sub` result moved to `(-1/10,
 inf]` or emptied, the new identity oracle red. the library is unchanged.
 
+### fuzz-rootn-crossed: a float end rounded to nearest past an exact one (done 2026-10-03)
+
+**found** by fuzz run 37098878528 on GitHub at `8e33d7e` (2026-10-03, x10; CI run 37098878518 green), a babysitter on
+`tools/ci_watch.sh`, reproduced locally from the artifact's database and by the seed:
+`tests/test_extreme_floats_functions.py::test_every_value_is_in_the_result[rootn]`, `rng=Random(94807)`: `rootn(., 5)`
+of an operand with the piece `(10 ** -30, 1.0000000000000003e-30]` raised `ValueError: interval start Fraction(1,
+1000000) is after end 1e-06` in the exact class (`MultiInterval`), from `kernel.piece`.
+
+**diagnosis**: the library's. `functions._Function.end` types each end on its own: the exact end gives `rootn(10 **
+-30, 5)` = 1/10 ** 6 exactly, the float end rounds `(1.0000000000000003e-30) ** (1/5)` (about 1/10 ** 6 + 6e-23) to
+nearest, onto the double `1e-06`, which is below 1/10 ** 6. `_settled` kept a piece squeezed to one point but not one
+whose ends crossed. `reverse.branch_preimage` has the same per-end rule (`reverse._end`), so `pown_rev((10 ** -30,
+1.0000000000000003e-30], 5)` raised the same. outward rounding never crosses (each end moves away from the other).
+a probe over every function and `rootn`/`log` degree and base, at 15 exact points with float partners one to five
+doubles away, found only these (2026-10-03).
+
+**fix and pins**: a crossed piece is the piece between the two values, each keeping its flag, as the applicator's
+ends are the least and greatest corner values: `[1e-06, 1/1000000)`, whose closure holds the nearest double of every
+value of the image (`functions._settled`, `reverse.branch_preimage`). pins:
+`tests/test_functions.py::test_rootn_ends_crossed_by_rounding`, `tests/test_reverse.py::test_pown_rev_ends_crossed_by_rounding`
+(each asserting the outward result unchanged), and `@example(rng=random.Random(94807))` on the test that found it.
+sabotage (2026-10-03): `functions.py` reverted, the rootn pin and the example red; `reverse.py` reverted, the pown_rev
+pin red. the outward class is unchanged; what the exact class gives for a crossed piece is the session's choice, by
+the applicator's rule (HANDOFF Q20).
+
 ### run ledger: what has run on this code (done 2026-10-01)
 
 **why**: the owner, 2026-10-01: "i need some machinery to know whats run and not on the current code ...

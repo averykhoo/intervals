@@ -31,6 +31,7 @@ limit the plan's table names (`exp(-inf)` = 0, `atan(inf)` = pi/2, `log(0)` = -i
   an end's value to the infinity on its side, both infinities closed; a pole's point 0 alone gives nothing
 """
 import math
+import random
 import warnings
 from fractions import Fraction
 
@@ -39,6 +40,7 @@ from flint import arb
 from flint import ctx
 from flint import fmpq
 from hypothesis import event
+from hypothesis import example
 from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
@@ -463,6 +465,7 @@ def _show(cuts):
 @pytest.mark.parametrize('case', CASES)
 @settings(max_examples=50, deadline=None)
 @given(rng=st.randoms(use_true_random=True))
+@example(rng=random.Random(94807))  # fuzz x10 on CI, 2026-10-03: [rootn] raised on ends rounding crossed
 def test_every_value_is_in_the_result(case, rng):
     """
     outward, the value at every sampled point is in the result; to nearest the same for an exact

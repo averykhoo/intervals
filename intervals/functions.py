@@ -430,9 +430,16 @@ def _inside_k(lo, hi, offset: Fraction) -> Tuple[int, int]:
 
 
 def _settled(lo, lo_closed: bool, hi, hi_closed: bool) -> Piece:
-    """a piece rounding squeezed to one point keeps it, closed (as in the applicator)"""
+    """
+    a piece rounding squeezed to one point keeps it, closed; one whose ends rounding crossed is the piece between
+    the two values, each keeping its flag (both as in the applicator, whose ends are the least and greatest corner
+    values). ends cross only to nearest, an exact end beside a float end rounded past it: `rootn((10 ** -30,
+    1.0000000000000003e-30], 5)` is `[1e-06, 1/1000000)` (fuzz x10 on CI, 2026-10-03; a reversed piece raised)
+    """
     if lo == hi:
         return lo, True, hi, True
+    if lo > hi:
+        return hi, hi_closed, lo, lo_closed
     return lo, lo_closed, hi, hi_closed
 
 

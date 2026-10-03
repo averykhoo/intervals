@@ -184,6 +184,8 @@ def branch_preimage(c: Cuts, branch: Branch, outward: bool) -> Cuts:
         b, b_closed = _end(branch, hi, hi_closed, UP, outward)
         if a == b:  # rounding to nearest squeezed the piece to one point: keep it, closed
             a_closed = b_closed = True
+        elif a > b:  # to nearest, a float end rounded past an exact one: the piece between them (functions._settled)
+            a, a_closed, b, b_closed = b, b_closed, a, a_closed
         out.append(kernel.piece(a, b, a_closed, b_closed))
     return kernel.normalize(out)
 
