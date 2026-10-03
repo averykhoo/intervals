@@ -97,8 +97,10 @@ Interval(float('-inf'), float('inf'))
 
 ## what it does
 
-* **values**: int and Fraction are exact and never rounded; float endpoints go through a rounding
-  hook (identity by default). `-inf` and `inf` are ordinary points, so `[1, inf]` and `[1, inf)` are
+* **values**: int and Fraction are exact and never rounded, but for a power too long to build (past
+  2**22 bits, about 1.26M digits: pown, pow, `exp2`, `exp10`), which becomes a float like an
+  irrational value, with a `PowerLimitWarning` (ignored by default; make it an error to forbid it);
+  float endpoints go through a rounding hook (identity by default). `-inf` and `inf` are ordinary points, so `[1, inf]` and `[1, inf)` are
   different sets, and `[inf]` is a legal degenerate interval
 * **set algebra**: `| & ^ ~`, `difference()`, `issubset()`, `in`, slicing `x[a:b]` (restricts to
   `[a, b]`), `hull`, `interior` (every end opened), `expand()`, `size` (rays, length, isolated
@@ -121,7 +123,12 @@ Interval(float('-inf'), float('inf'))
 * **power**: a number exponent with an integral value is 1788's pown, over every base
   (`MI(-3, 1) ** 2` is `[0, 9]`); any other real exponent, and every `MultiInterval` one, is 1788's
   pow, over the bases x > 0 and x = 0 where y > 0, the rest dropped with a `DomainClippedWarning`
-  (`MI(-3, 1) ** MI(2)` is `[0, 1]`). `2 ** A` is `MI(2) ** A`; 3-argument `pow` is refused
+  (`MI(-3, 1) ** MI(2)` is `[0, 1]`). `2 ** A` is `MI(2) ** A`; 3-argument `pow` is refused.
+  both are correctly rounded with no libm, pown to nearest too (python's `float ** int` is libm's
+  `pow` and can be an ulp off). exact operands give an exact power up to 2**22 bits, the same limit
+  for both: `MI(3) ** 70000` and `MI(3) ** MI(70000)` are the same 110948-bit int; past it pown and pow
+  give the tightest float enclosure, open, in both classes (`MI(2) ** 2 ** 60` and `MI(2) ** MI(2 ** 60)`
+  are `(MAX, inf)`; the float `MI(2.0) ** 2 ** 60` is `[inf]`, rounded to nearest)
 * **cancellation**: `A.cancel_minus(B)` is the Minkowski difference, the largest `X` with
   `B + X ⊆ A`, for any two sets (`∅` when nothing fits); `A.cancel_plus(B)` is
   `A.cancel_minus(-B)`. 1788's `cancelMinus`/`cancelPlus` where 1788 has an answer, a real set
@@ -129,7 +136,7 @@ Interval(float('-inf'), float('inf'))
 * **functions**: `sqrt`, `exp`, `exp2`, `exp10`, `expm1`, `log` (any base), `log2`, `log10`,
   `log1p`, `cbrt`, `rootn(n)`, `hypot`, `sin`, `cos`, `tan`, `cot`, `sec`, `csc`, `asin`, `acos`,
   `atan`, `acot`, `atan2`, `sinh`, `cosh`, `tanh`, `coth`, `sech`, `csch`, `asinh`, `acosh`,
-  `atanh`, `acoth`, as methods; a pole inside a piece gives both infinities, as `1/x` does. values are correctly rounded by a pure-python evaluator (no libm), so they are the same on
+  `atanh`, `acoth`, as methods; a pole inside a piece gives both infinities, as `1/x` does. values are correctly rounded by a pure-python evaluator (no libm, pown included), so they are the same on
   every platform; an irrational value of an exact operand is its tightest float enclosure
 * **step functions**: `floor()`, `ceil()`, `trunc()`, `round(ndigits)`, `round_ties_away()`,
   `sign()`, and `math.floor/ceil/trunc` and `round()` on a set: the values attained, listed up to
@@ -253,7 +260,11 @@ Interval(float('-inf'), float('inf'))
   `'gmpy2'`
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
-  `EmptySetPropagationWarning`)
+  `EmptySetPropagationWarning`, `PowerLimitWarning`)
+* **text form**: `repr` evaluates back and `str` is what `MultiInterval.parse` reads. an int too long
+  for python to write in decimal (past `sys.get_int_max_str_digits()`, 4300 digits by default) is
+  written in hex (`0x...`), which `parse` reads, so `repr` never raises; `parse` keeps python's limit
+  on a decimal literal
 * **1788's signals** (M13g): `UndefinedOperation` raises `UndefinedOperationError`, a `ValueError`,
   so a 1788 constructor or `DecoratedInterval` given invalid input stops, as `MI(2, 1)` does; hence
   there is no NaI. `PossiblyUndefinedOperation` would be `PossiblyUndefinedOperationWarning`, an
@@ -291,11 +302,11 @@ adapter compares closed hulls in binary64 (`v2-plan.md` "ieee 1788"). surveyed 2
 |---|---|---|---|
 | sets | connected intervals; a hull (`1/[-1, 1]` is entire) | finite unions (`[-inf, -1] ∪ [1, inf]`); reverse ops give the union | "ieee 1788"; "division semantics vs ieee 1788" |
 | ends | closed; infinity never attained | open or closed; ±inf are points, `[inf]` is legal | D1, D6; "domain and semantics" |
-| numbers | a floating-point format | int and Fraction exact, never rounded | D3 |
+| numbers | a floating-point format | int and Fraction exact, never rounded (a power past 2**22 bits is a float) | D3 |
 | indeterminate points | not writable | `[0] * [inf]`, `1/[0]` are empty, with a warning | D2, D7 |
 | a domain end with no value | dropped (`log([0])` empty) | its limit, a point (`log([0])` is `[-inf]`) | "elementary and step functions"; rows: degenerate infinities |
 | rounded ends | closed | outward, a moved end is open | "arithmetic" (flags at rounded ends) |
-| rounding | every result encloses | `MultiInterval` rounds to nearest as python's float (overflow is the point `inf`); `OutwardMultiInterval` encloses | "arithmetic" (rounding); Q18 open |
+| rounding | every result encloses | `MultiInterval` rounds to nearest as python's float (overflow is the point `inf`); `OutwardMultiInterval` encloses; pown to nearest is correctly rounded, not libm's `pow` | "arithmetic" (rounding) |
 | reverse ops and `x`, to nearest | `x` first, then enclose | `x` first, then round to nearest: a part rounding onto one double is kept, even an end `x` excludes | D26 |
 | periodic reverse ops | the hull | exact pieces; the hull past 1000 or over an unbounded `x` | D12 |
 | step functions | `floor([-1.5, 1.5])` is `[-2, 1]` | the points `{-2, -1, 0, 1}`; the hull past 1000 | "elementary and step functions" (no decision of its own) |

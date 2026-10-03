@@ -451,7 +451,7 @@ def test_outward_class_is_the_tightest_enclosure(op, form, a, b, c, n, float_n, 
                 assert not closed or contains_point(x, end), (end, why)
 
 
-@pytest.mark.parametrize('op', tuple(op for op in ROUNDED if op != 'pow'))
+@pytest.mark.parametrize('op', ROUNDED)
 @settings(max_examples=25, deadline=None)
 @given(form=st.sampled_from(NEAREST_FORMS), rng=st.randoms(use_true_random=False), **operations)
 @pytest.mark.filterwarnings('ignore')
@@ -467,13 +467,14 @@ def test_nearest_class_rounds_the_exact_result_to_nearest(op, form, rng, a, b, c
     end's flag is conservative, not a promise. what follows from that: the result is empty iff the
     exact one is, its hull ends are the exact ones rounded to nearest (or exact, from a box with no
     float; mod, // and fma round the whole result if any operand has one), and the nearest double of every
-    value a sampled point attains is in the result read with every end closed. pow is left out: a
-    float corner is libm's `pow`, not promised correctly rounded (`ops._exact_power_descriptor`)
+    value a sampled point attains is in the result read with every end closed. pow (pown, `A ** n`) is
+    in since 2026-10-03 (Q18): a float corner was libm's `pow` (python's `float ** int`), not correctly
+    rounded, and is now the exact power rounded once (`ops._power_descriptor`)
     """
     a, b, c = _operands(op, form, a, b, c, scalar)
     results = _spelled(op, form, 'M', a, b, c, n)
     exact = _spelled(op, 'MM', 'M', *(_exact_cuts(x) for x in (a, b, c)), n)
-    operands = (a, b, c) if op == 'fma' else (a,) if op == 'reciprocal' else (a, b)
+    operands = (a, b, c) if op == 'fma' else (a,) if op in ('reciprocal', 'pow') else (a, b)
     for part, result in results.items():
         assert type(result) is MultiInterval, (op, form)
         r, x = result.cuts, exact[part].cuts

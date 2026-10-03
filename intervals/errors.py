@@ -2,9 +2,10 @@
 warning and exception classes
 
 empty-set propagation and domain clipping are normal events in a solver loop, so they are
-ignored by default. the filters are appended to the *end* of the warnings filter list, so any
-filter the user installs -- before or after importing this package -- takes precedence. to use
-one as a tripwire::
+ignored by default, and so is a power of exact operands too long to build (`PowerLimitWarning`).
+the filters are appended to the *end* of the warnings filter list, so any filter the user
+installs -- before or after importing this package -- takes precedence. to use one as a
+tripwire::
 
     warnings.simplefilter('error', EmptySetPropagationWarning)
 """
@@ -34,6 +35,16 @@ class HullWarning(IntervalWarning):
     """
 
 
+class PowerLimitWarning(IntervalWarning):
+    """
+    an exact operand's power is rational but longer than `elementary.EXACT_RESULT_LIMIT` bits, so it
+    was not built: its tightest float enclosure was returned, in both classes (`M(2) ** 2 ** 60` and
+    `M(2) ** M(2 ** 60)` = `(MAX, inf)`). pown, pow, exp2 and
+    exp10 emit it. ignored by default; `warnings.simplefilter('error', PowerLimitWarning)` makes it an
+    error instead
+    """
+
+
 # ieee 1788's signals (M13g, D16). in 1788 each is a flag and the result is returned; here, by the
 # owner's choice (2026-09-26), invalid input raises and a possibly-invalid one warns
 
@@ -54,3 +65,4 @@ class PossiblyUndefinedOperationWarning(IntervalWarning):
 
 warnings.filterwarnings('ignore', category=EmptySetPropagationWarning, append=True)
 warnings.filterwarnings('ignore', category=DomainClippedWarning, append=True)
+warnings.filterwarnings('ignore', category=PowerLimitWarning, append=True)

@@ -6,6 +6,24 @@ import os
 
 from hypothesis import HealthCheck, settings
 from hypothesis.database import DirectoryBasedExampleDatabase
+from hypothesis.vendor import pretty
+
+
+def _pretty_fraction(obj, printer, cycle):
+    """
+    hypothesis writes an example's arguments eagerly (an explicit example's too, pass or fail) with its
+    own printer, which writes an int past python's 4300-digit limit in hex but a Fraction by `repr`,
+    which raises for such a part: `@example(None, Fraction(-1, 10 ** 4300))` failed before running
+    (tests/test_fmt.py, m14b-open, 2026-10-03). the parts go through hypothesis's int printer instead
+    """
+    printer.text('Fraction(')
+    printer.pretty(obj.numerator)
+    printer.text(', ')
+    printer.pretty(obj.denominator)
+    printer.text(')')
+
+
+pretty.for_type_by_name('fractions', 'Fraction', _pretty_fraction)
 
 PROFILE = os.environ.get('HYPOTHESIS_PROFILE')
 FUZZ = PROFILE == 'fuzz'

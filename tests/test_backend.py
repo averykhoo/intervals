@@ -598,7 +598,7 @@ def test_missed_exact_case_raises(monkeypatch):
     with a zero ternary value; the backend refuses in every direction, where the pure loop (its
     white-box twin in test_elementary) can answer DOWN because both ends of [2, 2 + tiny] round down
     """
-    monkeypatch.setattr(elementary, 'exact', lambda name, x, base=None: None)
+    monkeypatch.setattr(elementary, 'exact', lambda name, x, base=None, limit=None: None)
     with backend._use('gmpy2'):
         for d in DIRECTIONS:
             with pytest.raises(ArithmeticError, match='exact case was missed'):

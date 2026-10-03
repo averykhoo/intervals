@@ -422,7 +422,8 @@ def test_known_roundings(name, x, down, nearest, up):
     ('sqrt', Fraction(5e-324), Fraction(2) ** -537), ('sqrt', Fraction(2) ** -1073, None),
     ('exp', 0, 1), ('exp', -INF, 0), ('exp', INF, INF), ('exp', 1, None),
     ('exp2', -3, Fraction(1, 8)), ('exp2', 1024, 2 ** 1024), ('exp2', Fraction(1, 2), None),
-    ('exp2', elementary.EXACT_POWER_LIMIT + 1, None),
+    # past EXACT_RESULT_LIMIT, measured as pown measures 2 ** x (2 bits a factor): 2 ** 21 is the last built
+    ('exp2', elementary.EXACT_RESULT_LIMIT // 2 + 1, None), ('exp10', elementary.EXACT_RESULT_LIMIT // 4 + 1, None),
     ('exp10', -2, Fraction(1, 100)), ('exp10', 0, 1), ('exp10', Fraction(1, 2), None),
     ('log', 1, 0), ('log', 0, -INF), ('log', INF, INF), ('log', 2, None),
     ('log2', Fraction(1, 8), -3), ('log2', Fraction(2 ** -1074), -1074), ('log2', 3, None), ('log2', 0, -INF),
@@ -563,7 +564,7 @@ def test_exact_values_round_like_any_other():
 def test_a_missed_exact_case_raises_instead_of_looping(monkeypatch):
     """ziv's loop cannot narrow onto a double that the value IS; the precision cap turns that into an error"""
     monkeypatch.setattr(elementary, '_MAX_PRECISION', 1 << 12)
-    monkeypatch.setattr(elementary, 'exact', lambda name, x, base=None: None)
+    monkeypatch.setattr(elementary, 'exact', lambda name, x, base=None, limit=None: None)
     with backend._use('python'):  # the pure loop's guard; the gmpy2 backend's is test_backend's twin
         assert rounded('sqrt', 4, DOWN) == 2.0  # both ends of [2, 2 + tiny] round down to 2
         with pytest.raises(ArithmeticError):
@@ -694,10 +695,32 @@ def test_pow_correctly_rounded():
     (2, -3, Fraction(1, 8)), (Fraction(2) ** 60, Fraction(5, 6), Fraction(2) ** 50),
     (Fraction(3), Fraction(1, 2 ** 55), None),
     (3, elementary.EXACT_POWER_LIMIT, None),  # rational, but longer than the limit: rounded instead
+    (Fraction(1, 2), elementary.EXACT_POWER_LIMIT // 2 + 1, None),  # 2 bits a factor
     (Fraction(1, 2), 1000, Fraction(1, 2 ** 1000)),
 ])
 def test_exact_pow(x, y, value):
     assert elementary.exact_pow(x, y) == value
+
+
+def test_the_two_power_limits():
+    """
+    `exact_pow`'s limit is a parameter: `EXACT_POWER_LIMIT` (float operands, the default) and
+    `EXACT_RESULT_LIMIT` (exact operands, the one pown, pow and exp2/exp10 share), both on
+    `exact_power_bits`; past it the value is `too_long`. `exact` builds exp2/exp10 to `EXACT_RESULT_LIMIT`
+    unless told the float limit (owner, 2026-10-03, Q17)
+    """
+    small, big = elementary.EXACT_POWER_LIMIT, elementary.EXACT_RESULT_LIMIT
+    assert small < big and big == 1 << 22
+    assert elementary.exact_power_bits(3, 70000) == 140000 and elementary.exact_power_bits(-1, 10 ** 9) == 0
+    assert elementary.exact_pow(3, 70000) is None
+    assert elementary.exact_pow(3, 70000, big) == 3 ** 70000
+    marker = object()
+    assert elementary.exact_pow(3, big, big, marker) is marker
+    assert elementary.exact_pow(2, Fraction(1, 2), big, marker) is None  # irrational is not too long
+    assert elementary.exact('exp10', 30000) == 10 ** 30000  # exponent 30000: past 100000 bits, under 2**22
+    assert elementary.exact('exp10', 30000, limit=small) is None
+    assert elementary.exact('exp2', big // 2) == 2 ** (big // 2)
+    assert elementary.exact('exp2', -(big // 2) - 1) is None
 
 
 @pytest.mark.parametrize('x, y, down, nearest, up', [

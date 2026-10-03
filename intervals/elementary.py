@@ -43,8 +43,15 @@ NAMES = ('sqrt', 'exp', 'exp2', 'exp10', 'log', 'log2', 'log10', 'sin', 'cos', '
 POLE_AT_ZERO = ('cot', 'csc', 'coth', 'csch')
 
 _START_PRECISION = 64
-# `2 ** x` and `10 ** x` for an int x beyond this are not built exactly (2**100000 has 100001 bits);
-# they are rounded like any irrational value, which past the float range means [max float, inf]
+# the two limits on building a power exactly, both on `exact_power_bits` (|n| times the longer of the
+# base's numerator and denominator in bits). a power past its limit is not built: it is rounded like an
+# irrational value, which past the float range means [max float, inf] (owner, 2026-10-03, Q17):
+# * EXACT_RESULT_LIMIT, for exact operands (int, Fraction): the one limit pown, pow and exp2/exp10 share.
+#   2**22 bits (about 1.26M digits) still builds in under a second on this laptop (0.66 s, 2026-10-03,
+#   `references/owner-questions-2026-10-03/pown.md` §0); past it the result is a float enclosure
+# * EXACT_POWER_LIMIT, for a float operand: the rounded double is the same either way, so the exact build
+#   is a speed choice only, kept short (`rounded_pow`'s ziv route costs the same for any n)
+EXACT_RESULT_LIMIT = 1 << 22
 EXACT_POWER_LIMIT = 100000
 _MAX_PRECISION = 1 << 22  # a guard against a missed exact case, which would otherwise loop forever
 
@@ -510,10 +517,12 @@ def _check_domain(name: str, x, base) -> None:
         raise ValueError(f'{name} has no value at {x}, outside its domain')
 
 
-def exact(name: str, x, base=None):
+def exact(name: str, x, base=None, limit: int = EXACT_RESULT_LIMIT):
     """
     `f(x)` where it is rational or ±inf, None where it is irrational (then `rounded` is needed). x is
-    an exact value (int, Fraction, ±inf) inside f's domain, the domain's ends included
+    an exact value (int, Fraction, ±inf) inside f's domain, the domain's ends included. `exp2` and
+    `exp10` of an int are rational but not built past `limit` (`exact_power_bits` of 2 or 10 and x):
+    None there too, and `rounded` rounds them (a caller with a float x passes `EXACT_POWER_LIMIT`)
 
     >>> exact('sqrt', Fraction(9, 4)), exact('log2', Fraction(1, 8)), exact('tanh', -INF)
     (Fraction(3, 2), -3, -1)
@@ -546,10 +555,10 @@ def exact(name: str, x, base=None):
         return 1 if x == 0 else None
     if name == 'atanh':
         return 0 if x == 0 else INF if x == 1 else -INF if x == -1 else None
-    if name in ('exp2', 'exp10'):
-        if x.denominator != 1 or abs(x) > EXACT_POWER_LIMIT:
+    if name in EXP_BASES:
+        if x.denominator != 1 or exact_power_bits(EXP_BASES[name], int(x)) > limit:
             return None
-        return Fraction(2 if name == 'exp2' else 10) ** int(x)
+        return Fraction(EXP_BASES[name]) ** int(x)
     if name == 'log':
         if x == 0:
             return -INF if base is None or base > 1 else INF
@@ -725,7 +734,9 @@ def rounded(name: str, x, direction: int, base=None) -> float:
     >>> rounded('atan', INF, NEAREST) == math.pi / 2
     True
     """
-    value = exact(name, x, base)
+    # the float-corner limit: a caller that wanted a longer exp2/exp10 exactly asked `exact` first, and
+    # past this the double is the same from the ziv route or the range shortcuts, at no build cost
+    value = exact(name, x, base, EXACT_POWER_LIMIT)
     if value is not None:
         return value if is_infinite(value) else round_rational(value, direction)
     if is_infinite(x):  # atan(±inf) = ±pi/2, acot(-inf) = pi
@@ -800,17 +811,41 @@ def _round_outside(where: str, direction: int) -> float:
     }[where][direction]
 
 
-# POWERS, FOR 1788'S POW
+# POWERS, FOR 1788'S POW AND FOR POWN
 
-def exact_pow(x, y):
+# exp2 and exp10 are powers of these bases, under the same limits as pown and pow
+EXP_BASES = {'exp2': 2, 'exp10': 10}
+
+
+def exact_power_bits(x, n: int) -> int:
+    """
+    the length the exact powers are measured by, for a rational x and an int n: `|n|` times the longer
+    of x's numerator and denominator in bits, a bound on the bits of `x ** n` in lowest terms (within a
+    factor of 2); 0 for x = 0, 1 or -1, whose powers are short whatever n is. a power is built exactly
+    while this is at most the limit, `EXACT_RESULT_LIMIT` for exact operands and `EXACT_POWER_LIMIT` for
+    a float's, and past it the value is neither a double nor a midpoint of two (`ops._NotADouble`)
+
+    >>> exact_power_bits(3, 1000), exact_power_bits(Fraction(-1, 2), -7), exact_power_bits(-1, 10 ** 30)
+    (2000, 14, 0)
+    """
+    x = Fraction(x)
+    if x in (0, 1, -1):
+        return 0
+    return abs(n) * max(x.numerator.bit_length(), x.denominator.bit_length())
+
+
+def exact_pow(x, y, limit: int = EXACT_POWER_LIMIT, too_long=None):
     """
     `x ** y` where it is rational, None where it is not (then `rounded_pow` is needed), for exact
     finite x > 0, or x = 0 with y > 0. with y = a/b in lowest terms it is rational iff x is a b-th
-    power. a value longer than `EXACT_POWER_LIMIT` bits is not built; ziv's loop still ends for it,
+    power. a value longer than `limit` bits (`exact_power_bits` of the root and a) is not built: the
+    result is `too_long` (None by default, and `rounded_pow` rounds it). ziv's loop still ends for it,
     since a value that long in lowest terms is neither a double nor the midpoint of two
 
     >>> exact_pow(Fraction(9, 4), Fraction(3, 2)), exact_pow(8, Fraction(-2, 3)), exact_pow(2, Fraction(1, 2))
     (Fraction(27, 8), Fraction(1, 4), None)
+    >>> exact_pow(3, 70000), exact_pow(3, 70000, EXACT_RESULT_LIMIT).numerator.bit_length()
+    (None, 110948)
     """
     x, y = Fraction(x), Fraction(y)
     if x == 0:
@@ -821,8 +856,8 @@ def exact_pow(x, y):
     if root is None:
         return None
     a = y.numerator
-    if abs(a) * max(root.numerator.bit_length(), root.denominator.bit_length()) > EXACT_POWER_LIMIT:
-        return None
+    if exact_power_bits(root, a) > limit:
+        return too_long
     return root ** a
 
 

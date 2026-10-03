@@ -5,13 +5,14 @@ the package's own text form: `intervals.fmt` (`format_cuts`, `parse`, `parse_val
 * round trip: `parse(format_cuts(x))` is `x` with every value's type kept (an int stays an int, a float a
   float, a Fraction a Fraction; `==` alone reads 2, 2.0 and 2/1 as one value), and `format_cuts` is a fixed
   point, over the whole float range (subnormals, the largest double, +-inf), ints and Fractions of up to
-  4300 digits, mixed types and many pieces; `repr` evaluates back to the same class and set, for
-  `MultiInterval` and `OutwardMultiInterval`
+  4300 digits and past them (hex, below), mixed types and many pieces; `repr` evaluates back to the
+  same class and set, for `MultiInterval` and `OutwardMultiInterval`
 * spellings: a writer of its own, from the grammar in the module docstring (not from `format_cuts`), spells a
   set every documented way (bare points, `[x, x]`, `,` or `;` inside a piece, any separator or none between
   pieces, braces or not, pieces shuffled and repeated, empty pieces mixed in, white space anywhere around a
   token and after a sign or around `/`, `inf`/`Infinity`/`∞` in any case, a float as `repr` or `%e`, an int
-  as `2k/k`, a Fraction unreduced, `-0.0`); the parse is the set, with the design's one zero (v2-plan:
+  as `2k/k` or in hex, a Fraction unreduced or with hex parts, `-0.0`); the parse is the set, with the
+  design's one zero (v2-plan:
   `-0.0` becomes `0.0`) and an integral Fraction read as an int
 * `parse_value` reads back `format_value` of every number bit for bit (`-0.0` included: the parser's tokens
   are raw, the Cut constructor normalizes) and every other spelling of the number with its type
@@ -21,7 +22,9 @@ the package's own text form: `intervals.fmt` (`format_cuts`, `parse`, `parse_val
 
 findings of M14-breadth (2026-10-02): a zero denominator raised ZeroDivisionError and a separator after a
 leading `[]` or `()` was refused, both fixed (the `@example`s of the any-text property); an int part past
-python's 4300-digit `str()` limit cannot be formatted, held out of the round trip (`BIG`), an open question
+python's 4300-digit `str()` limit could not be formatted (`repr(MultiInterval(10 ** 4300))` raised ValueError).
+since 2026-10-03 (owner, m14b-open) such a part is written in hex and `parse` reads `0x`: the strategies
+reach past the limit (`HUGE`), and `test_past_the_int_str_limit` pins the spelling
 """
 import math
 import struct
@@ -36,6 +39,7 @@ from hypothesis import strategies as st
 
 from intervals import MultiInterval
 from intervals import OutwardMultiInterval
+from intervals.cuts import Cut
 from intervals.cuts import Side
 from intervals.fmt import format_cuts
 from intervals.fmt import format_value
@@ -134,10 +138,14 @@ def test_parse_value(text, value):
 
 # EXTREME VALUES
 
-# python refuses `str()` of an int past 4300 digits (`sys.get_int_max_str_digits()`), so `format_cuts` cannot
-# print one (finding F2 of M14-breadth fmt, 2026-10-02: `repr(MultiInterval(10 ** 4300))` raises ValueError).
-# the strategies stop at 4300 digits
+# python refuses `str()` of an int past 4300 digits (`sys.get_int_max_str_digits()`): BIG is the largest int it
+# writes in decimal, HUGE the smallest it does not, which `format_value` writes in hex (m14b-open, 2026-10-03;
+# finding F2 of M14-breadth fmt, 2026-10-02: `repr(MultiInterval(10 ** 4300))` raised ValueError)
 BIG = 10 ** 4300 - 1
+HUGE = 10 ** 4300
+# hypothesis writes a strategy's repr (its arguments by `repr`), which python refuses for an int past the limit,
+# so the huge values are made by `.map`, never passed to a strategy as literals
+huge_ints = st.tuples(st.integers(-BIG, BIG), st.integers(0, BIG)).map(lambda t: t[0] * HUGE + t[1])
 
 extreme_floats = st.one_of(
     st.floats(allow_nan=False),  # the whole range: subnormals, the largest double, +-inf, -0.0
@@ -146,12 +154,15 @@ extreme_floats = st.one_of(
 extreme_ints = st.one_of(
     st.integers(),
     st.integers(-BIG, BIG),
-    st.sampled_from([2 ** 53 + 1, -2 ** 63, BIG, -BIG]),
+    huge_ints,  # mostly past the limit: hex
+    st.sampled_from([2 ** 53 + 1, -2 ** 63, BIG, -BIG, 1, -1]).map(lambda k: k if abs(k) != 1 else k * HUGE),
 )
 extreme_fractions = st.one_of(
     st.fractions(),
     st.builds(Fraction, st.integers(-BIG, BIG), st.integers(1, BIG)),
-    st.sampled_from([Fraction(1, BIG), Fraction(-BIG, BIG - 1)]),
+    st.builds(Fraction, huge_ints, huge_ints.map(abs).filter(bool)),
+    st.sampled_from(range(5)).map(lambda i: (Fraction(1, BIG), Fraction(-BIG, BIG - 1), Fraction(1, HUGE),
+                                             Fraction(-HUGE, 3), Fraction(HUGE + 1, HUGE))[i]),
 )
 extreme_values = st.one_of(extreme_floats, extreme_ints, extreme_fractions)
 mixed_values = st.one_of(pool_values, extreme_values)  # the pool keeps equal values of two types common
@@ -191,6 +202,7 @@ def assert_values_normal(cuts):
 @example(mi((-inf, inf, False, False)))
 @example(mi(-inf, inf))
 @example(mi(BIG, -BIG, Fraction(1, BIG)))
+@example(mi(HUGE, -HUGE, Fraction(1, HUGE), Fraction(-HUGE, 3)))
 @example(mi((0.1, Fraction(1, 3), False, True), 7, (2 ** 53 + 1, 1e300, True, False)))
 def test_round_trip_extreme(cuts):
     text = format_cuts(cuts)
@@ -207,6 +219,7 @@ NAMESPACE = {'MultiInterval': MultiInterval, 'OutwardMultiInterval': OutwardMult
 @example(cuts=EMPTY)
 @example(cuts=REALS)
 @example(cuts=mi(0.1, (Fraction(1, 3), BIG, False, True)))
+@example(cuts=mi((-HUGE, Fraction(1, HUGE), True, False), HUGE))
 def test_repr_round_trip(cls, cuts):
     # v2-plan: `repr` evaluates back; `str` is the text `parse` reads
     x = cls.from_cuts(cuts)
@@ -234,18 +247,30 @@ def spelled_number(draw, value):
         body = draw(st.sampled_from([repr(magnitude), f'{magnitude:.17e}', f'{magnitude:.17E}', f'{magnitude:.25e}']))
         negative = negative or (value == 0 and draw(st.booleans()))  # `-0.0`
     elif isinstance(value, int):
-        spellings = [str(magnitude)]
-        if magnitude < 10 ** 4000:  # `2k/k`, kept under python's 4300-digit limit
+        spellings = [_hex(magnitude, draw)]  # any int may be hex; past python's limit it must be
+        if magnitude < 10 ** 4000:  # decimal and `2k/k`, kept under python's 4300-digit limit
             k = draw(st.integers(1, 9))
-            spellings.append(f'{magnitude * k}{draw(_SPACE)}/{draw(_SPACE)}{k}')
+            spellings += [str(magnitude), f'{magnitude * k}{draw(_SPACE)}/{draw(_SPACE)}{k}']
         body = draw(st.sampled_from(spellings))
         negative = negative or (value == 0 and draw(st.booleans()))  # `-0`
     else:
         small = max(magnitude.numerator, magnitude.denominator) < 10 ** 4000
         k = draw(st.integers(1, 9)) if small else 1  # unreduced
-        body = f'{magnitude.numerator * k}{draw(_SPACE)}/{draw(_SPACE)}{magnitude.denominator * k}'
+        numerator, denominator = magnitude.numerator * k, magnitude.denominator * k
+        body = f'{_int_text(numerator, draw)}{draw(_SPACE)}/{draw(_SPACE)}{_int_text(denominator, draw)}'
     sign = '-' if negative else draw(st.sampled_from(['', '+']))
     return sign + (draw(_SPACE) if sign else '') + body
+
+
+def _hex(n: int, draw) -> str:
+    """`0x...` with the prefix and the digits in either case (the grammar reads hex case-blind)"""
+    text = hex(n)
+    return draw(st.sampled_from([text, text.upper(), '0x' + text[2:].upper()]))
+
+
+def _int_text(n: int, draw) -> str:
+    """one part of a fraction: decimal where python writes it, else hex; hex either way, sometimes"""
+    return _hex(n, draw) if n >= 10 ** 4000 or draw(st.booleans()) else str(n)
 
 
 @st.composite
@@ -317,6 +342,9 @@ def test_spellings(data, cuts):
 @example(None, 5e-324)
 @example(None, -BIG)
 @example(None, Fraction(-1, BIG))
+@example(None, -HUGE)
+@example(None, Fraction(-1, HUGE))
+@example(None, Fraction(HUGE, 7))
 def test_parse_value_round_trip(data, value):
     if type(value) is Fraction and value.denominator == 1:
         value = int(value)  # as the Cut constructor stores it; format_value prints `4/1` as `4`
@@ -331,9 +359,43 @@ def test_parse_value_round_trip(data, value):
     assert again == value and type(again) is (Fraction if '/' in spelled else type(value))  # raw: no Cut yet
 
 
+# PAST PYTHON'S INT-STR LIMIT (m14b-open, owner 2026-10-03): hex out, hex in, decimal in still limited
+
+def test_past_the_int_str_limit():
+    assert format_value(BIG) == str(BIG)  # the largest int python writes in decimal stays decimal
+    assert format_value(HUGE) == hex(HUGE) and format_value(-HUGE) == hex(-HUGE)
+    assert format_value(Fraction(1, HUGE)) == f'1/{hex(HUGE)}'
+    assert format_value(Fraction(-HUGE, 3)) == f'{hex(-HUGE)}/3'
+    for x in (MultiInterval(HUGE), OutwardMultiInterval(-HUGE, Fraction(1, HUGE)), MultiInterval(3) ** 2 ** 21):
+        text = repr(x)  # raised ValueError, and so did str() and format()
+        assert eval(text, NAMESPACE) == x and type(x).parse(str(x)) == x and format(x) == str(x)
+    assert repr(Cut(HUGE, Side.BELOW)) == f'Cut({hex(HUGE)}, BELOW)'
+    assert repr(Cut(Fraction(-1, HUGE), Side.ABOVE)) == f'Cut(Fraction(-1, {hex(HUGE)}), ABOVE)'
+    with pytest.raises(ValueError, match='hex'):  # python's own limit, kept: it guards the whole process
+        parse('1' * 4301)
+    with pytest.raises(ValueError, match='hex'):
+        parse_value('1/' + '3' * 4301)
+
+
+@pytest.mark.parametrize('text, value', [
+    ('0x1f', 31), ('-0X1F', -31), ('0x1f/0x3', Fraction(31, 3)), ('1/0x10', Fraction(1, 16)),
+    ('0x10 / 3', Fraction(16, 3)), ('0x0', 0),
+])
+def test_parse_hex(text, value):
+    parsed = parse_value(text)
+    assert parsed == value and type(parsed) is type(value)
+
+
+@pytest.mark.parametrize('text', ['0x', '[0x1.8p1]', '[0x1.5e3]', '[1/0x3.5]', '0x1g', '[0x 1]'])
+def test_hex_floats_and_bad_hex_are_refused(text):
+    """a hex float is not read, and never as `0x1` then `.8` (the grammar takes two bare numbers as a piece)"""
+    with pytest.raises(ValueError):
+        parse(text)
+
+
 # ANY TEXT
 
-_GRAMMAR = '0123456789 .eE+-/[](){},;|∪∞infINFty\t\n'
+_GRAMMAR = '0123456789 .eE+-/[](){},;|∪∞infINFtyxXabcdef\t\n'
 @st.composite
 def mutated_outputs(draw):
     """a valid output with a few characters inserted, deleted or replaced, or a slice repeated"""

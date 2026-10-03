@@ -13,8 +13,11 @@ they cannot, is `references/test-vector-sources.md` §3h.
     $PY tools/coremath.py status             # what changed since the last full check
     $PY tools/coremath.py pin [<commit>]     # move the pin (master by default): rewrites the manifest
 
-the cache is `.scratch/coremath-cache/<commit>/` (gitignored, kept between sessions: `CLAUDE.md`). the
+the cache is `.scratch/coremath-cache/<commit>/` (gitignored, kept between sessions: `CLAUDE.md`), or the
+directory `INTERVALS_COREMATH_CACHE` names (a worktree reads the main checkout's cache that way). the
 pin and every file's sha256 are `tests/coremath/MANIFEST.tsv`; a file whose bytes differ is refused.
+pown has no file of its own: its rows are pow.wc's with an integral exponent (`DERIVED`), through pown's
+own descriptors (`ops._power_descriptor`), so `status`'s scalar closure does not cover it.
 the gate runs only the vendored sample (`tests/test_coremath.py`); `check` runs everything and appends
 its verdict to `references/coremath-runs.tsv`, which `status` reads.
 """
@@ -23,6 +26,7 @@ import ast
 import hashlib
 import math
 import multiprocessing
+import os
 import random
 import subprocess
 import sys
@@ -36,7 +40,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'tests' / 'coremath'
 MANIFEST = DATA / 'MANIFEST.tsv'
 RUNS = ROOT / 'references' / 'coremath-runs.tsv'  # prose to the ledger: a check's row stales no gate run
-CACHE = ROOT / '.scratch' / 'coremath-cache'
+CACHE = Path(os.environ.get('INTERVALS_COREMATH_CACHE') or ROOT / '.scratch' / 'coremath-cache')
 REPO = 'https://gitlab.inria.fr/core-math/core-math'
 API = 'https://gitlab.inria.fr/api/v4/projects/35719'
 
@@ -46,7 +50,11 @@ API = 'https://gitlab.inria.fr/api/v4/projects/35719'
 UNARY = ('exp', 'exp2', 'exp10', 'expm1', 'log', 'log2', 'log10', 'log1p', 'sin', 'cos', 'tan', 'asin', 'acos',
          'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'cbrt')
 BINARY = ('atan2', 'hypot', 'pow')
-FUNCTIONS = UNARY + BINARY
+# rows taken from another function's file: pown's are pow.wc's with an integral exponent, its hard cases
+# (2026-10-03, Q18: to nearest pown is correctly rounded, so libm's `float ** int` would go red here)
+DERIVED = {'pown': 'pow'}
+FUNCTIONS = UNARY + BINARY + tuple(DERIVED)
+FILES = UNARY + BINARY  # the pinned files
 
 # the sample: every row of a block up to WHOLE rows, PER_BLOCK seeded rows of a bigger one, and these
 # blocks whole whatever their size (atan's ±2^e block is the one that drives the loop past 512 bits)
@@ -79,7 +87,8 @@ def _raw(commit: str, path: str) -> bytes:
 
 
 def cached(name: str) -> Path:
-    """the pinned file of `name`, from the cache, its sha256 checked (fetched if absent)"""
+    """the pinned file of `name` (pow's for pown), from the cache, its sha256 checked (fetched if absent)"""
+    name = DERIVED.get(name, name)
     commit, files = read_manifest()
     path = CACHE / commit / f'{name}.wc'
     if not path.exists():
@@ -95,7 +104,7 @@ def cached(name: str) -> Path:
 
 def blocks(name: str):
     """[(label, [x or (x, y)]), ...] in file order: finite inputs, each block headed by its `#` lines"""
-    pair = name in BINARY
+    pair = name in BINARY or name in DERIVED
     out, rows, label, heading = [], [], '(no heading)', []
     for line in cached(name).read_text(encoding='utf-8').splitlines():
         text = line.strip()
@@ -144,11 +153,12 @@ def _oracle():
     contexts = {d: gmpy2.context(precision=53, emin=-1073, emax=1024, subnormalize=True, round=r)
                 for d, r in modes.items()}
     unary = {name: getattr(gmpy2, name) for name in UNARY}
-    binary = {'atan2': lambda x, y: gmpy2.atan2(y, x), 'hypot': gmpy2.hypot, 'pow': lambda x, y: x ** y}
+    binary = {'atan2': lambda x, y: gmpy2.atan2(y, x), 'hypot': gmpy2.hypot, 'pow': lambda x, y: x ** y,
+              'pown': lambda x, y: x ** y}
 
     def value(name, operand, direction):
         with contexts[direction]:
-            if name in BINARY:
+            if name in binary:
                 x, y = operand
                 return float(binary[name](gmpy2.mpfr(x), gmpy2.mpfr(y)))
             return float(unary[name](gmpy2.mpfr(operand)))
@@ -165,6 +175,8 @@ def inside(name: str, operand) -> bool:
         return True
     if name == 'pow':
         return operand[0] > 0
+    if name == 'pown':  # an integral exponent but 0 (`A ** 0` is [1] before any corner), any base but 0
+        return operand[0] != 0 and operand[1] != 0 and operand[1] == int(operand[1])
     try:
         elementary._check_domain(name, Fraction(operand), None)
     except ValueError:
@@ -175,6 +187,7 @@ def inside(name: str, operand) -> bool:
 def ours(name: str, operand, direction: int) -> float:
     """the library's scalar answer: the call the set layer makes for an end"""
     from intervals import elementary
+    from intervals.rounding import DOWN, NEAREST
     if name == 'atan2':
         x, y = operand
         q = Fraction(y) / Fraction(x)
@@ -184,12 +197,18 @@ def ours(name: str, operand, direction: int) -> float:
         return elementary.rounded('sqrt', Fraction(x) ** 2 + Fraction(y) ** 2, direction)
     if name == 'pow':
         return elementary.rounded_pow(Fraction(operand[0]), Fraction(operand[1]), direction)
+    if name == 'pown':  # a float corner of `A ** n`: the nearest descriptor's value, the outward one's hooks
+        from intervals import ops
+        x, n = operand[0], int(operand[1])
+        if direction == NEAREST:
+            return ops._power_descriptor(n).fn(x)
+        return ops._power_descriptor(n, True).rounded[0 if direction == DOWN else 1](x)
     return elementary.rounded(name, Fraction(operand), direction)
 
 
 def inputs(name: str):
     """[(block index, label, operands)] of the scalar's inputs, mirrored where CORE-MATH mirrors them"""
-    symmetric = read_manifest()[1][name][1] and name in UNARY  # hypot's sign is the square's
+    symmetric = read_manifest()[1][DERIVED.get(name, name)][1] and name in UNARY  # hypot's sign is the square's
     out = []
     for i, (label, rows) in enumerate(blocks(name)):
         if symmetric:
@@ -213,9 +232,11 @@ def sample_text(name: str) -> str:
     from intervals.rounding import DOWN, NEAREST, UP
     value = _oracle()
     commit, files = read_manifest()
-    lines = [f'# CORE-MATH {commit} src/binary64/{name}/{name}.wc (sha256 {files[name][0]}), MIT: LICENSE.core-math',
+    source = DERIVED.get(name, name)
+    lines = [f'# CORE-MATH {commit} src/binary64/{source}/{source}.wc (sha256 {files[source][0]}), MIT: LICENSE.core-math',
              f'# written by tools/coremath.py sample: every row of a block of <= {WHOLE}, {PER_BLOCK} seeded rows of a '
-             f'bigger one{", sign mirrored" if files[name][1] else ""}; expected values from MPFR',
+             f'bigger one{", sign mirrored" if files[source][1] else ""}'
+             f'{", the rows with an integral exponent" if name in DERIVED else ""}; expected values from MPFR',
              '# do not edit: tools/coremath.py sample --check']
     rows = []
     for i, label, kept in inputs(name):
@@ -380,7 +401,7 @@ def pin(commit: str) -> int:
         commit = json.loads(_get(f'{API}/repository/commits/master'))['id']
     lines = [f'# commit {commit}', f'# {REPO}, src/binary64/<name>/<name>.wc, sha256; symmetric: CORE-MATH defines '
              'WORST_SYMMETRIC for it, so its worst cases are checked at -x too', '# name\tsha256\tsymmetric']
-    for name in FUNCTIONS:
+    for name in FILES:
         data = _raw(commit, f'src/binary64/{name}/{name}.wc')
         path = CACHE / commit / f'{name}.wc'
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -409,7 +430,7 @@ def main(argv=None) -> int:
     p.add_argument('commit', nargs='?', default='master')
     args = parser.parse_args(argv)
     if args.command == 'fetch':
-        for name in FUNCTIONS:
+        for name in FILES:
             print(f'{name}: {cached(name).stat().st_size} bytes, sha256 ok', flush=True)
         return 0
     if args.command == 'sample':
