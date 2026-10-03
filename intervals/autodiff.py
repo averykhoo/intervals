@@ -32,6 +32,7 @@ from intervals import numpy_compat
 from intervals.decorated import DecoratedInterval
 from intervals.multi_interval import MultiInterval
 from intervals.multi_interval import _is_integral
+from intervals.multi_interval import _refuse_shift_count
 
 _PART = (MultiInterval, DecoratedInterval)
 
@@ -155,6 +156,22 @@ class Dual:
         if other is NotImplemented:
             return NotImplemented
         return other / self
+
+    def __lshift__(self, n):
+        """`(u << n)' = u' << n`: `u * 2 ** n` for an int n of either sign (`MultiInterval.__lshift__`)"""
+        value = self._value.__lshift__(n)
+        return NotImplemented if value is NotImplemented else Dual(value, self._derivative << n)
+
+    def __rshift__(self, n):
+        """`(u >> n)' = u' >> n`: `u * 2 ** -n`"""
+        value = self._value.__rshift__(n)
+        return NotImplemented if value is NotImplemented else Dual(value, self._derivative >> n)
+
+    def __rlshift__(self, other):
+        return _refuse_shift_count(self, other, '<<')
+
+    def __rrshift__(self, other):
+        return _refuse_shift_count(self, other, '>>')
 
     def reciprocal(self) -> 'Dual':
         """`(1 / u)' = -u' / u ** 2`"""

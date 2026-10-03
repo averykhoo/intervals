@@ -603,6 +603,33 @@ def test_mixing_the_classes_is_the_cores_rule(op):
         assert result.interval.cuts == bare.cuts
 
 
+@settings(max_examples=30, deadline=None)
+@given(a=decorated(grid_sets()), n=st.integers(-60, 60), outward=st.booleans())
+@example(a=DecoratedInterval(M(1, INF)), n=3, outward=False)  # inf attained: outside the domain, trv
+def test_a_shift_is_decorated_as_the_product(a, n, outward):
+    """Q6-shift (owner, 2026-10-03): `x << n` is `x * 2 ** n` and `x >> n` is `x * 2 ** -n`, set and
+    decoration (a scaling: defined and continuous on the reals, com iff bounded)"""
+    if outward:
+        a = DecoratedInterval(OutwardMultiInterval.from_cuts(a.interval.cuts), a.decoration)
+    scale = Fraction(2) ** n
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        for got, expected in ((a << n, a * scale), (a >> n, a * (1 / scale))):
+            assert got == expected and type(got.interval) is type(a.interval)
+
+
+def test_shift_examples_and_refusals():
+    x = DecoratedInterval(M(1, 3))
+    assert x >> 1 == DecoratedInterval(M(Fraction(1, 2), Fraction(3, 2))) and (x << 1).decoration is COM
+    assert (set_dec(M(1, 3), 'def') << 2).decoration is Decoration.DEF
+    assert (DecoratedInterval(M.parse('[1, inf)')) << 2).decoration is Decoration.DAC  # unbounded
+    assert (DecoratedInterval(M(math.inf)) << 2).decoration is TRV  # the point inf: outside the domain
+    for thunk in (lambda: x << 1.0, lambda: x << True, lambda: x << x, lambda: x << M(1), lambda: 1 << x,
+                  lambda: x.interval << x, lambda: 2 >> x):
+        with pytest.raises(TypeError):
+            thunk()
+
+
 def test_numbers_are_points_and_a_bare_set_is_refused():
     a = DecoratedInterval(M(1, 2))
     assert a + 1 == DecoratedInterval(M(2, 3)) and 1 - a == DecoratedInterval(M(-1, 0))

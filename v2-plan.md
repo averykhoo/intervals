@@ -343,6 +343,19 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   while `|n| <= 2 ** 53`, past it `rounded_pow` to nearest with the int n's parity (python rounds n
   to a double there: `M(-1.0) ** (2 ** 60 + 1)` was `[1.0]`). int and Fraction operands are still
   exact, so `M(2) ** 2 ** 60` does not finish (open question Q-exact, plan §2 "pown-huge")
+* **shifts** (owner, 2026-10-03, Q6-shift; `intervals/multi_interval.py::MultiInterval.__lshift__`,
+  `::__rshift__`): `A << n` is `A * 2 ** n` and `A >> n` is `A * 2 ** -n`, **exactly** (binary
+  scaling, as `math.ldexp`, MPFR's `mul_2si`), for an int n of either sign (any `Integral` but bool,
+  numpy's ints too; no cap: python's own `1 << 2 ** 63` is a MemoryError too). computed by `*`
+  (`ops.mul` with the point `2 ** n` or `Fraction(1, 2 ** -n)`), so both classes, openness, rounding
+  and warnings are its: exact on int and Fraction ends, exact on float ends but past the largest
+  double (`M(1e308) << 10` is `[inf]`, outward `(MAX, inf)`) and in the subnormal range
+  (`M(5e-324) >> 1` is `[0.0]`, outward `(0.0, 5e-324)`). the one departure from python's int
+  shift: `M(3) >> 1` is `[3/2]`, not `[1]`, as `M(1) / 3` is `[1/3]`; the floor is `A // 2 ** n`,
+  so `(A << n) >> n` is A on exact ends. a set as the count (`A << B`) and the reflected forms
+  (`3 << A`, `np.int64(3) << A`) are TypeErrors: `x * 2 ** B` is the scaling by a set.
+  `DecoratedInterval` decorates a shift as the product with a point (defined and continuous on the
+  reals, com iff bounded); `Dual` scales both parts (`(u << n)' = u' << n`)
 * **reductions** (M13h, 2026-09-26; `intervals/reductions.py`): 1788's `sum`, `sumAbs`,
   `sumSquare`, `dot` as `sum_(xs)`, `sum_abs(xs)`, `sum_sqr(xs)`, `dot(xs, ys)`, exported from
   `intervals`. point ops over any iterable of real numbers, not interval ops: each operand is held
@@ -1071,7 +1084,9 @@ type, never an array of numbers, so interop is four rules and one refusal:
   (`np.float64(2) + A` is `A.__radd__(np.float64(2))`, the call python made before the hook
   existed; both operands ours, python's own operator, subclass first, so `np.add(M, O)` is `M + O`,
   an `OutwardMultiInterval`); `==` and `!=` fall back to identity, as python's do
-  (`np.float64(2) == M(2)` is False). the other ufuncs are the method computing the set image of
+  (`np.float64(2) == M(2)` is False); `left_shift`/`right_shift` are `<<`/`>>` (Q6-shift), whose
+  reflected forms refuse, so `np.left_shift(A, 3)` is `A << 3` and `np.int64(3) << A` a TypeError,
+  as `3 << A`. the other ufuncs are the method computing the set image of
   the ufunc's pointwise function: `sqrt cbrt exp exp2 expm1 log log2 log10 log1p sin cos tan sinh
   cosh tanh floor ceil trunc sign reciprocal` the method of that name, `arcsin ... arctanh` the
   1788 names `asin ... atanh`, `rint` `round` (ties to even, as numpy's), `square` `x ** 2` (pown,
