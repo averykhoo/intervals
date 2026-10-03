@@ -1,6 +1,7 @@
 """
-the speed tables of M16e's record (`h3-records/gmpy2.md`): the pure path, then gmpy2, back to back in
-one process under `backend._use`, best of 5 per call, as markdown rows `| call | pure | gmpy2 | ratio |`.
+the speed tables of M16e's record (`v2-implementation-plan.md` §2 M16e, "speed"): the pure path, then
+gmpy2, back to back in one process under `backend._use`, best of 5 per call, as markdown rows
+`| call | pure | gmpy2 | ratio |`.
 ratios, not absolute times: a loaded machine moves both columns. with `--bound`, the cost of the
 class-15 calls (`tests/test_backend.py::_bound_cases`) at a bound of 2**12, 2**16 and 2**20 bits
 instead: the pure path at a tiny x grows about quadratically in the bits, which is why the real-bound

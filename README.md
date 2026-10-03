@@ -201,10 +201,10 @@ Interval(float('-inf'), float('inf'))
   1788 does: a part of the answer inside `x` that rounds wholly onto one double is that double, even
   an end `x` excludes (D26)
 * **a faster backend, optional** (M16e): `pip install intervals[fast]` adds gmpy2, and
-  `INTERVALS_BACKEND=gmpy2` (or `auto`: gmpy2 when it imports) picks it at `import intervals`. it
-  computes the same doubles as the default pure-python path, only faster (a few times for the
-  elementary functions at a float, less at set level), and changes no flag, so every result is
-  the same either way:
+  `INTERVALS_BACKEND=gmpy2` (or `auto`: gmpy2 when it imports, else the pure path, silently) picks
+  it at `import intervals`. it computes the same doubles as the default pure-python path, only
+  faster (a few times for the elementary functions at a float, less over a whole set, little for
+  arithmetic), and changes no flag, so every result is the same either way:
 
   ```python
   >>> from intervals import OutwardMultiInterval
@@ -214,6 +214,9 @@ Interval(float('-inf'), float('inf'))
   OutwardMultiInterval.parse('(0.3, 0.30000000000000004)')
 
   ```
+
+  reporting a result, say which backend computed it: `intervals.backend.name()` is `'python'` or
+  `'gmpy2'`
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
   `EmptySetPropagationWarning`)

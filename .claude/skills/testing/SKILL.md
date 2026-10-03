@@ -16,7 +16,7 @@ repo root. timings are from this shared laptop under load, 2026-09-30.
 | session start, before a commit or push | `$PY tools/gate.py status` | under a second |
 | while editing | the touched test file(s): `$PY -m pytest -q tests/test_x.py` | seconds to minutes |
 | before a commit | the gate, in two recorded calls (below) | ~1 min + ~10-14 min |
-| before a push | `bash tools/prepush.sh`, in the background | ~83 min; docs only: seconds |
+| before a push | `bash tools/prepush.sh`, in the background | ~83 min; docs only: seconds; + ~10-15 min if a backend file changed |
 | after a push | a babysitter agent on `bash tools/ci_watch.sh <sha>` | ci ~12 min, fuzz ~30-56 min |
 | CI only | the exhaustive harnesses (below) | 20 s to 12 min each on CI |
 
@@ -58,17 +58,27 @@ beside it. a row names the code by two content ids, not by the commit:
 
 so a run made before `git commit` still counts after it; a HANDOFF or plan edit stales nothing; a
 README edit stales only the doctests (`$PY tools/gate.py run docs`, seconds). phases: `gate:itf`,
-`gate:rest`, `docs`, `fuzz-x<N>:itf`, `fuzz-x<N>:rest` (only N >= 10, fuzz.yml's, clears a push).
+`gate:rest`, `docs`, `fuzz-x<N>:itf`, `fuzz-x<N>:rest` (only N >= 10, fuzz.yml's, clears a push),
+`gate:gmpy2` (below).
 
     $PY tools/gate.py status                   # each phase on this code, the commit and push verdicts
     $PY tools/gate.py status --require commit  # exit 1 unless the gate is green on this code
     $PY tools/gate.py status --require push    # exit 1 unless a push needs nothing more
-    $PY tools/gate.py plan                     # nothing / docs / fuzz / dirty, what prepush reads
+    $PY tools/gate.py plan                     # nothing / dirty, or docs|fuzz and gmpy2 joined by +: what prepush reads
 
 statuses: PASSED (rc 0 and a passing pytest summary), FAILED, INCONSISTENT (rc 0 without one),
 MOVED (the code changed while it ran: it counts for nothing; do not edit sources during a run),
-INTERRUPTED. a log with no row is a run killed or still running. the run removes
-`INTERVALS_BACKEND` (CI's gate runs the pure path) and sets the fuzz variables from the phase name.
+INTERRUPTED. a log with no row is a run killed or still running. every phase but `gate:gmpy2` removes
+`INTERVALS_BACKEND` (CI's gate and fuzz run the pure path); all set the fuzz variables from the phase name.
+
+`gate:gmpy2` (owner, Q16(e), 2026-10-03) is the whole suite, one call, with `INTERVALS_BACKEND=gmpy2`
+set whatever your environment says: what ci.yml's `gate-gmpy2` job runs (python 3.13, ubuntu, the
+PyPI wheel's MPFR). forced, `import intervals` raises without gmpy2, so the suite cannot pass on the
+pure path (one test file alone can: a failed package import leaves leaf modules importable; the CI
+job asserts `backend.name()` first). it is keyed by src like the fuzz, never covers the gate (a commit
+needs the pure path), and a push needs it only when `tools/gate.py::BACKEND_FILES` (`backend`,
+`_gmpy2`, `elementary`, `ops`) changed since the base. about 10-15 min: in the background. there is no
+gmpy2 fuzz job.
 the ids do not see `.hypothesis/` or the installed packages (recorded in each row, not matched).
 `tests/test_gate_ledger.py` pins all of it; its sabotage table (13 breaks, each red) is in
 `v2-implementation-plan.md` §2 "run ledger".
@@ -78,7 +88,8 @@ the ids do not see `.hypothesis/` or the installed packages (recorded in each ro
 refuses uncommitted changes outside markdown and `references/` (untracked files too); compares with
 `origin/master` (fetched); runs what `tools/gate.py plan` says is missing: the fuzz at x10 if the
 src changed and no green x10 run on it is recorded, the docs phase if only READMEs changed since,
-nothing if only prose did. logs in `.gate-runs/`. its exit is `tools/gate.py status --require push`.
+nothing if only prose did; and besides, `gate:gmpy2` if a backend file changed and no green run of it
+on this src is recorded. logs in `.gate-runs/`. its exit is `tools/gate.py status --require push`.
 `PREPUSH_DRY=1` prints the decision, `PREPUSH_FULL=1` forces the fuzz run. push only on exit 0.
 
 ## after a push: tools/ci_watch.sh
@@ -159,8 +170,9 @@ commit that row. the files live in `.scratch/coremath-cache/` (kept; `fetch` res
 
 * `$PY tools/itf1788_census.py`: the itf1788 counts quoted in the docs (vectors, ops, divergence keys
   by category), read from the adapter, so a count in a doc can be regenerated rather than copied
-* `INTERVALS_BACKEND=gmpy2 $PY -m pytest -q ...`: the suite on the gmpy2/MPFR backend (opt-in; CI runs
-  only `tests/test_backend.py`'s differential); `$PY tools/backend_speed.py [--bound]` for its speed
+* `INTERVALS_BACKEND=gmpy2 $PY -m pytest -q ...`: a file on the gmpy2/MPFR backend (opt-in; the whole
+  suite is the `gate:gmpy2` phase above and ci.yml's `gate-gmpy2` job; every pure job also runs
+  `tests/test_backend.py`'s differential); `$PY tools/backend_speed.py [--bound]` for its speed
 * `tests/itf1788/`: the vendored ITF1788 vectors (unmodified; `tests/itf1788/README.md`), the parser
   `itl.py` and the adapter `test_itf1788.py`, whose docstring explains how a vector is compared; a new
   difference from 1788 is a row under a named category, never a skip

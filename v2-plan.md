@@ -441,6 +441,10 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
       MPFR 4.2); `auto` gmpy2 if it imports and `2.3 <= version < 3`, else the pure path, silently;
       anything else a `ValueError`. no public setter (rounding is a property of the type, never an
       ambient mode); `intervals.backend.name()` says which, and is not exported from `intervals`
+      (the README names it for anyone reporting a result). the extra `[fast]` installs gmpy2 in
+      `auto`'s window, `gmpy2>=2.3,<3`, as `[test]` does (owner, Q16(d), 2026-10-03), so "I installed
+      `[fast]`" means the backend is on when asked; both pins move with `backend.CEILING`
+      (`tests/test_backend.py::test_the_fast_extra_installs_what_auto_takes` and its `[test]` sibling)
     * **the backend's contract: the same doubles and the same flags, faster.** it answers only "which
       double": every decision that is not a rounding (`elementary.exact`, `exact_pow`, `_beyond` and
       the range shortcuts of `rounded_pow`, the pi limits at ±inf, every flag and attainment in
@@ -1364,7 +1368,12 @@ imports only point downward.
   set-level method under both backends; `::test_use_switches` guards that the two really ran
   different code, and `::test_use_restores` that the files after it run on the pure path again.
   gmpy2 is in `[test]`, so nothing skips. the rest of the suite runs on the pure
-  path (the default); the build ran the whole gate once more forced to gmpy2
+  path (the default) in the gate and the fuzz; and the whole suite runs forced to gmpy2 (owner,
+  Q16(e), 2026-10-03) in ci.yml's `gate-gmpy2` job (python 3.13, ubuntu, the PyPI wheel's MPFR) on
+  every push, and locally as the ledger phase `gate:gmpy2` (`tools/gate.py`), which a push needs only
+  when a backend file (`tools/gate.py::BACKEND_FILES`) changed since `origin/master` and a commit never
+  needs. forced, `import intervals` raises without gmpy2, so the suite cannot pass on the pure path;
+  the job asserts `backend.name()` first, since one test file alone can. no gmpy2 fuzz job
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
   every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 10; 100 until
   2026-09-27) times its own `max_examples`; unset, the conftest does nothing, so the gate keeps `default` locally and the
@@ -1394,8 +1403,9 @@ imports only point downward.
       interop, which is built (M16d; D23 (a), `HANDOFF.md` Q15(a))
     * the backend's non-dyadic part: an mpfr ziv loop for a monotone f at a bracketed x, for the
       points the backend declines today (a `Fraction(1, 3)`, `log` to a base, `pow_rev2`'s `log_t
-      v`, `acoth`, `rootn` with n < 0, the periodic reverse ops' `k pi + f(v)`); not measured
-      (M16e; `HANDOFF.md` Q16(c))
+      v`, `acoth`, `rootn` with n < 0, the periodic reverse ops' `k pi + f(v)`); not measured, and
+      kept here until a real workload measures those calls on its critical path (owner, Q16(c),
+      2026-10-03)
     * allen's composition table (from the relations of `(a, b)` and `(b, c)`, those possible for
       `(a, c)`), re-derived for the cut reading with points, where some classical compositions
       shrink (a point cannot OVERLAP); `allen_relations` is its input. a design of its own (M16c)
