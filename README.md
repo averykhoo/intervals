@@ -192,10 +192,15 @@ Interval(float('-inf'), float('inf'))
   `TypeError`; an ndarray meeting a set is elementwise into an object array
   (`np.linspace(0, 1, 3) + A`), except `==`, which stays structural; `np.array([A, B])` holds the
   sets as elements. `np.asarray(x, dtype=float)` rounds each point to nearest, in both classes.
-  object arrays of sets run numpy's own loops (`np.arcsin(arr)` and `np.round(A)` are TypeErrors)
+  object arrays of sets run numpy's own loops (`np.arcsin(arr)` and `np.round(A)` are TypeErrors).
+  the 1788 layer's `Interval` is a scalar to numpy: operators with numpy scalars work, ufuncs do not
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
-  open. mixing the two gives an `OutwardMultiInterval`. to nearest, as python's float, a value past the
+  open. mixing the two gives an `OutwardMultiInterval`. an exact end stays exact, so the outward
+  class is isotone within one grid; across grids (a float piece of `A` inside an exact piece of `B`),
+  `f(A)` lies within the tightest double cover of `f(B)`, which `f(B).rounded()` gives: round the
+  inputs first (`A.rounded()`: every end a double, outward) and `A ⊆ B` gives `f(A) ⊆ f(B)`. to
+  nearest, as python's float, a value past the
   largest double is `inf` (`MultiInterval(1e308) * 10` is `[inf]`, the point, so `& (0, inf)` leaves
   nothing); the outward class keeps it as `(MAX, inf)`. the reverse ops meet `x` before rounding, as
   1788 does: a part of the answer inside `x` that rounds wholly onto one double is that double, even
@@ -236,7 +241,8 @@ Interval(float('-inf'), float('inf'))
   the library's, converted in by 1788's input rule and out by its output rule (attained infinities
   dropped, the hull rounded outward to doubles, an infinite end open), with 1788's answer where it
   defines another (cancellation's "no answer" is entire, touching intervals `meets`,
-  `mul_rev_to_pair` decorated as the division). 1788's names in snake_case, and `ieee1788.NAMES` in
+  `mul_rev_to_pair` decorated as the division, NaN for the numbers of the empty set and a reduction
+  with no value). 1788's names in snake_case, and `ieee1788.NAMES` in
   1788's own spelling. a third conformance pass runs every vector through it and compares exactly:
   all match but 104 vectors under 94 rows (no NaI, tighter than the vector, exact parsing;
   2026-09-28)
@@ -266,12 +272,12 @@ adapter compares closed hulls in binary64 (`v2-plan.md` "ieee 1788"). surveyed 2
 | interval orders | `less`, `strictLess` | `weakly_less()`, `strictly_less()`; `<` is pointwise, a `TruthSet` | D10 |
 | NaI and signals | NaI; signals are flags | no NaI; UndefinedOperation raises, PossiblyUndefined warns | D16; "2026-09-26 revision: owner answers to the open questions" (Q1, Q8); rows: no NaI |
 | parsing | may round first | exact: validity decided on the exact bounds | D18(b); rows: exact parsing decides validity |
-| constructors | the binary64 hull | the exact set (`[0.1, infinity]` is `[1/10, inf)`) | "2026-09-26 revision: M13g part 1"; Q10 open |
+| constructors | the binary64 hull | the exact set (`[0.1, infinity]` is `[1/10, inf)`); the hull is `ieee1788.text_to_interval` | "2026-09-26 revision: M13g part 1"; D21(d) (Q10 closed as built, owner 2026-10-03) |
 | tightness | some vectors 1-2 doubles loose | the tightest enclosure | D18(a); rows: tighter than the vector |
 | decorations | on every op; decided in binary64 | only on `DecoratedInterval`; decided on the exact set, per piece | D16, D18(c), D18(d); "2026-09-26 revision: M13g part 3" |
-| mulRevToPair's decoration | the first interval as `c / b` | `mul_rev` is one op, trv | Q9 open (pending Q13(c)); rows: decoration expectations |
-| numbers of the empty set | NaN | `ValueError`; `mig`/`mag` of the set, not the hull | D9 |
-| reductions | NaN for nan, `inf + -inf`, `0 * inf` | `ValueError` | "2026-09-26 revision: owner answers to the open questions" (Q2) |
+| mulRevToPair's decoration | the first interval as `c / b` | `mul_rev` is one op, trv; 1788's pair is `ieee1788.mul_rev_to_pair` | D21(c) (Q9 closed as built, owner 2026-10-03); rows: decoration expectations |
+| numbers of the empty set | NaN | `ValueError`; `mig`/`mag` of the set, not the hull; `ieee1788`'s are NaN | D9; the layer: D21(b) (Q13(b), owner 2026-10-03) |
+| reductions | NaN for nan, `inf + -inf`, `0 * inf` | `ValueError`; `ieee1788`'s are NaN | "2026-09-26 revision: owner answers to the open questions" (Q2); the layer: Q13(b) |
 | zero | signed | one zero | "2026-09-22 revision: signed zero dropped" |
 | warnings | none | `EmptySetPropagationWarning`, `DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning` | "empties and warnings" |
 

@@ -18,8 +18,8 @@ a branch and prune over the pieces of `x`, each a connected set, kept on a stack
   piece's interior, the piece holds exactly one zero (the interval newton theorem; with `0 ∉ F'` no
   two zeros fit, by rolle). it is kept by every later step, since a step keeps every zero
 * **bisection** at the midpoint, where the step removed less than half the piece or could not run;
-  a piece spanning more than a factor of 16 in magnitude is split by its exponents first
-  (`_magnitude_split`), with no newton step
+  a piece spanning more than a factor of 16 in magnitude, above 1 or below it, is split by its
+  exponents first (`_magnitude_split`), with no newton step unless it is already within `tol`
 
 a piece is output as a `Root` once its width is at most `tol` (newton may go on past it for a few
 steps while it halves the piece, to prove a zero unique), or its zero is proved unique and a step no
@@ -84,6 +84,14 @@ def newton(f, x, *, tol=1e-10, max_steps=10_000) -> Tuple[Root, ...]:
     the zeros of `f` in `x` (a set or a number), as disjoint `Root`s in increasing order: every zero
     of `f` in `x` is in one of them (see the module docstring for the method and what `f` may use)
 
+    `tol` is an **absolute** width, in the units of `x`: a piece no wider is output, after the few
+    newton steps past it that may prove its zero. so a zero at a scale below `tol` can come out
+    unproved, in a piece far wider than the zero; lower `tol` to prove it (a proved zero and a piece
+    with no float inside stop by themselves, but a continuum of zeros is bisected down to `tol`).
+    `max_steps` counts **pieces** taken off the stack, not calls of `f`: a piece costs at most two
+    calls (on a decorated `Dual` over it, and at a point), and one output unproved up to two more
+    (at its closed ends)
+
     >>> from intervals import MultiInterval as M
     >>> [str(r.interval) for r in newton(lambda x: x.sin(), M(-4, 4))]  # -pi, 0, pi
     ['(-3.1415926535897936, -3.141592653589793)', '[0.0]', '(3.141592653589793, 3.1415926535897936)']
@@ -117,7 +125,10 @@ def newton(f, x, *, tol=1e-10, max_steps=10_000) -> Tuple[Root, ...]:
                 # a point: its zero is certain when the value is exactly [0]
                 roots.append(Root(piece, value == type(value)(0)))
                 continue
-            if smooth and piece.is_finite and _magnitude_split(piece) is None:
+            # a piece wide in magnitude is split by its exponents, not stepped; but one already within
+            # tol (below 1 in magnitude) is output next, and a step may still prove its zero first
+            wide = _magnitude_split(piece, below_one=True) is not None and piece.wid() > tol
+            if smooth and piece.is_finite and not wide:
                 point = _point_in(piece)
                 if point is not None:
                     narrowed, proved = _newton_step(piece, slope, point, _value_at(f, point))
@@ -138,11 +149,12 @@ def newton(f, x, *, tol=1e-10, max_steps=10_000) -> Tuple[Root, ...]:
                     # a simple zero it converges quadratically, and a step or two more proves the
                     # zero unique; at a multiple zero only linearly (x ** 2 at 0 by 3/8 a step)
                     width = narrowed.wid()
-                    if width <= piece.wid() / 2 and (width > tol or past < _PAST_TOL):
+                    # 2 * width, not wid() / 2: an exact piece wider than the doubles would overflow
+                    if 2 * width <= piece.wid() and (width > tol or past < _PAST_TOL):
                         work.append((narrowed, False, past + (width <= tol)))
                         continue
                     piece = narrowed
-            if piece.wid() <= tol or (halves := _bisect(piece)) is None:
+            if piece.wid() <= tol or (halves := _bisect(piece, below_one=True)) is None:
                 _finish(f, piece, unique, roots, work)
                 continue
             work.extend((half, False, 0) for half in reversed(halves))
@@ -214,29 +226,34 @@ def _point_in(piece: MultiInterval):
     return mid if mid in piece else None
 
 
-def _magnitude_split(piece: MultiInterval):
+def _magnitude_split(piece: MultiInterval, below_one: bool = False):
     """
     on a piece spanning more than a factor of 16 in magnitude, a point in the middle of its
-    exponents: 0 if the piece holds it, else ±1 if an end is 0, else ±2 ** the mean binary exponent.
-    None on a narrower piece. newton from far off a zero gains about a constant factor a step, so
-    such a piece is bisected here first: `[0, 1e300]` or `[-inf, inf]` reaches the scale of its zeros
-    in about a dozen splits, not hundreds of steps
+    exponents: 0 if the piece holds it, else ±1 if an end is 0 (and the other beyond ±1), else ±2 **
+    the mean binary exponent. None on a narrower piece, and on one inside [-1, 1] unless `below_one`
+    (then only on one from 0 to at most ±1, with no exponent to take the middle of). newton from far
+    off a zero gains about a constant factor a step, so such a piece is bisected here first: `[0,
+    1e300]` or `[-inf, inf]` reaches the scale of its zeros in about a dozen splits, not hundreds of
+    steps. `newton` splits below 1 too: `[5e-41, 1]` (`x ** 2 - 1e-40` on `[-1, 1]`) took 132 calls
+    of f, both zeros unproved, and takes 28, both proved (2026-10-04). `solve` does not: its boxes
+    narrowed by gauss-seidel to `(-1, -1e-300)` would be split through every exponent, in each
+    coordinate (the circle on `[-1e300, 1e300]²`: 3433 calls against 103, 2026-10-04)
     """
     lo, hi = max(piece.inf, -_MAX), min(piece.sup, _MAX)
     if lo < 0 < hi:
         return 0 if max(-lo, hi) > _SPAN * min(-lo, hi) else None
     sign, lo, hi = (1, lo, hi) if lo >= 0 else (-1, -hi, -lo)
-    if hi <= 1 or (lo > 0 and hi <= _SPAN * lo):
+    if (hi <= 1 and (lo == 0 or not below_one)) or (lo > 0 and hi <= _SPAN * lo):
         return None
     if lo == 0:
         return sign
     return sign * 2.0 ** ((math.frexp(lo)[1] + math.frexp(hi)[1]) // 2)
 
 
-def _bisect(piece: MultiInterval):
+def _bisect(piece: MultiInterval, below_one: bool = False):
     """the piece split at `_magnitude_split`, else at `_point_in`, the point going left; None if one
     side would be empty"""
-    point = _magnitude_split(piece)
+    point = _magnitude_split(piece, below_one)
     if point is None or point not in piece:
         point = _point_in(piece)
     if point is None:
@@ -266,6 +283,11 @@ def solve(F, xs, *, tol=1e-10, max_steps=10_000) -> Tuple[RootBox, ...]:
     arguments and returns a list or a tuple of n `Dual`s, sets or numbers, using the library's ops
     as `newton`'s `f` does; it is called with decorated `Dual`s, with boxes of
     `OutwardMultiInterval`s and with points. n == 1 is `newton`, exactly
+
+    `tol` is an **absolute** width, of a box's widest component, as `newton`'s is: a zero at a scale
+    below it can come out unproved. `max_steps` counts **boxes** taken off the stack, not calls of
+    `F`: a box costs n + 2 calls (on the box, n decorated passes, at a point), one if it is pruned,
+    and one output unproved up to n + 2 more (its simplest point, the inflated krawczyk test)
 
     a branch and prune like `newton`'s, per box: **prune by range** (`F` on the box; a component of
     the value without 0 drops it); **a point** is unique iff `F` is exactly `[0]` there; **the step**,

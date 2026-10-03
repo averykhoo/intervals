@@ -507,3 +507,47 @@ def test_allen_relations_refuses_unnormalized_operands():
         with pytest.raises(AssertionError):
             relations.allen_relations(x, y)
     assert relations.allen_relations(b, b) == {EQUALS}
+
+
+def _relations_over_cut_tuples():
+    """every public function of `relations` taking two cut tuples, found by inspection, so a new one
+    is covered by the rule below without being listed"""
+    import inspect
+    return sorted(name for name, f in vars(relations).items()
+                  if inspect.isfunction(f) and f.__module__ == relations.__name__ and not name.startswith('_')
+                  and list(inspect.signature(f).parameters) == ['a', 'b'])
+
+
+@pytest.mark.skipif(not __debug__, reason='the check is an assert, as MultiInterval._wrap')
+@pytest.mark.parametrize('name', _relations_over_cut_tuples())
+def test_every_relation_asserts_normalized_operands(name):
+    """
+    one rule (owner, 2026-10-03, references/owner-questions-2026-10-03/allen.md (b)): every relation
+    over cut tuples asserts normalized operands under `__debug__`, not `allen_relations` alone (whose
+    wrong answer would be silent and partial; the others' read the first and last cut as the ends).
+    `allen` reads two pieces, so a piece out of order is what it refuses; `allen_matrix`, the plain
+    loop, takes pieces in any order (`::test_allen_matrix_does_not_need_normalized_operands`) and
+    refuses a piece out of order through `allen`
+    """
+    f = getattr(relations, name)
+    good = P('[0, 1]')._cuts
+    unordered = P('[3, 4]')._cuts + good       # two pieces out of order
+    reversed_piece = P('[3, 4]')._cuts[::-1]   # one piece, its cuts swapped
+    bad = (reversed_piece,) if name in ('allen', 'allen_matrix') else (unordered, reversed_piece, list(good))
+    for x in bad:
+        for args in ((x, good), (good, x)):
+            with pytest.raises(AssertionError):
+                f(*args)
+    f(good, good)  # and the normalized call answers
+    if name == 'allen_matrix':
+        assert f(unordered, good) == ((AFTER,), (EQUALS,))
+
+
+def test_the_relations_are_the_ones_listed():
+    """the inspection above finds every relation the module docstring's rule covers (so a renamed
+    signature cannot drop one silently)"""
+    assert _relations_over_cut_tuples() == sorted([
+        'adjoins', 'after', 'allen', 'allen_matrix', 'allen_relations', 'before', 'certainly_after',
+        'certainly_before', 'certainly_equal', 'contains', 'disjoint', 'eq_pointwise', 'equals', 'ge', 'gt',
+        'le', 'lt', 'overlaps', 'possibly_after', 'possibly_before', 'possibly_equal', 'strictly_less',
+        'weakly_less', 'within'])

@@ -184,6 +184,57 @@ def test_evaluation_budgets(monkeypatch):
     assert _evaluations(monkeypatch, lambda x: x ** 2 * (x - 3), M(-6, 6)) <= 80
 
 
+@pytest.mark.parametrize('sign', [1, -1])
+def test_the_magnitude_split_goes_below_one(monkeypatch, sign):
+    """
+    owner 2026-10-04 (references/owner-questions-2026-10-03/solver.md §10.2): newton splits a piece
+    by its exponents below 1 in magnitude too, both signs. `x ** 2 - 1e-40` on `[-1, 1]`: the first
+    step leaves `[5e-41, 1]` and its mirror, which halving by width took 132 calls of f to bring to
+    tol, both zeros unproved and a million times too wide; the split takes 28 calls and proves both
+    (2026-10-04). a piece from 0 to at most 1 has no exponent to split at and is left alone
+    """
+    f = lambda x: x ** 2 - Fraction(1, 10 ** 40)  # noqa: E731
+    roots = newton(f, M(-1, 1))
+    assert [r.unique for r in roots] == [True, True]
+    assert sign * Fraction(1, 10 ** 20) in roots[(1 + sign) // 2].interval
+    assert all(r.interval.wid() < 1e-30 for r in roots)
+    assert _evaluations(monkeypatch, f, M(-1, 1)) <= 25
+    split = solver._magnitude_split
+    piece = M(sign * 5e-41, sign) if sign > 0 else M(-1, -5e-41)
+    point = split(piece, below_one=True)
+    assert point in piece and point not in (piece.inf, piece.sup) and split(piece) is None
+    assert split(M(0, sign) if sign > 0 else M(-1, 0), below_one=True) is None
+    assert split(M(sign * 0.5, sign) if sign > 0 else M(-1, -0.5), below_one=True) is None  # within 16
+
+
+@pytest.mark.parametrize('sign', [1, -1])
+def test_a_wide_piece_within_tol_is_still_stepped(sign):
+    """the split below 1 must not cost a proof the step made: a piece wide in magnitude but already
+    within tol gets the newton step before it is output, so the small zero of `(x - 3)(x - 1e-25)`
+    on `[1e-30, 4]` is proved unique, as before the split (2026-10-04: unproved `[1e-30, 3.6e-15]`
+    without the step)"""
+    small = sign * Fraction(1, 10 ** 25)
+    x = M(1e-30, 4) if sign > 0 else M(-4, -1e-30)
+    roots = newton(lambda t: (t - 3 * sign) * (t - small), x)
+    assert [r.unique for r in roots] == [True, True]
+    assert all(r.interval.wid() < 1e-30 for r in roots)
+    assert any(small in r.interval for r in roots)
+
+
+def test_a_piece_wider_than_the_doubles():
+    """HANDOFF item newton-width: the halving test was `width <= piece.wid() / 2`, int true division,
+    which raised OverflowError on an exact piece wider than the doubles at the first step that
+    narrowed without proving (`[10 ** 400, 10 ** 401]` here, the first step); now `2 * width <=
+    piece.wid()`, as `solve`'s. (more steps are slow: the exact ends grow, HANDOFF 2026-09-28)"""
+    f = lambda x: x ** 2 - 9 * 10 ** 800  # noqa: E731
+    x = M(10 ** 400, 10 ** 401)
+    first = newton(f, x, max_steps=1)
+    assert len(first) == 1 and not first[0].unique and 3 * 10 ** 400 in first[0].interval
+    assert first[0].interval.wid() < x.wid()
+    proved = newton(f, x, max_steps=3)
+    assert len(proved) == 1 and proved[0].unique and 3 * 10 ** 400 in proved[0].interval
+
+
 def test_tol_stops_refining():
     """f = 0: every point is a zero, so only tol stops the bisection (the split points are exact
     zeros, the pieces between them unproved)"""

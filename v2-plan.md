@@ -188,7 +188,9 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   per piece of `A` and a column per piece of `B`, both in order (`A.allen_matrix(B)[i][j] is
   A.pieces[i].allen(B.pieces[j])`). `A.allen_relations(B)` is the `frozenset` of the relations
   holding between some piece of `A` and some piece of `B`: allen's algebra reasons over relation
-  sets (the 2026-08-16 note). every entry is `allen()` of a cut pair, so exactly one of the 13 per
+  sets (the 2026-08-16 note), but this set is extensional (each relation in it holds between some
+  pair), not the algebra's disjunction, though it has that type (the docstrings say so, owner
+  2026-10-03). every entry is `allen()` of a cut pair, so exactly one of the 13 per
   pair (JEPD per entry, which is why it goes per piece) and no new divergence against 1788: the
   cut-based relations' 5 keys stand, a point never OVERLAPS, `[1, inf)` MEETS `[inf]`
 * **an empty operand has no pairs**: `EMPTY.allen_matrix(B)` is `()`, `A.allen_matrix(EMPTY)` is
@@ -205,7 +207,11 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
 * **the set view needs normalized operands; the matrix does not.** on out-of-order pieces the sweep
   would miss entries, so `relations.allen_relations` asserts `kernel.is_valid` of both cut tuples
   under `__debug__`, as `MultiInterval._wrap` does (the methods cannot reach it: every
-  `MultiInterval` is valid). `relations.allen_matrix` takes any cut pairs in any order
+  `MultiInterval` is valid). `relations.allen_matrix` takes any cut pairs in any order. one rule
+  for all of `relations.py` (owner, 2026-10-03): every function over cut tuples asserts its operands
+  normalized (`relations._normalized`), `allen` its two pieces; `allen_matrix` alone does not, and
+  checks each piece through `allen` (`tests/test_relations.py::test_every_relation_asserts_normalized_operands`,
+  over every public two-operand function found by inspection)
 * within one set the pieces never meet (`kernel.normalize` merges pieces that touch), so
   `A.allen_matrix(A)` is EQUALS on the diagonal, BEFORE above it and AFTER below it. `adjoins`
   stays a fact about the sets' ends: `[0, 1) | [3, 5]` has a piece that MEETS `[1, 2]`, and does
@@ -314,7 +320,14 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   operand first. int and Fraction are exact and never rounded. `mod`, `floordiv`, `fma` and the step
   functions have no hook: they compute exactly and round once (`rounding.round_piece`), to nearest
   or outward by type. poles never go through the hook, and a float piece that rounding squeezes to
-  one point keeps that point, closed
+  one point keeps that point, closed. **isotone within one grid** (Q19, owner 2026-10-03): `A ⊆ B`
+  gives `f(A) ⊆ f(B)` in the outward class when every float piece of `A` lies in a float piece of
+  `B` (an exact `A` inside anything included); across grids, a float piece of `A` inside an exact
+  piece of `B`, `f(A)` lies within the tightest double cover of `f(B)`, not always within `f(B)`
+  (`B` is computed exactly, `A`'s result rounded: up to an ulp out at each non-double value; the
+  oracle is `tests/test_steps.py::_assert_isotone`). no typing rule by number type can make it
+  isotone, only one grid; `OutwardMultiInterval.rounded()` puts a set on the double grid, outward
+  (`rounding.float_cuts`), so a user who needs the theorem verbatim rounds the inputs first
 * **flags at rounded ends**: outward, attainment is decided on exact values (an `OUTWARD`
   descriptor's `fn` is exact too; pown's, past that limit, is a marker equal to nothing, which is
   the exact value's answer, `ops._NOT_A_DOUBLE`), so an end that directed rounding moved is **open** — nothing
@@ -322,7 +335,12 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   double already keeps its flag. to nearest, flags are conservative, not a promise (the suite checks
   the nearest mode against the closure). an irrational value of an exact operand is its tightest
   float enclosure, open at both ends, in both classes (`sqrt([2])`): an exact operand never loses
-  its true value
+  its true value. to nearest, a float end's nearest double may lie past an exact end of the same
+  piece; the piece is then the one between the two values, each keeping its flag (Q20, owner
+  2026-10-03: `rootn((10 ** -30, 1.0000000000000003e-30], 5)` is `[1e-06, 1/1000000)`), the rule the
+  applicator has always used for `+ - * /`, whose ends are the least and greatest corner values
+  (`MultiInterval(1 - Fraction(1, 10 ** 30), 1.0) * Fraction(1, 3)` is `[0.3333333333333333,
+  333333333333333333333333333333/1000000000000000000000000000000]`, before `912558b` too)
 * **power** (D11, built at M13d 2026-09-26; `intervals/multi_interval.py::MultiInterval.__pow__`,
   `::__rpow__`): a number exponent with an integral value (int, or a float or Fraction equal to one;
   never bool) is 1788's **pown**, over every base, as python's numbers do (`[-3, 1] ** 2.0` =
@@ -611,7 +629,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
       emitted is `signal PossiblyUndefinedOperation`. the constructors have no interval operand, so
       they are not in the outward pass. `::test_signals_are_checked` fails if an op whose vectors
       carry a signal is not in `SIGNALLED`
-    * residual divergence table: degenerate infinities, domain-clipped functions, decoration
+    * residual divergence table: degenerate infinities, decoration
       expectations, (added at M12) cut-based relations, and (added at M13f, approved with D13)
       **cancellation as a Minkowski difference**: where 1788's `cancelMinus`/`cancelPlus` answer
       entire as "no answer", ours is the real set of the fitting `x`, and for `[empty] [empty]` the
@@ -804,7 +822,8 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   answers over the library and changes nothing in it. every set is computed by the library
   (`OutwardMultiInterval`, and `DecoratedInterval` over one); the layer converts in by 1788's input
   rule and out by its output rule, and has its own logic only where 1788 *defines* another answer
-  than the library's set (cancellation, overlap, `mulRevToPair`'s decoration). no library module
+  than the library's set (cancellation, overlap, `mulRevToPair`'s decoration, NaN for the numbers
+  of the empty set and a reduction with no value). no library module
   was edited. not exported from `intervals` and not imported by it: `from intervals import
   ieee1788`
 * **one class for both flavours**: `ieee1788.Interval(lo, hi, decoration)`, immutable and hashable,
@@ -857,10 +876,13 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   `rootn(x, 0)` raises `ValueError` for every `x`, the empty set included (the library's rule,
   "rootn(n) for every int n other than 0", kept; no vector has degree 0), while `pown_rev(c, 0)`
   answers (entire or empty), as the library's does;
-  `mid`, `rad`, `wid`, `mag`, `mig`, `mid_rad` of the empty set raise `ValueError` (D9's answer
-  where 1788 says NaN; the default built, pending Q13 (b)). booleans are of the interval parts;
-  `is_member(nan, x)` and `is_member(±inf, x)` are false. the reductions are the library's own
-  objects (`ieee1788.sum_ is intervals.sum_`; `sum_square` is `sum_sqr`)
+  `mid`, `rad`, `wid`, `mag`, `mig` of the empty set are `nan` and `mid_rad` `(nan, nan)`, 1788's
+  answer, where the library raises `ValueError` (D9 stands for the library; Q13 (b), owner
+  2026-10-03). booleans are of the interval parts;
+  `is_member(nan, x)` and `is_member(±inf, x)` are false. the reductions are the library's
+  (`sum_square` is `sum_sqr`) wrapped to answer 1788's `nan` where the library raises for a value
+  that has none (a nan operand, `inf + -inf`, `0 * inf`); a bad call (a rounding that is none of the
+  three, `dot` of different lengths, a non-real operand) still raises
 * **names**: 1788's, transliterated to snake_case mechanically (`mulRevToPair` ->
   `mul_rev_to_pair`), a trailing underscore on a python builtin (`abs_`, `min_`, `max_`, `pow_`,
   `sum_`); `NAMES` maps 1788's own spelling to each function: 104 names, 1788's 102 and
@@ -877,19 +899,20 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   none is the obvious one. `repr` evaluates back (`Interval(float('-inf'), 2.0)`); `str` is a 1788
   literal with python's shortest decimal of each end (`[0.1, 2.0]_com`, `[entire]`, `[empty]_trv`),
   read back by `text_to_interval` as an enclosure within one double at each end.
-  `__array_ufunc__ = None`, the package's rule for every type when the layer was designed; since
-  M16d the three core classes have numpy's hook ("numpy" below) and the layer's `Interval` still
-  refuses numpy: the rule for the layer is owed (`HANDOFF.md` "still owed")
+  `__array_ufunc__ = None`: the layer's `Interval` is a scalar to numpy, numpy's scalars work
+  through the operators (`np.float64(2) + x`, the reflected dunders) and ufuncs refuse
+  (`np.sqrt(x)` is a `TypeError`), while the three core classes have numpy's hook ("numpy" below);
+  kept for 2.0 (layer-numpy, owner 2026-10-03), a hook of the layer's own being additive later
 * **conformance: a third pass** (`tests/itf1788/test_ieee1788.py`) runs all 9542 vectors through
   the layer and compares **exactly** (no hull, no rounding, no input rule): an interval as its
   float ends and decoration after asserting 1788's form, a pair member by member, numbers as
   floats, booleans, `Overlap` and `Decoration` values as they are. operands are the literals'
   nearest doubles in `Interval(lo, hi, d)`, strict (the C++ tests' convention, not 1788's text
   reading); a `Fraction` becomes its float and an `int` stays an `int`. warnings are recorded and
-  every one must be a `PossiblyUndefinedOperationWarning`; the readings, in order: an
+  every one must be a `PossiblyUndefinedOperationWarning`; the two readings: an
   `UndefinedOperationError` is `signal UndefinedOperation`, a `PossiblyUndefinedOperationWarning`
-  `signal PossiblyUndefinedOperation`, then a `ValueError` from a number or a reduction is `NaN`
-  only where the vector expects `NaN`. its rows are the adapter's under three categories only, taken
+  `signal PossiblyUndefinedOperation`. no exception is read as `NaN` (since Q13 (b) the layer answers
+  `nan` itself; a `ValueError` fails its vector). its rows are the adapter's under three categories only, taken
   from the adapter's lists by reason: **94 keys, 104 vectors** (76 no NaI, 11 tighter than the
   vector, 7 exact parsing; 2026-09-28). the adapter's other rows (degenerate infinities, cut-based
   relations, cancellation as a Minkowski difference, decoration expectations incl. Q9's 52 pair
@@ -938,9 +961,18 @@ of H3 is under "later" below.
   proved zero is narrowed until a step no longer narrows it; else bisection at the midpoint, or,
   on a piece spanning more than a factor of 16 in magnitude, at 0, ±1 or ±2 ** the mean binary
   exponent, with no newton step (so `[-inf, inf]` reaches the scale of its zeros in about a dozen
-  splits: `x ** 2 - 2` on it in 57 evaluations, measured 2026-09-27); an unproved piece is output
+  splits: `x ** 2 - 2` on it in 57 evaluations, measured 2026-09-27); below 1 in magnitude too
+  (owner 2026-10-04: `x ** 2 - 1e-40` on `[-1, 1]` from 132 calls of f, both zeros unproved, to 28,
+  both proved), except a piece from 0 to at most ±1, and a piece already within `tol` still gets the
+  step (the small zero of `(x - 3)(x - 1e-25)` stays proved). `solve` keeps the split above 1 only:
+  gauss-seidel leaves components like `(-1, -1e-300)`, which the split below 1 would take through
+  every exponent in each coordinate (the circle on `[-1e300, 1e300]²`, 103 calls, 3433 with it;
+  2026-10-04). an unproved piece is output
   once its width is at most `tol` or it cannot be split, and past `max_steps` the whole stack is
-  output as it is (still every zero enclosed)
+  output as it is (still every zero enclosed). `tol` is absolute (a zero at a scale below it can
+  come out unproved) and `max_steps` counts pieces (boxes in `solve`), not calls: at most 2 calls a
+  piece, n + 2 a box, and up to 2 (newton) or n + 2 (solve) more where one is output unproved
+  (the docstrings)
 * `f` takes one argument and uses the library's ops on it, with numbers as its constants (it is
   called with a decorated `Dual`, which refuses a bare set, and with a point as an
   `OutwardMultiInterval`). the library's warnings inside `f` are silenced: a piece the solver makes
