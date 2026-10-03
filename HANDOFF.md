@@ -268,6 +268,7 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
 
 ## still owed
 
+* fuzz gaps a census left (2026-10-03; the rest of its shortlist is built): no @given test for `DecoratedInterval.log(base)` (random base), the decorated reflected ops and divmod (examples only), the slow decorated functions (pow, hypot, trig) on float operands, exact-operand equality of the outward and nearest classes for about 25 more functions, `Builder` (low value)
 * the run ledger (2026-10-01) knows local runs only: a push whose src is unchanged since `origin/master`
   trusts that master's fuzz run was green on CI (every push is watched to the end), it does not check.
   count floors (zanzibar's `MIN_TESTS_ALL`) are recorded in each row, not enforced: a gate that
