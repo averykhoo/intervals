@@ -29,8 +29,10 @@ nobody reads CI email. a push is only done by a session that stays to see its ru
    x10, every test, so it covers the gate; 27795 in 53 s + 5611 in 4899 s, about 83 min on this
    laptop, 2026-09-29 at `97d9824`) unless a green x10 run on this source is already recorded; the
    READMEs' doctests if only a README changed; nothing if only markdown or `references/` changed
-   since `origin/master` (owner, 2026-09-30: docs skip the fuzz). push only if it exits 0 (its last
-   step is `tools/gate.py status --require push`).
+   since `origin/master` (owner, 2026-09-30: docs skip the fuzz); and the whole suite on the forced
+   gmpy2 backend (`gate:gmpy2`, about 13 min, 2026-10-04) when a file of `tools/gate.py::BACKEND_FILES`
+   changed since the base (owner, 2026-10-03: Q16(e); CI's `gate-gmpy2` job runs it on every push).
+   push only if it exits 0 (its last step is `tools/gate.py status --require push`).
 2. **push** `master` (pushing still needs the owner's go).
 3. **after**: a babysitter agent runs `tools/ci_watch.sh <sha>` in the background: it waits for both
    workflows of the commit (`ci`, about 12 min; `fuzz`, about an hour), prints each result, and for
