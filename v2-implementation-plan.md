@@ -4331,6 +4331,34 @@ exact among float operands, `abs(M(-1.0, 1.0))` is `[0, 1.0]`; trunc's non-negat
 `parse_value('+-5')` is 5 and `'1 2'` is 12; `tests/test_extreme_floats.py::_float_samples` raises
 `OverflowError` on an exact piece wider than the doubles.
 
+### fuzz-steps-isotone: outward isotonicity across number types (done 2026-10-03)
+
+**found** by a local x50 fuzz run (2026-10-03, replayed by the session): `tests/test_steps.py::test_isotone[round]`
+and `[round_ties_away]`, in the outward class. `round_ties_away((0.0, 1/10), 1)` = `{ [0.0] ,
+(0.09999999999999999, 0.1) }` is not inside `round_ties_away((-inf, 1/10), 1)` = `(-inf, 1/10]`; and `round((-1.0,
+-1/20), 1)`, which lists `(-0.1, -0.09999999999999999)`, is not inside `round((-inf, -1/20), 1)` = `(-inf, -1/10]`.
+
+**diagnosis**: the test, not the library. the session's lead was "the hull path keeps an exact end while the listed
+path rounds"; checked, `steps.step` rounds a hull outward too, for a float piece. B's piece has no finite float end
+(±inf is exact, `rounding.is_float`), so the outward class computes f(B) exactly, as its contract says
+(`tests/test_outward.py`: "on exact operands it is the same as MultiInterval"), while A's piece has a float end, so
+its values that are not doubles are listed as the open gap around them. each is within the contract; together
+`A ⊆ B` does not give `f(A) ⊆ f(B)`, and no rule by number type can make it: an exact listed `1/10` in f(B) cannot
+hold any rounding of A's `1/10`. hulls play no part: `round([0.0, 0.25], 1)` against `round([-1, 3/10], 1)` and
+`ceil([2.0 ** 53, 2.0 ** 53 + 2])` against `ceil([2 ** 53 - 1/2, 2 ** 53 + 3])` fail the same way with everything
+listed, and outward `+` too: `O([1.0, 2]) + 1/3` = `(1.3333333333333333, 7/3]` is not inside `O([1 - 10 ** -30, 2])
++ 1/3`. every other isotonicity property in `tests/` runs on exact operands. the lead's fix (round an outward hull
+whatever the piece) turns `tests/test_outward.py::test_exact_operands_give_the_same_set[round]`,
+`[round_ties_away]` and `tests/test_steps.py::test_hull_past_the_cap[round]`, `[round_ties_away]` red.
+
+**fix and pins**: `test_isotone`'s check (`_assert_isotone`) keeps `f(A) ⊆ f(B)` in the outward class where each
+float piece of A lies in a float piece of B (outward rounding is monotone, and an exact value lies in its own open
+gap), and elsewhere checks `f(A) ⊆` the tightest double-ended cover of f(B) (`_cover`), which the contract does
+give. pins: `tests/test_steps.py::test_isotone_float_piece_in_an_exact_one`, the two fuzz rows and the two listed
+ones (an `@example` cannot feed `st.data()`), each also asserting outward f(B) equals MultiInterval's. sabotage
+(2026-10-03): the old check, all four rows red; the lead's fix, rows 1-2 red (and the four tests above); outward
+listing rounded to nearest, `test_isotone[round_ties_away]` and rows 1 and 3 red. the library is unchanged.
+
 ### run ledger: what has run on this code (done 2026-10-01)
 
 **why**: the owner, 2026-10-01: "i need some machinery to know whats run and not on the current code ...

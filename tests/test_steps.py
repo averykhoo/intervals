@@ -15,7 +15,9 @@ the greatest; sign never hulls. and the laws of a pointwise image where nothing 
 isotone, distributing over unions, idempotent. two library bugs they found are fixed and pinned
 (M14-breadth, 2026-10-02): the outward class's floor, ceil and trunc rounded their values to nearest
 (`test_outward_lists_what_no_double_holds`), and the cap counted a value two pieces share twice
-(`test_the_cap_counts_distinct_values`).
+(`test_the_cap_counts_distinct_values`). isotone holds in the outward class only where each float
+piece of A lies in a float piece of B; a float piece inside an exact one gets f(A) inside the
+tightest double-ended cover of f(B) (fuzz-steps-isotone, 2026-10-03: a test oracle, not the library).
 """
 import math
 import sys
@@ -587,15 +589,66 @@ def test_the_cap_counts_distinct_values(name, text):
 def test_isotone(name, data):
     """
     A ⊆ B gives f(A) ⊆ f(B) unless f(A) is a hull: in the exact class on exact operands, and in the outward class on
-    float and mixed ones (to nearest it cannot hold: an exact piece of A keeps a value B's float piece rounds)
+    float and mixed ones where each float piece of A lies in a float piece of B (to nearest it cannot hold: an exact
+    piece of A keeps a value B's float piece rounds). a float piece of A inside an exact piece of B gets only
+    f(A) ⊆ the tightest double-ended cover of f(B): B's piece is exact, so the outward class computes it exactly
+    (as MultiInterval), while A's lists each value that is not a double as the open gap around it
+    (`test_isotone_float_piece_in_an_exact_one`)
     """
     ndigits = _ndigits(data, name)
     b = data.draw(float_operands(ndigits).filter(bool), label='b')
     a = intersection(b, data.draw(cut_tuples(), label='c')) or normalize([next(pairs(b))])
+    _assert_isotone(name, ndigits, a, b)
+
+
+def _assert_isotone(name, ndigits, a, b):
     for cls, (sub, sup) in ((MultiInterval, (_exact_cuts(a), _exact_cuts(b))), (OutwardMultiInterval, (a, b))):
         fa, a_hulled = _call(cls, name, sub, ndigits)
         fb, _ = _call(cls, name, sup, ndigits)
-        assert a_hulled or is_subset(fa, fb), (cls.__name__, show(sub), show(sup), show(fa), show(fb))
+        if a_hulled:
+            continue
+        if cls is OutwardMultiInterval and not _float_pieces_in_float_pieces(sub, sup):
+            fb = _cover(fb)
+        assert is_subset(fa, fb), (cls.__name__, show(sub), show(sup), show(fa), show(fb))
+
+
+def _is_float_piece(p) -> bool:
+    return _finite_float(p[0]) or _finite_float(p[2])
+
+
+def _float_pieces_in_float_pieces(a, b) -> bool:
+    """each piece of a with a finite float end lies in a piece of b with one (b ⊇ a, so each lies in one)"""
+    def cuts(p):
+        return piece(p[0], p[2], p[1], p[3])
+    return all(any(_is_float_piece(q) for q in pieces(b) if is_subset(cuts(p), cuts(q)))
+               for p in pieces(a) if _is_float_piece(p))
+
+
+def _cover(cuts):
+    """the tightest double-ended cover: each end that is not a double moved to the next double outward, and opened"""
+    return normalize(_rounded_hull(*p, outward=True) for p in pieces(cuts))
+
+
+@pytest.mark.parametrize('name, ndigits, a, b', [
+    ('round_ties_away', 1, '(0.0, 1/10)', '(-inf, 1/10)'),  # x50 fuzz, 2026-10-03: B's hull keeps 1/10
+    ('round', 1, '(-1.0, -1/20)', '(-inf, -1/20)'),  # x50 fuzz, 2026-10-03
+    ('round', 1, '[0.0, 0.25]', '[-1, 3/10]'),  # nothing hulled: f(B) lists 1/10 and 1/5 exactly
+    ('ceil', None, '[9007199254740992.0, 9007199254740994.0]', '[18014398509481983/2, 9007199254740995]'),
+])
+def test_isotone_float_piece_in_an_exact_one(name, ndigits, a, b):
+    """
+    the x50 fuzz (2026-10-03) found test_isotone claiming f(A) ⊆ f(B) in the outward class for a float piece of A
+    inside an exact piece of B: `round_ties_away((0.0, 1/10), 1)` = { [0.0] , (0.09999999999999999, 0.1) } is not
+    inside `round_ties_away((-inf, 1/10), 1)` = (-inf, 1/10]. the library is right and the oracle was wrong: B has
+    no finite float end, so the class computes f(B) exactly, as MultiInterval does (tests/test_outward.py: "on
+    exact operands it is the same as MultiInterval"), and no rounding of A's values can fit inside B's exact 1/10.
+    nothing here is about hulls (rows 3 and 4 list everything), and outward `+` is the same: `O([1.0, 2]) + 1/3`
+    = (1.3333333333333333, 7/3] is not inside `O([1 - 10 ** -30, 2]) + 1/3`. what does hold: f(A) is inside the
+    tightest double-ended cover of f(B), and f(B) is the exact class's
+    """
+    a, b = parse(a), parse(b)
+    _assert_isotone(name, ndigits, a, b)
+    assert _call(OutwardMultiInterval, name, b, ndigits) == _call(MultiInterval, name, b, ndigits)
 
 
 @pytest.mark.parametrize('name', STEPS)
