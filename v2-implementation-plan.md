@@ -4359,6 +4359,35 @@ ones (an `@example` cannot feed `st.data()`), each also asserting outward f(B) e
 (2026-10-03): the old check, all four rows red; the lead's fix, rows 1-2 red (and the four tests above); outward
 listing rounded to nearest, `test_isotone[round_ties_away]` and rows 1 and 3 red. the library is unchanged.
 
+### fuzz-mixed-points: two oracles that assumed a float stays a float (done 2026-10-03)
+
+**found** by the prepush's x10 fuzz at `e5cb396` (2026-10-03, `fuzz-x10:rest`, replayed from the local database):
+`tests/test_applicator.py::test_rounding_hook_sees_every_finite_float_corner_and_nothing_else[mul]` on `(-inf, -1.0)
+* [0, 0.0]` and `[abs]` on `[2, 2.0]` and `[1, 1.0]`; `tests/test_ops_properties.py::test_sound_float_identity_rounding
+[sub]` on `(0, 5.0533628082320924e-138) - (-inf, 1/5]`. the same run's other 27 failures and 24 errors were the
+laptop, not the code: every one a child process or `git` that exited `3221225794` (`0xC0000142`, a DLL failing to
+initialise, under another session's concurrent hypothesis run), and the ledger read the run as MOVED.
+
+**diagnosis**: the tests, not the library. (1) a one-point piece whose cuts differ in type is evaluated at its exact
+low cut: `abs` of `[2, 2.0]` calls no hook and gives `[2]`, `(-inf, -1.0) * [2, 2.0]` rounds the corner `(-1.0, 2)`
+and gives `(-inf, -2.0)`, in both classes; the values are right, the type quirk of HANDOFF row m14b-open. the hook
+oracle allowed it only at a split point (`abs` of `[0, 0.0]`, M14-breadth). (2) python computes `2.5266814041160462e-138
+- Fraction(1, 5)` as `float(1/5)` then a float difference, -0.2, below the exact open end -1/5 that the exact class
+computes from the corner `0 - 1/5`; no exact end can stop a rounded value, so "python's float value is in the result"
+holds only next to float corners.
+
+**fix and pins**: the hook oracle (`check_rounding_hook`) lets a float corner coordinate be read as an equal exact
+twin (`exact_twins`: the exact end of a mixed one-point piece, or a split point), the corner then seen with the twin
+or, if no float is left, not at all; the identity-rounding oracle (`check_float_identity_rounding`) allows a python
+float outside the result only where the pair's exact value is inside. pins:
+`tests/test_applicator.py::test_rounding_hook_reads_a_mixed_point_as_its_exact_twin` (the three fuzz rows, the earlier
+`[0, 0.0]`, and `(-inf, -1.0) * [2, 2.0]` off the split point) and
+`tests/test_ops_properties.py::test_float_identity_rounding_past_an_exact_end` (asserting the old oracle's claim
+fails on it). sabotage (2026-10-03, in process): the old hook oracle, 4 of the 5 rows red (`[0, 0.0]` was its own
+exemption); the applicator skipping the hook on every negative float, the new hook oracle red on `mul`, `abs` and
+the mixed-point `mul` (`add` takes the monotone fast path, outside that clause); the `sub` result moved to `(-1/10,
+inf]` or emptied, the new identity oracle red. the library is unchanged.
+
 ### run ledger: what has run on this code (done 2026-10-01)
 
 **why**: the owner, 2026-10-01: "i need some machinery to know whats run and not on the current code ...

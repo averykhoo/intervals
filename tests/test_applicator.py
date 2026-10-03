@@ -578,6 +578,49 @@ def corners(desc, operands):
 mixed_cut_tuples = st.one_of(float_cut_tuples, cut_tuples(max_pieces=3))
 
 
+def exact_twins(desc, cuts):
+    """
+    the exact values a float end of `cuts` may be read as: the exact end of a one-point piece whose cuts differ in
+    type (`[2, 2.0]` is read at its low cut, 2), and the split points (`[0, 0.0]` at 0)
+    """
+    points = {x for lo, _, hi, _ in kernel.pieces(cuts) if lo == hi for x in (lo, hi) if not isinstance(x, float)}
+    return points | set(desc.split_points)
+
+
+def read_as(c, twins):
+    """the typed corners `c` may be evaluated as: each float coordinate as itself or as an equal exact twin"""
+    return set(product(*([(t, x)] + [(type(e), e) for e in ts if t is float and e == x] for (t, x), ts in zip(c, twins))))
+
+
+def check_rounding_hook(desc, operands):
+    """the property of test_rounding_hook_sees_every_finite_float_corner_and_nothing_else on one draw"""
+    seen = {-1: [], 1: []}
+
+    def hook(direction):
+        def rounded(*args):
+            seen[direction].append(args)
+            return desc.fn(*args)
+        return rounded
+
+    apply(desc._replace(rounded=(hook(-1), hook(1))), operands)
+    assert sorted(map(repr, seen[-1])) == sorted(map(repr, seen[1]))
+    due = {typed(c) for c in corners(desc, operands) if all(operands) and desc.fn(*c) is not None
+           and all(not math.isinf(x) for x in c) and any(isinstance(x, float) for x in c)}
+    for args in seen[-1]:
+        assert all(not math.isinf(x) for x in args) and any(isinstance(x, float) for x in args), args
+        assert typed(args) in due, (args, operands)
+    if desc.monotone is None:
+        # a float end that equals an exact twin can be read as the twin (a one-point piece whose cuts differ in
+        # type, a split point): then the hook sees the corner with the twin, or nothing if no float is left
+        # (`abs` of `[0, 0.0]`, fuzz x10, 2026-10-02; `abs` of `[2, 2.0]`, `(-inf, -1.0) * [0, 0.0]`, fuzz x10,
+        # 2026-10-03; the type quirk of HANDOFF row m14b-open, no wrong value)
+        got = {typed(args) for args in seen[-1]}
+        twins = [exact_twins(desc, cuts) for cuts in operands]
+        missed = {c for c in due if not any(alt in got or all(t is not float for t, _ in alt)
+                                            for alt in read_as(c, twins))}
+        assert not missed, (missed, operands)
+
+
 @pytest.mark.parametrize('name, desc', ORACLE_OPS + MINMAX_OPS, ids=[name for name, _ in ORACLE_OPS + MINMAX_OPS])
 @settings(max_examples=40, deadline=None)
 @given(data=st.data())
@@ -588,28 +631,23 @@ def test_rounding_hook_sees_every_finite_float_corner_and_nothing_else(name, des
     a recording hook: each call is a corner of a box with a value, every coordinate finite and one a
     float; down and up see the same corners; and without the monotone fast path every such corner is seen
     """
-    seen = {-1: [], 1: []}
+    check_rounding_hook(desc, [data.draw(mixed_cut_tuples, label=f'operand {i}') for i in range(arity(desc))])
 
-    def hook(direction):
-        def rounded(*args):
-            seen[direction].append(args)
-            return desc.fn(*args)
-        return rounded
 
-    operands = [data.draw(mixed_cut_tuples, label=f'operand {i}') for i in range(arity(desc))]
-    apply(desc._replace(rounded=(hook(-1), hook(1))), operands)
-    assert sorted(map(repr, seen[-1])) == sorted(map(repr, seen[1]))
-    due = {typed(c) for c in corners(desc, operands) if all(operands) and desc.fn(*c) is not None
-           and all(not math.isinf(x) for x in c) and any(isinstance(x, float) for x in c)}
-    for args in seen[-1]:
-        assert all(not math.isinf(x) for x in args) and any(isinstance(x, float) for x in args), args
-        assert typed(args) in due, (args, operands)
-    if desc.monotone is None:
-        # a float corner at a split point can be read as the split point, an int, and then nothing rounds
-        # (`abs` of `[0, 0.0]`: fuzz x10, 2026-10-02; the type quirk of HANDOFF row m14b-open, no wrong value)
-        at_split = {c for c in due if all(x in desc.split_points for t, x in c if t is float)}
-        got = {typed(args) for args in seen[-1]}
-        assert due - at_split <= got, (due - at_split - got, operands)
+@pytest.mark.parametrize('desc, operands', [
+    (ops.ABS, [parse('[0, 0.0]')]),  # fuzz x10, 2026-10-02: at the split point
+    (ops.ABS, [parse('[2, 2.0]')]),  # fuzz x10, 2026-10-03: read as the exact 2
+    (ops.ABS, [parse('[1, 1.0]')]),  # fuzz x10, 2026-10-03
+    (ops.MUL, [parse('(-inf, -1.0)'), parse('[0, 0.0]')]),  # fuzz x10, 2026-10-03
+    (ops.MUL, [parse('(-inf, -1.0)'), parse('[2, 2.0]')]),  # off the split point
+], ids=['abs-0', 'abs-2', 'abs-1', 'mul-0', 'mul-2'])
+def test_rounding_hook_reads_a_mixed_point_as_its_exact_twin(desc, operands):
+    """
+    a one-point piece whose cuts differ in type is evaluated at its exact low cut: `abs` of `[2, 2.0]` calls no
+    hook and gives `[2]`, and `(-inf, -1.0) * [2, 2.0]` rounds the corner `(-1.0, 2)`, not `(-1.0, 2.0)`. the
+    value is the same, so this is the type quirk of HANDOFF row m14b-open; the hook property allows it
+    """
+    check_rounding_hook(desc, operands)
 
 
 @pytest.mark.parametrize('name, desc', ALL_OPS, ids=OP_IDS)

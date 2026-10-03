@@ -231,8 +231,18 @@ def test_sound_float_identity_rounding(op, data, rng):
     """
     a = data.draw(cut_tuples(max_pieces=3), label='a')
     b = data.draw(second(op, cut_tuples(max_pieces=3)), label='b')
+    check_float_identity_rounding(op, a, b, sampled_pairs(op, a, b, rng))
+
+
+def check_float_identity_rounding(op, a, b, pairs):
+    """
+    the property of test_sound_float_identity_rounding on the given pairs. python rounds a pair's value, so it can
+    step past an end the op computed exactly: `x - y` of `x` = 2.5e-138 in `(0, 5.1e-138)` and `y` = 1/5 is -0.2 in
+    python (`float(1/5)`, then the float difference), below the exact open end -1/5 of `(0, 5.1e-138) - (-inf, 1/5]`
+    (fuzz x10, 2026-10-03). a value outside the result is allowed only where the pair's exact value is inside
+    """
     result = closed(apply(op, a, b))
-    for x, y in sampled_pairs(op, a, b, rng):
+    for x, y in pairs:
         try:
             values = values_of(op, x, y, a, b)
         except ValueError:
@@ -241,7 +251,24 @@ def test_sound_float_identity_rounding(op, data, rng):
             assert op == 'pow' and b < 0
             continue
         for v in values:
-            assert contains_point(result, v), (x, y, v, show(result))
+            assert (contains_point(result, v)
+                    or all(contains_point(result, w) for w in values_of(op, _exact(x), _exact(y), a, b))), \
+                (x, y, v, show(result))
+
+
+@pytest.mark.parametrize('op, a, b, pair', [
+    # fuzz x10, 2026-10-03: python's -0.2 is below the exact end -1/5; the pair's exact value is inside
+    ('sub', normalize([piece(0, 5.0533628082320924e-138, False, False)]), normalize([piece(-INF, Fraction(1, 5))]),
+     (2.5266814041160462e-138, Fraction(1, 5))),
+])
+def test_float_identity_rounding_past_an_exact_end(op, a, b, pair):
+    """
+    the exact class computes `(0, 5.1e-138) - (-inf, 1/5]` = `(-1/5, inf)` exactly (the corner 0 - 1/5 has no
+    float), and python's float value of an interior pair can round past it, as no exact end can stop
+    """
+    x, y = pair
+    assert not contains_point(closed(apply(op, a, b)), values_of(op, x, y, a, b)[0])  # the old oracle's claim
+    check_float_identity_rounding(op, a, b, [pair])
 
 
 def _exact(x):
