@@ -9,8 +9,15 @@ the open-items table: its record goes in the plan's milestone section, with a on
 session log below; nothing is listed as open and done at once), and list anything skipped as
 "Still owed:".
 
-## banner (2026-10-03)
+## banner (2026-10-04)
 
+* **the owner's answers to Q9-Q20 built (2026-10-04)**: the owner accepted every recommendation of
+  `references/owner-questions-2026-10-03/` (2026-10-03); four streams built them and were merged into `master`
+  (plan §2 "owner-answers"; D27-D29). behaviour changes: pown of exact operands past 2 ** 22 bits is the
+  enclosure, pown to nearest correctly rounded (no libm), hex `repr` past 4300 digits, a method mixing the
+  two classes outward (was a defect), elementwise `==` against an ndarray, `<<`/`>>`, the 1788 layer's
+  `nan` for the empty set's numbers, `OutwardMultiInterval.rounded()`; CI gains a `gate-gmpy2` job. no
+  question is open for the owner
 * **everything pushed, CI and fuzz green (2026-10-03)**: `origin/master` at `912558b`, CI run 37107899644 and fuzz run 37107899636 green. this push carried the CORE-MATH sample, the overnight fuzz additions, two test-oracle fixes (plan §2 "fuzz-mixed-points") and one library fix the fuzz on CI found, a crossed piece in the exact class (plan §2 "fuzz-rootn-crossed"; its semantics are Q20, the owner's to confirm). the CORE-MATH and M14-breadth bullets below are history
 * **CORE-MATH worst cases built (2026-10-02), not pushed**: a gate sample (`tests/test_coremath.py`) and a manual full check (`tools/coremath.py check`; asked for at the end of a session that changed the scalar evaluator, `CLAUDE.md`); the first full check found 0 mismatches in 51M calls. `.scratch/coremath-cache/` is kept on purpose
 * **M14-breadth done (2026-10-02)**: six streams of properties (plan §2 "M14-breadth"); five library bugs it
@@ -85,195 +92,22 @@ session log below; nothing is listed as open and done at once), and list anythin
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
 | 1 | trig-rev-far | a periodic reverse op whose domain piece reaches far from 0 is pure-path slow, then effectively hangs: `tan_rev(MultiInterval.parse('[-40.0, 0.1]'), MultiInterval.parse('(-X, -7.582732456406029]'))` took 1.6 s at X = 1e20, 3.4 s at 1e21, and ran past a 30 s timeout from 1e22 and a 60 s one at 1e300 (2026-09-28 at `7e148a2`, loaded laptop; reproduced by the session: 0.35 s at 1e20, past 30 s at 1e22; a stack sample sat in `reverse.py::_periodic_hull`'s branch walk, in `elementary._atan_rational`). found by M16e's soundness reviewer, whose set-level probe hung past 15 min on `sin_rev`/`tan_rev` with an end at 1e300 or 10**400. the backend declines `k != 0`, so both backends hang alike | not scheduled; measure where the time goes first | `v2-plan.md` "elementary and step functions" (D12's cap for the periodic ones) |
-| 2 | m14b-open | what M14-breadth found and left (2026-10-02): `repr`/`format` of an int past python's 4300-digit `str()` limit raises (`repr(MultiInterval(10 ** 4300))`; decide with Q17); `parse(' ' * 30000 + 'x')` takes 37 s (quadratic tokenizer regex, answer right); number-type quirks with no wrong value (a 0 end exact among float operands: `abs(M(-1.0, 1.0))` is `[0, 1.0]`; trunc's non-negative side ints; a one-point domain clip takes its low cut's type); `parse_value('+-5')` is 5, `'1 2'` is 12; `tests/test_extreme_floats.py::_float_samples` overflows on an exact piece wider than the doubles | the 4300 digits with Q17 (owner); the rest ready, small | plan §2 "M14-breadth" (left open) |
-| 3 | vectors-ext | test data beyond ITF1788 (survey 2026-09-29, `references/test-vector-sources.md`). the 1788 set is complete. decided 2026-10-02 with the owner: outputs computed by MPFR are not worth vendoring (our arb oracle already checks correct rounding); what adds depth is the CHOICE of inputs, so the source is CORE-MATH's worst cases (MIT; they carry blocks of Lefevre's data, whose own files state no licence, §3f), built 2026-10-02 as `tools/coremath.py` and `tests/test_coremath.py` (§3g-§3h; the testing skill). left: (a) `tests/itf1788/itl.py::parse_file` collapses whitespace inside quoted strings, so 40 textToInterval vectors (e.g. `"[ Empty  ]"`) run weaker than upstream; (b) rootn, pown and fma have no CORE-MATH file (glibc's `auto-libm-test-out` rows are the next source, LGPL test data: owner's call); (c) cuinterval's `custom.itl` (26, MIT), probably covered by `test_domain_ends_and_limits` | (a) ready, small; (b) owner's call | `references/test-vector-sources.md`; plan §2 M13a (the vendoring) |
-| 4 | newton-width | `newton`'s `width <= piece.wid() / 2` (`intervals/solver.py`, M15) is int true division, so an exact piece wider than the doubles would raise `OverflowError` once a step narrows without proving; not observed (a linear `f` is proved at the first step; `x ** 2 - 9 * 10 ** 800` over `[10 ** 400, 10 ** 401]` with `max_steps=10` did not finish in 2 minutes, 2026-09-28: the exact fractions grow). `solve`'s copy is already `2 * width <= _width(box)` (M16a review F2) | ready, small | plan §2 M16a review (soundness F2) |
-| 5 | Q6-shift | port v1's `<<` and `>>` (owner 2026-09-26: "for sure"); choose the meaning on real sets when built (`A * 2**n`; `>>` exact or floored). when they land, `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers` derives them and goes red until `numpy_compat.py::_OPERATORS` gains `left_shift`/`right_shift` (M16d) | ready | plan §4 (the `<<`, `>>` row); `v2-plan.md` "2026-09-26 revision: owner answers" |
-| 6 | layer-numpy | the 1788 layer's numpy rule: `ieee1788.Interval` keeps `__array_ufunc__ = None`, commented "the package's rule for every type" (`intervals/ieee1788.py`), which M16d made stale by giving `MultiInterval`, `DecoratedInterval` and `Dual` numpy's hook. the comment is fixed at the merge (2026-09-28: "the layer has no ufunc hook"); what stays is the rule: keep refusing (the default, as built) or give the layer the hook | owner's call, small (the two streams were built in parallel) | `v2-plan.md` "the 1788 layer" (the operators bullet) and "numpy"; plan §2 M16d |
-| 7 | T1 | a reusable sabotage engine in `tools/sabotage.py`: M13's sub-tasks wrote the same ~30-line loop nine times (copy the file, apply one replacement that must match exactly once, clear `.hypothesis`, run pytest with a timeout for hangs, restore, `filecmp`, log a line), each with its own table of breaks. the break tables are per task and not worth keeping; the engine is. M16c found a hazard the engine must avoid: a same-size break restored within the same second as the broken write left python running the broken `.pyc`; clear `__pycache__` before and after each break, run with `PYTHONDONTWRITEBYTECODE=1`, restore with `copy2`, start with a control row on the intact code (H3's template `.scratch/h3/sabotage.py` has the hazard; M15's table was not re-checked for it). M16b found a second: two streams' harnesses had the same relative path `.scratch/sabotage.py`, and stopping one by matching `sabotage.py` in the command line killed the other mid-break, so its `finally` was skipped and its target was left sabotaged beside a `.orig` (2026-09-28). the engine takes a per-run name and is stopped only by the PID it recorded at launch, never by a command-line match. the pown-huge review found a third (2026-09-29): the sabotage lens broke files in the worktree the soundness lens was probing at the same time (`elementary.EXACT_POWER_LIMIT = 2000` seen by `git status` at 09:07, clean again by 09:25), so the soundness lens's first runs may have tested a sabotaged tree; it re-ran everything on a `git archive` snapshot of the committed branch. the engine breaks a private copy (a snapshot or its own worktree), never a tree another agent is reading | idea, not scheduled (from the `.scratch/m13` audit, 2026-09-27) | plan §2 intro (sabotage rule); plan §2 M16c ("the sabotage harness ran stale bytecode") |
-| 8 | evaluate-box | a pure speed change noted by M16e's design: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | plan §2 M16e; `v2-plan.md` "elementary and step functions" (the backend) |
-| 9 | Q6-rest | `random_multi_interval`, a public `apply()`: to-do, undecided whether to port | owner's call, later | plan §4 (their rows) |
-| 10 | H1 | release 2.0.0 (`pyproject.toml` is now `2.0.0.dev0`) | when everything is fully done (owner 2026-09-26); M16e's backend is opt-in and can ship in 2.0 as is (Q16(f)) | plan §2 M11; D5, D17 |
-| 11 | M8 | the time layer on the v2 class | on hold, no rush (owner 2026-09-26); D4 recommends (a), Fraction seconds under a thin wrapper | plan §2 "M8 `time_interval.py`"; D4 |
-| 12 | H4 | delete `archive/v1/` | after v2 is stable (owner 2026-09-26) | plan §2 M10 (last bullet before "done") |
+| 2 | m14b-open | what M14-breadth found and left (2026-10-02): `parse(' ' * 30000 + 'x')` takes 37 s (quadratic tokenizer regex, answer right); number-type quirks with no wrong value (a 0 end exact among float operands: `abs(M(-1.0, 1.0))` is `[0, 1.0]`; trunc's non-negative side ints; a one-point domain clip takes its low cut's type); `parse_value('+-5')` is 5, `'1 2'` is 12; `tests/test_extreme_floats.py::_float_samples` overflows on an exact piece wider than the doubles | ready, small (the 4300 digits done 2026-10-04: hex, D28) | plan §2 "M14-breadth" (left open) |
+| 3 | vectors-ext | test data beyond ITF1788 (survey 2026-09-29, `references/test-vector-sources.md`). the 1788 set is complete. decided 2026-10-02 with the owner: outputs computed by MPFR are not worth vendoring (our arb oracle already checks correct rounding); what adds depth is the CHOICE of inputs, so the source is CORE-MATH's worst cases (MIT; they carry blocks of Lefevre's data, whose own files state no licence, §3f), built 2026-10-02 as `tools/coremath.py` and `tests/test_coremath.py` (§3g-§3h; the testing skill). left: (a) `tests/itf1788/itl.py::parse_file` collapses whitespace inside quoted strings, so 40 textToInterval vectors (e.g. `"[ Empty  ]"`) run weaker than upstream; (b) closed 2026-10-03 (owner): glibc's rows are conformance inputs, not hard cases; pown has CORE-MATH's integral-exponent pow rows since 2026-10-04 (`tests/coremath/pown.tsv`); (c) cuinterval's `custom.itl` (26, MIT), probably covered by `test_domain_ends_and_limits` | (a) ready, small | `references/test-vector-sources.md`; plan §2 M13a (the vendoring) |
+| 4 | pown-ziv | an exact corner of about 2M bits within about 2 ** -(its size) of a rounding breakpoint, past `EXACT_RESULT_LIMIT`, runs ziv past 120 s where the old code built the power in milliseconds (`O(3 + 2 ** -2100000) ** 2`, 2026-10-04); pow had the same at 60k-bit operands before D28 and has it at 2M bits now. follow-ups: a near-1 shortcut in `rounded_pow`, or the exact build when ziv passes a precision cap and the build is affordable | ready, not scheduled; extreme sizes only | plan §2 "owner-answers"; `references/owner-questions-2026-10-03/streams/pown.md` step 6 |
+| 5 | T1 | a reusable sabotage engine in `tools/sabotage.py`: M13's sub-tasks wrote the same ~30-line loop nine times (copy the file, apply one replacement that must match exactly once, clear `.hypothesis`, run pytest with a timeout for hangs, restore, `filecmp`, log a line), each with its own table of breaks. the break tables are per task and not worth keeping; the engine is. M16c found a hazard the engine must avoid: a same-size break restored within the same second as the broken write left python running the broken `.pyc`; clear `__pycache__` before and after each break, run with `PYTHONDONTWRITEBYTECODE=1`, restore with `copy2`, start with a control row on the intact code (H3's template `.scratch/h3/sabotage.py` has the hazard; M15's table was not re-checked for it). M16b found a second: two streams' harnesses had the same relative path `.scratch/sabotage.py`, and stopping one by matching `sabotage.py` in the command line killed the other mid-break, so its `finally` was skipped and its target was left sabotaged beside a `.orig` (2026-09-28). the engine takes a per-run name and is stopped only by the PID it recorded at launch, never by a command-line match. the pown-huge review found a third (2026-09-29): the sabotage lens broke files in the worktree the soundness lens was probing at the same time (`elementary.EXACT_POWER_LIMIT = 2000` seen by `git status` at 09:07, clean again by 09:25), so the soundness lens's first runs may have tested a sabotaged tree; it re-ran everything on a `git archive` snapshot of the committed branch. the engine breaks a private copy (a snapshot or its own worktree), never a tree another agent is reading | idea, not scheduled (from the `.scratch/m13` audit, 2026-09-27) | plan §2 intro (sabotage rule); plan §2 M16c ("the sabotage harness ran stale bytecode") |
+| 6 | evaluate-box | a pure speed change noted by M16e's design: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | plan §2 M16e; `v2-plan.md` "elementary and step functions" (the backend) |
+| 7 | later | left open by the owner's answers (2026-10-03), each "consider", optional or "if asked": `Root`/`RootBox` as frozen dataclasses if a third state appears; an `rtol` beside `tol`; outward fma, `%`, hypot, `cancel_minus` typed per corner (tighter); a to-nearest `MultiInterval.rounded()`; rootn run on cbrt's worst-case inputs; a numpy hook for the 1788 layer; an `AllenMatrix` class or a public `allen_pairs`; a strategies module after 2.0; Q20's optional pin | not scheduled | `references/owner-questions-2026-10-03/` |
+| 8 | H1 | release 2.0.0 (`pyproject.toml` is now `2.0.0.dev0`) | when everything is fully done (owner 2026-09-26); M16e's backend is opt-in and can ship in 2.0 as is (Q16(f)) | plan §2 M11; D5, D17 |
+| 9 | M8 | the time layer on the v2 class | on hold, no rush (owner 2026-09-26); D4 recommends (a), Fraction seconds under a thin wrapper | plan §2 "M8 `time_interval.py`"; D4 |
+| 10 | H4 | delete `archive/v1/` | after v2 is stable (owner 2026-09-26) | plan §2 M10 (last bullet before "done") |
 
 ## open questions for the owner
 
-recommendations on every question below, and on the owner's-call rows of the table above, with each
-option's pros, cons and when it is the better choice: `references/owner-questions-2026-10-03/`
-(`README.md` is the summary; written 2026-10-03, nothing decided). it found one defect, Q15(h): a
-method mixing the two classes (`M(0.1).hypot(O(0.1))`, `.minimum`, `.union`, ...) returns
-`MultiInterval`, against README "rounding"
-
-* **Q9 `mulRevToPair`'s decoration.** 1788 decorates the pair's first interval as the decorated
-  division `c / b` where `0 ∉ b` (6 com, 41 dac, 5 def in `libieeep1788_mul_rev.itl`), but its
-  `mulRev`, the hull of the same set, trv. ours is one op, `mul_rev`, always trv (sound: trv claims
-  nothing), so 52 vectors are rows under "decoration expectations" on the decoration alone (the set
-  must match, `tests/itf1788/test_itf1788.py::DECORATION_ONLY`). add a pair op with 1788's
-  decoration, or keep the rows? built as the conservative reading (plan §2 M13 "exit for M13").
-  **default built in the 1788 layer, pending Q13 (c)**: `ieee1788.mul_rev_to_pair` (M16b) is 1788's
-  pair with its decoration; the library's `mul_rev` stays one op, trv, and the rows stay
-* **Q10 the constructors' outward pass.** the 201 interval-valued vectors of the four 1788
-  constructors (`b-`/`d-textToInterval` 91 each, `b-numsToInterval` 10, `d-numsToInterval` 9) run in
-  the plain pass only: they have no interval operand, so an outward item would repeat the plain
-  call. give the constructors a class argument (`OutwardMultiInterval`, 1788's binary64 hull; new
-  API), or is the plain pass enough? kept as built (plan §2 M13g "review"). **default built in the
-  1788 layer, pending Q13 (d)**: the layer's pass runs the constructors in binary64 (M16b); no class
-  argument on the library's constructors
-
-* **Q11 M15's choices (D19)**, built as the session's defaults when the owner said "do h3 first":
-  (a) `Dual`, `derivative`, `newton` and `Root` are public and exported from `intervals` (the
-  2025-12 sketch named `autodiff.py` and `solver.py`), not newton "as a test" only; (b) newton's
-  step runs only where decorations prove `f` C¹, else the piece is pruned and bisected; (c) the
-  step is `mul_rev`, never `/`; (d) one variable only; (e) `tol=1e-10` absolute, `max_steps=10_000`.
-  keep, rename, or narrow the public surface? (plan §0 D19; `v2-plan.md` "2026-09-27 revision: M15")
-
-* **Q12 M16a's choices (D20)**, built as the session's defaults when the owner said "get the rest
-  of h3 done" (plan §0 D20, §2 M16a; `v2-plan.md` "2026-09-28 revision: M16a"):
-  * **Q12(a)** a jacobian as n passes with `Dual` untouched (default), or vector mode (a tangent tuple
-    inside `Dual`, one pass, M15's chain rules edited)? measured only indirectly: a box costs n + 2
-    calls of `F` either way and the library's ops dominate
-  * **Q12(b)** names `gradient`, `jacobian`, `solve`, `RootBox` (default), or `newton_system` /
-    `krawczyk` and a widened `Root`? folds into Q11 (keep, rename or narrow the public surface)
-  * **Q12(c)** zeros on split faces that are not simple rationals stay unproved, with unproved slivers
-    beside proved ones (default); or bisect off-centre (measured on the prototype: 1 to 3 of 4 face
-    zeros proved before the simplest point existed). noise, not error
-  * **Q12(d)** the simplest-point rule and the inflated krawczyk test are additions beyond H3's wording
-    (a gradient, a jacobian, krawczyk), each measured to be needed (`v2-plan.md` "2026-09-28 revision: M16a"): keep
-    (default)?
-  * not a question, recorded: hansen and sengupta's uniqueness test not used; smear, the mean value
-    prune and "any component halved" measured on the prototype and left out
-
-* **Q13 the 1788 layer's choices (D21)**, built as the session's defaults when the owner said "get
-  the rest of h3 done":
-  * (a) **shape**: `intervals/ieee1788.py`, one class `Interval` for both flavours, snake_case names
-    with 1788's camelCase in `NAMES`, builtins with a trailing underscore; not exported from
-    `intervals` (`from intervals import ieee1788`). keep, rename, or export (`intervals.ieee1788`
-    imported in `__init__`, one line)?
-  * (b) **numbers of the empty set**: `mid`, `rad`, `wid`, `mag`, `mig`, `mid_rad` of `[empty]`
-    raise `ValueError`, as the library's (D9) and the reductions (Q2), and the pass reads the raise
-    as `NaN`; or return `nan`, 1788's own answer, in the layer only? (`inf`/`sup` of it return `±inf`
-    either way)
-  * (c) **Q9**: default built, pending Q13 (c): 1788's pair with its decoration is
-    `ieee1788.mul_rev_to_pair`; the library's `mul_rev` stays one op, trv on decorated operands; the
-    adapter's 52 `DECORATION_ONLY` rows stay (true of the library). close Q9 so?
-  * (d) **Q10**: default built, pending Q13 (d): the constructors' binary64 run is the layer's pass
-    (their vectors match through it but the 9 that are rows, 7 exact parsing and 2 no NaI); no class
-    argument on the library's constructors. close Q10 so?
-  * (e) **two answers to one 1788 name**: where 1788 and the library disagree the layer answers
-    1788's way (cancellation's "no answer", `meets`, attained infinities dropped) and the library
-    keeps its own. keep?
-  (plan §0 D21, §2 M16b; `v2-plan.md` "the 1788 layer" and "2026-09-28 revision: M16b")
-
-* **Q14 M16c's choices (D22)**, built as the session's defaults when the owner said "get the rest
-  of h3 done":
-  (a) the matrix: `A.allen_matrix(B)`, nested tuples of `Allen` (rows the pieces of `A`), and
-  `relations.allen_matrix` over cut tuples. keep, rename, or a small `AllenMatrix` class
-  (`.transpose()`, `.converse()`)?
-  (b) the set view: `A.allen_relations(B)`, a `frozenset` of `Allen`. the H3 row named only the
-  matrix; the 2026-08-16 note says "matrix, or the set of relations". keep or drop; if kept, the
-  name (`allen_set` was the alternative)?
-  (c) an empty operand: no rows or empty rows and `frozenset()`, not `allen()`'s `ValueError`
-  (d) the matrix as the plain `n x m` loop over `allen()`, not dependent on normalized input; the
-  design's fill + sweep, ~2-3x faster, not taken
-  (e) the surface: methods on `MultiInterval` and functions in `relations.py`, nothing at the top
-  level, not on `DecoratedInterval` (`.interval` first, as `allen`), the sparse `(i, j, relation)`
-  view private (`relations._allen_pairs`). keep, or widen?
-  (plan §0 D22, §2 M16c; `v2-plan.md` "2026-09-28 revision: M16c")
-
-* **Q15 M16d's choices (D23)**, built as the session's defaults when the owner said "get the rest
-  of h3 done" (plan §0 D23, §2 M16d; `v2-plan.md` "numpy" and "2026-09-28 revision: M16d"):
-  * **Q15(a) the array API or the hook.** default **`__array_ufunc__` on the three classes**
-    (a multi-interval is an element, not an array); alternative: an interval-array type exposing the
-    array API standard's namespace, whose dtypes, elementwise bool `==` and float special cases all
-    collide with the library's choices (a new type, not interop)
-  * **Q15(b) foreign reals** (`np.longdouble` on linux, gmpy2's `mpq`/`mpfr`): default **the exact
-    value**, a `Rational` exact by type (`mpq(1, 2)` is `Fraction(1, 2)`, as `Fraction(1, 2)` is),
-    any other real exact where `float()` would round (a double stays the float); alternatives: refuse
-    a foreign real that is not a double (`TypeError`), or keep `float()` (unsound for
-    `OutwardMultiInterval`), or the value rule for rationals too (`mpq(1, 2)` a float)
-  * **Q15(c) an ndarray meeting ours**: default **elementwise into an object array**, `==`/`!=`
-    identity as before (`f == A` False; `np.array([A]) == A` False and `A in np.array([A])` False
-    although the array holds `A`); alternatives: `TypeError` as before; elementwise `==` (numpy's
-    convention, which changes what `f == A` and `A in f` mean today)
-  * **Q15(d) numpy's names as methods**: default **no aliases** (the 1788 names are the library's),
-    so `np.arcsin(object_array)`, `np.round(A)` and `np.around(A)` are TypeErrors; alternative:
-    eight aliases (`arcsin arccos arctan arcsinh arccosh arctanh rint arctan2`) on the three classes,
-    after which numpy's loops and the table agree except `square`
-  * **Q15(e) `np.invert(A)`**: default **the complement `~A`** (numpy's `invert` is the `~` ufunc,
-    and `np.bitwise_and/or/xor` must mean `& | ^` for `np.int64(1) | A`); alternative: TypeError for
-    the explicit unary call only
-  * **Q15(f) `fmin`/`fmax`**: default **not mapped** (TypeError): their point is a nan operand, which
-    the library refuses; alternative: `minimum`/`maximum` with `fmax(A, nan) is A`
-  * **Q15(g) numpy in the `[test]` extra**: default **no** (CI installs numpy beside it; the numpy
-    tests skip without it; the README section is prose); alternative: add it, and write the README
-    section as doctests
-  * **Q15(h) both operands ours in a method ufunc** (`hypot minimum maximum arctan2`): default **the
-    subclass decides, as for the operators** (`np.hypot(M, O)` is `O.hypot(M)`, outward in either
-    order; `np.arctan2(M, O)` takes y as an `OutwardMultiInterval` first), found by the M16d review;
-    alternative: the first operand's method and class (as `M.hypot(O)` called directly is, which
-    rounds to nearest and can miss the true value). with no subclass between them (`M` and
-    `DecoratedInterval`) the first operand's method either way
-
-* **Q16 M16e's choices (D24)**, built as the session's defaults when the owner said "get the rest
-  of h3 done" (plan §0 D24, §2 M16e; `v2-plan.md` "elementary and step functions" (the backend)
-  and "2026-09-28 revision: M16e"). none blocks H1; only (a) and (f) would change what a user
-  without `INTERVALS_BACKEND` sees:
-  * **Q16(a) automatic or opt-in.** built: opt-in. unset is the pure path; `INTERVALS_BACKEND=auto`
-    takes gmpy2 when it imports (`2.3 <= version < 3`), `gmpy2` forces it. alternative: `auto` as the
-    default, which gives every user who has gmpy2 (sympy's and mpmath's often do) the speed, and puts
-    their MPFR build on the path unasked
-  * **Q16(b) public surface.** built: the variable and the `[fast]` extra (a new name) only;
-    `intervals.backend.name()` importable, not exported from `intervals`; no setter (it would read like
-    the ambient rounding mode the plan rules out). alternative: export `backend_name()` for bug reports
-  * **Q16(c) the non-dyadic points.** built: pure (a user's `Fraction(1, 3)`, `log` to a base,
-    `pow_rev2`'s `log_t v`, `acoth`, `rootn` with n < 0, the periodic reverse ops' `k pi + f(v)`),
-    except atan, acot, atan2's angles and the hook's mixed operands (native, one rounding).
-    alternative: a second part, an mpfr ziv loop for a monotone f at a bracketed x; not measured
-  * **Q16(d) gmpy2 in `[test]`.** built: yes, so the differential never skips, pinned `<3` (the
-    review, 2026-09-28): `auto` takes only `2.3 <= version < 3`, so an unpinned gmpy2 3 on PyPI would
-    turn `test_env_var`'s auto row red in every CI job; `::test_the_test_extra_installs_what_auto_takes`
-    keeps the pin equal to `backend.FLOOR` and `backend.CEILING`. `[fast]` stays unpinned (a user's
-    environment is not narrowed; forced takes gmpy2 3, `auto` does not). alternatives: gmpy2 only in CI
-    jobs that ask for it, with `tests/test_backend.py` skipping locally (a test that passes by
-    skipping); or `[fast]` pinned `<3` as well
-  * **Q16(e) CI and fuzz.** built: no workflow change; every gate job runs the whole suite on the pure
-    path and `tests/test_backend.py`'s differential in-process, `fuzz.yml` likewise (so its ×10 run
-    fuzzes the differential too: `tests/test_backend.py` alone takes 387.51 s at x10, 2026-09-28,
-    loaded, which with the last whole x10 run's 5037 s still fits the 180-min timeout).
-    alternative: a gate job with `INTERVALS_BACKEND=gmpy2` (the whole suite on MPFR in CI, as this
-    build ran it once locally), and a selection assert in each job
-  * **Q16(f) 2.0 or later.** the item sat under `v2-plan.md` "later (not in v2.0)". built as an opt-in
-    that changes nothing unless selected, so it can ship in 2.0 (H1) as is; alternative: keep it out
-    of the 2.0 release notes until Q16(a) is answered
-  * not questions, recorded: `round_rational` has no gmpy2 path (the design measured 1.0-2.1x on a call
-    of a few µs, 2026-09-27); `floor_over_pi` and `compare` stay pure (they decide integers and signs),
-    which is why `.sin()` gains nothing at set level
-
-* **Q17 pown of exact operands** (the plan's Q-exact; plan §2 "pown-huge"): `M(2) ** 2 ** 60`,
-  `M(2) ** 1e300` and their `Dual` forms still never finish (the exact value does not fit in memory),
-  and exact ends are common inside outward intervals: `O(0.5, 2)` stores the 2 as an int, so
-  `O(0.5, 2) ** 2 ** 40` still hangs, and `O(0.5, 3) ** 2 ** 22` returns an interval whose repr
-  raises the 4300-digit error (2026-09-29). `functions.pow_` already rounds exact operands past
-  `EXACT_POWER_LIMIT` (`M(2) ** M(2 ** 60)` is `(MAX, inf)`). (a) keep exact and document the limit;
-  (b) raise `OverflowError` up front past a bit budget; (c) past a limit shared with `pow_`, the
-  tightest open float enclosure (both designers recommend it); (d) (c) in the outward class only,
-  with (a) or (b) in the exact class, the minimum that makes `O(0.5, 2) ** 2 ** 40` finish. note for
-  (c): `M(3) ** 70000` is an exact int today while `M(3) ** M(70000)` is `(MAX, inf)`, so (c) at
-  today's limit turns cheap exact results into float ends; the designer's (c) raises one shared limit
-  to about 2 ** 20-2 ** 24 bits (plan §2 "pown-huge", "left open")
-* **Q18 correctly rounded pown to nearest** (the plan's Q-nearest-libm): the nearest class keeps
-  python's `float ** int` (libm's `pow`, not promised correctly rounded) for `|n| <= 2 ** 53`, and
-  `rounded_pow` to nearest past it. 3000 of 3000 random near-1 bases agreed with `rounded_pow` on
-  this laptop (2026-09-29). is correctly rounded pown a promise of the nearest class? no change made
-
-Q1-Q8 answered 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers to the open
-questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) answered 2026-09-27
-(`v2-plan.md` "2026-09-27 revision: owner answers on M13's proposed categories (D18)").
-
-* **Q19 is the outward class isotone across number types? (2026-10-03, the x50 fuzz)** it is not, by its own contract: exact operands stay exact, float ones round, so A within B can give f(A) outside f(B) when a float piece of A lies in an exact piece of B: `OutwardMultiInterval(1.0, 2) + 1/3` = `(1.3333333333333333, 7/3]` is not inside `OutwardMultiInterval(1 - 10**-30, 2) + 1/3`, and `round([0.0, 0.25], 1)` lists `(0.0999.., 0.1)` while `round([-1, 3/10], 1)` has the exact `[1/10]`. the x50 fuzz found it as `tests/test_steps.py::test_isotone[round]` and `[round_ties_away]`; the oracle now checks f(A) against the tightest double cover of f(B) there (plan §2 "fuzz-steps-isotone"), the library unchanged. keep (the default), or make the class isotone (round an exact result whenever the operand set mixes in floats, at the cost of `exact operands give the same set`)?
-
-* **Q20 a crossed piece in the exact class (2026-10-03, the fuzz on CI)**: to nearest, an exact end beside a float end can come out past it: `rootn((10 ** -30, 1.0000000000000003e-30], 5)` has the exact end 1/10 ** 6 and the float end rounded onto `1e-06`, below it, and raised `ValueError`. built as the applicator's rule, the piece between the two values, each keeping its flag: `[1e-06, 1/1000000)` (no true value is in it, but its closure holds the nearest double of each, as the class promises a float piece). alternatives: both ends closed (`[1e-06, 1/1000000]`); or round the exact end too whenever its partner is a float (one type per piece, as the outward class's open ends are). plan §2 "fuzz-rootn-crossed"
+none open. Q9-Q20 and the owner's-call rows were answered 2026-10-03 (the owner accepted every
+recommendation of `references/owner-questions-2026-10-03/`; `v2-plan.md` "2026-10-03 revision: owner
+answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answered 2026-09-26, D18
+2026-09-27 (`v2-plan.md`). what the answers left for later is the open-items row "later".
 
 ## still owed
 
@@ -301,9 +135,7 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
 * sabotage rows red in their first run were not re-run after the closing tests were added (M16a:
   the four closing tests and the review's, which only add red paths); M15's table was not re-checked
   for the stale-bytecode hazard M16c found (T1)
-* M16b: the adapter's docstring (`tests/itf1788/test_itf1788.py`) does not yet name the third pass,
-  and `_PAIR_DECORATED_AS_DIVISION`'s reason does not name `ieee1788.mul_rev_to_pair` (left alone so
-  the build does not pre-empt Q13 (c); one clause each once Q13 is answered). the layer's per-call
+* M16b: the layer's per-call
   `warnings.catch_warnings` is not thread-safe on python 3.11-3.13 (as `decorated.py::_quietly`);
   recorded, not addressed. the pass imports the adapter a second time as
   `tests.itf1788.test_itf1788` (the vectors parsed twice, 7.5 s cold, 2026-09-27); accepted. one
@@ -313,8 +145,8 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
 * M16c: the other relations over cut tuples in `relations.py` (`before`, `adjoins`, ...) also read
   normalized operands and do not assert it; only `allen_relations`, whose wrong answer would be
   silent and partial, does. the methods are unaffected
-* M16e: the whole suite under `INTERVALS_BACKEND=gmpy2` exists only as the build's one local run
-  (2026-09-28); no CI job runs it (Q16(e)). the backend is verified only with gmpy2 2.3.1 / MPFR
+* M16e: the whole suite under `INTERVALS_BACKEND=gmpy2` runs in CI's `gate-gmpy2` job since 2026-10-04
+  (Q16(e)) and locally as `gate:gmpy2` when a backend file changed. the backend is verified only with gmpy2 2.3.1 / MPFR
   4.2.2 on windows (python 3.13); CI's linux jobs run `tests/test_backend.py` with the PyPI wheel, no
   other MPFR build has been run. free-threaded builds untested (the three contexts are shared module
   objects; `backend._use` is a global). the speed numbers were taken beside four other streams' runs:
@@ -327,15 +159,10 @@ questions"); D18 (M13's two proposed categories, the exact-com rows, `set_dec`) 
   marker proof's floor (36550 bits), but a limit lowered at run time, after import, still stalls
   (`O(0.5, 1.0) ** 1074` past a 60 s timeout; review SAB-3). recorded, not guarded
 
-* the 1788 departures census (2026-09-30, README "departures from ieee 1788"): four departures were
-  build choices never put to the owner, as D13 and D18 were: step functions as point sets
-  (`floor([-1.5, 1.5])` is four points, 1788 `[-2, 1]`), a rounded end open (M12), and the divergence
-  categories "degenerate infinities" and "cut-based relations" (M12, from the 2026-08-16 principles).
-  and `tests/itf1788/test_itf1788.py` lists a "domain-clipped functions" category in `REASONS` with no
-  row (every pow vector matches since M13d): stale, or keep as a slot. recorded, not asked
 
 ## session log (newest first)
 
+* **2026-10-03/04** the open owner questions (the owner: "what questions are open for me", then "call in fable subagents to think about each", then "i'll accept everything fable said, update accordingly", then "when all the agents are done ... run the full gate and fuzz and then push"). nine read-only agents wrote one report per group of questions (`references/owner-questions-2026-10-03/`, `09435ca`; the session re-ran the key claims, listed in its README). decisions recorded (`a1a5716`: decision log, D19-D24 marked, D27-D29). four build streams in worktrees, merged (`87c9319`, `1db1b15` CLAUDE.md's push clause for `gate:gmpy2`, `9896284`, `87e6ea3`); their records in `streams/`. at the merge the session changed one thing: the pown stream had built the nearest class's over-limit pown as rounded to nearest, from a summary line that misread the report; the report's (c) is the enclosure in both classes, now built and pinned (4 tests red on the stream's `ops.py`)
 * **2026-10-03** gate and push (the owner: "Gate and push"). the prepush of `e5cb396` went red: `fuzz-x10:rest` 30 failed, 24 errors, read as MOVED. 27 failures and the 24 errors were the laptop (child processes and `git` exiting `0xC0000142` under another session's concurrent hypothesis run); three were test oracles that assumed a float stays a float, the mixed one-point piece `[2, 2.0]` read as its exact 2 by the rounding-hook check, and python's double-rounded `float - Fraction` past an exact end in the identity-rounding check. both oracles fixed and pinned, the library unchanged (plan §2 "fuzz-mixed-points"). prepush of `8e33d7e` green (x10: 27795 in 53 s + 6033 in 5594 s); pushed `233fdd4..8e33d7e`. the babysitter: CI run 37098878518 green; fuzz run 37098878528 red, `1 failed, 33827 passed in 3235.17s`: a library bug, `rootn((10 ** -30, 1.0000000000000003e-30], 5)` raised in the exact class (an exact end beside a float end rounded to nearest past it), and `pown_rev` the same; fixed by the applicator's rule (the piece between the two values, each keeping its flag) and pinned (plan §2 "fuzz-rootn-crossed", Q20). gate 27795 + 6035, prepush of `912558b` green (x10: 27795 in 53 s + 6035 in 5459 s); pushed `8e33d7e..912558b`; the babysitter, checked by the session: CI run 37107899644 green (`33830 passed` on python 3.12, 3.13, 3.14 in 495, 430, 361 s) and fuzz run 37107899636 green (`33830 passed in 2051.77s`, x10)
 * **2026-10-03** overnight fuzz (the owner: "run the fuzzer ... maybe 50x", missing fuzz tests first). a census agent listed public behaviour no @given test randomised and found a soundness bug: `OutwardMultiInterval.expand` rounded a moved float end to nearest (`O(0.1, 0.2).expand(1)` was `[-0.9, 1.2]` with 0.2 + 1 > 1.2), fixed in `4447f6f` (expand is the set plus [-d, d], the class's outward sum). new or widened @given tests, each sabotaged red: the domain guard at random points, rootn vs arb to degree 10**4, decorated set ops, 1788 pown/rootn/pownRev exponents to +-40, `overlap`, `is_member`, Dual powers and rootn, `gradient` vs `jacobian`, the predicates, `positive`/`negative`/`finite`, `A[a:b]`. fuzz x50 on all of it: itf 27795 passed in 72 s, rest 2 failed, 6021 passed in 27006 s (7 h 30 min): `test_steps.py::test_isotone[round]` and `[round_ties_away]`, a test-oracle bug (Q19; the session first misread it as a library bug, an agent showed it was the oracle and the session re-checked). not pushed
 * **2026-10-02** CORE-MATH worst cases (the owner: outputs MPFR computed are not worth vendoring, the choice of inputs is; Lefevre's data has no licence, CORE-MATH is MIT and carries blocks of it). built: `008fa4a` the scalar evaluator refuses a point outside a domain (six functions hung, `acos(-2)` was 0.0; no public result changes, the set layer clips first); `3044197` `tools/coremath.py`, a vendored gate sample of 29,054 rows (`tests/test_coremath.py`, 12 s, sabotaged 4 ways) and a manual full check, never in CI or prepush (`CLAUDE.md`); its first run at `3044197`: 17,077,691 inputs, 51,233,073 calls, 0 mismatches, 2547 s at 4 jobs. gate green on both commits (27795 + 5929, then 27795 + 5978 passed). a review agent's second opinion and its sabotage table: `references/test-vector-sources.md` §3h; the build: §3i. not pushed

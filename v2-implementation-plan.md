@@ -4416,6 +4416,61 @@ sabotage (2026-10-03): `functions.py` reverted, the rootn pin and the example re
 pin red. the outward class is unchanged; what the exact class gives for a crossed piece is the session's choice, by
 the applicator's rule (HANDOFF Q20).
 
+### owner-answers: the build of the owner's 2026-10-03 answers (done 2026-10-04)
+
+the owner accepted every recommendation of `references/owner-questions-2026-10-03/` (D27-D29; `v2-plan.md`
+"2026-10-03 revision: owner answers"). four streams, each in its own worktree off `09435ca`, merged into
+`master` (`87c9319`, `9896284` with a README conflict resolved by keeping both, `87e6ea3`); each stream's
+record (what changed by `file::symbol`, its pins and sabotage tables, its runs) is
+`references/owner-questions-2026-10-03/streams/<stream>.md`.
+
+* **pown** (D28; `streams/pown.md`): `elementary.EXACT_RESULT_LIMIT = 2 ** 22` bits for exact operands, shared by
+  pown, `functions.pow_` and exp2/exp10 (exp2/exp10 now measured in result bits); `EXACT_POWER_LIMIT` stays
+  the float-corner threshold. past the limit an exact corner is its tightest open float enclosure in both
+  classes, with `errors.PowerLimitWarning` (ignored by default, exported). pown to nearest is correctly
+  rounded for every n (`ops._power_descriptor`: the exact power rounded once, else `rounded_pow`); libm's
+  `float ** int` and the `2 ** 53` seam are gone. `ops._NotADouble`'s proof re-derived for any rational
+  corner before the build (`streams/pown.md` step 1). ints past python's 4300-digit limit print in hex and
+  `parse` reads `0x` (`fmt`, `cuts`). `tests/coremath/pown.tsv`: 2857 rows from pow.wc's integral exponents;
+  `tools/coremath.py` reads a cache elsewhere through `INTERVALS_COREMATH_CACHE`. **changed at the merge**:
+  the stream built "rounded to nearest" for `MultiInterval` past the limit, from a misread summary; the
+  report's (c) is the enclosure in both classes (one class only was (d), rejected), so the nearest descriptor
+  got rounding hooks (a float corner to nearest, an exact corner outward). sabotage: the stream's 44 of 46
+  new pin ids red on `09435ca` (6 by hanging), its 12 breaks each red; the merge's change: 4 of
+  `tests/test_pown_huge.py`'s tests red on the stream's `ops.py`, green after (2026-10-04). **left open**: an
+  exact corner of about 2M bits within about 2 ** -(its size) of a breakpoint now runs ziv past 120 s where
+  the old code built the power in milliseconds (`O(3 + 2 ** -2100000) ** 2`); pow had the same at 60k-bit
+  operands before and has it at 2M bits now (`streams/pown.md` step 6, two follow-ups)
+* **numpy, methods, shifts** (D23 as answered; `streams/numpy.md`): `multi_interval.py::_subclass_decides` on
+  the eleven methods taking another set (union, intersection, difference, symmetric_difference, minimum,
+  maximum, fma, cancel_minus, cancel_plus, hypot, atan2), so a mixed call is outward as the operators are;
+  `DecoratedInterval`'s `& | ^` had the same defect (they called `MultiInterval.__and__`), fixed;
+  `numpy_compat._subclass_first` removed (a ufunc is the method). `==`/`!=` against an ndarray give a bool
+  array; `fmin`/`fmax` are `minimum`/`maximum`; numpy in `[test]`, the README numpy section doctests, the
+  trailing `numpy` gone from the workflows. `<<`/`>>` (Q6-shift) on `MultiInterval`, `DecoratedInterval`,
+  `Dual`, with `left_shift`/`right_shift` in `_OPERATORS`. every new or flipped pin red on `09435ca`; nine
+  breaks of the new code each red
+* **backend and CI** (D24 as answered; `streams/backend.md`): `[fast]` pinned `gmpy2>=2.3,<3`
+  (`tests/test_backend.py::test_the_fast_extra_installs_what_auto_takes`); CI job `gate-gmpy2` (python 3.13,
+  `INTERVALS_BACKEND=gmpy2`, asserts `backend.name() == 'gmpy2'` first: a forced but missing gmpy2 fails
+  collection for most files but not all, `tests/test_cuts.py` passes, so the assert is the guard, pinned);
+  ledger phase `gate:gmpy2`, keyed by src, never part of the commit verdict, required for a push only when a
+  file of `tools/gate.py::BACKEND_FILES` changed since the base (`tools/prepush.sh` runs it; `CLAUDE.md`
+  push). the whole suite on gmpy2 locally: 33833 passed in 777 s (2026-10-04, on the stream's tree). 13
+  sabotage rows red. README: `intervals.backend.name()` for bug reports; `tools/backend_speed.py` cites §2
+  M16e
+* **the rest** (D21, D22, D20, D29; `streams/small.md`): the 1788 layer's numbers of the empty set are `nan`
+  and its four reductions return `nan` for a nan operand, `inf + -inf` and `0 * inf` (the library keeps D9);
+  the third pass's NaN-reading clause gone (`tests/itf1788/test_ieee1788.py`); Q9/Q10 clauses paid; the stale
+  "domain-clipped functions" category removed and `test_divergence_rows` now wants a row per category.
+  every public cut-tuple relation asserts normalized operands (`allen_matrix` takes pieces in any order and
+  checks each through `allen`). solver: `newton-width` fixed (it was live: `newton(x ** 2 - 9 * 10 ** 800,
+  [10 ** 400, 10 ** 401])` raised OverflowError at the first step); the split inside (0, 1] in `newton` only
+  (in `solve` it took the circle on `[-1e300, 1e300] ** 2` from 103 calls to 3433), and not for a piece
+  already within `tol`; `x ** 2 - 1e-40` on `[-1, 1]` proves both zeros in 28 calls (was 132, unproved).
+  `OutwardMultiInterval.rounded()` (`rounding.float_cuts`, outward) and Q19's rule documented; Q20's
+  sentence in `v2-plan.md` "flags at rounded ends". every pin red on the old code or a targeted break
+
 ### run ledger: what has run on this code (done 2026-10-01)
 
 **why**: the owner, 2026-10-01: "i need some machinery to know whats run and not on the current code ...
