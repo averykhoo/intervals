@@ -1,6 +1,7 @@
 import copy
 import math
 import pickle
+import warnings
 from fractions import Fraction
 
 import pytest
@@ -14,8 +15,11 @@ from intervals import MultiInterval
 from intervals import OutwardMultiInterval
 from intervals import Size
 from intervals import kernel
+from intervals.cuts import Cut
+from intervals.errors import EmptySetPropagationWarning
 from tests.strategies import cut_tuples
 from tests.strategies import endpoint_values
+from tests.strategies import exact_cut_tuples
 from tests.strategies import probe_points
 from tests.strategies import values
 
@@ -369,3 +373,84 @@ def test_conversions():
         float(P('[1, 2]'))
     with pytest.raises(ValueError):
         int(P('{1, 2}'))
+
+
+# SHIFTS (Q6-shift, owner 2026-10-03): `A << n` is `A * 2 ** n` and `A >> n` is `A * 2 ** -n`, exactly
+
+O = OutwardMultiInterval
+MAX = 1.7976931348623157e+308
+
+
+@pytest.mark.parametrize('expr, expected', [
+    (lambda: MultiInterval(3) >> 1, P('[3/2]')),  # not python's 3 >> 1 == 1: the floor is `//`
+    (lambda: MultiInterval(-3) >> 1, P('[-3/2]')),
+    (lambda: MultiInterval(3.0) >> 1, P('[1.5]')),
+    (lambda: MultiInterval(3) << -1, P('[3/2]')),  # a negative count: the other direction
+    (lambda: MultiInterval(3) << 4, P('[48]')),
+    (lambda: P('[-3, 7)') >> 2, P('[-3/4, 7/4)')),  # openness kept
+    (lambda: P('(0.1, 1]') << 3, P('(0.8, 8]')),  # exact on doubles: no rounding
+    (lambda: P('[-inf, 3]') << 2, P('[-inf, 12]')),
+    (lambda: MultiInterval(5e-324) >> 1, P('[0.0]')),  # below the least double: to nearest
+    (lambda: O(5e-324) >> 1, O.parse('(0.0, 5e-324)')),  # outward
+    (lambda: MultiInterval(1e308) << 10, P('[inf]')),  # past the largest double, as `*`
+    (lambda: O(1e308) << 10, O.parse(f'({MAX!r}, inf)')),
+    (lambda: P('[1, 2] | [5]') >> 0, P('[1, 2] | [5]')),
+])
+def test_shift_examples(expr, expected):
+    result = expr()
+    assert type(result) is type(expected) and repr(result) == repr(expected)
+
+
+def test_shift_of_the_empty_set_warns_as_a_product():
+    with pytest.warns(EmptySetPropagationWarning):
+        assert MultiInterval() << 3 == EMPTY
+
+
+def _with_warnings(thunk):
+    """(repr of the result, the warning categories)"""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        result = thunk()
+    return type(result), repr(result), [w.category for w in caught]
+
+
+@classes
+@settings(max_examples=50, deadline=None)
+@given(cuts=cut_tuples(), n=st.one_of(st.integers(-80, 80), st.sampled_from([-1100, -1075, -1074, 1024, 1100])))
+def test_shift_is_scaling_by_a_power_of_two(cls, cuts, n):
+    """`A << n` is `A * 2 ** n` and `A >> n` is `A << -n`, as sets, end types, class and flags"""
+    a = cls.from_cuts(cuts)
+    scale = 2 ** n if n >= 0 else Fraction(1, 2 ** -n)
+    for got, expected in ((lambda: a << n, lambda: a * scale), (lambda: a >> n, lambda: a * (Fraction(1) / scale)),
+                          (lambda: a >> n, lambda: a << -n)):
+        assert _with_warnings(got) == _with_warnings(expected) and _with_warnings(got)[0] is cls
+
+
+@classes
+@settings(max_examples=50, deadline=None)
+@given(cuts=exact_cut_tuples.filter(bool), n=st.integers(-70, 70))
+def test_shift_of_exact_ends_moves_each_cut(cls, cuts, n):
+    """on int and Fraction ends nothing rounds: every cut moves to `value * 2 ** n`, its side kept, so
+    `(A << n) >> n` is A (python's `(x >> n) << n` is not x: its `>>` floors)"""
+    a = cls.from_cuts(cuts)
+    scale = Fraction(2) ** n
+    assert (a << n).cuts == tuple(Cut(c.value * scale if math.isfinite(c.value) else c.value, c.side)
+                                  for c in cuts)
+    assert (a << n) >> n == a == (a >> n) << n
+
+
+def test_shift_refusals():
+    """the count is an int (any Integral, numpy's too, tests/test_numpy_compat.py), never bool, a float,
+    a Fraction or a set; a set never on the right of a shift (the reflected forms refuse)"""
+    a = MultiInterval(1, 2)
+    for count in (True, False, 2.0, Fraction(2), a, O(2), '2', None):
+        for thunk in (lambda: a << count, lambda: a >> count):
+            with pytest.raises(TypeError):
+                thunk()
+    for left in (2, 2.0, Fraction(2), True, MultiInterval(2), O(2)):
+        for thunk in (lambda: left << a, lambda: left >> a):
+            with pytest.raises(TypeError):
+                thunk()
+    with pytest.raises(TypeError, match='not a shift count'):
+        _ = 2 << a
+    assert a << 1 == a * 2 and a << 10 ** 3 == a * 2 ** 1000  # any int: no cap

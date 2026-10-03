@@ -8,8 +8,11 @@ not coerce scalars: `MultiInterval(5) == 5` is False, because `hash(MultiInterva
 
 float arithmetic rounds to nearest; `OutwardMultiInterval` is the same class with outward rounding,
 so its results enclose the exact result. the rounding is a property of the type, never a flag.
+mixing the two, by an operator or by a method taking another set, gives an `OutwardMultiInterval`.
 """
+import functools
 import math
+from fractions import Fraction
 from numbers import Integral
 from numbers import Real
 from typing import FrozenSet
@@ -38,6 +41,28 @@ from intervals.kernel import Cuts
 from intervals.kernel import Size
 from intervals.relations import Allen
 from intervals.relations import TruthSet
+
+
+def _subclass_decides(method):
+    """
+    a method taking other sets computes in the class the operators would give: the receiver's,
+    unless an operand's class is a proper subclass of it, which then decides, as python lets the
+    right operand of `M + O` decide (owner, 2026-10-03, Q15(h)). the receiver is promoted to that
+    class and the class's own method runs: `M(0.1).hypot(O(0.1))` is `O(0.1).hypot(O(0.1))`. a number
+    operand decides nothing (it becomes a point of the receiver's class)
+    """
+    name = method.__name__
+
+    @functools.wraps(method)
+    def deciding(self, *args, **kwargs):
+        cls = type(self)
+        for other in (*args, *kwargs.values()):
+            if isinstance(other, cls) and type(other) is not cls:
+                cls = type(other)
+        if cls is not type(self):
+            return getattr(cls._wrap(self._cuts), name)(*args, **kwargs)
+        return method(self, *args, **kwargs)
+    return deciding
 
 
 class MultiInterval:
@@ -127,17 +152,27 @@ class MultiInterval:
     def cuts(self) -> Cuts:
         return self._cuts
 
-    # SET ALGEBRA
+    # SET ALGEBRA (a method taking other sets has the operators' result class: `_subclass_decides`)
 
+    @_subclass_decides
     def union(self, *others) -> 'MultiInterval':
+        """
+        the union of self and every other; mixed with an `OutwardMultiInterval`, one, as `|` gives
+
+        >>> MultiInterval(1).union(OutwardMultiInterval(2), 3)
+        OutwardMultiInterval.parse('{ [1] , [2] , [3] }')
+        """
         return self._wrap(kernel.union(self._cuts, *self._coerce_all(others)))
 
+    @_subclass_decides
     def intersection(self, *others) -> 'MultiInterval':
         return self._wrap(kernel.intersection(self._cuts, *self._coerce_all(others)))
 
+    @_subclass_decides
     def difference(self, *others) -> 'MultiInterval':
         return self._wrap(kernel.difference(self._cuts, *self._coerce_all(others)))
 
+    @_subclass_decides
     def symmetric_difference(self, *others) -> 'MultiInterval':
         return self._wrap(kernel.symmetric_difference(self._cuts, *self._coerce_all(others)))
 
@@ -246,6 +281,36 @@ class MultiInterval:
 
     def __rtruediv__(self, other):
         return self._binary(other, ops.div, reflected=True)
+
+    def __lshift__(self, n):
+        """
+        `A << n` is `A * 2 ** n`, exactly, for an int n of either sign (any `Integral` but bool, so
+        numpy's ints too): binary scaling, as `math.ldexp`, computed by `*`, so openness, the class and
+        the rounding are its. a float end rounds only where no double holds the scaled value (past
+        the largest double, or bits lost in the subnormal range), to nearest in `MultiInterval` and
+        outward in `OutwardMultiInterval`. `A >> n` is `A << -n`. unlike python's int shift,
+        `MultiInterval(3) >> 1` is `[3/2]`, not `[1]`, as `MultiInterval(1) / 3` is `[1/3]`: the floor
+        is `A // 2 ** n`. a set as the count, on either side, is a TypeError (`A * 2 ** B` scales by
+        a set)
+
+        >>> MultiInterval(3) >> 1, MultiInterval(0.1, 1, end_closed=False) << 3
+        (MultiInterval.parse('[3/2]'), MultiInterval.parse('[0.8, 8)'))
+        >>> MultiInterval(5e-324) >> 1, OutwardMultiInterval(5e-324) >> 1  # below the least double
+        (MultiInterval.parse('[0.0]'), OutwardMultiInterval.parse('(0.0, 5e-324)'))
+        """
+        scale = _power_of_two(n)
+        return NotImplemented if scale is NotImplemented else self._binary(scale, ops.mul)
+
+    def __rshift__(self, n):
+        """`A >> n` is `A * 2 ** -n`, exactly: `A << -n` (see `__lshift__`; `A // 2 ** n` is the floor)"""
+        scale = _power_of_two(n, -1)
+        return NotImplemented if scale is NotImplemented else self._binary(scale, ops.mul)
+
+    def __rlshift__(self, other):
+        return _refuse_shift_count(self, other, '<<')
+
+    def __rrshift__(self, other):
+        return _refuse_shift_count(self, other, '>>')
 
     def __neg__(self) -> 'MultiInterval':
         return self._wrap(ops.neg(self._cuts))
@@ -389,6 +454,7 @@ class MultiInterval:
     def __round__(self, ndigits=None) -> 'MultiInterval':
         return self.round(ndigits)
 
+    @_subclass_decides
     def minimum(self, other) -> 'MultiInterval':
         """
         `{min(x, y) : x in self, y in other}` (builtin `min` needs a bool from `<`, which is pointwise)
@@ -398,21 +464,30 @@ class MultiInterval:
         """
         return self._wrap(ops.minimum(self._cuts, self._coerce_or_raise(other)._cuts))
 
+    @_subclass_decides
     def maximum(self, other) -> 'MultiInterval':
         """`{max(x, y) : x in self, y in other}`"""
         return self._wrap(ops.maximum(self._cuts, self._coerce_or_raise(other)._cuts))
 
+    @_subclass_decides
     def fma(self, factor, addend) -> 'MultiInterval':
-        """`self * factor + addend`, rounded once (ieee 1788 fma)"""
+        """
+        `self * factor + addend`, rounded once (ieee 1788 fma), outward if any operand is an
+        `OutwardMultiInterval`
+
+        >>> MultiInterval(0.1).fma(OutwardMultiInterval(3), 0)
+        OutwardMultiInterval.parse('(0.3, 0.30000000000000004)')
+        """
         return self._wrap(ops.fma(self._cuts, self._coerce_or_raise(factor)._cuts,
                                   self._coerce_or_raise(addend)._cuts, outward=self._outward))
 
+    @_subclass_decides
     def cancel_minus(self, other) -> 'MultiInterval':
         """
         the largest `X` with `other + X ⊆ self`, the Minkowski difference (ieee 1788's
         `cancelMinus`). any two sets have one: `∅` when nothing fits, `[-inf, inf]` when `other` is
-        empty. exact for exact operands; a float operand rounds it once, to nearest, or outward in
-        an `OutwardMultiInterval` (an enclosure of `X`, as 1788 gives). derivation in
+        empty. exact for exact operands; a float operand rounds it once, to nearest, or outward if
+        either operand is an `OutwardMultiInterval` (an enclosure of `X`, as 1788 gives). derivation in
         `intervals.ops.cancel_minus`
 
         >>> A, B = MultiInterval(0, 10), MultiInterval(1, 3)
@@ -428,6 +503,7 @@ class MultiInterval:
         """
         return self._wrap(ops.cancel_minus(self._cuts, self._coerce_or_raise(other)._cuts, outward=self._outward))
 
+    @_subclass_decides
     def cancel_plus(self, other) -> 'MultiInterval':
         """
         `self.cancel_minus(-other)`: the largest `X` with `X - other ⊆ self` (ieee 1788's `cancelPlus`)
@@ -547,12 +623,16 @@ class MultiInterval:
         """
         return self._function('rootn', n)
 
+    @_subclass_decides
     def hypot(self, other) -> 'MultiInterval':
         """
-        `sqrt(x**2 + y**2)` for x in self and y in other, rounded once
+        `sqrt(x**2 + y**2)` for x in self and y in other, rounded once (outward if either operand is
+        an `OutwardMultiInterval`, so `np.hypot` gives the same in either order)
 
         >>> MultiInterval(3).hypot(MultiInterval(-4, 0))
         MultiInterval.parse('[3, 5]')
+        >>> MultiInterval(0.1).hypot(OutwardMultiInterval(0.1))
+        OutwardMultiInterval.parse('(0.1414213562373095, 0.14142135623730953)')
         """
         return self._wrap(functions.hypot(self._cuts, self._coerce_or_raise(other)._cuts, outward=self._outward))
 
@@ -586,6 +666,7 @@ class MultiInterval:
         """defined for `|x| >= 1`; `acoth(±1)` = ±inf and `acoth(±inf)` = 0"""
         return self._function('acoth')
 
+    @_subclass_decides
     def atan2(self, x) -> 'MultiInterval':
         """
         the angles `atan2(y, x)` for y in self, in [-pi, pi]; `atan2(0, x < 0)` is pi, as there is no -0
@@ -969,6 +1050,20 @@ class MultiInterval:
         return complex(self._point())
 
 
+def _power_of_two(n, sign: int = 1):
+    """`2 ** (sign * n)`, exact (an int or a Fraction), for an `Integral` n but bool, else NotImplemented"""
+    if isinstance(n, bool) or not isinstance(n, Integral):
+        return NotImplemented
+    n = sign * int(n)
+    return 1 << n if n >= 0 else Fraction(1, 1 << -n)
+
+
+def _refuse_shift_count(self, other, op: str):
+    """the reflected shifts, `n << A` and `n >> A`: a set is never a shift count (owner, 2026-10-03, Q6-shift)"""
+    raise TypeError(f'a {type(self).__name__} is not a shift count: {type(other).__name__} {op} '
+                    f'{type(self).__name__} is refused (`x * 2 ** A` scales by a set)')
+
+
 def _is_integral(v: Real) -> bool:
     """a real number with an integer value (±inf and nan have none)"""
     if isinstance(v, Integral):
@@ -984,7 +1079,8 @@ class OutwardMultiInterval(MultiInterval):
     a MultiInterval whose float results round outward: a low end down and a high end up, from the
     exact value, so every result holds the exact result of its operands (the tightest such floats).
     exact operands give the same results as in MultiInterval. mixed with a MultiInterval, the result
-    is an OutwardMultiInterval, whichever side it is on
+    is an OutwardMultiInterval, whichever side it is on: of an operator, or of a method taking
+    another set (`M.hypot(O)`, `M.union(O)`)
 
     inclusion isotone within one grid: `A ⊆ B` gives `f(A) ⊆ f(B)` when every float piece of A lies
     in a float piece of B (an exact A inside anything included). across grids, a float piece of A

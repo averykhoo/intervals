@@ -2,8 +2,9 @@
 OutwardMultiInterval: the class whose float results round outward
 
 * the type carries the rounding: every result of an OutwardMultiInterval is one, and so is every
-  result of mixing one with a MultiInterval, on either side of the operator. a method keeps the
-  receiver's class (v2-plan "methods on the receiver's class"), so `M.fma(O, ...)` is M's
+  result of mixing one with a MultiInterval, on either side of the operator, and of a method of a
+  MultiInterval taking one (owner, 2026-10-03, Q15(h): `M.fma(O, ...)` is `O.fma(O, ...)`, the
+  receiver promoted; it was the receiver's class, M's, before)
 * on exact operands it is the same as MultiInterval: nothing is rounded there, the functions'
   irrational values included (the tightest enclosure in both classes)
 * an end that outward rounding moved is open (nothing attains it); an end that is a double already
@@ -314,7 +315,8 @@ def flat(results):
 @given(a=any_operands, b=any_operands, s=values)
 def test_the_class_is_closed(a, b, s):
     """every operator with an OutwardMultiInterval on either side gives one, and so does every method of
-    one; a MultiInterval's method keeps its class with an outward argument"""
+    one, and a MultiInterval's method with an outward argument: the receiver promoted (Q15(h), 2026-10-03;
+    the receiver's class before), so the same set as the method of the receiver read as outward"""
     x, y = O.from_cuts(a), M.from_cuts(b)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -327,12 +329,37 @@ def test_the_class_is_closed(a, b, s):
                    x.intersection(y), x.difference(s), x.symmetric_difference(y), x.complement(), x.hull,
                    x.closed_hull, x.interior, x.finite, x.positive, x.negative, x.expand(1), x.sqrt(),
                    x.exp(), x.log(2), x.sin(), x.atan(), x.hypot(y), x.atan2(s), x.rootn(3)]
-        receiver = [y.minimum(x), y.maximum(x), y.fma(x, x), y.cancel_minus(x), y.cancel_plus(x), y.union(x),
-                    y.intersection(x), y.difference(x), y.symmetric_difference(x), y.hypot(x), y.atan2(x)]
+        promoted = [(f(y, x, s), f(O.from_cuts(b), x, s)) for f in MIXED_METHODS]
+        own = [f(y, y, s) for f in MIXED_METHODS]
     for result in flat([*mixed, *unary, *methods]):
         assert type(result) is O, result
-    for result in receiver:
+    for result, expected in promoted:
+        assert type(result) is O and result.cuts == expected.cuts, (result, expected)
+    for result in own:
         assert type(result) is M, result
+
+
+# every method of a MultiInterval taking another set, with an outward x among its operands (s a number)
+MIXED_METHODS = [
+    lambda r, x, s: r.minimum(x), lambda r, x, s: r.maximum(x), lambda r, x, s: r.fma(x, s),
+    lambda r, x, s: r.fma(s, x), lambda r, x, s: r.fma(addend=x, factor=s), lambda r, x, s: r.cancel_minus(x),
+    lambda r, x, s: r.cancel_plus(x), lambda r, x, s: r.union(s, x), lambda r, x, s: r.intersection(x),
+    lambda r, x, s: r.difference(s, x), lambda r, x, s: r.symmetric_difference(x), lambda r, x, s: r.hypot(x),
+    lambda r, x, s: r.atan2(x),
+]
+
+
+def test_a_mixed_method_is_the_outward_method():
+    """Q15(h) by example (owner, 2026-10-03): `M(0.1).hypot(O(0.1))` was the nearest point
+    `[0.1414213562373095]`, which misses sqrt(0.02); now the outward enclosure, as `O(0.1).hypot(M(0.1))`"""
+    a, b = M(0.1), O(0.1)
+    assert a.hypot(b) == b.hypot(a) == O.parse('(0.1414213562373095, 0.14142135623730953)')
+    assert type(a.hypot(b)) is O and type(a.union(b)) is O and type(a.minimum(b)) is O
+    assert type(M(1).union(O(2))) is type(M(1) | O(2)) is O
+    assert type(M(1).intersection(O(1))) is type(M(1) & O(1)) is O
+    assert M(5).minimum(O(0.1) + 0.2) == O(0.1) + 0.2  # an O's open rounded ends stay an O's
+    assert type(M(5).minimum(O(0.1) + 0.2)) is O
+    assert type(M(1).minimum(M(2))) is M and type(M(1).hypot(2)) is M  # a number decides nothing
 
 
 def number_types(x):

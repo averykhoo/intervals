@@ -15,6 +15,8 @@ MultiInterval.parse('{ [0, 1) , (2, 3] }')
 { [-inf, -1/2] , [1/2, inf] }
 >>> print(MI(1) / MI(3))           # int and Fraction stay exact
 [1/3]
+>>> print(MI(3) >> 1, MI(3) // 2)  # a shift scales by 2 ** -1, exactly; // is the floor
+[3/2] [1]
 >>> print(MI(0, 10) // 4)          # floor of the exact quotient, enumerated
 { [0] , [1] , [2] }
 >>> print(MI(1, 3) < MI(2, 4))     # comparisons are pointwise
@@ -112,6 +114,10 @@ Interval(float('-inf'), float('inf'))
   the set of values attained: an infinite endpoint is closed iff it is attained, a pole at a closed
   zero attains the infinity of its piece's sign, and a box that *is* an indeterminate point
   (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`) is empty with an `IndeterminateResultWarning`
+* **shifts**: `A << n` is `A * 2 ** n` and `A >> n` is `A * 2 ** -n`, exactly, for an int n of
+  either sign: binary scaling, so a float end rounds only past the largest double or in the
+  subnormal range. unlike python's int shift, `MI(3) >> 1` is `[3/2]`, as `MI(1) / 3` is `[1/3]`;
+  `A // 2 ** n` is the floor. a set as the count, or on the right (`3 << A`), is a `TypeError`
 * **power**: a number exponent with an integral value is 1788's pown, over every base
   (`MI(-3, 1) ** 2` is `[0, 9]`); any other real exponent, and every `MultiInterval` one, is 1788's
   pow, over the bases x > 0 and x = 0 where y > 0, the rest dropped with a `DomainClippedWarning`
@@ -168,7 +174,7 @@ Interval(float('-inf'), float('inf'))
   propagate the decoration as 1788 does (the weakest of the operands' and the op's own on the
   operands' sets: `DecoratedInterval(MI(1, 2)) / DecoratedInterval(MI(0, 1))` is `[1, inf]_trv`).
   the reverse ops take `DecoratedInterval` operands too and decorate the result trv, as 1788 does
-* **autodiff** (M15): `Dual.variable(X)` and the ops on it (`+ - * / **`, `abs`, `reciprocal`, the
+* **autodiff** (M15): `Dual.variable(X)` and the ops on it (`+ - * / **`, `<< >>`, `abs`, `reciprocal`, the
   elementary functions) carry a derivative beside the value, each a set, by the chain rule over the
   library's own ops; `derivative(f, X)` encloses `f'` over `X`. with `DecoratedInterval` parts the
   decorations prove `f` C¹ on `X` (dac or better on both), which an enclosure of `f'` alone does not
@@ -185,22 +191,45 @@ Interval(float('-inf'), float('inf'))
   converged box, once more on the box inflated within the part of the input it stands for; a zero at
   a simple rational is output as that exact point. the step runs only where the decorations prove
   `F` C¹ on the box
-* **numpy** (M16d, optional): a numpy scalar is a python number to every op (`np.float32(0.1)` is
-  the double it holds; an `np.longdouble` wider than a double is exact, as any foreign real);
-  ufuncs on a set are its methods (`np.sin(A)` is `A.sin()`, `np.arcsin(A)` is `A.asin()`,
-  `np.square(A)` is `A ** 2`) or python's operators (`np.add(M, O)` is `M + O`), anything else a
-  `TypeError`; an ndarray meeting a set is elementwise into an object array
-  (`np.linspace(0, 1, 3) + A`), except `==`, which stays structural; `np.array([A, B])` holds the
-  sets as elements. `np.asarray(x, dtype=float)` rounds each point to nearest, in both classes.
-  object arrays of sets run numpy's own loops (`np.arcsin(arr)` and `np.round(A)` are TypeErrors).
-  the 1788 layer's `Interval` is a scalar to numpy: operators with numpy scalars work, ufuncs do not
+* **numpy** (M16d, optional: the library never imports it; the `[test]` extra installs it for the
+  gate): a numpy scalar is a python number to every op (`np.float32(0.1)` is the double it holds; an
+  `np.longdouble` wider than a double is exact, as any foreign real); ufuncs on a set are its methods
+  (`np.sin(A)` is `A.sin()`, `np.arcsin(A)` is `A.asin()`, `np.square(A)` is `A ** 2`, `np.fmin` is
+  `minimum`, a nan refused as everywhere) or python's operators (`np.add(M, O)` is `M + O`), anything
+  else a `TypeError`; an ndarray meeting a set is elementwise into an object array, and `==` into a
+  bool array, as numpy compares any element type (each element structurally); `np.array([A, B])`
+  holds the sets as elements. `np.asarray(x, dtype=float)` rounds each point to nearest, in both
+  classes. the 1788 layer's `Interval` is a scalar to numpy: operators with numpy scalars work,
+  ufuncs do not. object arrays of sets run numpy's own loops, which look for numpy's names
+  (`np.arcsin(arr)` and `np.round(A)` are TypeErrors; `np.frompyfunc` reaches the method):
+
+  ```python
+  >>> import numpy as np
+  >>> np.float32(0.1) + MI(0)                        # the double a float32 holds, exactly
+  MultiInterval.parse('[0.10000000149011612]')
+  >>> np.arcsin(MI(0, 1)) == MI(0, 1).asin()
+  True
+  >>> np.hypot(MI(0.1), OMI(0.1)) == MI(0.1).hypot(OMI(0.1)) == OMI(0.1).hypot(MI(0.1))
+  True
+  >>> print(np.fmin(MI(1, 2), 1.5))
+  [1, 1.5]
+  >>> print(*(np.linspace(0, 1, 3) + MI(1, 2)))       # elementwise, an object array
+  [1.0, 2.0] [1.5, 2.5] [2.0, 3.0]
+  >>> arr = np.array([MI(1, 2), MI(3)])              # two elements, not their pieces
+  >>> arr.shape, arr == MI(3), MI(3) in arr
+  ((2,), array([False,  True]), True)
+  >>> print(*np.frompyfunc(MI.asin, 1, 1)(np.array([MI(0), MI(1)])))
+  [0] (1.5707963267948966, 1.5707963267948968)
+
+  ```
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
-  open. mixing the two gives an `OutwardMultiInterval`. an exact end stays exact, so the outward
-  class is isotone within one grid; across grids (a float piece of `A` inside an exact piece of `B`),
-  `f(A)` lies within the tightest double cover of `f(B)`, which `f(B).rounded()` gives: round the
-  inputs first (`A.rounded()`: every end a double, outward) and `A ⊆ B` gives `f(A) ⊆ f(B)`. to
-  nearest, as python's float, a value past the
+  open. mixing the two gives an `OutwardMultiInterval`, by an operator or by a method taking another
+  set (`MI(0.1).hypot(OMI(0.1))` is outward, as `OMI(0.1).hypot(MI(0.1))`). an exact end stays
+  exact, so the outward class is isotone within one grid; across grids (a float piece of `A` inside
+  an exact piece of `B`), `f(A)` lies within the tightest double cover of `f(B)`, which
+  `f(B).rounded()` gives: round the inputs first (`A.rounded()`: every end a double, outward) and
+  `A ⊆ B` gives `f(A) ⊆ f(B)`. to nearest, as python's float, a value past the
   largest double is `inf` (`MultiInterval(1e308) * 10` is `[inf]`, the point, so `& (0, inf)` leaves
   nothing); the outward class keeps it as `(MAX, inf)`. the reverse ops meet `x` before rounding, as
   1788 does: a part of the answer inside `x` that rounds wholly onto one double is that double, even

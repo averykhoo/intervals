@@ -482,3 +482,22 @@ def test_no_step_functions():
     """floor has no derivative a solver could use: it is not a method of Dual"""
     with pytest.raises(AttributeError):
         Dual.variable(MultiInterval(1)).floor()
+
+
+@pytest.mark.parametrize('make', [MultiInterval, OutwardMultiInterval, lambda *a: DecoratedInterval(MultiInterval(*a))])
+@pytest.mark.parametrize('n', [-3, 0, 2, 1100])
+def test_a_shift_is_the_product(make, n):
+    """Q6-shift (owner, 2026-10-03): `x << n` is `2 ** n x` with derivative `2 ** n x'`, each part
+    scaled as the parts scale, and `x >> n` the same with `2 ** -n`; the count is an int, never a set,
+    and never on the right. (`x * 2 ** n` computes the derivative as `x' 2 ** n + x 0`: the same set,
+    but past the doubles its `inf + 0` decorates trv where the scaling alone is dac)"""
+    x = Dual.variable(make(0.1, 3)) ** 2
+    for got, scale in ((x << n, Fraction(2) ** n), (x >> n, Fraction(2) ** -n)):
+        assert (got.value, got.derivative) == (x.value * scale, x.derivative * scale)
+        assert type(got.value) is type(x.value) and type(got.derivative) is type(x.derivative)
+        product = x * scale
+        for part, of_product in ((got.value, product.value), (got.derivative, product.derivative)):
+            assert getattr(part, 'interval', part) == getattr(of_product, 'interval', of_product)
+    for thunk in (lambda: x << 1.0, lambda: x << True, lambda: x << x, lambda: 1 << x, lambda: 2 >> x):
+        with pytest.raises(TypeError):
+            thunk()

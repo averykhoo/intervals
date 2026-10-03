@@ -317,7 +317,11 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   from gmpy2/mpfr, faster (the backend, "elementary and step functions" below); it never makes one
   tighter or looser. mixed with a `MultiInterval` on either side, the result is outward: the
   subclass overrides every reflected dunder, which python requires before it tries the right
-  operand first. int and Fraction are exact and never rounded. `mod`, `floordiv`, `fma` and the step
+  operand first. a method taking other sets follows the same rule (owner, 2026-10-03, Q15(h)):
+  `M.hypot(O)`, `M.union(O)`, `M.fma(x, O)` compute in the outward class, the receiver promoted
+  (`multi_interval.py::_subclass_decides`; any operand of a proper subclass of the receiver's class
+  decides, a number never does), so a method and its operator, and a numpy ufunc and its method,
+  give the same class. int and Fraction are exact and never rounded. `mod`, `floordiv`, `fma` and the step
   functions have no hook: they compute exactly and round once (`rounding.round_piece`), to nearest
   or outward by type. poles never go through the hook, and a float piece that rounding squeezes to
   one point keeps that point, closed. **isotone within one grid** (Q19, owner 2026-10-03): `A ⊆ B`
@@ -357,6 +361,19 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   while `|n| <= 2 ** 53`, past it `rounded_pow` to nearest with the int n's parity (python rounds n
   to a double there: `M(-1.0) ** (2 ** 60 + 1)` was `[1.0]`). int and Fraction operands are still
   exact, so `M(2) ** 2 ** 60` does not finish (open question Q-exact, plan §2 "pown-huge")
+* **shifts** (owner, 2026-10-03, Q6-shift; `intervals/multi_interval.py::MultiInterval.__lshift__`,
+  `::__rshift__`): `A << n` is `A * 2 ** n` and `A >> n` is `A * 2 ** -n`, **exactly** (binary
+  scaling, as `math.ldexp`, MPFR's `mul_2si`), for an int n of either sign (any `Integral` but bool,
+  numpy's ints too; no cap: python's own `1 << 2 ** 63` is a MemoryError too). computed by `*`
+  (`ops.mul` with the point `2 ** n` or `Fraction(1, 2 ** -n)`), so both classes, openness, rounding
+  and warnings are its: exact on int and Fraction ends, exact on float ends but past the largest
+  double (`M(1e308) << 10` is `[inf]`, outward `(MAX, inf)`) and in the subnormal range
+  (`M(5e-324) >> 1` is `[0.0]`, outward `(0.0, 5e-324)`). the one departure from python's int
+  shift: `M(3) >> 1` is `[3/2]`, not `[1]`, as `M(1) / 3` is `[1/3]`; the floor is `A // 2 ** n`,
+  so `(A << n) >> n` is A on exact ends. a set as the count (`A << B`) and the reflected forms
+  (`3 << A`, `np.int64(3) << A`) are TypeErrors: `x * 2 ** B` is the scaling by a set.
+  `DecoratedInterval` decorates a shift as the product with a point (defined and continuous on the
+  reals, com iff bounded); `Dual` scales both parts (`(u << n)' = u' << n`)
 * **reductions** (M13h, 2026-09-26; `intervals/reductions.py`): 1788's `sum`, `sumAbs`,
   `sumSquare`, `dot` as `sum_(xs)`, `sum_abs(xs)`, `sum_sqr(xs)`, `dot(xs, ys)`, exported from
   `intervals`. point ops over any iterable of real numbers, not interval ops: each operand is held
@@ -389,7 +406,8 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
       difference, `cancelMinus [max] [-max]` is `[max, infinity]`) and the class's promise: every
       `x` that fits is in the result. it is **not** a certificate that `B + X ⊆ A`, which a
       moved end can break by an ulp; exact operands (a float as `Fraction(f)`) give that. the
-      result class is the receiver's, as for `fma`; no warning is emitted, since `∅` and
+      result class is the operators' (outward if either operand is: "rounding" above), as for
+      `fma`; no warning is emitted, since `∅` and
       `[-inf, inf]` are real answers
 
 ### elementary and step functions (M12, M13d, M13e, M16e)
@@ -1072,8 +1090,9 @@ of H3 is under "later" below.
 ### numpy (M16d, H3's second part, 2026-09-28)
 
 numpy is optional: never imported at load (`intervals/numpy_compat.py` imports numpy inside the two
-hooks, which only numpy calls), not in `[project]` dependencies nor the `[test]` extra (CI's jobs
-install it beside the extra). a multi-interval is a *scalar* to numpy, one value of a number-like
+hooks, which only numpy calls), not in `[project]` dependencies; it is in the `[test]` extra (owner,
+2026-10-03, Q15(g)), as gmpy2 is, so the gate's numpy tests never skip and README's numpy section
+runs as doctests. a multi-interval is a *scalar* to numpy, one value of a number-like
 type, never an array of numbers, so interop is four rules and one refusal:
 
 * **a numpy scalar is a python number** to every op: numpy registers `np.floating` as
@@ -1101,19 +1120,22 @@ type, never an array of numbers, so interop is four rules and one refusal:
   (`np.float64(2) + A` is `A.__radd__(np.float64(2))`, the call python made before the hook
   existed; both operands ours, python's own operator, subclass first, so `np.add(M, O)` is `M + O`,
   an `OutwardMultiInterval`); `==` and `!=` fall back to identity, as python's do
-  (`np.float64(2) == M(2)` is False). the other ufuncs are the method computing the set image of
+  (`np.float64(2) == M(2)` is False); `left_shift`/`right_shift` are `<<`/`>>` (Q6-shift), whose
+  reflected forms refuse, so `np.left_shift(A, 3)` is `A << 3` and `np.int64(3) << A` a TypeError,
+  as `3 << A`. the other ufuncs are the method computing the set image of
   the ufunc's pointwise function: `sqrt cbrt exp exp2 expm1 log log2 log10 log1p sin cos tan sinh
   cosh tanh floor ceil trunc sign reciprocal` the method of that name, `arcsin ... arctanh` the
   1788 names `asin ... atanh`, `rint` `round` (ties to even, as numpy's), `square` `x ** 2` (pown,
-  not `x * x`), `minimum maximum hypot` the method of whichever operand is ours, `arctan2(y, x)`
-  `y.atan2(x)`; with both operands ours, the operators' subclass rule: `np.hypot(M, O)` is
-  `O.hypot(M)` and `np.arctan2(M, O)` takes y as an `OutwardMultiInterval` first, so an outward
-  operand keeps its rounding in either order (`M.hypot(O)`, called directly, is still M's), and
-  with no subclass between them the first operand's method (`np.hypot(M, D)` a TypeError, as
-  `M.hypot(D)`); and the unary operators (`negative positive absolute fabs`, `invert` the complement
-  `~`). a class without the method (`Dual` has no `floor`) is a TypeError. **not mapped**, so a
-  TypeError: `fmod` (C's truncated remainder, `fmod(-7, 2)` is -1 where `-7 % M(2)` is `[1]`),
-  `fmin`/`fmax` (numpy's point is to ignore a nan operand; a nan is refused here), `float_power`,
+  not `x * x`), `minimum maximum hypot` the method of whichever operand is ours (the first, if
+  both), `fmin fmax` `minimum maximum` (owner, 2026-10-03, Q15(f): they agree wherever there is no
+  nan, and a nan operand is the library's `ValueError`, never skipped as numpy skips it),
+  `arctan2(y, x)` `y.atan2(x)`; with both operands ours the method's own rule, the operators'
+  ("rounding" in "arithmetic"): `np.hypot(M, O)` is `M.hypot(O)`, an `OutwardMultiInterval` in
+  either order, so the ufunc is the method called directly, and with no subclass between them the
+  first operand's method (`np.hypot(M, D)` a TypeError, as `M.hypot(D)`); and the unary operators
+  (`negative positive absolute fabs`, `invert` the complement `~`). a class without the method
+  (`Dual` has no `floor`) is a TypeError. **not mapped**, so a TypeError: `fmod` (C's truncated
+  remainder, `fmod(-7, 2)` is -1 where `-7 % M(2)` is `[1]`; its values differ off nan too), `float_power`,
   `deg2rad` and the like, `isnan` and the other predicates of a point, `matmul`, every other ufunc,
   every ufunc method but `__call__` (`reduce`, `outer`, `accumulate`, `at`) and every keyword
   (`out=`, `where=`, `dtype=`, `casting=`). the table is keyed by the ufunc *objects*, so a foreign
@@ -1122,8 +1144,12 @@ type, never an array of numbers, so interop is four rules and one refusal:
   table with two operands) is elementwise into an object array of the array's shape, each element a
   python number (as `tolist()` gives it) meeting the object on the scalar path; an element with no
   answer raises (a nan element: `ValueError`, as `nan + A`; a bool or complex array: `TypeError`).
-  `==` and `!=` never broadcast: `f == A` is False and `A in f` False, as before. a list is not an
-  array here: `np.add([1, 2], A)` is a TypeError
+  `==` and `!=` too, into a bool array (owner, 2026-10-03, Q15(c)), as numpy compares an array with
+  any element type and as `arr == arr2`, pandas and `np.isin` already did: `np.array([A, B]) == A` is
+  `[True, False]`, `A in arr` is True where arr holds A, `f == A` for a float array is all False
+  (so `A in f` stays False); each element compares structurally, and the scalar path is unchanged
+  (`np.float64(2) == M(2)` is False, `np.array(A) == A` True). a list is not an array here:
+  `np.add([1, 2], A)` is a TypeError
 * **arrays hold a `MultiInterval` as one element** (`MultiInterval.__array__ = numpy_compat.array`,
   a 0-d object array): `np.array([A, B])` has shape `(2,)` (before, numpy took A for the sequence
   of its pieces: a 64-deep array or a ValueError). `np.asarray(A, copy=False)` is a ValueError.
@@ -1134,8 +1160,7 @@ type, never an array of numbers, so interop is four rules and one refusal:
 * **object arrays run numpy's own loops, not the table**: numpy calls the python operator or a
   method named after the ufunc on each element, so on `arr = np.array([A, B])` `arr + 1`,
   `np.sum(arr)`, `np.sin(arr)` work, `np.arcsin(arr)` is a TypeError (no method `arcsin`),
-  `np.square(arr)` is `x * x` (looser than `np.square(A)`), and `arr == A` is False and `A in arr`
-  False although `arr` holds `A` (identity: `==` is structural and does not broadcast).
+  `np.square(arr)` is `x * x` (looser than `np.square(A)`); `arr == A` is the bool array above.
   `np.round(A)` and `np.around(A)` are TypeErrors (not ufuncs: numpy's fallback looks for `rint`).
   `np.frompyfunc(MultiInterval.asin, 1, 1)(arr)` or an operand of ours reaches the table.
   numpy's own comparisons (inside its loops and functions) call `bool()` of a `TruthSet`, so they
@@ -1148,8 +1173,8 @@ type, never an array of numbers, so interop is four rules and one refusal:
 * **pandas** (3.0.6, probed 2026-09-28, not tested): a `Series` meets ours as an ndarray does, so
   `pd.Series([1.0, 2.0]) + A` and `A + pd.Series(...)` are object Series, elementwise (a TypeError
   before M16d), and `pd.Series([1.0]) < A` a Series of `TruthSet`s; pandas broadcasts `==` itself,
-  so `pd.Series([1.0]) == A` is a bool Series of `False`, as before M16d (not numpy's single
-  `False`). a Series or a DataFrame column holds sets as elements (`pd.Series([A, B]) + 1`,
+  so `pd.Series([1.0]) == A` is a bool Series of `False`, as before M16d (numpy's own answer, a
+  bool array, agrees since 2026-10-03). a Series or a DataFrame column holds sets as elements (`pd.Series([A, B]) + 1`,
   `.sum()`, `np.sin(series)` run numpy's loops), and a numpy masked array keeps its mask
   (`np.ma.masked_array([1.0, 2.0], mask=[0, 1]) + A` masks the second element)
 * **the array API standard and `__array_function__` are not built**: the standard is a namespace
@@ -1381,13 +1406,15 @@ imports only point downward.
   loop's contract on unnormalized operands; the set view's cost pinned by counts, calls to
   `allen()` (at most `n + m - 1`, exactly the intersecting cells, never the matrix) and cut
   comparisons (`::_CountingCut`, at most `10 (n + m)`), and its refusal of out-of-order operands
-* numpy (M16d, 2026-09-28; `tests/test_numpy_compat.py`, which skips without numpy): numpy never
-  imported at load (a subprocess); 9 numpy scalar types in every operator derived from the classes'
+* numpy (M16d, 2026-09-28; `tests/test_numpy_compat.py`, which skips without numpy, in the `[test]`
+  extra since 2026-10-03): numpy never imported at load (a subprocess), never in `dependencies`,
+  always in `[test]`; 9 numpy scalar types in every operator derived from the classes'
   reflected dunders, both sides, against the python number of the same value (result, exception
-  type and warning categories); every ufunc of the table against its method, both operands ours by
-  the operators' subclass rule; the unmapped ufuncs, ufunc methods and keywords `TypeError`s; the
-  elementwise path against the scalar path per element, numpy's float flags left alone; `==` never
-  broadcasting; the foreign-real rule against stubs (`::Wide`, `::Rat`, `::Plain`), every float32
+  type and warning categories); every ufunc of the table against its method called directly (both
+  operands ours: the method's own rule, the operators', `::test_both_ours_method_ufunc_is_the_method`);
+  the unmapped ufuncs, ufunc methods and keywords `TypeError`s; the elementwise path against the
+  scalar path per element, `==` and `!=` included as bool arrays, numpy's float flags left alone;
+  the foreign-real rule against stubs (`::Wide`, `::Rat`, `::Plain`), every float32
   bit pattern and the long double (which discriminates on linux CI only); numpy ints as integer
   arguments. in `tests/test_autodiff.py`, M15's `Dual ** r` hole against arb at 400 bits, bare and
   decorated (`::test_pow_number_exponent_derivative_encloses`)
