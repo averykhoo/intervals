@@ -34,11 +34,16 @@ meaning, and `intervals` does not import this module: `from intervals import iee
   library keeps its own: `cancel_minus` answers entire as 1788's "no answer" where the library's is
   the Minkowski difference (D13); `overlap`'s touching closed intervals `meets` where the library's
   `allen` says `overlaps`; `mul_rev_to_pair` decorates its first interval as the division where 0 is
-  not in `b`, where the library's `mul_rev` is trv
+  not in `b`, where the library's `mul_rev` is trv; the numbers below answer NaN where the library
+  raises
 * **numbers**: python floats; `inf` of the empty set is `+inf` and `sup` `-inf`, and `inf` of an
   interval whose lower end is 0 is `-0.0` (and `sup` `+0.0`), as 1788 has it; `mid`, `rad`, `wid`,
-  `mag`, `mig`, `mid_rad` of the empty set raise `ValueError`, the library's answer where 1788 says
-  NaN (the default built, pending Q13 (b)). the reductions are the library's own
+  `mag`, `mig` of the empty set are `nan` and `mid_rad` `(nan, nan)`, 1788's answer, where the
+  library raises `ValueError` (D9). the reductions are the library's, but `nan` where the library
+  raises for a value that has none (a nan operand, `inf + -inf`, `0 * inf`), as 1788 has it
+* **numpy**: `Interval` is a scalar to numpy (`__array_ufunc__ = None`): numpy's scalars work through
+  the operators (`np.float64(2) + x`), ufuncs refuse (`np.sqrt(x)` is a `TypeError`); the core
+  classes' ufunc hook is not the layer's
 
 the functions carry 1788's names in snake_case (a trailing underscore on a python builtin: `abs_`,
 `min_`, `max_`, `pow_`, `sum_`), and `NAMES` maps 1788's own spelling to each (`'mulRevToPair'`, and
@@ -60,6 +65,8 @@ Interval(float('-inf'), float('inf'))
 (Interval(float('-inf'), -1.0), Interval(1.0, float('inf')))
 >>> ieee1788.log(Interval(float('-inf'), 0)), ieee1788.inf(Interval(0, 1))  # the library's log is [-inf]
 (Interval(), -0.0)
+>>> ieee1788.mid(Interval()), ieee1788.sum_([1, float('inf'), float('-inf')])  # the library's raise
+(nan, nan)
 """
 import enum
 import math
@@ -594,9 +601,12 @@ def sup(x) -> float:
 
 def _number(name: str, library):
     def number(x) -> float:
-        return float(_call(library, _part(name, x))) + 0.0
+        s = _part(name, x)
+        if not s:
+            return math.nan  # 1788's; the library raises ValueError (D9)
+        return float(_call(library, s)) + 0.0
     number.__name__ = number.__qualname__ = name
-    number.__doc__ = f"ieee 1788's `{name}`, a float; the empty set raises ValueError (the library's, D9)"
+    number.__doc__ = f"ieee 1788's `{name}`, a float; `nan` for the empty set, as 1788 has it (the library raises, D9)"
     return number
 
 
@@ -605,8 +615,11 @@ mag, mig = _number('mag', lambda s: s.mag()), _number('mig', lambda s: s.mig())
 
 
 def mid_rad(x):
-    """1788's `midRad`: `(mid, rad)`, floats"""
-    m, r = _call(lambda s: s.mid_rad(), _part('mid_rad', x))
+    """1788's `midRad`: `(mid, rad)`, floats; `(nan, nan)` for the empty set"""
+    s = _part('mid_rad', x)
+    if not s:
+        return math.nan, math.nan
+    m, r = _call(lambda s: s.mid_rad(), s)
     return float(m) + 0.0, float(r) + 0.0
 
 
@@ -691,12 +704,28 @@ def overlap(a, b) -> Overlap:
     return Overlap.CONTAINED_BY if a2 < b2 else Overlap.OVERLAPPED_BY
 
 
-# REDUCTIONS: the library's, 1788's already
+# REDUCTIONS: the library's, with 1788's NaN where the library raises for a value that has none
 
-sum_ = _reductions.sum_
-sum_abs = _reductions.sum_abs
-sum_square = _reductions.sum_sqr
-dot = _reductions.dot
+def _reduction(name: str, library):
+    def reduction(*sequences, rounding: str = 'nearest') -> float:
+        sequences = [list(s) for s in sequences]
+        _reductions._direction(rounding)  # a bad rounding is the caller's error, never NaN
+        if len({len(s) for s in sequences}) > 1:
+            return library(*sequences, rounding=rounding)  # dot of different lengths: the ValueError
+        try:
+            return library(*sequences, rounding=rounding)
+        except ValueError:  # a nan operand, inf + -inf, 0 * inf: 1788's NaN
+            return math.nan
+    reduction.__name__ = reduction.__qualname__ = name
+    reduction.__doc__ = (f"ieee 1788's `{name}`: `intervals.{library.__name__}`, but `nan` for a nan operand, "
+                         f"`inf + -inf` or `0 * inf`, as 1788 has it (the library raises ValueError)")
+    return reduction
+
+
+sum_ = _reduction('sum_', _reductions.sum_)
+sum_abs = _reduction('sum_abs', _reductions.sum_abs)
+sum_square = _reduction('sum_square', _reductions.sum_sqr)
+dot = _reduction('dot', _reductions.dot)
 
 # 1788's own names (1788-2015's spelling; the decorated constructors under itf1788's `d-`)
 NAMES = {

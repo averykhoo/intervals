@@ -68,6 +68,13 @@ reason is one of the plan's residual categories. a row that starts matching fail
 in `OPS` would have its statements counted in `SKIPPED`, which M13's exit keeps empty
 (`test_nothing_is_skipped`), and every statement of every file is parsed by
 `test_parser_reads_every_statement`.
+
+this adapter tests the library's own semantics. 1788's own answers are the 1788 layer's
+(`intervals.ieee1788`, M16b), and a third pass, `tests/itf1788/test_ieee1788.py`, runs every vector
+through it and compares exactly, with no hull and no rounding. so a row here is a true statement
+about the library, and each row of a category that pass has none of (degenerate infinities, cut-based
+relations, cancellation as a Minkowski difference, decoration expectations) has a second reading:
+1788's answer is the layer's, which matches.
 """
 import math
 import re
@@ -259,7 +266,7 @@ def _overlap(a, b):
 
 
 # the plan's residual categories (v2-plan.md "ieee 1788"); a row's reason starts with one of them
-REASONS = ('degenerate infinities', 'domain-clipped functions', 'decoration expectations',
+REASONS = ('degenerate infinities', 'decoration expectations',
            'cut-based relations', 'cancellation as a Minkowski difference',
            # M13e, approved by the owner 2026-09-27 (D18): a vector whose expected hull is looser than
            # the tightest double enclosure, where ours is (checked against arb, or exactly, in
@@ -555,7 +562,9 @@ INTERVAL_VECTORS = tuple(v for v in INTERVAL_VECTORS if v.op not in CONSTRUCTORS
 # trv as every reverse op, which is sound (trv claims nothing) and 1788's mulRev
 _PAIR_DECORATED_AS_DIVISION = ('decoration expectations: 1788 decorates mulRevToPair\'s first interval '
                                'as the decorated division c / b where 0 is not in b; ours is one set, '
-                               'mul_rev\'s, trv as 1788 decorates mulRev and every other reverse op')
+                               'mul_rev\'s, trv as 1788 decorates mulRev and every other reverse op. '
+                               '1788\'s pair with its decoration is ieee1788.mul_rev_to_pair, which '
+                               'matches (Q9, closed as built)')
 DECORATION_ONLY = {v.text: _PAIR_DECORATED_AS_DIVISION for v in VECTORS if v.op == 'mulRevToPair'
                    and not _has_nai(v) and v.expected[0].decoration not in (None, 'trv')}
 
@@ -902,6 +911,11 @@ def test_divergence_rows():
         b = found[0].args[0]
         assert not b.empty and not b.lo <= 0 <= b.hi, text
         assert reason.startswith(REASONS), reason
+    # and every category has a row: a category with none reads as a claim the census contradicts
+    # ('domain-clipped functions' had none since M13d and was removed, owner 2026-10-03)
+    reasons = [*DIVERGENCES.values(), *PLAIN_ONLY.values(), *DECORATION_ONLY.values()]
+    assert all(any(r.startswith(category) for r in reasons) for category in REASONS), \
+        [category for category in REASONS if not any(r.startswith(category) for r in reasons)]
 
 
 # a statement line: an op name, its operands, ` = `, the result, `;`. no comment line in these files

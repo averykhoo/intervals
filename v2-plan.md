@@ -611,7 +611,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
       emitted is `signal PossiblyUndefinedOperation`. the constructors have no interval operand, so
       they are not in the outward pass. `::test_signals_are_checked` fails if an op whose vectors
       carry a signal is not in `SIGNALLED`
-    * residual divergence table: degenerate infinities, domain-clipped functions, decoration
+    * residual divergence table: degenerate infinities, decoration
       expectations, (added at M12) cut-based relations, and (added at M13f, approved with D13)
       **cancellation as a Minkowski difference**: where 1788's `cancelMinus`/`cancelPlus` answer
       entire as "no answer", ours is the real set of the fitting `x`, and for `[empty] [empty]` the
@@ -804,7 +804,8 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   answers over the library and changes nothing in it. every set is computed by the library
   (`OutwardMultiInterval`, and `DecoratedInterval` over one); the layer converts in by 1788's input
   rule and out by its output rule, and has its own logic only where 1788 *defines* another answer
-  than the library's set (cancellation, overlap, `mulRevToPair`'s decoration). no library module
+  than the library's set (cancellation, overlap, `mulRevToPair`'s decoration, NaN for the numbers
+  of the empty set and a reduction with no value). no library module
   was edited. not exported from `intervals` and not imported by it: `from intervals import
   ieee1788`
 * **one class for both flavours**: `ieee1788.Interval(lo, hi, decoration)`, immutable and hashable,
@@ -857,10 +858,13 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   `rootn(x, 0)` raises `ValueError` for every `x`, the empty set included (the library's rule,
   "rootn(n) for every int n other than 0", kept; no vector has degree 0), while `pown_rev(c, 0)`
   answers (entire or empty), as the library's does;
-  `mid`, `rad`, `wid`, `mag`, `mig`, `mid_rad` of the empty set raise `ValueError` (D9's answer
-  where 1788 says NaN; the default built, pending Q13 (b)). booleans are of the interval parts;
-  `is_member(nan, x)` and `is_member(±inf, x)` are false. the reductions are the library's own
-  objects (`ieee1788.sum_ is intervals.sum_`; `sum_square` is `sum_sqr`)
+  `mid`, `rad`, `wid`, `mag`, `mig` of the empty set are `nan` and `mid_rad` `(nan, nan)`, 1788's
+  answer, where the library raises `ValueError` (D9 stands for the library; Q13 (b), owner
+  2026-10-03). booleans are of the interval parts;
+  `is_member(nan, x)` and `is_member(±inf, x)` are false. the reductions are the library's
+  (`sum_square` is `sum_sqr`) wrapped to answer 1788's `nan` where the library raises for a value
+  that has none (a nan operand, `inf + -inf`, `0 * inf`); a bad call (a rounding that is none of the
+  three, `dot` of different lengths, a non-real operand) still raises
 * **names**: 1788's, transliterated to snake_case mechanically (`mulRevToPair` ->
   `mul_rev_to_pair`), a trailing underscore on a python builtin (`abs_`, `min_`, `max_`, `pow_`,
   `sum_`); `NAMES` maps 1788's own spelling to each function: 104 names, 1788's 102 and
@@ -877,19 +881,20 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   none is the obvious one. `repr` evaluates back (`Interval(float('-inf'), 2.0)`); `str` is a 1788
   literal with python's shortest decimal of each end (`[0.1, 2.0]_com`, `[entire]`, `[empty]_trv`),
   read back by `text_to_interval` as an enclosure within one double at each end.
-  `__array_ufunc__ = None`, the package's rule for every type when the layer was designed; since
-  M16d the three core classes have numpy's hook ("numpy" below) and the layer's `Interval` still
-  refuses numpy: the rule for the layer is owed (`HANDOFF.md` "still owed")
+  `__array_ufunc__ = None`: the layer's `Interval` is a scalar to numpy, numpy's scalars work
+  through the operators (`np.float64(2) + x`, the reflected dunders) and ufuncs refuse
+  (`np.sqrt(x)` is a `TypeError`), while the three core classes have numpy's hook ("numpy" below);
+  kept for 2.0 (layer-numpy, owner 2026-10-03), a hook of the layer's own being additive later
 * **conformance: a third pass** (`tests/itf1788/test_ieee1788.py`) runs all 9542 vectors through
   the layer and compares **exactly** (no hull, no rounding, no input rule): an interval as its
   float ends and decoration after asserting 1788's form, a pair member by member, numbers as
   floats, booleans, `Overlap` and `Decoration` values as they are. operands are the literals'
   nearest doubles in `Interval(lo, hi, d)`, strict (the C++ tests' convention, not 1788's text
   reading); a `Fraction` becomes its float and an `int` stays an `int`. warnings are recorded and
-  every one must be a `PossiblyUndefinedOperationWarning`; the readings, in order: an
+  every one must be a `PossiblyUndefinedOperationWarning`; the two readings: an
   `UndefinedOperationError` is `signal UndefinedOperation`, a `PossiblyUndefinedOperationWarning`
-  `signal PossiblyUndefinedOperation`, then a `ValueError` from a number or a reduction is `NaN`
-  only where the vector expects `NaN`. its rows are the adapter's under three categories only, taken
+  `signal PossiblyUndefinedOperation`. no exception is read as `NaN` (since Q13 (b) the layer answers
+  `nan` itself; a `ValueError` fails its vector). its rows are the adapter's under three categories only, taken
   from the adapter's lists by reason: **94 keys, 104 vectors** (76 no NaI, 11 tighter than the
   vector, 7 exact parsing; 2026-09-28). the adapter's other rows (degenerate infinities, cut-based
   relations, cancellation as a Minkowski difference, decoration expectations incl. Q9's 52 pair

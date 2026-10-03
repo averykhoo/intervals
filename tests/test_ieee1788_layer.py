@@ -576,21 +576,24 @@ BOOLEAN_TABLE = [
 @given(intervals_1788(), flavours)
 def test_numbers(x, decorated):
     """every number a python float, the library's number of the interval part (D9 rounds float ends as
-    1788 does); the six numbers of the empty set raise ValueError (the default built, Q13 (b))"""
+    1788 does); the six numbers of the empty set are 1788's NaN (Q13 (b), owner 2026-10-03), where the
+    library's raise ValueError"""
     if decorated:
         x = ieee1788.new_dec(x)
     part = bare_and(x).to_set()
     for name, library in NUMBER_TABLE:
         f = ieee1788.NAMES[name]
-        if ends(x) is None:
-            with pytest.raises(ValueError):
-                f(x)
-            continue
         n = f(x)
-        assert type(n) is float and n == library(part), name
+        assert type(n) is float, name
+        if ends(x) is None:
+            assert math.isnan(n), name
+            with pytest.raises(ValueError):
+                library(part)
+            continue
+        assert n == library(part), name
     if ends(x) is None:
-        with pytest.raises(ValueError):
-            ieee1788.mid_rad(x)
+        m, r = ieee1788.mid_rad(x)
+        assert type(m) is float and type(r) is float and math.isnan(m) and math.isnan(r)
         assert ieee1788.inf(x) == INF and ieee1788.sup(x) == -INF
     else:
         m, r = ieee1788.mid_rad(x)
@@ -615,8 +618,44 @@ def test_numbers_examples():
     assert type(ieee1788.mid(ieee1788.entire())) is float and ieee1788.mid(ieee1788.entire()) == 0.0
     assert ieee1788.mid(Interval(0.0, INF)) == MAX and ieee1788.rad(Interval(1.0, INF)) == INF
     assert type(ieee1788.mig(ieee1788.entire())) is float
-    assert ieee1788.sum_ is intervals.sum_ and ieee1788.sum_abs is intervals.sum_abs
-    assert ieee1788.sum_square is intervals.sum_sqr and ieee1788.dot is intervals.dot
+    for empty in (Interval(), Interval(decoration='trv')):
+        assert all(math.isnan(ieee1788.NAMES[name](empty)) for name in ('mid', 'rad', 'wid', 'mag', 'mig'))
+        assert all(math.isnan(n) for n in ieee1788.mid_rad(empty))
+        part = bare_and(empty).to_set()
+        with pytest.raises(ValueError):
+            part.mid()  # the library keeps D9
+
+
+REDUCTION_TABLE = [('sum', intervals.sum_, 1), ('sumAbs', intervals.sum_abs, 1),
+                   ('sumSquare', intervals.sum_sqr, 1), ('dot', intervals.dot, 2)]
+
+
+@pytest.mark.parametrize('name, library, arity', REDUCTION_TABLE, ids=[n for n, _, _ in REDUCTION_TABLE])
+def test_reductions(name, library, arity):
+    """Q13 (b), owner 2026-10-03: the reductions are the library's, but 1788's NaN where the library
+    raises for a value that has none (a nan operand, `inf + -inf`, `0 * inf`); a bad call (a rounding
+    that is none of the three, `dot` of different lengths, an operand that is no real) still raises"""
+    f = ieee1788.NAMES[name]
+    assert f is not library
+    plain = [[1, Fraction(1, 3), 0.5, -2.0]] * arity
+    for rounding in ('nearest', 'down', 'up'):
+        assert f(*plain, rounding=rounding) == library(*plain, rounding=rounding)
+    assert type(f(*plain)) is float and f(*(iter(s) for s in plain)) == library(*plain)
+    no_value = [[[1.0, math.nan, 3.0]] * arity]
+    no_value.append([[1.0, -INF, 2.0, INF]] if arity == 1 else [[0.0, 1.0], [INF, 1.0]])
+    if name in ('sumAbs', 'sumSquare'):  # |x| and x * x make no -inf: nan is their one case
+        no_value.pop()
+    for args in no_value:
+        with pytest.raises(ValueError):
+            library(*args)
+        assert math.isnan(f(*args)), args
+    with pytest.raises(ValueError, match='rounding'):
+        f(*plain, rounding='zero')
+    with pytest.raises(TypeError):
+        f(*[['1.0']] * arity)
+    if arity == 2:
+        with pytest.raises(ValueError, match='different lengths'):
+            f([1, 2], [3])
 
 
 @pytest.mark.parametrize('name, kinds, library', BOOLEAN_TABLE, ids=[n for n, _, _ in BOOLEAN_TABLE])

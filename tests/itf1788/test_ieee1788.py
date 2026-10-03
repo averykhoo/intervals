@@ -24,11 +24,12 @@ as 1788 does, and compares **exactly**: no hull, no rounding and no input rule h
 * **warnings** are recorded, and every one recorded must be a `PossiblyUndefinedOperationWarning`
   (read as 1788's `signal PossiblyUndefinedOperation`): a library warning escaping the layer fails
   its vector (recording would otherwise swallow it)
-* **three readings**, in this order, each a python spelling of a 1788 answer, none a widening: a
-  raised `UndefinedOperationError` is `signal UndefinedOperation` (the expected `[empty]` or
-  `[nai]`); a `PossiblyUndefinedOperationWarning` is `signal PossiblyUndefinedOperation`; then a
-  `ValueError` from a number or a reduction is `NaN`, read only where the vector expects `NaN`
-  (`UndefinedOperationError` subclasses `ValueError`, hence the order), and raised anywhere else
+* **two readings**, each a python spelling of a 1788 signal, none a widening: a raised
+  `UndefinedOperationError` is `signal UndefinedOperation` (the expected `[empty]` or `[nai]`); a
+  `PossiblyUndefinedOperationWarning` is `signal PossiblyUndefinedOperation`. nothing else is read:
+  a `NaN` is the layer's own `nan` (the numbers of the empty set and the reductions answer 1788's
+  `NaN`, Q13 (b), owner 2026-10-03), so any other exception, a `ValueError` included, fails its
+  vector
 
 every vector matches or is a row of `ROWS`, whose reason is one of three owner-approved categories,
 taken from the adapter's own lists so a row cannot drift; a row that starts matching fails as stale.
@@ -73,9 +74,6 @@ CALLS.update({
     'b-textToInterval': ('textToInterval', _SAME), 'b-numsToInterval': ('numsToInterval', _SAME),
 })
 del CALLS['isNaI']  # no NaI (D16): isNaI has no counterpart, and its vectors are rows
-
-NUMBERS = frozenset({'mid', 'rad', 'wid', 'mag', 'mig', 'midRad'})
-REDUCTIONS = frozenset({'sum_nearest', 'sum_abs_nearest', 'sum_sqr_nearest', 'dot_nearest'})
 
 # the pass's rows: the adapter's rows under these three categories, taken by reason, never copied
 CATEGORIES = ('no NaI: invalid input raises', 'tighter than the vector', 'exact parsing decides validity')
@@ -141,7 +139,6 @@ def value_form(result):
 
 
 RAISED = 'UndefinedOperationError raised'
-NAN_READ = 'a ValueError, read as NaN'
 
 
 def expected_form(vector):
@@ -166,11 +163,6 @@ def _expected_value(literal):
     return literal
 
 
-def _expects_nan(vector) -> bool:
-    values = vector.expected if isinstance(vector.expected, tuple) else (vector.expected,)
-    return all(isinstance(v, float) and math.isnan(v) for v in values)
-
-
 def call(vector):
     """the layer's answer to `vector`, raw"""
     if vector.op not in CALLS:
@@ -180,7 +172,7 @@ def call(vector):
 
 
 def read(vector, run=call):
-    """ours as `(value, signal)`, under the three readings"""
+    """ours as `(value, signal)`, under the two readings"""
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         try:
@@ -189,11 +181,6 @@ def read(vector, run=call):
             return f'no counterpart: {e}', None
         except UndefinedOperationError:
             ours = RAISED, 'UndefinedOperation'
-        except ValueError:
-            if not (vector.op in NUMBERS | REDUCTIONS and _expects_nan(vector)):
-                raise
-            nan = (math.nan, math.nan) if vector.op == 'midRad' else math.nan
-            ours = nan, None
         else:
             ours = value_form(result), None
     escaped = [w for w in caught if not issubclass(w.category, PossiblyUndefinedOperationWarning)]
@@ -320,26 +307,28 @@ def test_an_escaped_warning_fails():
     assert read(vector, warns(PossiblyUndefinedOperationWarning)) == (((4.0, 6.0), None), 'PossiblyUndefinedOperation')
 
 
-def test_the_nan_reading_is_narrow():
-    """a `ValueError` is `NaN` only from a number or a reduction whose vector expects `NaN`; anywhere
-    else it escapes (critique n3), and an `UndefinedOperationError` is read first, as the signal"""
-    number = _vector('mid [empty] = NaN')
-    assert same(read(number), expected_form(number))
+def test_nothing_is_read_as_nan():
+    """Q13 (b), owner 2026-10-03: the layer answers 1788's `NaN` itself, so the pass reads no
+    exception as `NaN`: a `ValueError` escapes even where the vector expects `NaN` (it was read so
+    before, critique n3's narrow reading), and an `UndefinedOperationError` is the signal"""
+    expects_nan = ['mid [empty] = NaN', 'midRad [empty] = NaN NaN', 'sum_nearest {1.0, 2.0, NaN, 3.0} = NaN',
+                   'sum_nearest {1.0, -infinity, 2.0, infinity, 3.0} = NaN',
+                   'dot_nearest {1.0, 2.0, 0.0, 4.0} {1.0, 2.0, infinity, 3.0} = NaN']
+    for text in expects_nan:
+        vector = _vector(text)
+        assert same(read(vector), expected_form(vector)), text
 
     def plain(v):
         raise ValueError('plain')
 
-    interval = _vector('add [1.0,2.0] [3.0,4.0] = [4.0,6.0]')
-    with pytest.raises(ValueError, match='plain'):
-        read(interval, plain)
-    not_nan = _vector('mid [0.0,2.0] = 1.0')
-    with pytest.raises(ValueError, match='plain'):
-        read(not_nan, plain)
+    for text in expects_nan + ['add [1.0,2.0] [3.0,4.0] = [4.0,6.0]', 'mid [0.0,2.0] = 1.0']:
+        with pytest.raises(ValueError, match='plain'):
+            read(_vector(text), plain)
 
     def undefined(v):
         raise UndefinedOperationError('undefined')
 
-    assert read(number, undefined) == (RAISED, 'UndefinedOperation')
+    assert read(_vector('mid [empty] = NaN'), undefined) == (RAISED, 'UndefinedOperation')
 
 
 def test_operands_keep_int_exponents():
