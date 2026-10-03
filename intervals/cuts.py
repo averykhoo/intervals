@@ -106,7 +106,23 @@ class Cut(_CutBase):
         return super().__new__(cls, normalize_value(value), Side(side))
 
     def __repr__(self) -> str:
-        return f'Cut({self.value!r}, {self.side.name})'
+        return f'Cut({_value_repr(self.value)}, {self.side.name})'
+
+
+def _value_repr(v) -> str:
+    """
+    `repr(v)`, with an int part past python's int-str limit in hex (a python literal still), so the repr
+    of a cut never raises (python's own `repr(10 ** 4300)` does)
+
+    >>> _value_repr(Fraction(1, 3)), _value_repr(-(2 ** 15000))[:9]
+    ('Fraction(1, 3)', '-0x100000')
+    """
+    try:
+        return repr(v)
+    except ValueError:
+        if isinstance(v, Fraction):
+            return f'Fraction({_value_repr(v.numerator)}, {_value_repr(v.denominator)})'
+        return hex(v)
 
 
 def below(value) -> Cut:

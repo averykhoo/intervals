@@ -13,6 +13,11 @@ error bound does not: the loop absorbs it. so each function must also send enoug
 (`DEEP`), which a resample that lost the hard blocks would fail. every input of every file, not just the
 sample, is `tools/coremath.py check`: manual, run when `tools/coremath.py status` shows the scalar code
 or upstream has moved.
+
+pown has no file: its rows are pow.wc's with an integral exponent n != 0 (2857 rows, 731 of a negative base),
+through pown's own descriptors (`ops._power_descriptor`: the nearest one's value, the outward one's hooks).
+to nearest pown is correctly rounded since 2026-10-03 (Q18); python's `float ** int`, libm's `pow`, which it
+was, gives another double on 243 of those rows on this laptop's UCRT (2026-10-03)
 """
 import importlib.util
 import math
@@ -36,7 +41,8 @@ _spec.loader.exec_module(coremath)
 # or special cases)
 DEEP = {'exp': 650, 'exp2': 185, 'exp10': 305, 'expm1': 285, 'log': 390, 'log2': 450, 'log10': 160, 'log1p': 350,
         'sin': 2840, 'cos': 900, 'tan': 590, 'asin': 715, 'acos': 420, 'atan': 3610, 'sinh': 415, 'cosh': 260,
-        'tanh': 385, 'asinh': 500, 'acosh': 705, 'atanh': 440, 'cbrt': 150, 'atan2': 43, 'hypot': 28, 'pow': 865}
+        'tanh': 385, 'asinh': 500, 'acosh': 705, 'atanh': 440, 'cbrt': 150, 'atan2': 43, 'hypot': 28, 'pow': 865,
+        'pown': 27}  # pown (2026-10-03): 54 of its calls pass 64 bits; most rows are exact powers rounded once
 
 
 def _rows(name):

@@ -57,7 +57,9 @@ class OpDescriptor(NamedTuple):
     * `split_points`: values every operand piece is split at
     * `attained(v, box) -> bool`: replaces the face rule (see the module docstring) if given
     * `rounded`: `(fn_down, fn_up)`, used for a corner whose operands are all finite and at least one
-      is a float; `None` is the identity. exact and infinite operands never go through it
+      is a float, and for a corner whose `fn` value is an `Unbuilt` (pown's power of exact operands
+      too long to build); `None` is the identity. other exact corners and infinite operands never go
+      through it
     * `pole(args, dirs)`: the value where `fn` has none but a limit from the piece's side does
       (`x / 0`); `dirs[i]` is +1 / -1 if piece i extends above / below `args[i]`, 0 if degenerate
     """
@@ -68,6 +70,15 @@ class OpDescriptor(NamedTuple):
     attained: Optional[Callable[[Value, Box], bool]] = None
     rounded: Optional[Tuple[Callable[..., Value], Callable[..., Value]]] = None
     pole: Optional[Callable[[tuple, tuple], Optional[Value]]] = None
+
+
+class Unbuilt:
+    """
+    a corner value too long to build exactly (`ops._NotADouble` is the one kind): it stands for a
+    finite value that equals no double and no other corner, so its corner always goes through the
+    descriptor's rounding hooks, exact operands included, and attains nothing
+    """
+    __slots__ = ()
 
 
 # SCALAR HELPERS (shared with ops.py)
@@ -168,7 +179,7 @@ def evaluate_box(desc: OpDescriptor, box: Box) -> Optional[Piece]:
         dirs = tuple(d for _, _, d in corner)
         value = desc.fn(*args)
         if value is not None:
-            if desc.rounded is not None and _rounds(args):
+            if desc.rounded is not None and (_rounds(args) or isinstance(value, Unbuilt)):
                 lows.append(desc.rounded[0](*args))
                 highs.append(desc.rounded[1](*args))
             else:

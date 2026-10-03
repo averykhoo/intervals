@@ -8,6 +8,7 @@ from intervals.errors import EmptySetPropagationWarning
 from intervals.errors import HullWarning
 from intervals.errors import IndeterminateResultWarning
 from intervals.errors import IntervalWarning
+from intervals.errors import PowerLimitWarning
 from intervals.kernel import Builder
 from intervals.kernel import Size
 from intervals.multi_interval import MultiInterval
@@ -72,6 +73,7 @@ __all__ = [
     'DomainClippedWarning',
     'IndeterminateResultWarning',
     'HullWarning',
+    'PowerLimitWarning',
     'sum_',
     'sum_abs',
     'sum_sqr',

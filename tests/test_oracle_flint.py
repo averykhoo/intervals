@@ -41,6 +41,7 @@ from hypothesis import strategies as st
 from intervals import DomainClippedWarning
 from intervals import MultiInterval
 from intervals import OutwardMultiInterval
+from intervals import PowerLimitWarning
 from intervals import elementary
 from intervals import kernel
 from intervals.rounding import DOWN
@@ -280,7 +281,9 @@ def _check_point(test: str, name: str, x, base=None):
     r = elementary.exact(name, exact_x, base)
     assert r not in (INF, -INF), f'{where} = {r!r} inside the domain'
     down, near, up = (elementary.rounded(name, exact_x, d, base) for d in (DOWN, NEAREST, UP))
-    exact_result = _method(MultiInterval(exact_x), name, base)
+    with warnings.catch_warnings():  # exp2/exp10 of an exact int past EXACT_RESULT_LIMIT rounds, and says so
+        warnings.simplefilter('ignore', PowerLimitWarning)
+        exact_result = _method(MultiInterval(exact_x), name, base)
     outward = _method(OutwardMultiInterval(x), name, base) if isinstance(x, float) else None
     nearest = _method(MultiInterval(x), name, base) if isinstance(x, float) else None
 
@@ -625,7 +628,7 @@ def test_pow_against_arb(x, y):
     assume(x > 0)
     exact_x, exact_y = Fraction(x), Fraction(y)
     where = f'pow({x!r}, {y!r})'
-    r = elementary.exact_pow(exact_x, exact_y)
+    r = elementary.exact_pow(exact_x, exact_y, elementary.EXACT_RESULT_LIMIT)  # the exact class's limit
     down, near, up = (elementary.rounded_pow(exact_x, exact_y, d) for d in (DOWN, NEAREST, UP))
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')

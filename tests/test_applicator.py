@@ -772,7 +772,7 @@ def test_package_exports_unchanged():
     assert set(intervals.__all__) == {
         'MultiInterval', 'OutwardMultiInterval', 'EMPTY', 'REALS', 'Size', 'Builder', 'TruthSet', 'Allen',
         'Cut', 'Side', 'IntervalWarning', 'EmptySetPropagationWarning', 'DomainClippedWarning',
-        'IndeterminateResultWarning', 'HullWarning', 'sum_', 'sum_abs', 'sum_sqr', 'dot',
+        'IndeterminateResultWarning', 'HullWarning', 'PowerLimitWarning', 'sum_', 'sum_abs', 'sum_sqr', 'dot',
         # M13e: the reverse ops (intervals/reverse.py)
         'sqr_rev', 'abs_rev', 'pown_rev', 'cosh_rev',
         'mul_rev',

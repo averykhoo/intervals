@@ -9,8 +9,13 @@ grammar (v1's, made strict -- anything left over is a ValueError):
     { [1, 2) , [3] }            several pieces; `,` `;` `|` `∪` or nothing between them
     {1, 2, 3}                   a set of points
 
-numbers are ints, floats (`2.0`, `1e-05`), fractions (`1/3`) or `inf`/`-inf` (also `∞`).
-`format` prints ints and fractions exactly and floats by `repr`, so `parse(format(x)) == x`.
+numbers are ints, floats (`2.0`, `1e-05`), fractions (`1/3`) or `inf`/`-inf` (also `∞`). an int, and
+each part of a fraction, may also be hex (`0x1f`, `-0x1f/0x3`, `1/0x10`).
+`format` prints ints and fractions exactly and floats by `repr`, so `parse(format(x)) == x`. an int part
+python will not write in decimal (more than `sys.get_int_max_str_digits()` digits, 4300 by default:
+python's guard against slow conversions) is written in hex, which python converts in linear time and
+without a limit, so `repr` never raises and still reads back (owner, 2026-10-03, m14b-open). `parse`
+keeps python's limit on a decimal literal: `parse('1' * 4301)` raises ValueError, naming the hex form
 """
 import math
 import re
@@ -26,7 +31,10 @@ from intervals.kernel import normalize
 from intervals.kernel import pairs
 from intervals.kernel import piece
 
-_NUMBER = r'[+-]?\s*(?:inf(?:inity)?|∞|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*/\s*\d+)?)'
+# a hex int is never followed by `.`: `0x1.8p1` is a hex float, which is not read (and not `0x1` then `.8`)
+_INT = r'(?:0x[0-9a-f]+(?!\.)|\d+)'
+_NUMBER = (r'[+-]?\s*(?:inf(?:inity)?|∞|0x[0-9a-f]+(?!\.)(?:\s*/\s*' + _INT + r')?'
+           r'|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*/\s*' + _INT + r')?)')
 _TOKEN = re.compile(fr'\s*(?:(?P<num>{_NUMBER})|(?P<punct>[\[\](){{}},;|∪]))\s*', flags=re.IGNORECASE)
 _SEPARATORS = {',', ';', '|', '∪'}
 
@@ -34,9 +42,25 @@ _SEPARATORS = {',', ';', '|', '∪'}
 # FORMAT
 
 def format_value(value: Value) -> str:
+    """
+    a float by `repr` (exact; also 'inf' / '-inf'), an int in decimal, a Fraction as `p/q`; an int part
+    past python's int-str limit in hex
+
+    >>> format_value(-1 / 3), format_value(Fraction(-7, 2)), format_value(-(10 ** 4300))[:12]
+    ('-0.3333333333333333', '-7/2', '-0x1392bd7c2')
+    """
     if isinstance(value, float):
-        return repr(value)  # round-trips exactly; also 'inf' / '-inf'
-    return str(value)  # int, or Fraction as 'p/q'
+        return repr(value)
+    if isinstance(value, Fraction) and value.denominator != 1:
+        return f'{_format_int(value.numerator)}/{_format_int(value.denominator)}'
+    return _format_int(int(value))
+
+
+def _format_int(n: int) -> str:
+    try:
+        return str(n)
+    except ValueError:  # past sys.get_int_max_str_digits(): hex has no limit and is linear
+        return hex(n)
 
 
 def format_piece(start, end) -> str:
@@ -71,13 +95,31 @@ def parse_value(text: str) -> Value:
     if body in ('inf', 'infinity', '∞'):
         return sign * math.inf
     if '/' in body:
+        numerator, denominator = body.split('/')
         try:
-            return sign * Fraction(body)
+            return sign * Fraction(_parse_int(numerator, text), _parse_int(denominator, text))
         except ZeroDivisionError:  # a zero denominator is bad text like any other (M14-breadth)
             raise ValueError(f'cannot parse {text!r}: a zero denominator') from None
-    if any(c in body for c in '.e'):
+    if any(c in body for c in '.e') and not body.startswith('0x'):
         return sign * float(body)
-    return sign * int(body)
+    return sign * _parse_int(body, text)
+
+
+def _parse_int(body: str, text: str) -> int:
+    """
+    a decimal or `0x` hex int. python refuses a decimal of more than `sys.get_int_max_str_digits()`
+    digits; the ValueError then names the hex form, which has no limit
+    """
+    if body.startswith('0x'):
+        return int(body, 16)
+    try:
+        return int(body)
+    except ValueError as e:
+        if not body.isdigit():  # `1.5/2`: not an int at all
+            raise ValueError(f'cannot parse {text!r}: {body!r} is not an int') from None
+        shown = text if len(text) <= 40 else f'{text[:20]}...{text[-10:]}'
+        raise ValueError(f'cannot parse {shown!r}: {e} (an int that long can be written in hex, 0x..., '
+                         f'which has no limit)') from None
 
 
 def _tokenize(text: str) -> List[Tuple[str, str]]:

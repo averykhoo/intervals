@@ -94,6 +94,11 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   rule again; complement would need a translation table instead of a role swap. it feels natural
   because it names the point rather than the boundary; two sides is the whole trick
 * `-0.0` normalizes to `0.0` inside the Cut constructor (they compare equal but print differently)
+* text (`fmt`): `repr` evaluates back and `str` is what `parse` reads; an int part python will not
+  write in decimal (past `sys.get_int_max_str_digits()`, 4300 digits by default) is written in hex,
+  which `parse` reads (`0x1f`, `1/0x10`), lossless and linear, so `repr` and `str` never raise
+  (m14b-open, 2026-10-03). `parse` keeps python's limit on a decimal literal (a 4301-digit one raises
+  ValueError, naming hex): lifting it would switch off python's guard for the whole process
 * arithmetic never operates on cuts directly. the applicator converts each piece to
   `(lo, lo_closed, hi, hi_closed)`, computes, and converts back. cuts are the storage and set-algebra
   form; nobody adds two cuts
@@ -311,7 +316,9 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   from gmpy2/mpfr, faster (the backend, "elementary and step functions" below); it never makes one
   tighter or looser. mixed with a `MultiInterval` on either side, the result is outward: the
   subclass overrides every reflected dunder, which python requires before it tries the right
-  operand first. int and Fraction are exact and never rounded. `mod`, `floordiv`, `fma` and the step
+  operand first. int and Fraction are exact and never rounded, except a power too long to build
+  ("power" below: past `elementary.EXACT_RESULT_LIMIT`, 2**22 bits, it is a float, as an irrational
+  value is, with a `PowerLimitWarning`). `mod`, `floordiv`, `fma` and the step
   functions have no hook: they compute exactly and round once (`rounding.round_piece`), to nearest
   or outward by type. poles never go through the hook, and a float piece that rounding squeezes to
   one point keeps that point, closed
@@ -330,15 +337,24 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   1788's **pow** (`functions.pow_`, "elementary and step functions" below), so `[-3, 1] ** [2]` =
   `[0, 1]`. `b ** A` for a real `b` is `MultiInterval(b) ** A`, in `A`'s class, and a subclass's
   `__rpow__` keeps `MultiInterval(2) ** OutwardMultiInterval(...)` outward. 3-argument `pow` is a
-  `TypeError`: dropped (not 1788; v1 had it on integers only). pown's float corners never build a
-  power longer than `elementary.EXACT_POWER_LIMIT` bits (pown-huge, 2026-09-29;
-  `intervals/ops.py::_power_descriptor`): outward, a float corner's power is exact while
-  `elementary.exact_pow` builds it and otherwise `elementary.rounded_pow` in each direction (1788's
-  pow route, the same doubles), with attainment against `ops._NOT_A_DOUBLE`, a marker equal to
-  nothing (such a power is neither a double nor a midpoint); to nearest, python's `float ** int`
-  while `|n| <= 2 ** 53`, past it `rounded_pow` to nearest with the int n's parity (python rounds n
-  to a double there: `M(-1.0) ** (2 ** 60 + 1)` was `[1.0]`). int and Fraction operands are still
-  exact, so `M(2) ** 2 ** 60` does not finish (open question Q-exact, plan §2 "pown-huge")
+  `TypeError`: dropped (not 1788; v1 had it on integers only). pown has one rule
+  (`intervals/ops.py::_power_descriptor`; pown-huge 2026-09-29, Q17 and Q18 2026-10-03): a corner's
+  power is built exactly while it is short, else rounded by `elementary.rounded_pow` (1788's pow
+  route); outward in two directions with attainment against `ops._NOT_A_DOUBLE`, a marker equal to
+  nothing (such a power is neither a double nor a rounding breakpoint, for any rational corner), to
+  nearest once. short means `elementary.exact_power_bits` (`|n|` times the longer of the base's
+  numerator and denominator in bits) at most `elementary.EXACT_POWER_LIMIT` (100000) for a float
+  corner, a speed choice since the double is the same, and at most `elementary.EXACT_RESULT_LIMIT`
+  (2**22, about 1.26M digits, under a second to build) for an int or Fraction corner, the one limit
+  pown, pow and `exp2`/`exp10` share. so to nearest pown is correctly rounded for every n, with no
+  libm: python's `float ** int` (libm's `pow`, an ulp off on 1 in 2600 random inputs and on 23% of
+  CORE-MATH's integral-exponent hard cases, 2026-10-03) is gone, and with it the `2 ** 53` seam where
+  python rounds n to a double. an exact corner past its limit is a float: outward the tightest float
+  enclosure, open (`O(2) ** 2 ** 60` = `(MAX, inf)`, the same as `O(2) ** O(2 ** 60)`), to nearest the
+  value rounded to nearest (`M(2) ** 2 ** 60` = `[inf]`, as `M(2.0) ** 2 ** 60`; `M(2) ** M(2 ** 60)`,
+  pow, is the open enclosure in both classes), with a `PowerLimitWarning` (ignored by default; a
+  filter makes it the error), as pow and `exp2`/`exp10` warn when they round an exact operand's
+  rational value
 * **reductions** (M13h, 2026-09-26; `intervals/reductions.py`): 1788's `sum`, `sumAbs`,
   `sumSquare`, `dot` as `sum_(xs)`, `sum_abs(xs)`, `sum_sqr(xs)`, `dot(xs, ys)`, exported from
   `intervals`. point ops over any iterable of real numbers, not interval ops: each operand is held
@@ -425,10 +441,15 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
       ones (`exp(0)`, `sqrt` of a square, `log2` of a power of 2, `2 ** int`, ...) and every other
       value is irrational (lindemann-weierstrass, gelfond-schneider). so results are the same on
       every platform; libm is not correctly rounded (this laptop's UCRT `acosh` is 2 ulp off near 1,
-      measured 2026-09-25). `exp2`/`exp10` of an int past `elementary.EXACT_POWER_LIMIT` (100000)
-      are rounded rather than built exactly, and so is a rational power longer than that many bits
-      (`elementary.exact_pow`), which ziv's loop still settles, since a value that long in lowest
-      terms is neither a double nor a midpoint of two. M13d's functions avoid cancellation where
+      measured 2026-09-25). a power is built exactly while `elementary.exact_power_bits` is at most
+      `elementary.EXACT_RESULT_LIMIT` (2**22) for exact operands, the limit pown, pow and
+      `exp2`/`exp10` share (exp2/exp10 of x measured as `2 ** x`, `10 ** x`: `M(2 ** 21).exp2()` and
+      `M(2) ** M(2 ** 21)` are exact, one more is not), and `elementary.EXACT_POWER_LIMIT` (100000)
+      for a float operand; past it the power is rounded like an irrational value, with a
+      `PowerLimitWarning` for exact operands, and ziv's loop still settles it, since a value that long
+      in lowest terms is neither a double nor a midpoint of two (`ops._NotADouble`'s proof). the loop
+      ends but is not bounded: an exact operand crafted close to a breakpoint (`3 + 2**-3000000`, an
+      exact newton iterate) can need millions of bits. M13d's functions avoid cancellation where
       they need it: expm1 from exp at extra precision near 0, log1p as the log of the exact `1 + x`,
       coth and csch through expm1, acot as `atan(1/x)`, roots and pow as `exp(ln x / n)` and
       `exp(y ln x)`; pow decides overflow and underflow from a bracket of `ln x` good to a factor of

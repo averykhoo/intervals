@@ -57,6 +57,7 @@ from intervals.cuts import normalize_value
 from intervals.errors import DomainClippedWarning
 from intervals.errors import EmptySetPropagationWarning
 from intervals.errors import IndeterminateResultWarning
+from intervals.errors import PowerLimitWarning
 from intervals.kernel import Cuts
 from intervals.rounding import DOWN
 from intervals.rounding import NEAREST
@@ -172,6 +173,9 @@ def apply(name: str, a: Cuts, outward: bool = False, base=None) -> Cuts:
     if fn.poles_hit:
         warn(IndeterminateResultWarning, f'{name}([0]) has no value (a pole with a side each way), so that part '
                                          f'contributes nothing')
+    if fn.too_long:
+        warn(PowerLimitWarning, f'{name}: the power of an exact operand is longer than '
+                                f'{elementary.EXACT_RESULT_LIMIT} bits, so its tightest float enclosure was returned')
     return kernel.normalize(kernel.piece(lo, hi, lo_closed, hi_closed) for lo, lo_closed, hi, hi_closed in out)
 
 
@@ -207,6 +211,7 @@ class _Function:
         self.base = base
         self.float_operands = float_operands
         self.poles_hit = False  # a piece that is the point 0 of a pole with a side each way
+        self.too_long = False  # exp2/exp10 of an exact int past elementary.EXACT_RESULT_LIMIT
         if name == 'rootn':
             self.where = 'never' if base > 0 else 'always' if base % 2 == 0 else 'pole'
         elif name in POLE_AT_ZERO:
@@ -220,14 +225,19 @@ class _Function:
         """
         a result end from a piece's end x, as `(f(x), closed)`: `want` is DOWN for a result's low end
         and UP for its high end. an exact x gives the exact value, or the enclosure's end when the value
-        is irrational; a float x gives a float, to nearest or (outward) in the `want` direction. an end
-        that a directed rounding moved is open, since nothing attains it
+        is irrational, or (exp2, exp10) rational past `elementary.EXACT_RESULT_LIMIT`; a float x gives a
+        float, to nearest or (outward) in the `want` direction. an end that a directed rounding moved is
+        open, since nothing attains it
         """
         as_float = is_float(x) if self.float_operands is None else self.float_operands and not is_infinite(x)
         direction = (want if self.outward else NEAREST) if as_float else want
         exact_x = Fraction(x) if as_float else x
-        value = elementary.exact(self.name, exact_x, self.base)
-        if value is None:  # irrational
+        limit = elementary.EXACT_POWER_LIMIT if as_float else elementary.EXACT_RESULT_LIMIT
+        value = elementary.exact(self.name, exact_x, self.base, limit)
+        if value is None:  # irrational, or a power too long to build
+            if not as_float and self.name in elementary.EXP_BASES and not is_infinite(x) \
+                    and Fraction(x).denominator == 1:
+                self.too_long = True
             return elementary.rounded(self.name, exact_x, direction, self.base), closed and direction == NEAREST
         if is_infinite(value) or not as_float:
             return value, closed
@@ -620,6 +630,7 @@ _POW_EXTREMES = {
     (-1, -1): ((1, 1), (0, 0)),
 }
 _OUTSIDE = object()  # a box outside pow's domain
+_TOO_LONG = object()  # a rational power longer than its limit
 
 
 def pow_(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
@@ -653,12 +664,12 @@ def pow_(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     inside = kernel.intersection(a, _NON_NEGATIVE)
     clipped = inside != a
     as_float = has_finite_float(a) or has_finite_float(b)
-    out, indeterminate = [], []
+    out, indeterminate, too_long = [], [], []
     for box in product(kernel.pieces(inside), kernel.pieces(b)):
         found, undefined = [], False
         for sx, px in _tagged_parts(box[0], ((0, _ZERO_BASE), (-1, _BELOW_ONE), (None, _ONE), (1, _ABOVE_ONE))):
             for sy, py in _tagged_parts(box[1], ((-1, _NEGATIVE), (0, _ZERO), (1, _POSITIVE))):
-                p = _power_box(px, py, sx, sy, as_float, outward)
+                p = _power_box(px, py, sx, sy, as_float, outward, too_long)
                 if p is _OUTSIDE:
                     clipped = True
                 elif p is None:
@@ -674,6 +685,9 @@ def pow_(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
         shown = ', '.join(fmt.format_piece(*kernel.piece(lo, hi, lo_closed, hi_closed))
                           for lo, lo_closed, hi, hi_closed in indeterminate[0])
         warn(IndeterminateResultWarning, f'pow({shown}) has no value at any point, so that part contributes nothing')
+    if too_long:
+        warn(PowerLimitWarning, f'pow: the power of exact operands is longer than {elementary.EXACT_RESULT_LIMIT} '
+                                f'bits, so its tightest float enclosure was returned')
     return kernel.normalize(kernel.piece(lo, hi, lo_closed, hi_closed) for lo, lo_closed, hi, hi_closed in out)
 
 
@@ -682,8 +696,11 @@ def _tagged_parts(p: Piece, parts) -> List[Tuple[object, Piece]]:
     return [(tag, q) for tag, part in parts for q in kernel.pieces(kernel.intersection(_cuts(p), part))]
 
 
-def _power_box(px: Piece, py: Piece, sx, sy: int, as_float: bool, outward: bool):
-    """the powers of one box as a piece; None if no point has one, `_OUTSIDE` if it is outside the domain"""
+def _power_box(px: Piece, py: Piece, sx, sy: int, as_float: bool, outward: bool, too_long: Optional[list] = None):
+    """
+    the powers of one box as a piece; None if no point has one, `_OUTSIDE` if it is outside the domain.
+    a corner of exact operands whose power is too long to build appends to `too_long`, if given
+    """
     if sx == 0:
         return _OUTSIDE if sy <= 0 else _point(0, as_float)
     if sx is None:  # 1 ** y
@@ -696,7 +713,7 @@ def _power_box(px: Piece, py: Piece, sx, sy: int, as_float: bool, outward: bool)
         yv, y_closed = (py[0], py[1]) if y_end == 0 else (py[2], py[3])
         # along a closed infinite edge the power is constant, so any point of it attains the corner's value
         attained = (x_closed and y_closed) or (xv == INF and x_closed) or (is_infinite(yv) and y_closed)
-        ends.append(_power_corner(xv, yv, sx, sy, want, attained, as_float, outward))
+        ends.append(_power_corner(xv, yv, sx, sy, want, attained, as_float, outward, too_long))
     (lo, lo_closed), (hi, hi_closed) = ends
     return _settled(lo, lo_closed, hi, hi_closed)
 
@@ -706,8 +723,14 @@ def _point(v: int, as_float: bool) -> Piece:
     return v, True, v, True
 
 
-def _power_corner(x, y, sx: int, sy: int, want: int, attained: bool, as_float: bool, outward: bool):
-    """`(value, closed)` at a corner of a box with x on side `sx` of 1 and y of sign `sy`"""
+def _power_corner(x, y, sx: int, sy: int, want: int, attained: bool, as_float: bool, outward: bool,
+                  too_long: Optional[list] = None):
+    """
+    `(value, closed)` at a corner of a box with x on side `sx` of 1 and y of sign `sy`. exact operands
+    build a rational power while it is at most `elementary.EXACT_RESULT_LIMIT` bits, the limit pown and
+    exp2/exp10 share, and past it round it like an irrational one (appending to `too_long`); with a float
+    operand the limit is `elementary.EXACT_POWER_LIMIT`, a speed choice: the double is the same
+    """
     direction = (want if outward else NEAREST) if as_float else want
     if x == INF:
         value = INF if sy > 0 else 0
@@ -718,8 +741,13 @@ def _power_corner(x, y, sx: int, sy: int, want: int, attained: bool, as_float: b
     elif x == 1 or y == 0:  # the limit at an open end of a part
         value = 1
     else:
-        value = elementary.exact_pow(Fraction(x), Fraction(y))
-        if value is None:  # irrational
+        limit = elementary.EXACT_POWER_LIMIT if as_float else elementary.EXACT_RESULT_LIMIT
+        value = elementary.exact_pow(Fraction(x), Fraction(y), limit, _TOO_LONG)
+        if value is _TOO_LONG:  # rational, but too long to build
+            value = None
+            if too_long is not None and not as_float:
+                too_long.append((x, y))
+        if value is None:  # irrational, or too long
             return elementary.rounded_pow(Fraction(x), Fraction(y), direction), attained and direction == NEAREST
     if is_infinite(value) or not as_float:
         return value, attained

@@ -16,6 +16,18 @@ attainment: a power that long is neither a double nor a midpoint (`ops._NOT_A_DO
   power is still affordable here, so it is the oracle
 * below it, the descriptor is today's construction (`ops.outward` of the exact descriptor) exactly
 * past it, MPFR decides (points, both directions, closed iff exact)
+
+and the owner's answers of 2026-10-03 (`references/owner-questions-2026-10-03/pown.md`), one rule in
+`ops._power_descriptor`:
+
+* Q17: an int or Fraction corner builds its power only up to `elementary.EXACT_RESULT_LIMIT` bits, the
+  limit pow and exp2/exp10 share; past it outward gives the tightest open float enclosure and to nearest
+  the value rounded to nearest, with a `PowerLimitWarning` (ignored by default). `M(2) ** 2 ** 60` and
+  `O(0.5, 2) ** 2 ** 40` (the 2 an int) used to hang: reproductions above, the limit's boundary, and pown
+  against pow on exact points below
+* Q18: to nearest a float corner is correctly rounded for every n (the exact power rounded once, or
+  `rounded_pow` to nearest), no longer python's `float ** int`, which is libm's `pow` and misses by an
+  ulp on hard cases (`M(1.0026606152364441) ** 13`); MPFR decides over every n, not only past 2 ** 53
 """
 import math
 import subprocess
@@ -34,6 +46,7 @@ from intervals import DecoratedInterval
 from intervals import IndeterminateResultWarning
 from intervals import MultiInterval
 from intervals import OutwardMultiInterval
+from intervals import PowerLimitWarning
 from intervals import elementary
 from intervals import kernel
 from intervals import ops
@@ -43,6 +56,7 @@ from intervals.cuts import above
 from intervals.cuts import below
 from intervals.rounding import DOWN
 from intervals.rounding import MAX
+from intervals.rounding import NEAREST
 from intervals.rounding import UP
 from intervals.rounding import round_rational
 
@@ -85,12 +99,23 @@ REPRODUCTIONS = [
     ('Dual.variable(O(-2.0)) ** 2 ** 60',
      "Dual(O.parse('(1.7976931348623157e+308, inf)'), O.parse('(-inf, -1.7976931348623157e+308)'))"),
     ('np.power(O(0.5, 1), 2 ** 31 - 1) if np else O.parse("(0.0, 1]")', "O.parse('(0.0, 1]')"),
+    # exact operands (Q17, 2026-10-03): each hung before, building the exact power
+    ('O(0.5, 2) ** 2 ** 40', "O.parse('(0.0, inf)')"),  # the 2 is an int, as `O.parse('[0.5, 2]')` stores it
+    ('O.parse("[0.5, 2]") ** 2 ** 40', "O.parse('(0.0, inf)')"),
+    ('O(2) ** 2 ** 60', "O.parse('(1.7976931348623157e+308, inf)')"),
+    ('M(2) ** 2 ** 60', "M.parse('[inf]')"),  # to nearest: rounded, as M(2.0) ** 2 ** 60
+    ('M(2) ** 1e300', "M.parse('[inf]')"),  # an integral float exponent is the int
+    ('M(Fraction(1, 3)) ** 2 ** 40', "M.parse('[0.0]')"),
+    ('O(Fraction(-1, 3)) ** -(2 ** 40 + 1)', "O.parse('(-inf, -1.7976931348623157e+308)')"),
+    ('Dual.variable(M(2)) ** 2 ** 60', "Dual(M.parse('[inf]'), M.parse('[inf]'))"),
+    ('D(M(2)) ** 2 ** 60', "D(M.parse('[inf]'), Decoration.DAC)"),
 ]
 
 _PRELUDE = '''
 import math, warnings
 warnings.simplefilter('ignore')
-from intervals import OutwardMultiInterval as O, DecoratedInterval as D, Decoration
+from fractions import Fraction
+from intervals import MultiInterval as M, OutwardMultiInterval as O, DecoratedInterval as D, Decoration
 import intervals.ieee1788 as I
 from intervals.autodiff import Dual
 try:
@@ -237,7 +262,8 @@ def test_the_marker_boundary_of_one_half():
 
 
 @pytest.mark.parametrize('limit, holds', [
-    (elementary.EXACT_POWER_LIMIT, True), (36550, True), (36549, False), (2150, False), (2000, False)])
+    (elementary.EXACT_POWER_LIMIT, True), (elementary.EXACT_RESULT_LIMIT, True), (36550, True), (36549, False),
+    (2150, False), (2000, False)])
 def test_the_marker_proof_premises(limit, holds):
     """
     `ops._NotADouble`'s proof needs `EXACT_POWER_LIMIT >= 36550`: below it a marker could stand for a
@@ -349,6 +375,170 @@ def test_huge_exponent_against_mpfr(x, n):
     assert _piece(O(x) ** n) == _mpfr_piece(x, n), (x, n)
 
 
+# EXACT CORNERS AT AND PAST EXACT_RESULT_LIMIT (Q17, owner 2026-10-03)
+
+LIMIT = elementary.EXACT_RESULT_LIMIT
+K = LIMIT // 2  # 2 and 1/2 have 2 bits: 2 ** K and 2 ** -K are the last powers of 2 built
+
+
+def test_exact_corners_at_the_limit():
+    """
+    `exact_power_bits` (|n| times the longer of numerator and denominator in bits) at the limit builds,
+    one past rounds: outward the tightest open enclosure, to nearest the nearest double, with the
+    warning. before, every row built its exact power (an int of 2**21 bits, cheap for a power of 2)
+    """
+    for cls in (M, O):
+        assert (cls(2) ** K).cuts == cls(2 ** K).cuts
+        assert (cls(Fraction(-1, 2)) ** K).cuts == cls(Fraction(1, 2 ** K)).cuts
+    big, tiny = f'{MAX!r}', f'{TINY!r}'
+    for a, n, outward, nearest in [
+        (2, K + 1, f'({big}, inf)', '[inf]'),
+        (-2, K + 1, f'(-inf, -{big})', '[-inf]'),  # K + 1 is odd
+        (Fraction(1, 2), K + 1, f'(0.0, {tiny})', '[0.0]'),
+        (-2, -(K + 1), f'(-{tiny}, 0.0)', '[0.0]'),
+        (Fraction(7, 5), -(LIMIT // 3 + 1), f'(0.0, {tiny})', '[0.0]'),
+    ]:
+        with pytest.warns(PowerLimitWarning, match='longer than 4194304 bits'):
+            assert repr(O(a) ** n) == repr(O.parse(outward)), (a, n)
+        with pytest.warns(PowerLimitWarning, match='rounded to nearest'):
+            assert repr(M(a) ** n) == repr(M.parse(nearest)), (a, n)
+
+
+def test_an_exact_corner_past_the_limit_inside_the_float_range():
+    """
+    the marker route for an exact corner whose value is a finite double's neighbour: x has 31 bits, so
+    135301 is the first n past the limit; the exact power (4.2M bits, about 0.25 s here) is the oracle
+    """
+    x = 1 + Fraction(1, 2 ** 30)
+    n = LIMIT // 31 + 1
+    v = x ** n
+    down, nearest, up = (round_rational(v, d) for d in (DOWN, NEAREST, UP))
+    assert down < up
+    with pytest.warns(PowerLimitWarning):
+        assert _piece(O(x) ** n) == (down, False, up, False)
+    with pytest.warns(PowerLimitWarning):
+        assert _piece(M(x) ** n) == (nearest, True, nearest, True)
+    with pytest.warns(PowerLimitWarning):
+        assert _piece(O(-x) ** n) == (-up, False, -down, False)  # n odd
+
+
+EXACT_POINTS = [(3, 70000), (2, 50001), (10, 25001), (2, K), (Fraction(2, 3), -40000)]
+
+
+@pytest.mark.parametrize('x, n', EXACT_POINTS + [
+    (2, K + 1), (Fraction(1, 3), 2 ** 40), (Fraction(2, 3), -(2 ** 30)), (7, 10 ** 30), (Fraction(-5, 3), 2 ** 40 + 1)])
+def test_pown_matches_pow_on_exact_points(x, n):
+    """
+    `A ** n` and `A ** O(n)` are pown and pow, two routes that now share one limit: `O(3) ** 70000` was the
+    exact int while `O(3) ** O(70000)` was `(MAX, inf)` (pow's limit was 100000 bits), and past the
+    limit pown built the power (`O(Fraction(1, 3)) ** 2 ** 40` hung). pow takes no negative base: a
+    negative one is checked as `-(|x| ** n)` for odd n
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', PowerLimitWarning)
+        got = O(x) ** n
+        want = O(abs(x)) ** O(n)
+    assert got == (want if x > 0 or n % 2 == 0 else -want), (x, n)
+
+
+@pytest.mark.parametrize('x, n', EXACT_POINTS)
+def test_nearest_pown_matches_pow_on_exact_points(x, n):
+    """within the limit both classes build the same exact power (past it the nearest class rounds pown
+    to nearest but pow to the enclosure: `M(2) ** 2 ** 60` is `[inf]`, `M(2) ** M(2 ** 60)` `(MAX, inf)`)"""
+    got = M(x) ** n
+    assert got == M(x) ** M(n) and not any(isinstance(c.value, float) for c in got.cuts), (x, n)
+
+
+def test_one_limit_for_pown_pow_exp2_exp10():
+    """
+    exp2 and exp10 measure `2 ** x` and `10 ** x` as pown does (`exact_power_bits` of the base and x):
+    `M(2 ** 21).exp2()` and `M(2 ** 20).exp10()` are exact, one more rounds. exp2/exp10 used to stop at an
+    exponent of 100000 (`M(100000).exp10()` built 332193 bits while `M(10) ** M(25001)` rounded)
+    """
+    for base, name, x in ((2, 'exp2', K), (10, 'exp10', LIMIT // 4)):
+        exact = base ** x
+        for got in (getattr(M(x), name)(), M(base) ** M(x), M(base) ** x, O(base) ** x):
+            assert [type(c.value) for c in got.cuts] == [int, int] and got.cuts[0].value == exact, (name, x)
+        for result in (lambda: getattr(M(x + 1), name)(), lambda: M(base) ** M(x + 1), lambda: O(base) ** (x + 1)):
+            with pytest.warns(PowerLimitWarning):
+                assert _piece(result()) == (MAX, False, INF, False), name
+
+
+@pytest.mark.parametrize('expr, match', [
+    ('M(2) ** 2 ** 60', 'pow<a 61-bit int>: .* rounded to nearest'),
+    ('O(2, 3) ** -(2 ** 40)', 'pow-1099511627776: .* tightest float enclosure'),
+    ('M(2) ** M(2 ** 60)', 'pow: .* tightest float enclosure'),
+    ('O(Fraction(1, 3)) ** O(2 ** 40)', 'pow: '),
+    ('M(2 ** 60).exp2()', 'exp2: '),
+    ('O(-(2 ** 60)).exp10()', 'exp10: '),
+])
+def test_the_power_limit_warning(expr, match):
+    with pytest.warns(PowerLimitWarning, match=match):
+        eval(expr, {'M': M, 'O': O, 'Fraction': Fraction})
+
+
+@pytest.mark.parametrize('expr', [
+    'M(2.0) ** 2 ** 60', 'M(2.0) ** M(2 ** 60)', 'M(2 ** 60.0).exp2()',  # a float operand: rounded anyway
+    'M(2) ** M(Fraction(1, 2))', 'M(2).sqrt()',  # irrational: no limit involved
+    'M(1, 2) ** 0', 'M(-1, 1) ** 2 ** 60', 'M(0) ** 2 ** 60',  # 0 and ±1 are always built
+])
+def test_no_power_limit_warning(expr):
+    """the suite makes the library's warnings errors, so each of these would raise if it warned"""
+    eval(expr, {'M': M, 'Fraction': Fraction})
+
+
+def test_the_power_limit_warning_is_ignored_by_default_and_can_be_an_error():
+    code = (
+        'import warnings\n'
+        'from intervals import MultiInterval as M, PowerLimitWarning\n'
+        'with warnings.catch_warnings(record=True) as w:\n'
+        '    M(2) ** 2 ** 60\n'
+        'print(len(w))\n'
+        'warnings.simplefilter("error", PowerLimitWarning)\n'
+        'try:\n'
+        '    M(2) ** 2 ** 60\n'
+        'except PowerLimitWarning:\n'
+        '    print("raised")\n')
+    r = subprocess.run([sys.executable, '-c', code], cwd=ROOT, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ['0', 'raised']
+
+
+# TO NEAREST, CORRECTLY ROUNDED FOR EVERY n (Q18, owner 2026-10-03)
+
+@pytest.mark.parametrize('x, n, want', [
+    # libm's `pow` (python's `float ** int`) on this laptop's UCRT gave the neighbour of each (2026-10-03,
+    # `references/owner-questions-2026-10-03/pown.md` §3): 1.32750153854842, 1.0351455727723202,
+    # 4.45014878383046e-308, 4425.378458811314
+    (1.0287349703833546, 10, 1.3275015385484197),
+    (1.0026606152364441, 13, 1.03514557277232),
+    (2.1095375758280437e-154, 2, 4.450148783830459e-308),
+    (1.3811118839148833, 26, 4425.378458811315),
+])
+def test_nearest_is_correctly_rounded(x, n, want):
+    assert float(Fraction(x) ** n) == want  # int / int is correctly rounded in CPython: the oracle
+    for sign in (1, -1):
+        assert repr(M(sign * x) ** n) == repr(M(sign ** n * want)), (sign, x, n)
+
+
+def _nearest(x: float, n: int) -> float:
+    """the exact `x ** n` rounded to nearest by CPython's correctly rounded int division"""
+    v = Fraction(x) ** n
+    try:
+        return float(v) + 0.0
+    except OverflowError:
+        return INF if v > 0 else -INF
+
+
+@settings(max_examples=100, deadline=None)
+@given(FLOATS, st.integers(1, 300).flatmap(lambda k: st.sampled_from([k, -k])))
+@example(1.0026606152364441, 13)
+@example(-1.0287349703833546, 10)
+@example(5.155830884225402, -3)  # one rounding, not `1 / x ** 3` (M14-breadth)
+def test_nearest_against_the_exact_power(x, n):
+    assert repr(M(x) ** n) == repr(M.parse(f'[{_nearest(x, n)!r}]')), (x, n)
+
+
 # TO NEAREST PAST 2 ** 53: python's `float ** int` rounds the exponent to a double there
 
 @pytest.mark.parametrize('a, n, want', [
@@ -359,7 +549,7 @@ def test_huge_exponent_against_mpfr(x, n):
     (M(-1.0), -(2 ** 60 + 1), '[-1.0]'),
     (M(1.0000000000000002), 2 ** 53 + 1, '[7.38905609893065]'),  # was 7.389056098930649, at 2 ** 53
     (M(-1.0000000000000002), 2 ** 53 + 1, '[-7.38905609893065]'),  # was positive
-    (M(-1.0000000000000002), 2 ** 53, '[7.389056098930649]'),  # python's own, still
+    (M(-1.0000000000000002), 2 ** 53, '[7.389056098930649]'),  # correctly rounded (MPFR), as python's here
     (M(0.0), 10 ** 400, '[0.0]'),
     (M(-0.0), 10 ** 400 + 1, '[0.0]'),
     (M(0.0, 0.5), 10 ** 400, '[0.0]'),  # a wrong set, [0.0, inf], with the zero sent to python
@@ -386,10 +576,14 @@ PAST_2_53 = st.one_of(
     st.tuples(st.integers(54, 70), st.integers(-2, 2)).map(lambda t: 2 ** t[0] + t[1]),
     st.integers(16, 300).map(lambda j: int(10.0 ** j)),
 ).flatmap(lambda k: st.sampled_from([k, -k]))
+# every n since Q18 (2026-10-03): to nearest is one rule, so MPFR decides below 2 ** 53 too
+EVERY_N = st.one_of(PAST_2_53, EXPONENTS, st.integers(2 ** 31, 2 ** 53).flatmap(lambda k: st.sampled_from([k, -k])))
 
 
 @settings(max_examples=100, deadline=None)
-@given(FLOATS, PAST_2_53)
+@given(FLOATS, EVERY_N)
+@example(1.0026606152364441, 13)
+@example(2.1095375758280437e-154, 2)
 @example(-1.0000000000000002, 2 ** 53 + 1)
 @example(-1.0, -(2 ** 60 + 1))
 def test_nearest_huge_exponent_against_mpfr(x, n):
