@@ -196,7 +196,11 @@ Interval(float('-inf'), float('inf'))
   the 1788 layer's `Interval` is a scalar to numpy: operators with numpy scalars work, ufuncs do not
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
-  open. mixing the two gives an `OutwardMultiInterval`. to nearest, as python's float, a value past the
+  open. mixing the two gives an `OutwardMultiInterval`. an exact end stays exact, so the outward
+  class is isotone within one grid; across grids (a float piece of `A` inside an exact piece of `B`),
+  `f(A)` lies within the tightest double cover of `f(B)`, which `f(B).rounded()` gives: round the
+  inputs first (`A.rounded()`: every end a double, outward) and `A ⊆ B` gives `f(A) ⊆ f(B)`. to
+  nearest, as python's float, a value past the
   largest double is `inf` (`MultiInterval(1e308) * 10` is `[inf]`, the point, so `& (0, inf)` leaves
   nothing); the outward class keeps it as `(MAX, inf)`. the reverse ops meet `x` before rounding, as
   1788 does: a part of the answer inside `x` that rounds wholly onto one double is that double, even

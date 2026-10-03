@@ -320,7 +320,14 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   operand first. int and Fraction are exact and never rounded. `mod`, `floordiv`, `fma` and the step
   functions have no hook: they compute exactly and round once (`rounding.round_piece`), to nearest
   or outward by type. poles never go through the hook, and a float piece that rounding squeezes to
-  one point keeps that point, closed
+  one point keeps that point, closed. **isotone within one grid** (Q19, owner 2026-10-03): `A ⊆ B`
+  gives `f(A) ⊆ f(B)` in the outward class when every float piece of `A` lies in a float piece of
+  `B` (an exact `A` inside anything included); across grids, a float piece of `A` inside an exact
+  piece of `B`, `f(A)` lies within the tightest double cover of `f(B)`, not always within `f(B)`
+  (`B` is computed exactly, `A`'s result rounded: up to an ulp out at each non-double value; the
+  oracle is `tests/test_steps.py::_assert_isotone`). no typing rule by number type can make it
+  isotone, only one grid; `OutwardMultiInterval.rounded()` puts a set on the double grid, outward
+  (`rounding.float_cuts`), so a user who needs the theorem verbatim rounds the inputs first
 * **flags at rounded ends**: outward, attainment is decided on exact values (an `OUTWARD`
   descriptor's `fn` is exact too; pown's, past that limit, is a marker equal to nothing, which is
   the exact value's answer, `ops._NOT_A_DOUBLE`), so an end that directed rounding moved is **open** — nothing
@@ -328,7 +335,12 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   double already keeps its flag. to nearest, flags are conservative, not a promise (the suite checks
   the nearest mode against the closure). an irrational value of an exact operand is its tightest
   float enclosure, open at both ends, in both classes (`sqrt([2])`): an exact operand never loses
-  its true value
+  its true value. to nearest, a float end's nearest double may lie past an exact end of the same
+  piece; the piece is then the one between the two values, each keeping its flag (Q20, owner
+  2026-10-03: `rootn((10 ** -30, 1.0000000000000003e-30], 5)` is `[1e-06, 1/1000000)`), the rule the
+  applicator has always used for `+ - * /`, whose ends are the least and greatest corner values
+  (`MultiInterval(1 - Fraction(1, 10 ** 30), 1.0) * Fraction(1, 3)` is `[0.3333333333333333,
+  333333333333333333333333333333/1000000000000000000000000000000]`, before `912558b` too)
 * **power** (D11, built at M13d 2026-09-26; `intervals/multi_interval.py::MultiInterval.__pow__`,
   `::__rpow__`): a number exponent with an integral value (int, or a float or Fraction equal to one;
   never bool) is 1788's **pown**, over every base, as python's numbers do (`[-3, 1] ** 2.0` =

@@ -369,3 +369,57 @@ def test_equality_and_hash_across_the_classes(data):
         assert (x == y) is same and (y == x) is same and (x != y) is not same, (x, y)
         if same:
             assert hash(x) == hash(y) and len({x, y}) == 1 and {x: 1}[y] == 1, (x, y)
+
+
+# ROUNDED: EVERY END ON THE DOUBLE GRID (Q19, owner 2026-10-03)
+
+@pytest.mark.parametrize('text, expected', [
+    ('[1/3, 1]', '(0.3333333333333333, 1.0]'),
+    ('[1, 2]', '[1.0, 2.0]'),
+    ('[0.1, 1/3]', '[0.1, 0.33333333333333337)'),
+    ('[-1/3, 1/3]', '(-0.33333333333333337, 0.33333333333333337)'),
+    ('[1/3] | (2/3, 5/3) | [7, inf]', '(0.3333333333333333, 0.33333333333333337) | (0.6666666666666666, 1.6666666666666667) | [7.0, inf]'),
+    (f'[1, {10 ** 400}]', '[1.0, inf)'),  # past the doubles: inf, open, as an overflow
+    (f'[{10 ** 400}]', '(1.7976931348623157e+308, inf)'),
+    (f'[1/{10 ** 400}, 1/{5 * 10 ** 399}]', '(0.0, 5e-324)'),
+    ('{}', '{}'),
+], ids=['third', 'ints', 'mixed', 'symmetric', 'pieces', 'past-max', 'point-past-max', 'subnormal', 'empty'])
+def test_rounded_examples(text, expected):
+    """every finite end a double, outward: a moved end open, a double end keeping its flag"""
+    x = O.parse(text).rounded()
+    assert type(x) is O and x.cuts == O.parse(expected).cuts, x
+    assert all(isinstance(c.value, float) for c in x.cuts)
+
+
+@settings(max_examples=200, deadline=None)
+@given(a=any_operands)
+@example(a=O.parse('[1/3] | (0.3333333333333333, 1]').cuts)  # pieces that merge once rounded
+def test_rounded_is_the_tightest_double_cover(a):
+    """`rounded()` is `cover` above (computed without the package's rounding): it holds the set,
+    has float or infinite ends only, is idempotent, and leaves a set with double ends as it is"""
+    x = O.from_cuts(a)
+    r = x.rounded()
+    assert type(r) is O and r.cuts == cover(a), (format_cuts(a), r)
+    assert kernel.is_subset(a, r.cuts)
+    assert all(isinstance(c.value, float) for c in r.cuts)
+    assert r.rounded().cuts == r.cuts
+    if not any(isinstance(c.value, (int, Fraction)) and not isinstance(c.value, bool) and c.value not in (INF, -INF)
+               for c in a):
+        assert r == x
+
+
+def test_rounded_restores_isotonicity_across_grids():
+    """the class is isotone within one grid; across grids, a float piece of A inside an exact piece of B,
+    f(A) can stick out of f(B) by an ulp but lies within f(B).rounded(), and on rounded inputs f is
+    isotone again (references/owner-questions-2026-10-03/q19.md, the `+` and the steps' rows)"""
+    third = Fraction(1, 3)
+    cases = [
+        (O(1.0, 2), O(1 - Fraction(1, 10 ** 30), 2), lambda s: s + third),
+        (O(0.0, 0.25), O(-1, Fraction(3, 10)), lambda s: round(s, 1)),  # f(B) lists 1/10 and 1/5 exactly
+    ]
+    for a, b, f in cases:
+        assert a.issubset(b)
+        fa, fb = f(a), f(b)
+        assert not fa.issubset(fb), (fa, fb)  # the cross-grid shape: not isotone
+        assert fa.issubset(fb.rounded()), (fa, fb.rounded())
+        assert f(a.rounded()).issubset(f(b.rounded())), (f(a.rounded()), f(b.rounded()))

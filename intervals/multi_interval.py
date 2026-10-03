@@ -26,6 +26,7 @@ from intervals import numeric
 from intervals import numpy_compat
 from intervals import ops
 from intervals import relations
+from intervals import rounding
 from intervals import steps
 from intervals.cuts import Value
 from intervals.cuts import above
@@ -985,6 +986,12 @@ class OutwardMultiInterval(MultiInterval):
     exact operands give the same results as in MultiInterval. mixed with a MultiInterval, the result
     is an OutwardMultiInterval, whichever side it is on
 
+    inclusion isotone within one grid: `A ⊆ B` gives `f(A) ⊆ f(B)` when every float piece of A lies
+    in a float piece of B (an exact A inside anything included). across grids, a float piece of A
+    inside an exact piece of B, f(A) lies within the tightest double cover of f(B) (`f(B).rounded()`),
+    not always within f(B): an exact result keeps its exact ends, a rounded one sticks out by up to an
+    ulp. `rounded()` puts a set on the double grid, outward
+
     an end that rounding moved is open, because nothing attains it: the exact sum below lies strictly
     between the two neighbouring doubles
 
@@ -1010,6 +1017,20 @@ class OutwardMultiInterval(MultiInterval):
         if not self or distance == 0:
             return self
         return self + MultiInterval(-distance, distance)
+
+    def rounded(self) -> 'OutwardMultiInterval':
+        """
+        the same set with every finite end on the double grid, outward: a low end down and a high end
+        up to a double, an end that moved open, so the tightest set with double ends holding this one
+        (an exact end past the doubles goes to `inf`, open, as an overflow does). the class keeps an
+        exact end exact, so it is isotone within one grid only (the class docstring): round the inputs
+        first, and an op's results on them are on the grid too, where `A ⊆ B` gives `f(A) ⊆ f(B)`
+
+        >>> from fractions import Fraction
+        >>> OutwardMultiInterval(Fraction(1, 3), 1).rounded()
+        OutwardMultiInterval.parse('(0.3333333333333333, 1.0]')
+        """
+        return self._wrap(rounding.float_cuts(self._cuts, outward=True))
 
     # python tries the right operand's reflected method first only if a subclass overrides it
     def __radd__(self, other):
