@@ -881,3 +881,14 @@ def test_the_test_extra_installs_what_auto_takes():
     extras = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['optional-dependencies']
     assert f'gmpy2>={backend.FLOOR[0]}.{backend.FLOOR[1]},<{backend.CEILING}' in extras['test']
     assert backend._supported(str(gmpy2.version()), str(gmpy2.mpfr_version()))
+
+
+def test_the_fast_extra_installs_what_auto_takes():
+    """
+    the user-facing `[fast]` pins the same window (owner, Q16(d), 2026-10-03): unpinned, `pip install
+    intervals[fast]` could install a gmpy2 3 that `auto` then declines silently and `gmpy2` runs
+    unverified. the pin moves with `CEILING` and `test`'s
+    """
+    import tomllib
+    extras = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['project']['optional-dependencies']
+    assert extras['fast'] == [f'gmpy2>={backend.FLOOR[0]}.{backend.FLOOR[1]},<{backend.CEILING}']

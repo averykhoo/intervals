@@ -7,6 +7,9 @@
 #     (fuzz-x10:itf, fuzz-x10:rest). every test runs, so it covers the gate. about 83 min here
 #   only a README.md changed since that (or since origin/master): its doctests (the docs phase), seconds
 #   only markdown or references/ changed (owner, 2026-09-30), or everything already green: nothing
+#   and, besides any of those, if a backend file (tools/gate.py BACKEND_FILES) changed since origin/master
+#     and no gate:gmpy2 run is green on this src: the whole suite with INTERVALS_BACKEND=gmpy2, as
+#     ci.yml's gmpy2 job (owner, Q16(e), 2026-10-03). about 10-15 min here
 #
 # a fuzz run made before `git commit`, or by an earlier prepush on the same code, still counts: the
 # ledger keys a verdict by the content, not the commit. `$PY tools/gate.py status` shows the same
@@ -35,19 +38,25 @@ plan=$("$PYTHON" tools/gate.py plan --base "$base")
 rc=$?
 [ "$rc" -eq 0 ] || { echo "prepush: $plan: commit first" >&2; exit 2; }
 if [ "${PREPUSH_FULL:-}" = 1 ] && [ "$plan" != nothing ]; then
-    plan=fuzz
+    case "+$plan+" in
+        *+gmpy2+*) plan=fuzz+gmpy2 ;;
+        *) plan=fuzz ;;
+    esac
 fi
 echo "prepush: $(git rev-parse --short HEAD) against $base: $plan"
 [ "${PREPUSH_DRY:-}" = 1 ] && exit 0
 
-case "$plan" in
-    nothing) ;;
-    docs) "$PYTHON" tools/gate.py run docs ;;
-    fuzz)
-        echo "prepush: x$n, $(date '+%Y-%m-%d %H:%M')"
-        "$PYTHON" tools/gate.py run "fuzz-x$n:itf"
-        "$PYTHON" tools/gate.py run "fuzz-x$n:rest"
-        ;;
-    *) echo "prepush: unexpected plan '$plan'" >&2; exit 2 ;;
-esac
+for word in ${plan//+/ }; do
+    case "$word" in
+        nothing) ;;
+        docs) "$PYTHON" tools/gate.py run docs ;;
+        fuzz)
+            echo "prepush: x$n, $(date '+%Y-%m-%d %H:%M')"
+            "$PYTHON" tools/gate.py run "fuzz-x$n:itf"
+            "$PYTHON" tools/gate.py run "fuzz-x$n:rest"
+            ;;
+        gmpy2) "$PYTHON" tools/gate.py run gate:gmpy2 ;;
+        *) echo "prepush: unexpected plan '$plan'" >&2; exit 2 ;;
+    esac
+done
 "$PYTHON" tools/gate.py status --require push --base "$base"

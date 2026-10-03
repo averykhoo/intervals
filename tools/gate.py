@@ -5,10 +5,11 @@
     $PY tools/gate.py run docs              # the collected READMEs' doctests only
     $PY tools/gate.py run fuzz-x10:itf      # the fuzz profile at x10, as fuzz.yml (prepush runs these)
     $PY tools/gate.py run fuzz-x10:rest
+    $PY tools/gate.py run gate:gmpy2        # the whole suite with INTERVALS_BACKEND=gmpy2 forced, as ci.yml's job
     $PY tools/gate.py status                # what is green on the code in front of you
     $PY tools/gate.py status --require commit   # exit 1 unless the gate is green on this code
     $PY tools/gate.py status --require push     # exit 1 unless a push needs nothing more
-    $PY tools/gate.py plan                  # prints nothing / docs / fuzz (tools/prepush.sh reads it)
+    $PY tools/gate.py plan                  # nothing, or docs / fuzz / gmpy2 joined by + (tools/prepush.sh reads it)
     $PY tools/gate.py tree-id
 
 why: "did the gate run on this code, and did the fuzz run?" was answered from memory and from logs
@@ -34,6 +35,13 @@ re-earns them in seconds, as the owner's docs-only rule of 2026-09-30 allows); a
 stales everything. an exclusion is a fail-open surface: it rests on a survey (2026-10-01: no test
 reads a markdown file other than the collected READMEs, and none reads `references/`), and
 tests/test_gate_ledger.py::test_no_source_names_a_prose_path re-checks it mechanically.
+
+the backend (owner, Q16(e), 2026-10-03): every phase but `gate:gmpy2` runs the pure path, with
+INTERVALS_BACKEND removed, as CI's gate and fuzz jobs do; `gate:gmpy2` runs the whole suite with it
+set to `gmpy2`, as ci.yml's `gate-gmpy2` job does. forced, `import intervals` raises unless gmpy2
+is taken, so that run cannot pass on the pure path. it never covers the gate (a commit needs the
+pure path); a push needs it, keyed by src like the fuzz, only when a file of BACKEND_FILES changed
+since the base.
 
 what a row does not see: gitignored files (`.hypothesis/`, so the fuzz database a run replayed),
 the installed packages and python (recorded in the row's facts, never matched), and anything that
@@ -71,7 +79,11 @@ PUSH_MULTIPLIER = 10
 SRC_IGNORED = ('**.md', 'references/**')
 UNKNOWN = 'unknown'
 PARTS = {'itf': ['tests/itf1788'], 'rest': ['--ignore=tests/itf1788']}
-PHASE_RE = re.compile(r'^(?:gate:(itf|rest)|fuzz-x([1-9]\d*):(itf|rest)|docs)$')
+PHASE_RE = re.compile(r'^(?:gate:(itf|rest)|fuzz-x([1-9]\d*):(itf|rest)|docs|(gate:gmpy2))$')
+GMPY2 = 'gate:gmpy2'
+# the modules that pick a double through the backend (the dispatch sites and the backend itself);
+# tests/test_gate_ledger.py::test_the_backend_files_are_the_modules_naming_it keeps the list whole
+BACKEND_FILES = ('intervals/_gmpy2.py', 'intervals/backend.py', 'intervals/elementary.py', 'intervals/ops.py')
 COUNT_RE = re.compile(r'(\d+) (passed|failed|errors?|skipped|xfailed|xpassed|deselected)\b')
 SUMMARY_RE = re.compile(r'\b\d+ (?:passed|failed|errors?|skipped|xfailed|xpassed|deselected)\b.* in [\d.]+s')
 
@@ -172,16 +184,21 @@ def append_row(path, row):
 # ---- running a phase
 
 def phase_spec(phase, repo=REPO):
-    """(pytest arguments, environment changes) for a phase name, or ValueError"""
+    """(pytest arguments, environment changes) for a phase name, or ValueError. a change of None removes
+    the variable: INTERVALS_BACKEND is removed for every phase but gate:gmpy2, which sets it"""
     m = PHASE_RE.match(phase or '')
     if not m:
-        raise ValueError(f'unknown phase {phase!r}: gate:itf, gate:rest, docs, fuzz-x<N>:itf, fuzz-x<N>:rest')
-    gate_part, multiplier, fuzz_part = m.groups()
+        raise ValueError(f'unknown phase {phase!r}: gate:itf, gate:rest, docs, fuzz-x<N>:itf, fuzz-x<N>:rest, '
+                         f'{GMPY2}')
+    gate_part, multiplier, fuzz_part, gmpy2 = m.groups()
+    pure = {'INTERVALS_BACKEND': None, 'HYPOTHESIS_PROFILE': None, 'FUZZ_MULTIPLIER': None}
     if multiplier:
-        return PARTS[fuzz_part], {'HYPOTHESIS_PROFILE': 'fuzz', 'FUZZ_MULTIPLIER': multiplier}
+        return PARTS[fuzz_part], {**pure, 'HYPOTHESIS_PROFILE': 'fuzz', 'FUZZ_MULTIPLIER': multiplier}
     if gate_part:
-        return PARTS[gate_part], {'HYPOTHESIS_PROFILE': None, 'FUZZ_MULTIPLIER': None}
-    return collected_readmes(repo), {'HYPOTHESIS_PROFILE': None, 'FUZZ_MULTIPLIER': None}
+        return PARTS[gate_part], pure
+    if gmpy2:
+        return [], {**pure, 'INTERVALS_BACKEND': 'gmpy2'}  # no arguments: the whole suite, as ci.yml runs it
+    return collected_readmes(repo), pure
 
 
 def collected_readmes(repo=REPO):
@@ -221,13 +238,14 @@ def run_phase(phase, repo=REPO, command=None):
     """run one phase, append its row, return 0 iff it is recorded PASSED.
 
     `command` replaces the pytest command (the ledger's own tests use a fake one). the backend
-    variable is removed: CI's gate and fuzz jobs run the pure path (Q16(e)), and a verdict on
-    INTERVALS_BACKEND=gmpy2 must not stand for one on the default
+    variable is the phase's (`phase_spec`): removed for the pure phases, as CI's gate and fuzz jobs
+    run the pure path, so a verdict on INTERVALS_BACKEND=gmpy2 never stands for one on the default;
+    set to gmpy2 for gate:gmpy2, whatever the caller's environment says
     """
     args, changes = phase_spec(phase, repo)
     env = dict(os.environ)
-    if env.pop('INTERVALS_BACKEND', None) is not None:
-        print('gate: INTERVALS_BACKEND removed for this run (the gate runs the pure path)')
+    if env.get('INTERVALS_BACKEND') and changes['INTERVALS_BACKEND'] is None:
+        print('gate: INTERVALS_BACKEND removed for this run (this phase runs the pure path)')
     for key, value in changes.items():
         if value is None:
             env.pop(key, None)
@@ -289,6 +307,11 @@ def _fuzz(phase):
     return (int(m.group(2)), m.group(3)) if m and m.group(2) else None
 
 
+def _key(phase):
+    """the id a phase's verdict is keyed by: src for the fuzz and gate:gmpy2, code for the rest"""
+    return 'src' if _fuzz(phase) or phase == GMPY2 else 'code'
+
+
 def green(rows, key, here, accept):
     """the phases accepted by `accept` whose last run with rows[key] == here PASSED"""
     if here == UNKNOWN:
@@ -301,8 +324,9 @@ def green(rows, key, here, accept):
 
 
 def gate_covered(rows, ids):
-    """{part: the phases that cover it} on this code; a fuzz run at any multiplier runs every test"""
-    ok = green(rows, 'code', ids['code'], lambda p: p.startswith(('gate:', 'fuzz-')))
+    """{part: the phases that cover it} on this code; a fuzz run at any multiplier runs every test.
+    gate:gmpy2 never covers the gate: CLAUDE.md's gate is the pure path"""
+    ok = green(rows, 'code', ids['code'], lambda p: p.startswith(('gate:', 'fuzz-')) and p != GMPY2)
     return {part: sorted(p for p in ok if p.endswith(':' + part)) for part in PARTS}
 
 
@@ -310,6 +334,11 @@ def fuzz_covered(rows, ids):
     """{part: the fuzz phases at >= PUSH_MULTIPLIER green on this src}"""
     ok = green(rows, 'src', ids['src'], lambda p: (_fuzz(p) or (0,))[0] >= PUSH_MULTIPLIER)
     return {part: sorted(p for p in ok if p.endswith(':' + part)) for part in PARTS}
+
+
+def gmpy2_covered(rows, ids):
+    """whether gate:gmpy2's last run on this src passed"""
+    return GMPY2 in green(rows, 'src', ids['src'], lambda p: p == GMPY2)
 
 
 def readmes_covered(rows, ids):
@@ -346,10 +375,13 @@ def changed_since(base, repo=REPO):
 
 
 def plan(rows, ids, changed, dirty):
-    """(word, reasons): what a push of HEAD still needs. word is dirty, nothing, docs or fuzz.
+    """(word, reasons): what a push of HEAD still needs. word is dirty, nothing, or the runs still
+    needed joined by '+' in this order: docs or fuzz, then gmpy2 (gate:gmpy2, when a file of
+    BACKEND_FILES changed since the base; owner, Q16(e), 2026-10-03).
 
-    the src of `base` is taken as fuzzed: every push to master is watched to its fuzz run's end
-    (CLAUDE.md "push"), so src unchanged since origin/master needs no local fuzz run
+    the src of `base` is taken as fuzzed and as run on gmpy2: every push to master is watched to the
+    end of its fuzz run and of ci.yml's gmpy2 job (CLAUDE.md "push"), so src unchanged since
+    origin/master needs no local fuzz run, and backend files unchanged since it no local gmpy2 run
     """
     if dirty:
         return 'dirty', [f'uncommitted: {", ".join(dirty[:5])}' + (' ...' if len(dirty) > 5 else '')]
@@ -361,7 +393,13 @@ def plan(rows, ids, changed, dirty):
         reasons = [f'{len(changed)} file(s) changed since the base: '
                    + (', '.join(f'{k} {sum(classify(p) == k for p in changed)}' for k in ('src', 'readme', 'prose')
                                 if any(classify(p) == k for p in changed)) or 'none')]
-    need_fuzz = need_docs = False
+    need_fuzz = need_docs = need_gmpy2 = False
+    if changed is None or any(p in BACKEND_FILES for p in changed):
+        if gmpy2_covered(rows, ids):
+            reasons.append(f'gmpy2: {GMPY2} green on {ids["src"]}')
+        else:
+            need_gmpy2 = True
+            reasons.append(f'gmpy2: a backend file changed since the base, no {GMPY2} run green on {ids["src"]}')
     if 'src' in changed_kinds:
         fuzz = fuzz_covered(rows, ids)
         if all(fuzz.values()):
@@ -378,7 +416,8 @@ def plan(rows, ids, changed, dirty):
         elif not need_fuzz:
             need_docs = True
             reasons.append(f'doctests: no docs or gate run green on {ids["code"]}')
-    return ('fuzz' if need_fuzz else 'docs' if need_docs else 'nothing'), reasons
+    words = ['fuzz'] * need_fuzz + ['docs'] * need_docs + ['gmpy2'] * need_gmpy2
+    return '+'.join(words) or 'nothing', reasons
 
 
 def _age(started):
@@ -410,12 +449,12 @@ def report(repo=REPO, base='origin/master', require=None):
     except TreeIdError:
         pass
 
-    phases = ['gate:itf', 'gate:rest', 'docs', f'fuzz-x{PUSH_MULTIPLIER}:itf', f'fuzz-x{PUSH_MULTIPLIER}:rest']
+    phases = ['gate:itf', 'gate:rest', 'docs', f'fuzz-x{PUSH_MULTIPLIER}:itf', f'fuzz-x{PUSH_MULTIPLIER}:rest', GMPY2]
     phases += sorted({r['phase'] for r in rows} - set(phases))
     width = max(map(len, phases))
     print()
     for phase in phases:
-        key = 'src' if _fuzz(phase) else 'code'
+        key = _key(phase)
         mine = [r for r in rows if r['phase'] == phase and r[key] == ids[key]]
         if mine:
             r = mine[-1]
@@ -446,9 +485,10 @@ def report(repo=REPO, base='origin/master', require=None):
     except TreeIdError as exc:
         dirty = [f'(git status failed: {exc})']
     word, reasons = plan(rows, ids, changed_since(base, repo), dirty)
-    print(f'push (base {base}): ' + {'dirty': 'commit first', 'nothing': 'nothing to run',
-                                     'docs': 'run the docs phase (tools/prepush.sh does)',
-                                     'fuzz': f'run the fuzz at x{PUSH_MULTIPLIER} (tools/prepush.sh)'}[word])
+    say = {'dirty': 'commit first', 'nothing': 'nothing to run', 'docs': 'run the docs phase',
+           'fuzz': f'run the fuzz at x{PUSH_MULTIPLIER}', 'gmpy2': f'run {GMPY2}'}
+    print(f'push (base {base}): ' + ', then '.join(say[w] for w in word.split('+'))
+          + (' (tools/prepush.sh does)' if word not in ('dirty', 'nothing') else ''))
     for reason in reasons:
         print(f'  {reason}')
     if require == 'commit':
@@ -466,7 +506,7 @@ def main(argv=None):
     st = sub.add_parser('status', help='what is green on this code')
     st.add_argument('--require', choices=('commit', 'push'))
     st.add_argument('--base', default='origin/master')
-    pl = sub.add_parser('plan', help='print what a push still needs: nothing, docs, fuzz (or dirty)')
+    pl = sub.add_parser('plan', help='print what a push still needs: nothing, or docs/fuzz/gmpy2 joined by + (or dirty)')
     pl.add_argument('--base', default='origin/master')
     sub.add_parser('tree-id', help='print the two ids')
     args = ap.parse_args(argv)
