@@ -949,9 +949,18 @@ of H3 is under "later" below.
   proved zero is narrowed until a step no longer narrows it; else bisection at the midpoint, or,
   on a piece spanning more than a factor of 16 in magnitude, at 0, ±1 or ±2 ** the mean binary
   exponent, with no newton step (so `[-inf, inf]` reaches the scale of its zeros in about a dozen
-  splits: `x ** 2 - 2` on it in 57 evaluations, measured 2026-09-27); an unproved piece is output
+  splits: `x ** 2 - 2` on it in 57 evaluations, measured 2026-09-27); below 1 in magnitude too
+  (owner 2026-10-04: `x ** 2 - 1e-40` on `[-1, 1]` from 132 calls of f, both zeros unproved, to 28,
+  both proved), except a piece from 0 to at most ±1, and a piece already within `tol` still gets the
+  step (the small zero of `(x - 3)(x - 1e-25)` stays proved). `solve` keeps the split above 1 only:
+  gauss-seidel leaves components like `(-1, -1e-300)`, which the split below 1 would take through
+  every exponent in each coordinate (the circle on `[-1e300, 1e300]²`, 103 calls, 3433 with it;
+  2026-10-04). an unproved piece is output
   once its width is at most `tol` or it cannot be split, and past `max_steps` the whole stack is
-  output as it is (still every zero enclosed)
+  output as it is (still every zero enclosed). `tol` is absolute (a zero at a scale below it can
+  come out unproved) and `max_steps` counts pieces (boxes in `solve`), not calls: at most 2 calls a
+  piece, n + 2 a box, and up to 2 (newton) or n + 2 (solve) more where one is output unproved
+  (the docstrings)
 * `f` takes one argument and uses the library's ops on it, with numbers as its constants (it is
   called with a decorated `Dual`, which refuses a bare set, and with a point as an
   `OutwardMultiInterval`). the library's warnings inside `f` are silenced: a piece the solver makes
