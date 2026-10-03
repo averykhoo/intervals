@@ -188,7 +188,9 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   per piece of `A` and a column per piece of `B`, both in order (`A.allen_matrix(B)[i][j] is
   A.pieces[i].allen(B.pieces[j])`). `A.allen_relations(B)` is the `frozenset` of the relations
   holding between some piece of `A` and some piece of `B`: allen's algebra reasons over relation
-  sets (the 2026-08-16 note). every entry is `allen()` of a cut pair, so exactly one of the 13 per
+  sets (the 2026-08-16 note), but this set is extensional (each relation in it holds between some
+  pair), not the algebra's disjunction, though it has that type (the docstrings say so, owner
+  2026-10-03). every entry is `allen()` of a cut pair, so exactly one of the 13 per
   pair (JEPD per entry, which is why it goes per piece) and no new divergence against 1788: the
   cut-based relations' 5 keys stand, a point never OVERLAPS, `[1, inf)` MEETS `[inf]`
 * **an empty operand has no pairs**: `EMPTY.allen_matrix(B)` is `()`, `A.allen_matrix(EMPTY)` is
@@ -205,7 +207,11 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
 * **the set view needs normalized operands; the matrix does not.** on out-of-order pieces the sweep
   would miss entries, so `relations.allen_relations` asserts `kernel.is_valid` of both cut tuples
   under `__debug__`, as `MultiInterval._wrap` does (the methods cannot reach it: every
-  `MultiInterval` is valid). `relations.allen_matrix` takes any cut pairs in any order
+  `MultiInterval` is valid). `relations.allen_matrix` takes any cut pairs in any order. one rule
+  for all of `relations.py` (owner, 2026-10-03): every function over cut tuples asserts its operands
+  normalized (`relations._normalized`), `allen` its two pieces; `allen_matrix` alone does not, and
+  checks each piece through `allen` (`tests/test_relations.py::test_every_relation_asserts_normalized_operands`,
+  over every public two-operand function found by inspection)
 * within one set the pieces never meet (`kernel.normalize` merges pieces that touch), so
   `A.allen_matrix(A)` is EQUALS on the diagonal, BEFORE above it and AFTER below it. `adjoins`
   stays a fact about the sets' ends: `[0, 1) | [3, 5]` has a piece that MEETS `[1, 2]`, and does

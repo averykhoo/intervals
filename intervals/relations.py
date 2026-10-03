@@ -14,8 +14,12 @@ the ends, the infima and the suprema, so for a multi-interval they are its hull'
 
 `allen` needs two contiguous operands. `allen_matrix` and `allen_relations` take any number of
 pieces: `allen` of each pair, as a matrix or as the set of relations holding. the matrix takes any
-cut pairs, in any order; the set view's sweep needs normalized cut tuples, as every relation here,
-and asserts it.
+cut pairs, in any order; the set view's sweep needs normalized cut tuples.
+
+one rule for the operands (owner, 2026-10-03): every function here reads normalized cut tuples
+(`kernel.is_valid`) and asserts it under `__debug__`, as `MultiInterval` asserts its own; the methods
+always pass normalized ones. the one exception is `allen_matrix`, the plain loop, which reads its
+operands only piece by piece, and each piece is checked by the `allen` it is passed to.
 """
 import math
 from enum import Enum
@@ -85,6 +89,11 @@ FALSE = TruthSet({False})
 BOTH = TruthSet({True, False})
 
 
+def _normalized(*operands) -> bool:
+    """the check every relation asserts on its operands: normalized cut tuples (module docstring)"""
+    return all(kernel.is_valid(x) for x in operands)
+
+
 def _truth_set(possibly: bool, certainly: bool) -> TruthSet:
     return TruthSet(([True] if possibly else []) + ([] if certainly else [False]))
 
@@ -96,6 +105,7 @@ def lt(a: Cuts, b: Cuts) -> TruthSet:
     possibly: some `x < y` iff `inf A < sup B` as values. certainly: every `x < y` iff
     `A.end <= B.start` as cuts (`[1, 2)` vs `[2, 3]`: the end `2)` equals the start `[2`)
     """
+    assert _normalized(a, b), (a, b)
     if not a or not b:
         return NEITHER
     return _truth_set(a[0].value < b[-1].value, a[-1] <= b[0])
@@ -106,6 +116,7 @@ def le(a: Cuts, b: Cuts) -> TruthSet:
     possibly: some `x <= y` iff `A.start < B.end` as cuts (at a shared value both must be closed).
     certainly: every `x <= y` iff `sup A <= inf B` as values
     """
+    assert _normalized(a, b), (a, b)
     if not a or not b:
         return NEITHER
     return _truth_set(a[0] < b[-1], a[-1].value <= b[0].value)
@@ -121,6 +132,7 @@ def ge(a: Cuts, b: Cuts) -> TruthSet:
 
 def eq_pointwise(a: Cuts, b: Cuts) -> TruthSet:
     """`{T}` only for the same single point; `{T, F}` for any non-degenerate `A` against itself"""
+    assert _normalized(a, b), (a, b)
     if not a or not b:
         return NEITHER
     same_point = len(a) == 2 and a == b and a[0].value == a[1].value
@@ -130,6 +142,7 @@ def eq_pointwise(a: Cuts, b: Cuts) -> TruthSet:
 # SET-LEVEL RELATIONS (bool; an empty operand is before, after or adjoining nothing)
 
 def before(a: Cuts, b: Cuts) -> bool:
+    assert _normalized(a, b), (a, b)
     return bool(a) and bool(b) and a[-1] <= b[0]
 
 
@@ -139,29 +152,35 @@ def after(a: Cuts, b: Cuts) -> bool:
 
 def adjoins(a: Cuts, b: Cuts) -> bool:
     """one ends exactly where the other starts: they tile without sharing a point"""
+    assert _normalized(a, b), (a, b)
     return bool(a) and bool(b) and (a[-1] == b[0] or b[-1] == a[0])
 
 
 def disjoint(a: Cuts, b: Cuts) -> bool:
+    assert _normalized(a, b), (a, b)
     return not kernel.intersection(a, b)
 
 
 def overlaps(a: Cuts, b: Cuts) -> bool:
     """they share at least one point"""
+    assert _normalized(a, b), (a, b)
     return bool(kernel.intersection(a, b))
 
 
 def contains(a: Cuts, b: Cuts) -> bool:
     """`B ⊆ A`"""
+    assert _normalized(a, b), (a, b)
     return kernel.is_subset(b, a)
 
 
 def within(a: Cuts, b: Cuts) -> bool:
     """`A ⊆ B`"""
+    assert _normalized(a, b), (a, b)
     return kernel.is_subset(a, b)
 
 
 def equals(a: Cuts, b: Cuts) -> bool:
+    assert _normalized(a, b), (a, b)
     return a == b
 
 
@@ -202,6 +221,7 @@ def weakly_less(a: Cuts, b: Cuts) -> bool:
     set are not. 1788's `less` on its closed intervals; on ends only, so open or closed ends do not
     matter here (`[0, 2]` is weakly less than `[0, 2)`, which the pointwise reading would refuse)
     """
+    assert _normalized(a, b), (a, b)
     if not a or not b:
         return not a and not b
     lo_a, hi_a, lo_b, hi_b = _ends(a, b)
@@ -214,6 +234,7 @@ def strictly_less(a: Cuts, b: Cuts) -> bool:
     as in 1788's `strictLess` (so `(-inf, inf)` is strictly less than itself). a start at inf or an
     end at -inf is a point there, and is not strictly less than itself. empty sets as `weakly_less`
     """
+    assert _normalized(a, b), (a, b)
     if not a or not b:
         return not a and not b
     lo_a, hi_a, lo_b, hi_b = _ends(a, b)
@@ -261,6 +282,7 @@ def allen(a: Cuts, b: Cuts) -> Allen:
     """the allen relation of `a` to `b`; both must be contiguous (exactly one piece)"""
     if len(a) != 2 or len(b) != 2:
         raise ValueError('allen() needs two contiguous, non-empty operands; pass hulls explicitly')
+    assert _normalized(a, b), (a, b)
     (s1, e1), (s2, e2) = a, b
     if e1 < s2:
         return Allen.BEFORE
@@ -285,7 +307,10 @@ def allen_matrix(a: Cuts, b: Cuts) -> Tuple[Tuple[Allen, ...], ...]:
     piece `j` of `b`, so `len(a) // 2` rows of `len(b) // 2` entries, each one of the 13 as `Allen`
     reads them on cuts. an empty operand has no pairs, so no rows or rows of no entries, not a
     raise. the plain loop, `n m` calls to `allen()`: it does not rely on the pieces being in
-    order, and `Θ(nm)` is the size of the answer anyway. for many pieces, `allen_relations`
+    order, and `Θ(nm)` is the size of the answer anyway. for many pieces, `allen_relations`.
+    nested tuples, so `zip(*M)` is the transpose and `np.array(M)` an `(n, m)` object array (but
+    `()` for an empty `a`, whatever `m`); the converse, `allen_matrix(b, a)`, is the transpose with
+    every entry's `.inverse`
     """
     pb = tuple(kernel.pairs(b))
     return tuple(tuple(allen(p, q) for q in pb) for p in kernel.pairs(a))
@@ -296,9 +321,11 @@ def allen_relations(a: Cuts, b: Cuts) -> FrozenSet[Allen]:
     the relations holding between some piece of `a` and some piece of `b`: the entries of
     `allen_matrix(a, b)`, found in `O(n + m)` without building it (`_allen_pairs`, then the two
     corners). normalized operands only (asserted: out of order, the sweep would miss entries);
-    `frozenset()` when either is empty
+    `frozenset()` when either is empty. the set is extensional, a fact about the pieces: each
+    relation in it holds between some pair. it is not allen's algebra's disjunction ("one of these
+    holds, which is unknown"), though it has that type
     """
-    assert kernel.is_valid(a) and kernel.is_valid(b), (a, b)
+    assert _normalized(a, b), (a, b)
     pa, pb = tuple(kernel.pairs(a)), tuple(kernel.pairs(b))
     if not pa or not pb:
         return frozenset()

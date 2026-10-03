@@ -657,7 +657,9 @@ class MultiInterval:
     def allen_relations(self, other) -> FrozenSet[Allen]:
         """
         the relations holding between some piece of self and some piece of other: the entries of
-        `allen_matrix`, found in `O(n + m)` without building it; `frozenset()` if either is empty
+        `allen_matrix`, found in `O(n + m)` without building it; `frozenset()` if either is empty.
+        extensional: each relation in it holds between some pair of pieces; not allen's algebra's
+        disjunction ("one of these holds"), though it has that type
 
         >>> A = MultiInterval.parse('[0, 1] | [4, 5]')
         >>> sorted(r.name for r in A.allen_relations(MultiInterval.parse('[2, 3] | [6, 7]')))
