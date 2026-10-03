@@ -99,6 +99,12 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## open questions for the owner
 
+recommendations on every question below, and on the owner's-call rows of the table above, with each
+option's pros, cons and when it is the better choice: `references/owner-questions-2026-10-03/`
+(`README.md` is the summary; written 2026-10-03, nothing decided). it found one defect, Q15(h): a
+method mixing the two classes (`M(0.1).hypot(O(0.1))`, `.minimum`, `.union`, ...) returns
+`MultiInterval`, against README "rounding"
+
 * **Q9 `mulRevToPair`'s decoration.** 1788 decorates the pair's first interval as the decorated
   division `c / b` where `0 ∉ b` (6 com, 41 dac, 5 def in `libieeep1788_mul_rev.itl`), but its
   `mulRev`, the hull of the same set, trv. ours is one op, `mul_rev`, always trv (sound: trv claims
