@@ -80,6 +80,7 @@ from intervals import kernel as _kernel
 from intervals import literals as _literals
 from intervals import reductions as _reductions
 from intervals import reverse as _reverse
+from intervals.cuts import is_numpy_time as _is_numpy_time
 from intervals.decorated import DecoratedInterval as _DecoratedInterval
 from intervals.decorated import Decoration
 from intervals.errors import DomainClippedWarning
@@ -347,7 +348,7 @@ def _method(name: str):
 
 
 def _exponent(name: str, n) -> int:
-    if isinstance(n, bool) or not isinstance(n, Integral):
+    if isinstance(n, bool) or not isinstance(n, Integral) or _is_numpy_time(n):
         raise TypeError(f'{name}: the exponent is an int, got {type(n).__name__}')
     return int(n)
 

@@ -36,6 +36,7 @@ from intervals.cuts import above
 from intervals.cuts import as_end
 from intervals.cuts import as_start
 from intervals.cuts import below
+from intervals.cuts import is_numpy_time
 from intervals.cuts import normalize_value
 from intervals.kernel import Cuts
 from intervals.kernel import Size
@@ -226,7 +227,7 @@ class MultiInterval:
         """
         if isinstance(item, MultiInterval):
             return kernel.is_subset(item._cuts, self._cuts)
-        if isinstance(item, Real) and not isinstance(item, bool):
+        if isinstance(item, Real) and not isinstance(item, bool) and not is_numpy_time(item):
             if item != item:  # nan is not a point of the extended reals
                 return False
             return kernel.contains_point(self._cuts, item)
@@ -1021,9 +1022,9 @@ class MultiInterval:
 
 
 def _is_integral(v: Real) -> bool:
-    """a real number with an integer value (±inf and nan have none)"""
+    """a real number with an integer value (±inf and nan have none; a numpy timedelta64 is no number)"""
     if isinstance(v, Integral):
-        return True
+        return not is_numpy_time(v)
     try:
         return v == int(v)
     except (OverflowError, ValueError):

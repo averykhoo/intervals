@@ -37,6 +37,7 @@ from typing import Tuple
 from intervals import kernel
 from intervals.applicator import split_pieces
 from intervals.applicator import warn
+from intervals.cuts import is_numpy_time
 from intervals.errors import EmptySetPropagationWarning
 from intervals.errors import HullWarning
 from intervals.kernel import Cuts
@@ -100,7 +101,7 @@ def step(name: str, a: Cuts, ndigits: Optional[int] = None, outward: bool = Fals
     if ndigits is not None:
         if name not in ('round', 'round_ties_away'):
             raise TypeError(f'{name}() takes no ndigits')
-        if isinstance(ndigits, bool) or not isinstance(ndigits, Integral):
+        if isinstance(ndigits, bool) or not isinstance(ndigits, Integral) or is_numpy_time(ndigits):
             raise TypeError(f'ndigits must be an int, got {type(ndigits).__name__}')
         ndigits = int(ndigits)  # numpy's ints too
     if not a:

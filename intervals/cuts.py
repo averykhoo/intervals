@@ -20,7 +20,9 @@ numbers) is its exact value where it has one to give: a `numbers.Rational` is ex
 Fraction is; any other real is the float it equals where it is a double (so `np.float32(0.1)` is the
 double it holds, as today), else its exact `as_integer_ratio()` (an `np.longdouble` wider than a
 double, a wide `mpfr`), where `float()` would have rounded it and an outward result would not hold it;
-a real with no `as_integer_ratio()` is `float()` of it, as before (M16d, 2026-09-28).
+a real with no `as_integer_ratio()` is `float()` of it, as before (M16d, 2026-09-28). a numpy `timedelta64`
+is no number although numpy registers it as `numbers.Integral` (its `int()` is its count in its own unit):
+a TypeError, as a `datetime64` is (`is_numpy_time`; M8's review, 2026-10-04).
 """
 import math
 from enum import IntEnum
@@ -52,6 +54,8 @@ def normalize_value(value) -> Value:
     if isinstance(value, bool) or not isinstance(value, Real):
         raise TypeError(f'expected a real number, got {type(value).__name__}: {value!r}')
     if isinstance(value, Integral):
+        if type(value) is not int and is_numpy_time(value):
+            raise TypeError(f'expected a real number, got {type(value).__name__}: {value!r} (a duration, not a number)')
         return int(value)
     if isinstance(value, Fraction):
         return int(value) if value.denominator == 1 else value
@@ -74,6 +78,16 @@ def normalize_value(value) -> Value:
     if value == 0:
         return 0.0  # also turns -0.0 into 0.0
     return value
+
+
+def is_numpy_time(value) -> bool:
+    """
+    a numpy `timedelta64` or `datetime64` (dtype kind 'm' or 'M'). numpy registers `timedelta64` as a
+    `numbers.Integral`, so a real-number check takes it, and `int()` of it is its count in its own unit
+    (`np.timedelta64(3, 'ns')` would be 3): a duration is no number, so the numeric class refuses it
+    (TypeError), as it refuses a `timedelta`. the time layer reads neither (`intervals.time_interval`)
+    """
+    return getattr(getattr(value, 'dtype', None), 'kind', None) in ('m', 'M')
 
 
 def _exact_value(value) -> Union[Fraction, None]:

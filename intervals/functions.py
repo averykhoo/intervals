@@ -53,6 +53,7 @@ from intervals import ops
 from intervals.applicator import split_pieces
 from intervals.applicator import warn
 from intervals.cuts import Value
+from intervals.cuts import is_numpy_time
 from intervals.cuts import normalize_value
 from intervals.errors import DomainClippedWarning
 from intervals.errors import EmptySetPropagationWarning
@@ -195,7 +196,7 @@ def _check_base(base) -> Value:
 
 def _check_degree(n) -> int:
     """any `Integral` but bool, as an int (numpy's ints included, as `ops.power` takes them)"""
-    if isinstance(n, bool) or not isinstance(n, Integral):
+    if isinstance(n, bool) or not isinstance(n, Integral) or is_numpy_time(n):  # a timedelta64 is numpy's Integral
         raise TypeError(f'the degree of a root must be an int, got {type(n).__name__}')
     n = int(n)
     if n == 0:

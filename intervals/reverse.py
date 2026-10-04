@@ -96,6 +96,7 @@ from intervals import kernel
 from intervals import ops
 from intervals.applicator import warn
 from intervals.cuts import Value
+from intervals.cuts import is_numpy_time
 from intervals.cuts import mirror
 from intervals.decorated import DecoratedInterval
 from intervals.decorated import _quietly
@@ -332,7 +333,7 @@ def pown_rev(c, n: int, x=_REALS) -> MultiInterval:
     >>> pown_rev(M.parse('[0, inf)'), -1)
     MultiInterval.parse('{ [-inf] , (0, inf] }')
     """
-    if isinstance(n, bool) or not isinstance(n, Integral):
+    if isinstance(n, bool) or not isinstance(n, Integral) or is_numpy_time(n):
         raise TypeError(f'pown_rev: the exponent must be an int, got {type(n).__name__}')
     n = int(n)  # numpy's ints too
     if n == 0:

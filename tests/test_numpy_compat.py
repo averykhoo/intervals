@@ -819,3 +819,21 @@ def test_dual_rootn_takes_the_degree_as_an_int(np):
         warnings.simplefilter('error')
         d = Dual.variable(M(1)).rootn(np.int64(-2 ** 63))
     assert d.value == M(1) and d.derivative == M(Fraction(-1, 2 ** 63))
+
+
+def test_numpy_durations_are_no_numbers(np):
+    """numpy registers `timedelta64` as `numbers.Integral` (it subclasses `signedinteger`), and `int()` of it is its
+    count in its own unit, so `MultiInterval(np.timedelta64(3, 'ns'))` was `[3]` and `np.timedelta64(3, 'Y')` a 3
+    (M8's review, F6, 2026-10-04): every place the numeric class takes a number, or an int argument, refuses dtype
+    kinds 'm' and 'M' (TypeError), as it refuses a `datetime.timedelta`"""
+    a = M(1, 2)
+    for t in (np.timedelta64(3, 'ns'), np.timedelta64(3, 'Y'), np.timedelta64(3, 's'), np.timedelta64('NaT', 'ns'),
+              np.datetime64(3, 'ns'), np.datetime64('2024-01-01')):
+        for thunk in (lambda: M(t), lambda: O(t), lambda: M(0, t), lambda: M.from_pieces([(0, t)]), lambda: a + t,
+                      lambda: t + a, lambda: a * t, lambda: t * a, lambda: a / t, lambda: t in a, lambda: a < t,
+                      lambda: a ** t, lambda: t ** a, lambda: a.expand(t), lambda: a[0:t], lambda: a.rootn(t),
+                      lambda: a.round(t), lambda: pown_rev(a, t), lambda: D(M(1)) + t, lambda: Dual.variable(a) * t,
+                      lambda: normalize_value(t)):
+            with pytest.raises(TypeError):
+                thunk()
+    assert a * np.int64(3) == M(3, 6) and a ** np.int64(2) == M(1, 4)  # numpy's ints are still numbers
