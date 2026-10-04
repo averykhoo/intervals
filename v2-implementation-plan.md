@@ -4535,6 +4535,25 @@ record (what changed by `file::symbol`, its pins and sabotage tables, its runs) 
   `OutwardMultiInterval.rounded()` (`rounding.float_cuts`, outward) and Q19's rule documented; Q20's
   sentence in `v2-plan.md` "flags at rounded ends". every pin red on the old code or a targeted break
 
+### fuzz-mulrev-point: a test oracle that predated D26 (done 2026-10-04)
+
+**found** by fuzz run 37187049245 on GitHub at `5888c6e` (2026-10-04, x10: `1 failed, 33978 passed in 3429.58s`; CI
+run 37187049250 green), a babysitter on `tools/ci_watch.sh`, reproduced locally:
+`tests/test_reverse.py::test_mul_rev_by_a_point` with `y = 5e-324`, `c = x = (-inf, -2)`, the nearest class: the
+library gave `[-inf]`, the oracle `c / y & x` the empty set. the prepush's local x10 run of the same source was green
+(drawing a subnormal `y` with this `c` and `x` is rare).
+
+**diagnosis**: the test's, not the library's. the exact preimage in x is `(-inf, -2 / 5e-324)`, not empty, and wholly
+past -MAX; the outward class gives `(-inf, -1.7976931348623157e+308)`; to nearest it rounds wholly onto `-inf`, which D26
+(fuzz-rev-inf, 2026-09-30) keeps as the point `[-inf]` because x meets the preimage before the rounding. the oracle
+`c / y & x` rounds first. D26 updated `test_mul_rev_float_operands` (`meets_x_as_d26`) but not this test.
+
+**fix and pin**: where the result differs from `c / y & x`, the class must be the nearest one and the result must pass
+`meets_x_as_d26` against the exact and outward results; the run's case is an `@example`. the old oracle is false on it
+(checked 2026-10-04). sabotage (2026-10-04): `reverse._reverse` with its `_keep_squeezed` call removed,
+`test_mul_rev_float_operands` red (D26's guard); this test stays green under that break by design, its job being a
+sound oracle, not D26's pin. the library is unchanged.
+
 ### run ledger: what has run on this code (done 2026-10-01)
 
 **why**: the owner, 2026-10-01: "i need some machinery to know whats run and not on the current code ...

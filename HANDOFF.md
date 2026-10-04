@@ -18,7 +18,8 @@ session log below; nothing is listed as open and done at once), and list anythin
 * **next: M8, the time layer (owner 2026-10-04: "port time intervals first")**, then H4 deletes `archive/v1/`
   (open items rows 1 and 2). its choices are decided (D30, 2026-10-04): ready to build
 * **pushed `c55ce20..5888c6e` (2026-10-04, the owner's go)** after a green prepush (x10: 27795 in 92 s + 6184 in
-  4358 s); CI and fuzz watched by a babysitter, results in the session log
+  4358 s); CI green, fuzz red on a test oracle that predated D26 (plan §2 "fuzz-mulrev-point"), fixed, not pushed:
+  the fix's push needs an x10 prepush
 * **the quadratic parse fixed (2026-10-04), pushed at `5888c6e`**: `parse(' ' * 30000 + 'x')` 37 s -> 0.0002 s, the
   tokenizer's white-space runs possessive (`6450502`; plan §2 "M14-breadth", "the parse fixed"). gate green on
   its branch's worktree (27795 + 6242), which the main checkout's ledger does not see: the push's prepush runs
@@ -182,7 +183,10 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
   listed in that README), then recorded them: D30, plan §2 M8, `v2-plan.md` decision log. meanwhile the prepush of
   `0dc80eb` ran green under a haiku babysitter (fuzz-x10:itf 27795 passed in 92 s, fuzz-x10:rest 6184 in 4358 s;
   the docs commit after it kept the src id) and `c55ce20..5888c6e` was pushed (the owner's go); a babysitter on
-  `tools/ci_watch.sh 5888c6e`. Still owed: CI and fuzz results of `5888c6e` into this entry
+  `tools/ci_watch.sh 5888c6e`: CI run 37187049250 green; fuzz run 37187049245 red, `1 failed, 33978 passed in
+  3429.58s`, `test_mul_rev_by_a_point` on a subnormal y: a test oracle that predated D26 (the library's `[-inf]` is
+  D26's), fixed and pinned (plan §2 "fuzz-mulrev-point"), not pushed. then M8's build began in the worktree
+  `../intervals-m8` (branch `m8`)
 * **2026-10-04** the owner asked how certain the library's correctness is (answered from the records: independent
   oracles, ITF1788, CORE-MATH, the exhaustive grids, fuzz and sabotage; the weak spots are the still-owed list and
   the discovery rate), then what v1 has that v2 lacks. a census of v1's class members against v2's found nothing

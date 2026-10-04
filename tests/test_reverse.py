@@ -761,13 +761,23 @@ nonzero_values = st.one_of(st.integers(-20, 20), st.fractions(-20, 20, max_denom
 @settings(deadline=None)
 @given(y=nonzero_values, c=cut_tuples(), x=cut_tuples(), cls=st.sampled_from([M, O]))
 @example(y=10, c=one(1.0, 2.0, False, False), x=ALL, cls=M)  # to nearest (0.1, 0.2), 1/10 rounded up
+# fuzz run 37187049245 (2026-10-04): the exact (-inf, -2 / 5e-324) in x rounds wholly onto -inf: [-inf] (D26)
+@example(y=5e-324, c=one(-INF, -2, False, False), x=one(-INF, -2, False, False), cls=M)
 def test_mul_rev_by_a_point(y, c, x, cls):
     """a finite point `b = [y]`, y != 0, is division, `t * y ∈ c` iff `t ∈ c / y` (±inf included), in
-    both classes; `b = [0]` is every finite t where 0 is in c, else nothing"""
+    both classes; `b = [0]` is every finite t where 0 is in c, else nothing. to nearest, x meets the
+    preimage before the rounding (D26): where that differs from `c / y & x`, the extra is a part in x
+    squeezed onto one double (`meets_x_as_d26`)"""
     C, X = cls.from_cuts(c), cls.from_cuts(x)
     if not C or not X:
         return
-    assert mul_rev(cls(y), C, X) == _quiet(lambda: C / y) & X
+    result = mul_rev(cls(y), C, X)
+    near = _quiet(lambda: C / y)
+    if result != near & X:  # to nearest only: x met before the rounding (D26)
+        assert cls is M, (result, near & X)
+        exact = mul_rev(M(Fraction(y)), M.from_cuts(exact_cuts(c)), M.from_cuts(exact_cuts(x)))
+        outward = mul_rev(O(y), O.from_cuts(c), O.from_cuts(x))
+        meets_x_as_d26(result, near, X, exact, outward)
     assert mul_rev(cls(0), C, X) == (cls.parse('(-inf, inf)') & X if 0 in C else cls())
 
 
