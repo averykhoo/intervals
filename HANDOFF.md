@@ -11,7 +11,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-10-04)
 
-* **shifts dropped, v1's leftovers settled (2026-10-04), not pushed**: `<<`/`>>` reverted (`0513109`), a
+* **shifts dropped, v1's leftovers settled (2026-10-04), pushed at `5888c6e`**: `<<`/`>>` reverted (`0513109`), a
   TypeError on every class and in numpy (`tests/test_multi_interval.py::test_no_shifts`); `merge`'s k-overlap
   mode and parsing, `random_multi_interval` gone; `apply()` stays internal (`v2-plan.md` decision log
   2026-10-04; the implementation plan's §4 map is current). v1 has nothing v2 lacks but the time layer (M8)
@@ -19,7 +19,7 @@ session log below; nothing is listed as open and done at once), and list anythin
   (open items rows 1 and 2). its choices are decided (D30, 2026-10-04): ready to build
 * **pushed `c55ce20..5888c6e` (2026-10-04, the owner's go)** after a green prepush (x10: 27795 in 92 s + 6184 in
   4358 s); CI and fuzz watched by a babysitter, results in the session log
-* **the quadratic parse fixed, not pushed (2026-10-04)**: `parse(' ' * 30000 + 'x')` 37 s -> 0.0002 s, the
+* **the quadratic parse fixed (2026-10-04), pushed at `5888c6e`**: `parse(' ' * 30000 + 'x')` 37 s -> 0.0002 s, the
   tokenizer's white-space runs possessive (`6450502`; plan §2 "M14-breadth", "the parse fixed"). gate green on
   its branch's worktree (27795 + 6242), which the main checkout's ledger does not see: the push's prepush runs
   the x10 fuzz anyway
