@@ -51,7 +51,7 @@ def repo(tmp_path):
 @pytest.mark.parametrize('path, kind', [
     ('intervals/ops.py', 'src'), ('pyproject.toml', 'src'), ('.github/workflows/fuzz.yml', 'src'),
     ('tests/itf1788/libieeep1788_elem.itl', 'src'), ('README.md', 'readme'), ('tests/itf1788/README.md', 'readme'),
-    ('archive/v1/README.md', 'readme'), ('HANDOFF.md', 'prose'), ('.claude/skills/testing/SKILL.md', 'prose'),
+    ('tools/README.md', 'readme'), ('references/owner-questions-2026-10-03/README.md', 'prose'), ('HANDOFF.md', 'prose'), ('.claude/skills/testing/SKILL.md', 'prose'),
     ('references/modulo-derivations/claude-fable/modulo_v3_prototype.py', 'prose'), ('tests\\x.md', 'prose'),
 ])
 def test_classify(path, kind):

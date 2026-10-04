@@ -1378,8 +1378,9 @@ imports only point downward.
   method; that is the real hot cost). correctness lives in the tests
 * immutability retires the `inplace=` dual API. `interval.py` (the alternative debug implementation)
   is not ported; the sampling oracle does that job better
-* v1 is **archived, never deleted**: all v1 modules moved unchanged to `archive/v1/` at M10
-  (2026-09-25), with the old README, and stay as the reference until v2 works
+* v1 was archived unchanged in `archive/v1/` at M10 (2026-09-25) and **deleted on 2026-10-04** (H4, the
+  owner), after a parity audit found nothing of v1 that v2 cannot do (`v2-implementation-plan.md` §4); git
+  history keeps it (`git show 22e16f8:archive/v1/multi_interval.py`), and its README is `references/v1-readme.md`
 
 ### testing
 
@@ -1388,9 +1389,9 @@ imports only point downward.
   (`tests/test_ops_properties.py::test_sound_float_identity_rounding`, `::test_sound_float_outward_rounding`),
   and outward rounding with the flags as given over subnormals, near-overflow magnitudes and ±inf
   (`tests/test_extreme_floats.py::test_outward_rounding_sound_on_extreme_floats`)
-* v1 as a differential oracle: set operations (`tests/test_kernel.py::test_matches_v1`) and
-  `A % scalar`, where ours ⊆ v1 and v1 − ours ⊆ {0} (`tests/test_modulo.py::test_matches_v1_mod_scalar`,
-  `::test_v1_phantom_zero`)
+* v1 was a differential oracle for set operations and `A % scalar` until it was deleted (2026-10-04); the set
+  operations keep the membership oracle and the laws, and the defect v1 had there is pinned on v2 alone
+  (`tests/test_modulo.py::test_no_phantom_zero`)
 * attainment checks for closure, on int/Fraction operands only
 * algebraic properties that pin the cut encoding cheaply: `~~A == A`, De Morgan, the size tiling
   invariants, and for arithmetic:
@@ -1586,6 +1587,16 @@ imports only point downward.
       exact text and interchange conversions, and every inf-sup type but binary64 (M16b)
 
 ## decision log
+
+### 2026-10-04 revision: strict flags; v1 deleted (Q22)
+
+the owner, on the v1 parity audit's two questions (`v2-implementation-plan.md` §4):
+* **(a) a flag is a bool**: `start_closed`/`end_closed` (and `from_pieces`' and `Builder.add_piece`'s flags) take
+  python's bool or numpy's; anything else is a TypeError (`cuts.flag`). they were read by truthiness, so
+  `MultiInterval(0, 1, start_closed='no')` was `[0, 1]`, silently; `0`, `1` and `None` are refused too. the same in
+  the time classes, for the empty set's flags as well. internal callers pass computed bools and are not checked
+* **(b)** the v1 README is kept whole as `references/v1-readme.md` (its "notes:" and "Geminis feedback" were kept
+  nowhere else); then H4: `archive/v1/` deleted, with its two differential tests and the `pythonpath` entry
 
 ### 2026-10-04 revision: M8's review round (three reviews, one fixer)
 

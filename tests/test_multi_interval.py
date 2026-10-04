@@ -74,6 +74,25 @@ def test_constructor_errors(args, kwargs, error):
         MultiInterval(*args, **kwargs)
 
 
+@pytest.mark.parametrize('bad', ['no', 'False', '', None, 0, 1, 1.0])
+def test_flags_are_bools(bad):
+    """a flag is a bool or numpy's, else a TypeError (owner, Q22(a), 2026-10-04): read by truthiness,
+    `start_closed='no'` was a closed end, silently. every way in: the constructors, `from_pieces`, `Builder`"""
+    for make in (lambda: MultiInterval(0, 1, start_closed=bad), lambda: MultiInterval(0, 1, end_closed=bad),
+                 lambda: MultiInterval(0, start_closed=bad, end_closed=bad), lambda: MultiInterval(start_closed=bad),
+                 lambda: OutwardMultiInterval(0, 1, end_closed=bad),
+                 lambda: MultiInterval.from_pieces([(0, 1, bad, True)]), lambda: MultiInterval.from_pieces([(0, 1, True, bad)]),
+                 lambda: kernel.Builder().add_piece(0, 1, bad, True), lambda: kernel.Builder().add_piece(0, 1, True, bad)):
+        with pytest.raises(TypeError, match='must be a bool'):
+            make()
+
+
+def test_numpy_bool_flags():
+    np = pytest.importorskip('numpy')
+    assert MultiInterval(0, 1, start_closed=np.False_, end_closed=(np.array([1]) > 0)[0]) == MultiInterval.parse('(0, 1]')
+    assert MultiInterval.from_pieces([(0, 1, np.True_, np.False_)]) == MultiInterval.parse('[0, 1)')
+
+
 def test_from_cuts_validates():
     with pytest.raises(ValueError):
         MultiInterval.from_cuts(REALS.cuts[::-1])

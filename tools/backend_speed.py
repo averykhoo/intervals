@@ -15,7 +15,7 @@ import time
 from fractions import Fraction
 from pathlib import Path
 
-sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).resolve().parents[1] / 'archive' / 'v1')]
+sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
 
 from intervals import MultiInterval as M  # noqa: E402
 from intervals import OutwardMultiInterval as O  # noqa: E402

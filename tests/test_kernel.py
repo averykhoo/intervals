@@ -28,7 +28,6 @@ from intervals.kernel import symmetric_difference
 from intervals.kernel import union
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples
-from tests.strategies import finite_cut_tuples
 from tests.strategies import piece_pairs
 from tests.strategies import probe_points
 
@@ -228,30 +227,3 @@ def test_size_is_additive_on_disjoint_sets(a, b):
 def test_size_is_lex_ordered():
     assert size(mi((0, inf, True, False))) > size(mi((0, 10 ** 9)))
     assert size(mi((0, 1))) > size(mi((0, 1, True, False))) > size(mi((0, 1, False, False)))
-
-
-# DIFFERENTIAL AGAINST V1 (trusted for set operations on finite inputs)
-
-def to_v1(cuts):
-    import multi_interval as v1
-    out = v1.MultiInterval()
-    for lo, lo_closed, hi, hi_closed in pieces(cuts):
-        out = out.union(v1.MultiInterval(lo, hi, start_closed=lo_closed, end_closed=hi_closed))
-    return out
-
-
-def from_v1(v1_interval):
-    it = iter(v1_interval.endpoints)
-    return normalize(piece(lo, hi, lo_eps == 0, hi_eps == 0) for (lo, lo_eps), (hi, hi_eps) in zip(it, it))
-
-
-@pytest.mark.parametrize('ours, theirs', [
-    (union, 'union'),
-    (intersection, 'intersection'),
-    (difference, 'difference'),
-    (symmetric_difference, 'symmetric_difference'),
-])
-@given(a=finite_cut_tuples, b=finite_cut_tuples)
-def test_matches_v1(ours, theirs, a, b):
-    assert from_v1(to_v1(a)) == a  # the conversion itself round-trips
-    assert ours(a, b) == from_v1(getattr(to_v1(a), theirs)(to_v1(b)))

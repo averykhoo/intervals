@@ -111,6 +111,7 @@ from intervals.cuts import Cut
 from intervals.cuts import Value
 from intervals.cuts import below
 from intervals.cuts import end_cut
+from intervals.cuts import flag
 from intervals.cuts import is_numpy_time
 from intervals.cuts import normalize_value
 from intervals.cuts import start_cut
@@ -776,6 +777,7 @@ class DateTimeInterval(_TimeInterval):
     def __init__(self, start=None, end=None, *, start_closed: bool = True, end_closed: bool = True, tz=None):
         if tz is not None and not isinstance(tz, _dt.tzinfo):
             raise TypeError(f'tz must be a datetime.tzinfo, got {type(tz).__name__}')
+        start_closed, end_closed = flag(start_closed, 'start_closed'), flag(end_closed, 'end_closed')
         if start is None:
             if end is not None:
                 raise ValueError('an end without a start')
@@ -1007,6 +1009,7 @@ class TimeDeltaInterval(_TimeInterval):
     __slots__ = ()
 
     def __init__(self, start=None, end=None, *, start_closed: bool = True, end_closed: bool = True):
+        start_closed, end_closed = flag(start_closed, 'start_closed'), flag(end_closed, 'end_closed')
         if start is None:
             if end is not None:
                 raise ValueError('an end without a start')

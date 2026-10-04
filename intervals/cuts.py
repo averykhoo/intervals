@@ -157,6 +157,26 @@ def end_cut(value, closed: bool) -> Cut:
     return Cut(value, Side.ABOVE if closed else Side.BELOW)
 
 
+def flag(value, name: str) -> bool:
+    """
+    an open/closed flag a user passed: python's bool or numpy's, anything else a TypeError (owner, Q22(a),
+    2026-10-04: a flag read by truthiness turned `start_closed='no'` into a closed end, silently)
+
+    >>> flag(False, 'start_closed')
+    False
+    >>> flag('no', 'start_closed')
+    Traceback (most recent call last):
+    ...
+    TypeError: start_closed must be a bool, not str: 'no'
+    """
+    if value is True or value is False:
+        return value
+    kind = type(value)
+    if kind.__module__ == 'numpy' and kind.__name__ in ('bool', 'bool_'):  # `bool` from numpy 2, `bool_` before
+        return bool(value)
+    raise TypeError(f'{name} must be a bool, not {kind.__name__}: {value!r}')
+
+
 def as_start(cut: Cut) -> Tuple[Value, bool]:
     """read a cut as the start of a piece: `(value, closed)`"""
     return cut.value, cut.side is Side.BELOW

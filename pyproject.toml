@@ -30,9 +30,8 @@ packages = ["intervals"]
 # README.md is collected so its examples are part of the gate
 testpaths = ["tests", "intervals", "README.md"]
 addopts = "--doctest-modules --doctest-glob=README.md"
-# "." puts the `intervals/` package on sys.path; "archive/v1" keeps v1 importable as
-# `multi_interval`, the differential oracle for set operations in tests/test_kernel.py
-pythonpath = [".", "archive/v1"]
+# "." puts the `intervals/` package on sys.path
+pythonpath = ["."]
 # the library's own warnings are errors inside the suite; a test that provokes one on purpose
 # opts out with a filterwarnings mark or pins it with pytest.warns
 filterwarnings = ["error::intervals.errors.IntervalWarning"]

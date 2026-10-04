@@ -24,6 +24,7 @@ from intervals.cuts import as_end
 from intervals.cuts import as_start
 from intervals.cuts import below
 from intervals.cuts import end_cut
+from intervals.cuts import flag
 from intervals.cuts import start_cut
 
 Cuts = Tuple[Cut, ...]
@@ -46,6 +47,11 @@ def piece(lo, hi, lo_closed: bool = True, hi_closed: bool = True) -> Pair:
     if start.value > end.value:
         raise ValueError(f'interval start {lo!r} is after end {hi!r}')
     return start, end
+
+
+def checked_piece(lo, hi, lo_closed: bool = True, hi_closed: bool = True) -> Pair:
+    """`piece` for flags a user passed: each a bool, else a TypeError (`cuts.flag`)"""
+    return piece(lo, hi, flag(lo_closed, 'lo_closed'), flag(hi_closed, 'hi_closed'))
 
 
 def normalize(pairs: Iterable[Pair]) -> Cuts:
@@ -95,7 +101,7 @@ class Builder:
         self._pairs = []
 
     def add_piece(self, lo, hi, lo_closed: bool = True, hi_closed: bool = True) -> 'Builder':
-        self._pairs.append(piece(lo, hi, lo_closed, hi_closed))
+        self._pairs.append(checked_piece(lo, hi, lo_closed, hi_closed))
         return self
 
     def add_point(self, value) -> 'Builder':

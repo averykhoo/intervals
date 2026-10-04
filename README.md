@@ -390,16 +390,13 @@ Allen relations and matrices, `TruthSet` comparisons.
 * `v2-implementation-plan.md` — milestones (each one's spec and, once built, its record), decisions
   D1–D26
 * `HANDOFF.md` — what is open now: ranked items, questions for the owner, a session log
-* `references/` — papers and the modulo derivations
-* `archive/v1/` — the previous implementation, kept unchanged as a reference: `multi_interval.py`,
-  `interval.py`, `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`), `compare.py`, and
-  the old README with its notes and TODO list. `tests/test_kernel.py` still uses v1 as a
-  differential oracle for set operations, so pytest puts `archive/v1` on the path
+* `references/` — papers and the modulo derivations; `v1-readme.md` is the previous implementation's
+  README, kept for its notes. v1 itself was deleted on 2026-10-04 once v2 did everything it did
+  (`references/v1-parity-2026-10-04/`); git history has it (`git show 22e16f8:archive/v1/multi_interval.py`)
 
 ## status
 
-`2.0.0.dev0`, on the `v2` branch. the time layer is back on the v2 class (M8, 2026-10-04); v1's archived
-`time_interval.py` stays in `archive/v1/` until the archive goes (`HANDOFF.md` H4).
+`2.0.0.dev0`, on the `master` branch. the time layer is back on the v2 class (M8, 2026-10-04).
 
 ## tests
 

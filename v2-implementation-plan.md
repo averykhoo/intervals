@@ -98,6 +98,8 @@ vendoring.
   and `testpaths` also collects `README.md` as a doctest. v1 is imported in one place,
   `tests/test_kernel.py::to_v1`, used by the set-op differential (`test_matches_v1`) and by the
   `A % scalar` one (`tests/test_modulo.py::test_matches_v1_mod_scalar`)
+* since H4 (2026-10-04): `archive/v1/` is deleted, the `pythonpath` is `["."]`, and both differentials are gone
+  (§2 "q22-h4")
 
 ## 2. milestones
 
@@ -4827,6 +4829,30 @@ past -MAX; the outward class gives `(-inf, -1.7976931348623157e+308)`; to neares
 `test_mul_rev_float_operands` red (D26's guard); this test stays green under that break by design, its job being a
 sound oracle, not D26's pin. the library is unchanged.
 
+### q22-h4: strict flags, v1 deleted (done 2026-10-04)
+
+the owner's answers to Q22 (`v2-plan.md` decision log, "strict flags; v1 deleted"), then H4.
+* **strict flags**: `cuts.flag(value, name)` returns a python or numpy bool as a bool and raises TypeError for
+  anything else; called by `MultiInterval.__init__` (so `OutwardMultiInterval` too), `kernel.checked_piece` (for
+  `from_pieces` and `Builder.add_piece`) and both time constructors, before their empty-set branch. `kernel.piece`
+  stays unchecked (internal callers, the hot path). pins: `tests/test_multi_interval.py::test_flags_are_bools`,
+  `::test_numpy_bool_flags`, `tests/test_time_interval.py::test_flags_are_bools`
+* **the parity audit's unrecorded time differences**, pinned: `tests/test_time_interval.py::test_empty_is_falsy`,
+  `::test_no_bounds_with_any_flags_is_empty`, `::test_slice_step_is_a_type_error` (`D(None, t)` raising was pinned
+  already, `::test_nan_and_foreign_bounds_refused`)
+* **sabotage** (2026-10-04; each break in a private copy of `intervals/` and `tests/` with its own `pyproject.toml`,
+  checked to import the copy; the six new tests run, `-x`): control intact green; red for each of: `flag` reading
+  truthiness, numpy's bool refused, `MultiInterval.__init__` unchecked, `from_pieces` unchecked, `Builder.add_piece`
+  unchecked, `DateTimeInterval.__init__` unchecked, `TimeDeltaInterval.__init__` unchecked, the time classes'
+  `__bool__` always True (v1), their no-bound flags checked as v1 did, a slice step a ValueError (v1): 10 of 10 red
+* **H4**: `archive/v1/` deleted (`git rm`); `tests/test_kernel.py`'s v1 differential (`to_v1`, `from_v1`,
+  `test_matches_v1`) and `tests/test_modulo.py`'s (`test_matches_v1_mod_scalar`) removed, `test_v1_phantom_zero`
+  kept as `test_no_phantom_zero` on v2 alone; `pyproject.toml`'s `pythonpath` is `["."]`; the `sys.path` lines of
+  `tools/itf1788_census.py` and `tools/backend_speed.py`; `tests/test_gate_ledger.py::test_classify`'s sample
+  README path; the README's layout and status. HANDOFF's list of v1's readers had missed `tests/test_modulo.py`
+  (it imported `to_v1` from `tests/test_kernel.py`); a grep for `to_v1` found it. the probes in
+  `references/v1-parity-2026-10-04/` import `archive/v1/` and no longer run (records)
+
 ### run ledger: what has run on this code (done 2026-10-01)
 
 **why**: the owner, 2026-10-01: "i need some machinery to know whats run and not on the current code ...
@@ -4884,7 +4910,7 @@ independent of each other and were built in parallel worktrees, then merged on `
 
 ## 4. v1 → v2 surface map (for the M10 README and for not forgetting anything)
 
-"gone" below means gone from v2's API; the v1 code itself is archived at M10, not deleted.
+"gone" below means gone from v2's API; the v1 code itself was archived at M10 and deleted on 2026-10-04 (H4, §2 "q22-h4").
 
 | v1 | v2 |
 |---|---|

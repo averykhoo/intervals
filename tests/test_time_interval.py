@@ -218,7 +218,36 @@ def test_nan_and_foreign_bounds_refused():
     with pytest.raises(TypeError):
         T(NOON)
     with pytest.raises(ValueError):
-        D(None, NOON)  # an end without a start, as MultiInterval
+        D(None, NOON)  # an end without a start, as MultiInterval; v1 read a None start as NaT, a point
+
+
+@pytest.mark.parametrize('bad', ['no', None, 0, 1])
+def test_flags_are_bools(bad):
+    """as MultiInterval (owner, Q22(a), 2026-10-04), the empty set's flags too"""
+    for make in (lambda: D(NOON, NOON + HOUR, start_closed=bad), lambda: D(JAN1, end_closed=bad, start_closed=bad),
+                 lambda: D(start_closed=bad), lambda: T(-HOUR, HOUR, end_closed=bad), lambda: T(end_closed=bad)):
+        with pytest.raises(TypeError, match='must be a bool'):
+            make()
+
+
+def test_empty_is_falsy():
+    """as MultiInterval and python's sets; v1's time classes had no `__bool__`, so an empty one was True
+    (the v1 parity audit, 2026-10-04: plan §4)"""
+    assert not D() and not T() and not (D(NOON) & D(NOON + HOUR)) and not T(HOUR) - T(HOUR) & T()
+    assert D(NOON) and T(td(0)) and D(NEG_INF, POS_INF)
+
+
+def test_no_bounds_with_any_flags_is_empty():
+    """`T(start_closed=False)` is the empty set, as `MultiInterval(start_closed=False)` (v1 raised; plan §4)"""
+    for flags in ({'start_closed': False}, {'end_closed': False}, {'start_closed': False, 'end_closed': False}):
+        assert D(**flags) == D() and T(**flags) == T() and MultiInterval(**flags) == MultiInterval()
+
+
+def test_slice_step_is_a_type_error():
+    """slicing restricts to a closed range; a step means nothing (v1 raised ValueError; plan §4)"""
+    for a, lo, hi in ((D(NEG_INF, POS_INF), NOON, NOON + HOUR), (T(NEG_INF, POS_INF), -HOUR, HOUR)):
+        with pytest.raises(TypeError, match='step'):
+            a[lo:hi:HOUR]
 
 
 def test_end_or_end_not_ported():

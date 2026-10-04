@@ -11,7 +11,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).resolve().parents[1] / 'archive' / 'v1')]
+sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
 
 from tests.itf1788 import test_itf1788 as t  # noqa: E402
 

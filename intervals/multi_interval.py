@@ -36,6 +36,7 @@ from intervals.cuts import above
 from intervals.cuts import as_end
 from intervals.cuts import as_start
 from intervals.cuts import below
+from intervals.cuts import flag
 from intervals.cuts import is_numpy_time
 from intervals.cuts import normalize_value
 from intervals.kernel import Cuts
@@ -90,8 +91,10 @@ class MultiInterval:
         """
         `MultiInterval()` is empty, `MultiInterval(x)` is the point `[x]`, and
         `MultiInterval(a, b, start_closed=..., end_closed=...)` is one piece. an infinite bound is
-        taken literally: `MultiInterval(1, inf)` is `[1, inf]`, which contains inf
+        taken literally: `MultiInterval(1, inf)` is `[1, inf]`, which contains inf. a flag is a bool, else
+        a TypeError
         """
+        start_closed, end_closed = flag(start_closed, 'start_closed'), flag(end_closed, 'end_closed')
         if start is None:
             if end is not None:
                 raise ValueError('an end without a start')
@@ -123,8 +126,8 @@ class MultiInterval:
 
     @classmethod
     def from_pieces(cls, pieces: Iterable[tuple]) -> 'MultiInterval':
-        """the union of `(lo, hi)` or `(lo, hi, lo_closed, hi_closed)` tuples"""
-        return cls._wrap(kernel.normalize(kernel.piece(*p) for p in pieces))
+        """the union of `(lo, hi)` or `(lo, hi, lo_closed, hi_closed)` tuples; a flag is a bool, else a TypeError"""
+        return cls._wrap(kernel.normalize(kernel.checked_piece(*p) for p in pieces))
 
     @classmethod
     def parse(cls, text: str) -> 'MultiInterval':

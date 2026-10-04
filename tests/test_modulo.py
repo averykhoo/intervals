@@ -5,7 +5,7 @@ the oracle enumerates the quotient k = floor(x / y) instead of solving for it, s
 far-edge shapes and the O(1) attainment test rather than restating them. soundness, endpoint
 attainment and interior sharpness together pin a result to the attained set exactly; the tables pin
 the prototype's suites (references/modulo-derivations/claude-fable/modulo_v3_prototype.py), the design
-notes' degenerate cases, python's scalar `%` and v1's `A % scalar`.
+notes' degenerate cases and python's scalar `%` (v1's `A % scalar` too, until v1 was deleted on 2026-10-04).
 
 `tests/exhaustive_modulo.py` is the slow exhaustive differential over an exact grid; it is not part of
 the gate.
@@ -32,7 +32,6 @@ from intervals.fmt import format_cuts
 from intervals.fmt import parse
 from intervals.kernel import EMPTY
 from intervals.kernel import contains_point
-from intervals.kernel import difference
 from intervals.kernel import intersection
 from intervals.kernel import is_subset
 from intervals.kernel import normalize
@@ -44,8 +43,6 @@ from tests.oracles import pointwise
 from tests.oracles import sample
 from tests.strategies import cut_tuples
 from tests.strategies import probe_points
-from tests.test_kernel import from_v1
-from tests.test_kernel import to_v1
 from tests.test_ops_properties import exact_sets
 from tests.test_ops_properties import special_point_sets
 
@@ -285,37 +282,10 @@ def test_float_result_is_float_and_exact_is_exact():
     assert show(modulo.mod(one(0.1, True, 0.1, True), parse('[1/30]'))) == [(expected, True, expected, True)]
 
 
-# V1: `A % scalar` for a non-negative finite A and a positive scalar is trusted there
-
-quarters = st.integers(0, 80).map(lambda n: n / 4)
-
-
-@st.composite
-def v1_operands(draw):
-    lo, hi = sorted((draw(quarters), draw(quarters)))
-    if lo == hi:
-        return one(lo, True, lo, True)
-    return one(lo, draw(st.booleans()), hi, draw(st.booleans()))
-
-
-@given(a=v1_operands(), m=st.integers(1, 40).map(lambda n: n / 4))
-@example(a=one(0.25, True, 0.5, False), m=0.5)
-def test_matches_v1_mod_scalar(a, m):
-    """
-    v1 is sound here but not sharp: an open end at a multiple of m gives it a 0 nothing attains
-    (`[0.25, 0.5) % 0.5` is `{ [0] , [0.25, 0.5) }` in v1). so v1 holds ours, and differs by 0 at most
-    """
-    ours = modulo.mod(a, one(m, True, m, True))
-    theirs = from_v1(to_v1(a) % m)
-    assert is_subset(ours, theirs), (show(a), m, show(ours), show(theirs))
-    assert is_subset(difference(theirs, ours), parse('[0]')), (show(a), m, show(ours), show(theirs))
-
-
-def test_v1_phantom_zero():
-    """the v1 defect the differential test tolerates, pinned so a v1 fix shows up here"""
-    a = one(0.25, True, 0.5, False)
-    assert from_v1(to_v1(a) % 0.5) == parse('{ [0] , [0.25, 0.5) }')
-    assert modulo.mod(a, parse('[0.5]')) == normalize([piece(0.25, 0.5, True, False)])
+def test_no_phantom_zero():
+    """an open end at a multiple of m attains no 0: `[0.25, 0.5) % 0.5` is `[0.25, 0.5)`. v1 gave `{ [0] , [0.25, 0.5) }`
+    (pinned against v1 itself until v1 was deleted, 2026-10-04)"""
+    assert modulo.mod(one(0.25, True, 0.5, False), parse('[0.5]')) == normalize([piece(0.25, 0.5, True, False)])
 
 
 # PROPERTIES over every sign

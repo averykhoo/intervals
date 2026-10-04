@@ -1,3 +1,5 @@
+<!-- archive/v1/README.md as of 22e16f8, copied verbatim below this comment before H4 deleted archive/v1/ (owner, Q22(b), 2026-10-04): its prose ("notes:", "Geminis feedback") was kept nowhere else. the TODO it lists is references/todo-from-v1-readme.md; its code is in git history (git show 22e16f8:archive/v1/multi_interval.py). -->
+
 # (Time) Intervals for Python
 
 *A GLORIOUS EXERCISE IN YAK-SHAVING*
