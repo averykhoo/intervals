@@ -4853,6 +4853,21 @@ the owner's answers to Q22 (`v2-plan.md` decision log, "strict flags; v1 deleted
   (it imported `to_v1` from `tests/test_kernel.py`); a grep for `to_v1` found it. the probes in
   `references/v1-parity-2026-10-04/` import `archive/v1/` and no longer run (records)
 
+### fuzz-dst-gap: a wall time a DST gap skips (done 2026-10-05)
+
+fuzz run 37213772177 at `a984e26` (CI run 37213772220 green): `1 failed, 34283 passed in 3813.76s`,
+`tests/test_time_interval.py::test_aware_datetime_round_trips` on `1986-04-27 02:00` in America/Inuvik, a wall time
+the spring-forward gap skips (02:00 -> 03:00). a test oracle, the library right: python reads the time with fold=0
+as `02:00-07:00`, 09:00 UTC; `D(d)` keeps that instant and reads it back as `03:00-06:00`, as
+`d.astimezone(UTC).astimezone(tz)` does (`D(a.inf) == a` held). the oracle wanted the wall time as written, and
+hypothesis's `st.datetimes` draws such times by default (`allow_imaginary=True`); the first run to draw one was this.
+fixed: the oracle expects `wall_of_instant(d)` (the test module); the case is an `@example`; a pin
+`::test_a_wall_time_in_a_dst_gap_reads_as_its_instant` (New York, 2024-03-10 02:30 -> 03:30-04:00); the module
+docstring says how a gap time is read. the other zone properties compare instants (`::test_aware_readings_are_zone_invariant`,
+`::test_tz_dates_property`) or fixed inputs, so they do not assume it. sabotage (2026-10-05, private copies, each
+checked to import the copy): the old oracle red on the example; the library reading an aware datetime with fold=1
+red on both tests; control green.
+
 ### run ledger: what has run on this code (done 2026-10-01)
 
 **why**: the owner, 2026-10-01: "i need some machinery to know whats run and not on the current code ...

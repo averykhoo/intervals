@@ -11,6 +11,10 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-10-04)
 
+* **pushed `5888c6e..a984e26` (2026-10-04, the owner's go)** after a green prepush (x10: 27795 in 63 s + 6489 in
+  5344 s): CI run 37213772220 green; fuzz run 37213772177 red, `1 failed, 34283 passed`, a test oracle that assumed
+  every aware wall time exists (a DST gap; plan §2 "fuzz-dst-gap"), fixed and pinned, the library unchanged but a
+  docstring line
 * **Q22 answered and H4 done (2026-10-04)**: open/closed flags are strict (a bool or numpy's, else TypeError,
   `cuts.flag`), the v1 README kept as `references/v1-readme.md`, and `archive/v1/` deleted with its two differential
   tests, after a parity audit found every v1 capability possible in v2 (839,971 side-by-side cases; plan §4 "the
@@ -192,7 +196,10 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
   the tests fixed, "then we can complete the task about removing v1", then the full gate, push and babysit CI).
   strict flags (`cuts.flag`) and pins for the audit's unrecorded time differences, 10 sabotage breaks all red (plan
   §2 "q22-h4"); `references/v1-readme.md`; `archive/v1/` deleted, with its differentials in `tests/test_kernel.py`
-  and `tests/test_modulo.py` (the second missing from H4's list) and the `pythonpath` entry
+  and `tests/test_modulo.py` (the second missing from H4's list) and the `pythonpath` entry. gate 27795 + 6489;
+  prepush green (x10: 27795 in 63 s + 6489 in 5344 s); pushed `5888c6e..a984e26`; the babysitter (haiku): CI run
+  37213772220 green, fuzz run 37213772177 red on a test oracle (a DST gap; plan §2 "fuzz-dst-gap"), reproduced by
+  the session, fixed and pinned, sabotaged red
 * **2026-10-04** the v1 parity audit (the owner: "send out a bunch of agents to read and run code, to verify that
   everything in v1 is possible in v2"). one workflow, 44 agents: ten auditors, one per slice of `archive/v1/`, ran v1
   and v2 side by side (839,971 cases, compared as sets); two skeptics per claimed gap (reproduce; records); a coverage

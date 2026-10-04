@@ -9,7 +9,9 @@ op is the numeric class's on those seconds.
   `timestamp()` (machine- and DST-dependent, and an `OSError` on windows before 1970). an aware one is its
   exact UTC instant. naive and aware never mix (`TypeError`, as python and pandas); aware ends in
   different zones do, the set is of instants, and one zone is kept for display only: the constructor's
-  `tz=`, else its start's zone, else its end's; of an op, the left operand's. it is never part of `==`
+  `tz=`, else its start's zone, else its end's; of an op, the left operand's. it is never part of `==`. a wall
+  time a DST gap skips is the instant python's `utcoffset()` gives it (its fold), read back as that instant's real
+  wall time (`2024-03-10 02:30` in New York is 07:30 UTC, `03:30-04:00`)
 * a `date` is the half-open day `[d 00:00, d+1 00:00)`, and its flag says whether the day is in: a
   closed start is `d 00:00`, an open start "after d" (`d+1 00:00`, closed), a closed end "through d"
   (`d+1 00:00`, open), an open end "before d" (`d 00:00`, open). so adjacent days tile into one piece and

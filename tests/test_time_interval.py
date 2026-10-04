@@ -18,6 +18,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import pytest
+from hypothesis import example
 from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
@@ -95,6 +96,16 @@ def seconds_of_naive(d: dt) -> Fraction:
 def seconds_of_aware(d: dt) -> Fraction:
     """the wall clock less the offset, in exact seconds (no datetime arithmetic, which overflows at the range ends)"""
     return seconds_of_naive(d.replace(tzinfo=None)) - seconds_of_timedelta(d.utcoffset())
+
+
+def wall_of_instant(d: dt) -> dt:
+    """the naive wall time `d`'s instant reads as in its zone: `d`'s own, unless a DST gap skips it (`2024-03-10 02:30`
+    in New York is 07:30 UTC, which reads as 03:30). where the instant has no datetime (near the range ends) `d`'s
+    own, so a gap there would fail loudly"""
+    try:
+        return d.astimezone(datetime.timezone.utc).astimezone(d.tzinfo).replace(tzinfo=None)
+    except OverflowError:
+        return d.replace(tzinfo=None)
 
 
 
@@ -806,13 +817,14 @@ def test_naive_datetime_round_trips_over_the_whole_range(d):
                  st.datetimes(timezones=st.timezones(), min_value=dt(9999, 12, 30)),
                  st.datetimes(timezones=st.timezones(), max_value=dt(1, 1, 2)),
                  st.datetimes(timezones=st.sampled_from([datetime.timezone(td(hours=h)) for h in (-23, -5, 5, 23)]))))
+@example(dt(1986, 4, 27, 2, 0, tzinfo=zoneinfo.ZoneInfo('America/Inuvik')))  # in a DST gap: fuzz run 37213772177
 def test_aware_datetime_round_trips(d):
     """over datetime's whole range: an aware datetime near the ends reads back although its UTC instant has no
     datetime (`9999-12-31 23:00-05:00`; the review's F2: the build bounded this property to 1-01-02..9999-12-30)"""
     a = D(d)
     assert a.inf_seconds == seconds_of_aware(d)
     assert a.inf.tzinfo is d.tzinfo and a.tz is d.tzinfo
-    assert a.inf.replace(tzinfo=None) == d.replace(tzinfo=None) and seconds_of_aware(a.inf) == seconds_of_aware(d)
+    assert a.inf.replace(tzinfo=None) == wall_of_instant(d) and seconds_of_aware(a.inf) == seconds_of_aware(d)
     assert D(a.inf) == a and D.from_seconds(a.seconds, tz=d.tzinfo) == a and a.sup == a.inf
     assert eval(repr(a), EVAL_NAMESPACE) == a
 
@@ -926,6 +938,16 @@ class _NoDst(datetime.tzinfo):
 
     def tzname(self, d):
         return 'NODST'
+
+
+def test_a_wall_time_in_a_dst_gap_reads_as_its_instant():
+    """a wall time a DST gap skips is the instant python's `utcoffset()` gives it (fold=0: the offset before the
+    gap), read back as that instant's real wall time: `02:30` on New York's spring-forward night is 07:30 UTC, 03:30"""
+    gap = dt(2024, 3, 10, 2, 30, tzinfo=NY)
+    a = D(gap)
+    assert a.inf_seconds == seconds_of_aware(gap) == seconds_of_aware(dt(2024, 3, 10, 7, 30, tzinfo=UTC))
+    assert a.inf.replace(tzinfo=None) == dt(2024, 3, 10, 3, 30) and a.inf.utcoffset() == -4 * HOUR
+    assert a == D(dt(2024, 3, 10, 3, 30, tzinfo=NY)) and gap in a
 
 
 def test_a_tzinfo_without_dst_reads_out():
