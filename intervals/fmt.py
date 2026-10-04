@@ -33,9 +33,12 @@ from intervals.kernel import piece
 
 # a hex int is never followed by `.`: `0x1.8p1` is a hex float, which is not read (and not `0x1` then `.8`)
 _INT = r'(?:0x[0-9a-f]+(?!\.)|\d+)'
-_NUMBER = (r'[+-]?\s*(?:inf(?:inity)?|∞|0x[0-9a-f]+(?!\.)(?:\s*/\s*' + _INT + r')?'
-           r'|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*/\s*' + _INT + r')?)')
-_TOKEN = re.compile(fr'\s*(?:(?P<num>{_NUMBER})|(?P<punct>[\[\](){{}},;|∪]))\s*', flags=re.IGNORECASE)
+# every white-space run is possessive (`\s*+`): what follows each one (`/`, a digit, `.`, `0x`, inf, ∞, a
+# bracket) never begins with white space, so giving spaces back can never make a match, and a run that no
+# token follows (`' ' * 30000 + 'x'`) is refused in linear time, not quadratic (m14b-open, 2026-10-04)
+_NUMBER = (r'[+-]?\s*+(?:inf(?:inity)?|∞|0x[0-9a-f]+(?!\.)(?:\s*+/\s*+' + _INT + r')?'
+           r'|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*+/\s*+' + _INT + r')?)')
+_TOKEN = re.compile(fr'\s*+(?:(?P<num>{_NUMBER})|(?P<punct>[\[\](){{}},;|∪]))\s*+', flags=re.IGNORECASE)
 _SEPARATORS = {',', ';', '|', '∪'}
 
 

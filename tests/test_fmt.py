@@ -29,6 +29,7 @@ reach past the limit (`HUGE`), and `test_past_the_int_str_limit` pins the spelli
 import math
 import struct
 import sys
+import time
 from fractions import Fraction
 
 import pytest
@@ -375,6 +376,35 @@ def test_past_the_int_str_limit():
         parse('1' * 4301)
     with pytest.raises(ValueError, match='hex'):
         parse_value('1/' + '3' * 4301)
+
+
+# LINEAR TIME (m14b-open, 2026-10-04): `parse(' ' * 30000 + 'x')` took 37 s. the tokenizer's leading `\s*`
+# backtracked a white-space run no token follows one space at a time, and at each position `_NUMBER`'s own
+# `[+-]?\s*` re-read the rest of the run: quadratic. every `\s*` in `_TOKEN` is possessive now (`\s*+`).
+# the bound is loose on purpose (a shared laptop under load): linear parsing takes milliseconds here, the
+# quadratic tokenizer about 170 s at this length (4.5 s at 16000, times 4 per doubling)
+
+_LONG = 100_000
+
+
+@pytest.mark.parametrize('text, outcome', [
+    (' ' * _LONG + 'x', ValueError),  # the reported case: white space, then no token
+    (' ' * _LONG + '+x', ValueError),  # a sign makes `_NUMBER` read one more character before failing
+    ('[1' + ' ' * _LONG + 'x', ValueError),  # inside a piece
+    ('1' + ' ' * _LONG, mi(1)),  # trailing
+    (' ' * _LONG + '1', mi(1)),  # leading, then a token
+    ('[1' + ' ' * _LONG + ', 2]', mi((1, 2))),  # between tokens
+    ('[-' + ' ' * _LONG + '5]', mi(-5)),  # between a sign and its digits
+    ('[1' + ' ' * _LONG + '/' + ' ' * _LONG + '3]', mi(Fraction(1, 3))),  # around `/`
+], ids=['then-junk', 'then-sign-junk', 'in-piece-then-junk', 'trailing', 'leading', 'between', 'after-sign', 'around-slash'])
+def test_white_space_runs_parse_in_linear_time(text, outcome):
+    started = time.perf_counter()
+    if isinstance(outcome, type):
+        with pytest.raises(outcome):
+            parse(text)
+    else:
+        assert parse(text) == outcome
+    assert time.perf_counter() - started < 10, 'a white-space run is read more than once'
 
 
 @pytest.mark.parametrize('text, value', [
