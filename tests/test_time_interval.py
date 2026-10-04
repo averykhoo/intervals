@@ -61,6 +61,30 @@ microseconds = st.integers(-10 ** 6, 10 ** 6).map(lambda k: Fraction(JAN1_SECOND
 us_cut_tuples = cut_tuples(values=st.one_of(st.sampled_from([-inf, inf, JAN1_SECONDS]), microseconds))
 factors = st.one_of(st.integers(-5, 5), st.fractions(-5, 5, max_denominator=6), st.floats(-5, 5),
                     st.sampled_from([-inf, inf]))
+DISPLAY_ZONES = [UTC, SGT, NY]
+
+
+def datetime_sets(aware: bool):
+    """exact seconds sets, naive or aware in one of three display zones (the review's F8: aware sets too)"""
+    zones = st.sampled_from(DISPLAY_ZONES) if aware else st.none()
+    return st.builds(lambda cuts, tz: D.from_seconds(M.from_cuts(cuts), tz=tz), exact_cut_tuples, zones)
+
+
+# a pair of the same kind, naive or aware (each aware one in its own zone)
+datetime_set_pairs = st.booleans().flatmap(lambda aware: st.tuples(datetime_sets(aware), datetime_sets(aware)))
+
+
+def has_finite_end(x) -> bool:
+    return any(-inf < c.value < inf for c in x.seconds.cuts)
+
+
+def display_zone(result, *operands):
+    """the zone a result shows: the first operand's that has one, None when the result has no finite end"""
+    return next((o.tz for o in operands if o.tz is not None), None) if has_finite_end(result) else None
+
+
+def seconds_of_timedelta(x: td) -> Fraction:
+    return Fraction(x // td(microseconds=1), 10 ** 6)
 
 
 def seconds_of_naive(d: dt) -> Fraction:
@@ -69,11 +93,10 @@ def seconds_of_naive(d: dt) -> Fraction:
 
 
 def seconds_of_aware(d: dt) -> Fraction:
-    return seconds_of_naive(d.replace(tzinfo=None) - d.utcoffset())
+    """the wall clock less the offset, in exact seconds (no datetime arithmetic, which overflows at the range ends)"""
+    return seconds_of_naive(d.replace(tzinfo=None)) - seconds_of_timedelta(d.utcoffset())
 
 
-def seconds_of_timedelta(x: td) -> Fraction:
-    return Fraction(x // td(microseconds=1), 10 ** 6)
 
 
 def quiet(fn, *args):
@@ -252,18 +275,39 @@ def test_date_flags_say_whether_the_day_is_in(start_closed, end_closed, lo, hi):
     assert (a.inf, a.inf_closed, a.sup, a.sup_closed) == (lo, True, hi, False)
 
 
-def test_reversed_dates_raise_and_crossed_flags_are_empty():
+def test_bounds_are_ordered_as_read():
+    """the order of two bounds is checked on their readings (cuts), by MultiInterval's rule: a start read after
+    the end raises, equal readings with an open flag are empty. the build checked the values as written (a date as
+    its 00:00), so it refused noon-through-the-day and let after-the-2nd-until-its-noon be empty (review F3)"""
+    tue, tue_noon = date(2024, 1, 2), dt(2024, 1, 2, 12)
+    for reversed_ in (lambda: D(date(2024, 1, 3), JAN1), lambda: D(NOON, JAN1, end_closed=False),
+                      lambda: D(POS_INF, NEG_INF),
+                      lambda: D(tue, tue_noon, start_closed=False),  # after the 2nd, until its noon
+                      lambda: D(JAN1, NOON, start_closed=False),
+                      lambda: D(JAN1, start_closed=False, end_closed=False),  # after Mon, before Mon
+                      lambda: D(JAN1, start_closed=False),  # half-open single bound, as MultiInterval
+                      lambda: D(tue_noon, tue, end_closed=False)):  # noon, before the 2nd
+        with pytest.raises(ValueError):
+            reversed_()
+    assert D(tue_noon, tue) == D(tue_noon, dt(2024, 1, 3), end_closed=False)  # noon, through the day
+    assert D(JAN1, JAN1, start_closed=False) == D()  # after Mon, through Mon: equal readings, as M(1, 1, start_closed=False)
+    assert D(tue, JAN1) == D()  # from Tue through Mon: [Tue 00:00, Tue 00:00), empty (the build raised: written reversed)
+    assert D(JAN1, dt(2024, 1, 2), start_closed=False) == D(dt(2024, 1, 2))  # after Mon, through Tue 00:00
+    week = D(JAN1, date(2024, 1, 7))
+    assert week[tue_noon:tue] == D(tue_noon, dt(2024, 1, 3), end_closed=False)  # slicing reads the same way
+    assert week[tue:JAN1] == D()
     with pytest.raises(ValueError):
-        D(date(2024, 1, 2), JAN1)
+        week[date(2024, 1, 3):JAN1]
+
+
+@pytest.mark.parametrize('make', [
+    lambda: T(HOUR, -HOUR), lambda: T(HOUR, start_closed=False), lambda: T(HOUR, end_closed=False),
+    lambda: T(POS_INF, td(0)), lambda: T(NEG_INF, POS_INF)[HOUR:-HOUR],
+])
+def test_durations_reversed_or_half_open_single_raise(make):
+    """as MultiInterval and DateTimeInterval (the sabotage review's R15, R16: pinned for D only)"""
     with pytest.raises(ValueError):
-        D(NOON, JAN1, end_closed=False)
-    with pytest.raises(ValueError):
-        D(POS_INF, NEG_INF)
-    assert D(JAN1, JAN1, start_closed=False) == D()  # after Mon, through Mon
-    assert D(JAN1, start_closed=False, end_closed=False) == D()
-    assert D(JAN1, NOON, start_closed=False) == D()  # after Mon, until Mon noon
-    with pytest.raises(ValueError):
-        D(JAN1, start_closed=False)  # half-open single bound, as MultiInterval
+        make()
 
 
 def test_a_datetime_is_an_instant_no_snap():
@@ -300,6 +344,9 @@ def test_sentinels_order_against_every_type(value):
 
 def test_sentinels_order_against_each_other_and_nothing_else():
     assert NEG_INF < POS_INF and POS_INF > NEG_INF and NEG_INF <= NEG_INF and not NEG_INF < NEG_INF
+    for x in (NEG_INF, POS_INF):  # each against itself (R13)
+        assert x <= x and x >= x and not x < x and not x > x
+    assert not POS_INF <= NEG_INF and not NEG_INF >= POS_INF
     assert NEG_INF == NEG_INF and NEG_INF != POS_INF
     assert -NEG_INF is POS_INF and -POS_INF is NEG_INF
     for foreign in (0, inf, -inf, 'x', None):
@@ -439,6 +486,8 @@ def test_foreign_equality_is_not_implemented_and_hashable():
     assert a.__eq__(NOON) is NotImplemented and a.__ne__(NOON) is NotImplemented
     assert a != NOON and not (a == NOON) and a != M(JAN1_SECONDS + 43200)
     assert T(HOUR).__eq__(HOUR) is NotImplemented and T(HOUR) != HOUR
+    assert T(HOUR) != T(2 * HOUR) and not (T(HOUR) != T(HOUR)) and T(HOUR) == T(HOUR)  # R14
+    assert D(NOON) != D(JAN1) and not (D(NOON) != D(NOON))
     assert D.from_seconds(3600) != T.from_seconds(3600)
     assert len({D(NOON), D(NOON), D(JAN1), T(HOUR), T(HOUR)}) == 3
     assert {D(dt(2024, 1, 1, 8, tzinfo=SGT)): 1}[D(dt(2024, 1, 1, tzinfo=UTC))] == 1
@@ -586,6 +635,15 @@ def test_arithmetic_matches_python_on_points():
     lambda: T(HOUR) % 2,
     lambda: 2 % T(HOUR),
     lambda: T(HOUR) + 1,
+    lambda: T(HOUR) - 1,
+    lambda: 1 - T(HOUR),
+    lambda: 1 + T(HOUR),
+    lambda: 3600 - D(NOON),
+    lambda: 3600 + D(NOON),
+    lambda: T(HOUR) - M(1),
+    lambda: M(1) - T(HOUR),
+    lambda: M(1) + D(NOON),
+    lambda: D(NOON) - M(1),
     lambda: T(HOUR) ** 2,
     lambda: D(NOON) + NEG_INF,
     lambda: T(HOUR) + POS_INF,
@@ -612,21 +670,47 @@ def test_numpy_scalars_meet_the_operators():
     assert T(HOUR) / np.float32(0.5) == T(2 * HOUR)
 
 
+def test_numpy_times_are_refused():
+    """numpy registers `timedelta64` as `numbers.Integral`, so `_factor` took it as a number in its own unit:
+    `X * np.timedelta64(3, 'ns')` was `X * 3`, `X / np.timedelta64(3, 'ns')` a duration (the review's F6). every
+    place the time layer takes a scalar refuses numpy's timedelta64 and datetime64 (TypeError)"""
+    np = pytest.importorskip('numpy')
+    x = T(2 * HOUR, 4 * HOUR)
+    for t in (np.timedelta64(3, 'ns'), np.timedelta64(1, 'h'), np.timedelta64(3, 'Y'), np.datetime64('2024-01-01')):
+        for thunk in (lambda: x * t, lambda: t * x, lambda: x / t, lambda: t / x, lambda: x // t, lambda: t // x,
+                      lambda: x % t, lambda: t % x, lambda: divmod(x, t), lambda: x + t, lambda: t + x, lambda: x - t,
+                      lambda: t - x, lambda: D(NOON) + t, lambda: t + D(NOON), lambda: D(NOON) - t, lambda: t - D(NOON),
+                      lambda: D(t), lambda: T(t), lambda: D(NOON, t), lambda: T.from_seconds(t),
+                      lambda: D.from_seconds(t), lambda: x.expand(t), lambda: x | t, lambda: t in x, lambda: x < t,
+                      lambda: NEG_INF < t, lambda: POS_INF > t, lambda: t < POS_INF, lambda: t > NEG_INF,
+                      lambda: NEG_INF <= t, lambda: t >= NEG_INF):
+            with pytest.raises(TypeError):
+                thunk()
+
+
 # HOMOMORPHISM ONTO THE NUMERIC CLASS (properties)
 
 SET_OPS = ['__or__', '__and__', '__xor__', 'difference', 'union', 'intersection', 'symmetric_difference']
 
 
 @settings(max_examples=50)
-@given(naive_sets, naive_sets, st.sampled_from(SET_OPS))
-def test_set_ops_are_the_numeric_ones(a, b, name):
+@given(datetime_set_pairs, st.sampled_from(SET_OPS))
+def test_set_ops_are_the_numeric_ones(pair, name):
+    """on naive and aware sets (each aware one in its own zone): the seconds are the numeric op's, the kind is
+    kept and the display zone is the first operand's that has one"""
+    a, b = pair
     result = getattr(D, name)(a, b)
     assert type(result) is D and result.seconds == getattr(M, name)(a.seconds, b.seconds)
+    assert result.tz is display_zone(result, a, b)
     durations = getattr(T, name)(T.from_seconds(a.seconds), T.from_seconds(b.seconds))
     assert type(durations) is T and durations.seconds == result.seconds
     assert (~a).seconds == ~a.seconds and a.hull.seconds == a.seconds.hull
     assert a.interior.seconds == a.seconds.interior and a.closed_hull.seconds == a.seconds.closed_hull
     assert [p.seconds for p in a] == list(a.seconds) and len(a) == len(a.seconds)
+    for x in (~a, a.hull, a.interior, a.closed_hull, *a):  # unary results keep the kind and zone (R25, R26)
+        assert type(x) is D and x.tz is display_zone(x, a)
+        if has_finite_end(x) and has_finite_end(a):
+            assert x == D.from_seconds(x.seconds, tz=a.tz)
 
 
 RELATIONS = ['issubset', 'issuperset', 'isdisjoint', 'before', 'after', 'adjoins', 'overlaps', 'contains', 'within',
@@ -634,8 +718,10 @@ RELATIONS = ['issubset', 'issuperset', 'isdisjoint', 'before', 'after', 'adjoins
 
 
 @settings(max_examples=50)
-@given(naive_sets, naive_sets)
-def test_relations_and_comparisons_are_the_numeric_ones(a, b):
+@given(datetime_set_pairs)
+def test_relations_and_comparisons_are_the_numeric_ones(pair):
+    """naive and aware sets, the aware ones in different zones (the review's F8)"""
+    a, b = pair
     for name in RELATIONS:
         assert getattr(a, name)(b) == getattr(a.seconds, name)(b.seconds), name
     for op in (operator.lt, operator.le, operator.gt, operator.ge):
@@ -648,7 +734,7 @@ def test_relations_and_comparisons_are_the_numeric_ones(a, b):
 
 
 @settings(max_examples=50)
-@given(naive_sets, duration_sets, duration_sets, factors)
+@given(st.booleans().flatmap(datetime_sets), duration_sets, duration_sets, factors)
 def test_arithmetic_is_the_numeric_one(a, x, y, f):
     exact_f = Fraction(f) if isinstance(f, float) and math.isfinite(f) else f
     cases = [
@@ -671,6 +757,8 @@ def test_arithmetic_is_the_numeric_one(a, x, y, f):
         result, expected = quiet(wrapped), quiet(numeric)
         assert type(result) is cls
         assert (result if cls is M else result.seconds) == expected
+        if cls is D:
+            assert result.tz is display_zone(result, a)
 
 
 # ROUND TRIPS AND ZONE INVARIANCE (properties)
@@ -685,13 +773,19 @@ def test_naive_datetime_round_trips_over_the_whole_range(d):
 
 
 @settings(max_examples=100)
-@given(st.datetimes(min_value=dt(1, 1, 2), max_value=dt(9999, 12, 30), timezones=st.timezones()))
+@given(st.one_of(st.datetimes(timezones=st.timezones()),
+                 st.datetimes(timezones=st.timezones(), min_value=dt(9999, 12, 30)),
+                 st.datetimes(timezones=st.timezones(), max_value=dt(1, 1, 2)),
+                 st.datetimes(timezones=st.sampled_from([datetime.timezone(td(hours=h)) for h in (-23, -5, 5, 23)]))))
 def test_aware_datetime_round_trips(d):
+    """over datetime's whole range: an aware datetime near the ends reads back although its UTC instant has no
+    datetime (`9999-12-31 23:00-05:00`; the review's F2: the build bounded this property to 1-01-02..9999-12-30)"""
     a = D(d)
     assert a.inf_seconds == seconds_of_aware(d)
     assert a.inf.tzinfo is d.tzinfo and a.tz is d.tzinfo
-    assert a.inf.astimezone(UTC) == d.astimezone(UTC)
-    assert D(a.inf) == a and D.from_seconds(a.seconds, tz=d.tzinfo) == a
+    assert a.inf.replace(tzinfo=None) == d.replace(tzinfo=None) and seconds_of_aware(a.inf) == seconds_of_aware(d)
+    assert D(a.inf) == a and D.from_seconds(a.seconds, tz=d.tzinfo) == a and a.sup == a.inf
+    assert eval(repr(a), EVAL_NAMESPACE) == a
 
 
 @settings(max_examples=100)
@@ -733,3 +827,219 @@ def test_pandas_is_never_imported():
     env = dict(os.environ, PYTHONPATH=str(ROOT))
     r = subprocess.run([sys.executable, '-c', code], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr
+
+
+# THE REVIEW ROUND (M8's three reviews, 2026-10-04): each pin names its finding
+
+def test_degenerate_points_keep_both_instants_of_a_fold():
+    """a tuple sorted by instant, not a set: python compares and hashes two datetimes of one zone by wall clock,
+    so the fold pair 01:30 EDT / 01:30 EST was one element of a set (review F7)"""
+    a0 = dt(2024, 11, 3, 1, 30, tzinfo=NY)
+    a1 = a0.replace(fold=1)
+    points = (D(a1) | D(a0)).degenerate_points
+    assert type(points) is tuple and len(points) == 2
+    assert [p.fold for p in points] == [0, 1] and seconds_of_aware(points[1]) - seconds_of_aware(points[0]) == 3600
+    assert len(set(points)) == 1  # why it is not a set
+
+
+def test_degenerate_points_values():
+    """R7: their values, sorted, for both classes and the sentinels (the build tested only the raise)"""
+    a = D(NOON) | D(JAN1 + 2 * DAY) | D(NOON - DAY) | D(dt(2024, 1, 5), dt(2024, 1, 6))
+    assert a.degenerate_points == (NOON - DAY, NOON)
+    assert (T(HOUR) | T(-HOUR) | T(2 * HOUR, 3 * HOUR)).degenerate_points == (-HOUR, HOUR)
+    assert (D(POS_INF) | D(NEG_INF) | D(NOON)).degenerate_points == (NEG_INF, NOON, POS_INF)
+    assert D(JAN1).degenerate_points == () and D().degenerate_points == ()
+    assert D(dt(2024, 1, 1, 8, tzinfo=SGT)).degenerate_points == (dt(2024, 1, 1, 8, tzinfo=SGT),)
+
+
+def test_fold_is_read_in():
+    """R3: an aware datetime with fold=1 is the second instant of its wall time (NY: 3600 s later)"""
+    a0 = dt(2024, 11, 3, 1, 30, tzinfo=NY)
+    assert D(a0.replace(fold=1)).inf_seconds - D(a0).inf_seconds == 3600
+    assert D(a0, a0.replace(fold=1)).total_seconds == 3600
+    assert D(a0.replace(fold=1)).inf.fold == 1 and D(a0).inf.fold == 0
+
+
+@pytest.mark.parametrize('d', [
+    dt(9999, 12, 31, 23, tzinfo=datetime.timezone(td(hours=-5))),
+    dt(9999, 12, 31, 23, 59, 59, 999999, tzinfo=datetime.timezone(-td(hours=23, minutes=59))),
+    dt(9999, 12, 31, 20, tzinfo=NY),
+    dt(1, 1, 1, 1, tzinfo=datetime.timezone(td(hours=5))),
+    dt(1, 1, 1, tzinfo=zoneinfo.ZoneInfo('Asia/Tokyo')),
+    dt(1, 1, 1, tzinfo=datetime.timezone(td(hours=23, minutes=59))),
+], ids=str)
+def test_aware_ends_near_the_range_read_back(d):
+    """review F2: `_from_us` built the UTC datetime before `astimezone`, so these raised OverflowError"""
+    a = D(d)
+    assert a.inf == d and a.inf.tzinfo is d.tzinfo and a.sup == d
+    assert str(a) == f'[{d.isoformat(sep=" ")}]' and eval(repr(a), EVAL_NAMESPACE) == a
+    assert a.degenerate_points == (d,)
+
+
+def test_an_error_only_when_the_local_datetime_is_past_the_range():
+    late = D(dt(9999, 12, 31, 23, tzinfo=datetime.timezone(td(hours=-5)))) + HOUR  # 10000-01-01 00:00-05:00
+    with pytest.raises(OverflowError, match='sup_seconds'):
+        late.sup
+    assert str(late).endswith(' s]') and eval(repr(late), EVAL_NAMESPACE) == late
+    early = D(dt(1, 1, 1, tzinfo=UTC)) - td(microseconds=1)
+    with pytest.raises(OverflowError, match='inf_seconds'):
+        early.inf
+
+
+class _NoDst(datetime.tzinfo):
+    """a tzinfo whose dst() is None, as the protocol allows; `astimezone` (fromutc) refuses it"""
+
+    def utcoffset(self, d):
+        return td(hours=1)
+
+    def dst(self, d):
+        return None
+
+    def tzname(self, d):
+        return 'NODST'
+
+
+def test_a_tzinfo_without_dst_reads_out():
+    """review F5: the read-outs and `str` raised `ValueError: fromutc: non-None dst() result required`"""
+    z = _NoDst()
+    d = dt(2024, 1, 1, tzinfo=z)
+    a = D(d, d + HOUR)
+    assert a.inf_seconds == JAN1_SECONDS - 3600
+    assert a.inf == d and a.inf.tzinfo is z and a.sup == d + HOUR
+    assert str(a) == '[2024-01-01 00:00:00+01:00, 2024-01-01 01:00:00+01:00]'
+    assert a.degenerate_points == () and D(d).degenerate_points == (d,)
+
+
+def test_aware_plus_a_timedelta_adds_elapsed_time():
+    """review F4: aware `dt + td` adds elapsed time (instants), as `dt - dt` gives it; python's aware `+` is wall
+    clock. NY springs forward on 2024-03-10, so a day after noon on the 9th is 13:00 on the 10th"""
+    t = dt(2024, 3, 9, 12, tzinfo=NY)
+    assert (D(t) + DAY).inf == dt(2024, 3, 10, 13, tzinfo=NY) != t + DAY
+    assert (D(t) + DAY).inf_seconds - D(t).inf_seconds == 86400
+    assert (D(t) + DAY) - D(t) == T(DAY)
+    assert (D(dt(2024, 3, 9, 12)) + DAY).inf == dt(2024, 3, 10, 12)  # naive: wall clock, as python
+    assert D(date(2024, 3, 9), tz=NY) + DAY != D(date(2024, 3, 10), tz=NY)  # not the next day in tz
+
+
+@pytest.mark.parametrize('name', RELATIONS + ['allen', 'union', 'intersection', 'difference', 'symmetric_difference',
+                                              '__or__', '__and__', '__xor__', '__lt__', '__le__', '__gt__', '__ge__'])
+def test_naive_and_aware_never_mix_in_any_relation(name):
+    """R10: the mixing check, pinned for `before` only among the relations"""
+    naive, aware = D(NOON), D(dt(2024, 1, 2, tzinfo=SGT))
+    for a, b in ((naive, aware), (aware, naive), (naive, dt(2024, 1, 2, tzinfo=SGT)), (aware, NOON), (aware, JAN1)):
+        with pytest.raises(TypeError):
+            getattr(a, name)(b)
+
+
+@pytest.mark.parametrize('start_closed, end_closed, lo, hi', [
+    (True, True, dt(2024, 3, 9, tzinfo=NY), dt(2024, 3, 12, tzinfo=NY)),
+    (True, False, dt(2024, 3, 9, tzinfo=NY), dt(2024, 3, 11, tzinfo=NY)),
+    (False, True, dt(2024, 3, 10, tzinfo=NY), dt(2024, 3, 12, tzinfo=NY)),
+    (False, False, dt(2024, 3, 10, tzinfo=NY), dt(2024, 3, 11, tzinfo=NY)),  # after the 9th, before the 11th: the 10th
+])
+def test_tz_date_flags(start_closed, end_closed, lo, hi):
+    """R11: `tz=` with an open start or end (pinned for closed/closed only); the 10th is 23 h in NY"""
+    a = D(date(2024, 3, 9), date(2024, 3, 11), start_closed=start_closed, end_closed=end_closed, tz=NY)
+    assert (a.inf, a.inf_closed, a.sup, a.sup_closed) == (lo, True, hi, False) and a.tz is NY
+    assert a.total_seconds == seconds_of_aware(hi) - seconds_of_aware(lo)
+
+
+def test_tz_date_at_the_end_of_the_range():
+    """R2: date.max has no next date to name, so its day ends 86400 s after it starts"""
+    for tz in (UTC, SGT, datetime.timezone(td(hours=-5))):
+        last = D(date.max, tz=tz)
+        assert last.total_seconds == 86400 and last.inf == dt(9999, 12, 31, tzinfo=tz)
+        assert last.sup_seconds == seconds_of_aware(dt(9999, 12, 31, tzinfo=tz)) + 86400
+        with pytest.raises(OverflowError, match='sup_seconds'):
+            last.sup  # 10000-01-01 00:00 has no datetime
+
+
+def test_reflected_set_ops_keep_the_left_zone():
+    """R5: a scalar on the left of `| & ^` is the left operand: its zone is the display zone"""
+    left, right = dt(2024, 1, 1, 20, tzinfo=SGT), D(dt(2024, 1, 1, tzinfo=NY), dt(2024, 1, 2, tzinfo=NY))
+    for result in (left | right, left & right, left ^ right):  # 20:00 SGT is 07:00 NY, inside: all three non-empty
+        assert result and result.tz is SGT
+    for result in (right | left, right & left, right ^ left):
+        assert result.tz is NY
+
+
+def test_expand():
+    """R6: `expand` had no test at all"""
+    assert D(NOON).expand(HOUR) == D(NOON - HOUR, NOON + HOUR)
+    assert (D(NOON) | D(NOON + 2 * HOUR)).expand(HOUR) == D(NOON - HOUR, NOON + 3 * HOUR)  # the pieces meet
+    assert T(td(0), HOUR).expand(td(minutes=30)) == T(-td(minutes=30), td(minutes=90))
+    assert D(NOON, POS_INF).expand(HOUR) == D(NOON - HOUR, POS_INF)
+    aware = D(dt(2024, 1, 1, 8, tzinfo=SGT)).expand(HOUR)
+    assert aware.tz is SGT and aware.total_seconds == 7200
+    assert D(NOON).expand(td(0)) == D(NOON) and D().expand(HOUR) == D()
+    with pytest.raises(TypeError):
+        D(NOON).expand(3600)
+    with pytest.raises(ValueError):
+        D(NOON).expand(-HOUR)
+
+
+def test_from_seconds_takes_a_number_exactly_and_a_tzinfo_only():
+    """R12: a float number is its exact value; R23: tz must be a tzinfo"""
+    assert D.from_seconds(0.1).inf_seconds == Fraction(0.1) != Fraction(1, 10)
+    assert T.from_seconds(0.1).inf_seconds == Fraction(0.1)
+    assert D.from_seconds(Fraction(1, 10)).inf_seconds == Fraction(1, 10) and D.from_seconds(3).inf_seconds == 3
+    for bad in ('UTC', 8, SGT.key):
+        with pytest.raises(TypeError):
+            D.from_seconds(0, tz=bad)
+    for bad in (True, '1', td(1), None):
+        with pytest.raises(TypeError):
+            T.from_seconds(bad)
+
+
+def test_reflected_divmod():
+    """R17: the quotient of `divmod(timedelta, T)` (only the remainder was checked)"""
+    q, r = divmod(5 * HOUR, T(2 * HOUR))
+    assert q == M(2) and r == T(HOUR)
+    x = T(2 * HOUR, 3 * HOUR)
+    q, r = divmod(5 * HOUR, x)
+    assert q == (5 * HOUR) // x == M.from_pieces([(1, 1), (2, 2)]) and r == (5 * HOUR) % x
+
+
+def test_arithmetic_keeps_the_aware_zone():
+    """R18: the display zone through every aware arithmetic row (all the table's rows are naive)"""
+    t = dt(2024, 1, 1, 8, tzinfo=SGT)
+    for result in (T(HOUR) + t, HOUR + D(t), D(t) + HOUR, D(t) - HOUR, t - T(HOUR), t + T(HOUR), D(t) + T(HOUR),
+                   T(HOUR) + D(t), D(t) - T(HOUR)):
+        assert type(result) is D and result.tz is SGT and result.inf.tzinfo is SGT
+    assert (D(t) - dt(2024, 1, 1, tzinfo=UTC)) == T(td(0))
+
+
+def test_astimezone_of_a_set_with_no_finite_end():
+    """a set with no finite end has no kind and no zone: `astimezone` gives it back, its tz stays None"""
+    for x in (D(), D(NEG_INF, POS_INF), D(POS_INF)):
+        assert x.astimezone(SGT) is x and x.astimezone(SGT).tz is None
+
+
+TZ_ZONES = [UTC, SGT, NY, zoneinfo.ZoneInfo('America/Havana'), zoneinfo.ZoneInfo('America/Santiago'),
+            zoneinfo.ZoneInfo('Asia/Beirut'), zoneinfo.ZoneInfo('Australia/Lord_Howe'), zoneinfo.ZoneInfo('Pacific/Apia'),
+            datetime.timezone(td(hours=-3, minutes=-30, seconds=-17))]
+
+
+def midnight_seconds(day: date, tz) -> Fraction:
+    """the oracle: the wall clock of `day 00:00` less the zone's offset there"""
+    return seconds_of_aware(dt.combine(day, datetime.time(), tzinfo=tz))
+
+
+@settings(max_examples=60)
+@given(st.dates(min_value=date(1900, 1, 1), max_value=date(2100, 12, 31)), st.integers(0, 3), st.booleans(),
+       st.booleans(), st.sampled_from(TZ_ZONES))
+def test_tz_dates_property(first, days, start_closed, end_closed, tz):
+    """review F8: a `tz=` date range against midnights read by an independent oracle, every flag, zones with
+    midnight DST changes (Havana, Santiago, Beirut), a 30-minute DST (Lord_Howe), a skipped day (Apia 2011)"""
+    last = first + td(days)
+    lo = midnight_seconds(first if start_closed else first + DAY, tz)
+    hi = midnight_seconds(last + DAY if end_closed else last, tz)
+    if lo > hi:
+        with pytest.raises(ValueError):
+            D(first, last, start_closed=start_closed, end_closed=end_closed, tz=tz)
+        return
+    a = D(first, last, start_closed=start_closed, end_closed=end_closed, tz=tz)
+    assert a.seconds == M(lo, hi, end_closed=False)
+    assert a.tz is (tz if a else None)
+    if a:
+        assert a.inf.tzinfo is tz and seconds_of_aware(a.inf) == lo

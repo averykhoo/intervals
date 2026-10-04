@@ -228,13 +228,17 @@ Interval(float('-inf'), float('inf'))
   relations and `TruthSet` comparisons, and datetime and timedelta arithmetic (`dt - dt` is a
   `TimeDeltaInterval`, `td / td` a `MultiInterval`). a naive datetime is wall-clock time (never
   `timestamp()`), an aware one its UTC instant, and the two never mix (`TypeError`); aware ends in
-  different zones do, one zone kept for display. a `date` is the half-open day `[d 00:00, d+1 00:00)`,
-  so days tile and a day is 86400 s; a datetime is an exact instant. `NEG_INF` and `POS_INF` are the
-  infinite ends, ordered against every time type. nothing is rounded: an end that is no whole number of
-  microseconds raises when read out as a datetime, and `inf_seconds`, `sup_seconds` and `seconds` give it
-  exactly. pandas' `Timestamp` and `Timedelta` are read exactly in their unit, `NaT` is refused, and
+  different zones do, one zone kept for display, and aware arithmetic is in elapsed time (across a DST
+  change `t + 1 day` is 24 h later, where python's aware `+` keeps the wall time). a `date` is the
+  half-open day `[d 00:00, d+1 00:00)`, so days tile and a day is 86400 s; a datetime is an exact instant;
+  two bounds are ordered as read (`DTI(noon, day)` is noon through that day). `NEG_INF` and `POS_INF` are
+  the infinite ends, ordered against every time type. nothing is rounded: an end that is no whole number
+  of microseconds raises when read out as a datetime, and `inf_seconds`, `sup_seconds` and `seconds` give
+  it exactly. pandas' `Timestamp` and `Timedelta` are read exactly in their unit, `NaT` is refused (a
+  `ValueError`, in every operator too), numpy's `datetime64`/`timedelta64` are a `TypeError`, and
   `to_pandas()` / `from_pandas()` convert one bounded piece to and from a `pd.Interval`; the library
-  never imports pandas otherwise:
+  never imports pandas otherwise. one limit: with a pandas `Timedelta` on the left of `%` or `divmod`,
+  pandas computes `x - (x // A) * A` itself, a sound but wider set; write `TDI(x) % A`, which is exact:
 
   ```python
   >>> import datetime

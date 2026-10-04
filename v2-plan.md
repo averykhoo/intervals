@@ -1212,7 +1212,11 @@ defaults are in `v2-implementation-plan.md` §2 M8.
   aware one its UTC instant (`d - datetime(1970, 1, 1, tzinfo=utc)`); a timedelta `days * 86400 + seconds +
   microseconds / 10 ** 6`; a pandas `Timestamp` or `Timedelta` its `asm8` in its own `unit` (`.value` is
   nanoseconds and overflows past 2262; a naive `Timestamp` reads as wall clock, which is pandas' reading).
-  `NaT` is a `ValueError`, a number (nan too) a `TypeError`
+  `NaT` is a `ValueError` (in the constructors, `in`, set ops and every arithmetic operator of either
+  class, either side), a number (nan too) a `TypeError`, and so are numpy's `datetime64` and `timedelta64`
+  everywhere a scalar is taken, factors and the sentinels' comparisons included: numpy registers
+  `timedelta64` as a `numbers.Integral` whose `int()` is its count in its own unit, so the numeric class
+  refuses it too (`cuts.is_numpy_time`; the M8 review's F6, 2026-10-04)
 * **kinds and zones**: a `DateTimeInterval` is naive or aware, a function of the set: one with no finite end
   (empty, `[-inf, inf]`, `[inf]`) has no kind and meets either. naive and aware never mix: the constructor,
   every set op, relation, comparison, `in`, slicing and `dt - dt` raise `TypeError`, and `==` is False (as
@@ -1220,15 +1224,22 @@ defaults are in `v2-implementation-plan.md` §2 M8.
   `tz=`, else its start's, else its end's, and of an op the first aware operand's, the left one's.
   `A.tz` reads it, `A.astimezone(tz)` changes it (a naive interval: `TypeError`); it is never part of `==`
   or the hash. `dt - dt` of aware ends is the elapsed time between the instants, also when both share a
-  tzinfo, where python's own `-` gives the wall-clock difference
+  tzinfo, where python's own `-` gives the wall-clock difference; and aware `dt + td` (`dt - td`) adds
+  elapsed time likewise: across a DST change `t + timedelta(days=1)` is 24 h later, not python's same
+  wall time on the next day, and `D(d, tz=tz) + timedelta(days=1)` is not the next day in tz (a naive
+  interval's `+` is wall clock, as python's; the M8 review's F4)
 * **dates**: a `date` is the half-open day `[d 00:00, d+1 00:00)`; as a bound it is always a cut below a
   midnight, its own for a closed start or an open end ("from d", "before d"), the next one for an open
   start or a closed end ("after d", "through d"). so days tile (`D(mon) | D(tue) == D(mon, tue)`, one
   piece), a naive day is 86400 s, `23:59:59.9999995` is in its day, and `[Tue, Sat) == [Tue, Fri]`. a date
   is naive; `tz=` reads it as that day in a zone (aware; a DST day there is 23 or 25 h). a datetime,
-  midnight included, is an exact instant: none of v1's snaps. reversed bounds are a `ValueError` on the
-  values as written (a date as its 00:00); bounds whose readings cross (`D(mon, mon, start_closed=False)`,
-  after Monday through Monday) are empty. `date in A` asks whether the day is a subset of A
+  midnight included, is an exact instant: none of v1's snaps. the order of two bounds is checked on their
+  readings, by `MultiInterval`'s rule (the M8 review's F3; the build checked the values as written, a date
+  as its 00:00): a start read after the end is a `ValueError` (`D(tue, datetime(tue, 12), start_closed=
+  False)`, after Tuesday until its noon), equal readings are empty (`D(mon, mon, start_closed=False)`, after
+  Monday through Monday; `D(tue, mon)`, from Tuesday through Monday, `[Tue 00:00, Tue 00:00)`), and
+  `D(datetime(tue, 12), tue)` is noon through Tuesday. slicing reads its bounds the same way. `date in A`
+  asks whether the day is a subset of A; an aware A refuses a date (naive) in `in` and in slicing
 * **the infinite ends**: `NEG_INF` and `POS_INF`, two module singletons, order below and above every
   datetime, date, timedelta, pandas `Timestamp` and `Timedelta` and each other (through python's reflected
   comparisons, since those types return NotImplemented), against `NaT` every comparison is False, and
@@ -1240,7 +1251,13 @@ defaults are in `v2-implementation-plan.md` §2 M8.
 * **read-outs, never rounded**: `inf`, `sup`, `degenerate_points` and `total_duration` give datetimes and
   timedeltas; an end that is no whole number of microseconds raises `ValueError` naming the raw accessor
   (`inf_seconds`, `sup_seconds`, `seconds`, `total_seconds`, `size`), which gives the exact seconds and
-  never fails, and an instant past datetime's range raises `OverflowError` the same way. iteration and
+  never fails, and an instant whose datetime in the display zone is past datetime's range raises
+  `OverflowError` the same way: every datetime that was an input reads back, also near the range's ends
+  where its UTC instant has no datetime (`9999-12-31 23:00-05:00`; the review's F2: the read-out went
+  through the UTC datetime), and a tzinfo whose `dst()` is None reads out too (`astimezone` refuses it;
+  F5). `degenerate_points` is a tuple sorted by instant, not a set as `MultiInterval`'s: python compares
+  and hashes two datetimes of one zone by wall clock, so a set kept one of a DST fold's two instants (F7).
+  `astimezone` of a set with no finite end is itself (no kind, no zone). iteration and
   `pieces` give wrappers and never fail; `size` is the numeric `Size` of the seconds, `total_seconds` its
   length (`ValueError` when unbounded)
 * **arithmetic**: dt ± td → dt; td + dt → dt; dt − dt → td; td ± td, td % td → td; td × real, real × td,
@@ -1248,7 +1265,11 @@ defaults are in `v2-implementation-plan.md` §2 M8.
   of a td. each operand an interval or a scalar of its kind (a date is its day), a real an int, Fraction,
   float (its exact value: `td * 0.1` is exact and not a whole microsecond) or `MultiInterval` (an outward
   one read exactly too). anything else is a `TypeError` through NotImplemented: `dt + dt`, `real × dt`,
-  `real / td`, `td // real`, `td ** n`. the numeric class's warnings pass through (`td / [0]`)
+  `real / td`, `td // real`, `td ** n`. the numeric class's warnings pass through (`td / [0]`). a pandas
+  `Timedelta` on the LEFT of `%` or `divmod` never reaches `__rmod__`: pandas computes `x - (x // A) * A`
+  itself, and no hook of pandas 3.0.6 makes the scalar defer (`__pandas_priority__` is read by Series,
+  Index and arrays only; `__array_priority__`, `_typ` tried too), so the remainder is sound but wider
+  (the dependency between the two x is lost); `T(x) % A` is exact (the M8 review's F1, documented and pinned)
 * **comparisons and relations**: `< <= > >=` and `eq_pointwise` are `TruthSet`s, `before after adjoins
   overlaps contains within allen allen_matrix allen_relations weakly_less strictly_less issubset
   issuperset isdisjoint` bools, all on the seconds. `==` is structural, the same set of the same kind;
@@ -1264,8 +1285,9 @@ defaults are in `v2-implementation-plan.md` §2 M8.
   `to_pandas()` imports it. `to_pandas()` of one bounded piece is a `pd.Interval` (ends in the display
   zone, a whole-microsecond end as a unit-`us` `Timestamp`, a nanosecond one at unit `ns`), and
   `from_pandas()` takes one back; an empty set, several pieces (`[p.to_pandas() for p in A]`), an infinite
-  end and an end that is no whole number of nanoseconds raise `ValueError`. pandas is in the `[test]` extra,
-  so `tests/test_time_pandas.py` never skips
+  end, an end that is no whole number of nanoseconds and one past pandas' range (a microsecond end past
+  9999, a nanosecond one outside 1677-2262) raise `ValueError`. pandas is in the `[test]` extra, so
+  `tests/test_time_pandas.py` never skips
 
 ### package layout
 
@@ -1564,6 +1586,25 @@ imports only point downward.
       exact text and interchange conversions, and every inf-sup type but binary64 (M16b)
 
 ## decision log
+
+### 2026-10-04 revision: M8's review round (three reviews, one fixer)
+
+three read-only reviews of the build (soundness and D30, spec and API, sabotage); the session decided the
+fixes, a fixer built them on branch `m8` (the record, with each finding's pin and the sabotage re-run,
+`v2-implementation-plan.md` §2 M8 "review round"). behaviour changed, all in "the time layer (M8)" above:
+* numpy's `timedelta64` (a `numbers.Integral` to numpy) and `datetime64` are no numbers: refused
+  (TypeError) by the numeric class wherever it takes a number or an int argument, and by every scalar
+  slot of the time layer (`MultiInterval(np.timedelta64(3, 'ns'))` was `[3]`, `td_iv * np.timedelta64(3,
+  'ns')` was `td_iv * 3`)
+* the order of two bounds is checked on their readings by `MultiInterval`'s rule, not on the values as
+  written; so `D(tue, mon)` (from Tuesday through Monday) is now empty, not a `ValueError`, and
+  `D(mon, noon_mon, start_closed=False)` a `ValueError`, not empty
+* `degenerate_points` is a tuple sorted by instant (a set lost one instant of a DST fold)
+* aware read-outs no longer pass through the UTC datetime (near the range's ends they overflowed) and
+  read a tzinfo whose `dst()` is None
+* `NaT` is a `ValueError` in every arithmetic operator; `to_pandas()` past pandas' range a `ValueError`
+* documented, not changed: aware `dt + td` adds elapsed time; `pd.Timedelta % A` is pandas' own, wider
+  remainder (no hook of pandas 3 lets the interval answer)
 
 ### 2026-10-04 revision: M8, the time layer, built
 
