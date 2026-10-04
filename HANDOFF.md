@@ -11,6 +11,10 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-10-04)
 
+* **everything pushed, CI and fuzz green (2026-10-05)**: `origin/master` at `48631f5` (the DST-gap oracle fix, prepush
+  x10: 27795 in 25 s + 6490 in 4385 s); CI run 37223604634 green (all 8 jobs; the gate 34285 passed on python 3.12,
+  3.13, 3.14 and `gate-gmpy2`, in 289-498 s) and fuzz run 37223604624 green (`34285 passed in 2933.42s`, x10).
+  checked by the session on GitHub, not only the babysitter's word
 * **pushed `5888c6e..a984e26` (2026-10-04, the owner's go)** after a green prepush (x10: 27795 in 63 s + 6489 in
   5344 s): CI run 37213772220 green; fuzz run 37213772177 red, `1 failed, 34283 passed`, a test oracle that assumed
   every aware wall time exists (a DST gap; plan §2 "fuzz-dst-gap"), fixed and pinned, the library unchanged but a
@@ -199,7 +203,11 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
   and `tests/test_modulo.py` (the second missing from H4's list) and the `pythonpath` entry. gate 27795 + 6489;
   prepush green (x10: 27795 in 63 s + 6489 in 5344 s); pushed `5888c6e..a984e26`; the babysitter (haiku): CI run
   37213772220 green, fuzz run 37213772177 red on a test oracle (a DST gap; plan §2 "fuzz-dst-gap"), reproduced by
-  the session, fixed and pinned, sabotaged red
+  the session, fixed and pinned, sabotaged red. gate 27795 + 6490; prepush green; pushed `a984e26..48631f5`; CI run
+  37223604634 and fuzz run 37223604624 both green (34285 passed). the first babysitter's "reproduced locally" rested
+  on a script importing a name that does not exist (`from intervals import Interval`); the session reproduced the
+  case itself. Still owed: Q21; the CORE-MATH full check is the owner's call (`cuts.py` and `kernel.py` changed: the
+  flag check in constructors only)
 * **2026-10-04** the v1 parity audit (the owner: "send out a bunch of agents to read and run code, to verify that
   everything in v1 is possible in v2"). one workflow, 44 agents: ten auditors, one per slice of `archive/v1/`, ran v1
   and v2 side by side (839,971 cases, compared as sets); two skeptics per claimed gap (reproduce; records); a coverage
