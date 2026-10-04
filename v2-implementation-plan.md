@@ -449,9 +449,9 @@ every new property test (flip one comparison, watch red, restore).
   a datetime; `TimeDeltaInterval(POS_INF)` is); a float factor (and a `MultiInterval` one's float ends, an
   `OutwardMultiInterval` read exactly) is its exact value, so `td * 0.1` is exact and its read-out raises
   (python's `timedelta * 0.1` rounds to the microsecond); `td // real` is a TypeError (`MultiInterval // n`
-  floors to whole seconds, which is not python's `timedelta // int`); reversed bounds are checked on the
-  values as written (a date as its 00:00), and bounds whose readings cross are empty, not an error
-  (`D(mon, mon, start_closed=False)`); the kind is a function of the set (no finite end, no kind); unary `-`,
+  floors to whole seconds, which is not python's `timedelta // int`); reversed bounds were checked on the
+  values as written (a date as its 00:00; superseded in the review round below, F3: the readings are checked
+  by `MultiInterval`'s rule); the kind is a function of the set (no finite end, no kind); unary `-`,
   `+`, `abs` on durations; `__array_ufunc__ = None` (numpy scalars reach the reflected operators);
   `to_pandas()` imports pandas, a whole-microsecond end becomes a unit-`us` `Timestamp`, a nanosecond one a
   unit-`ns` one; `str` of a duration is python's text signed as a whole without the comma (`-0:20:00`)
@@ -522,6 +522,179 @@ every new property test (flip one comparison, watch red, restore).
   layer adds 200 test items and the README's time doctests (about 10 s)
 * **left**: `archive/v1/` and the tests reading it stay (H4); the defaults above to confirm with the owner;
   pandas past `to_pandas()` (an `IntervalIndex` of several pieces, `IntervalArray`) not built
+
+**review round (2026-10-04, branch `m8`).** three read-only reviews of the build (`fd79070`, rebased as
+`6c62e37`): soundness and D30, spec and API, sabotage (do the tests discriminate). the session decided each
+finding; a fixer reproduced every one on the current code first (all reproduced), then built:
+
+* **findings, each with its fix and pin** (pins in `tests/test_time_interval.py` unless named):
+    * F6 (BLOCKING) numpy's `timedelta64` is a `numbers.Integral` to numpy, so `_factor` read it as its
+      count in its own unit (`td_iv * np.timedelta64(3, 'ns')` was `td_iv * 3`; `/` a duration), and the
+      numeric class the same (`MultiInterval(np.timedelta64(3, 'ns'))` was `[3]`, pre-M8). fixed in its own
+      commit for the numeric class: `cuts.is_numpy_time` (dtype kind 'm'/'M') refused (TypeError) by
+      `normalize_value`, `MultiInterval.__contains__`, `_is_integral` (the `**` int path), rootn's degree,
+      round's ndigits, `pown_rev` and the 1788 layer's exponent (files `cuts`, `multi_interval`, `functions`,
+      `steps`, `reverse`, `ieee1788`; none in `tools/gate.py::BACKEND_FILES`); pin
+      `tests/test_numpy_compat.py::test_numpy_durations_are_no_numbers`. in the time layer `_factor` refuses
+      it by name and the sentinels have `__array_ufunc__ = None`, so `POS_INF > np.datetime64(...)` is the
+      documented TypeError (was numpy's False); pin `::test_numpy_times_are_refused`
+    * F1 (BLOCKING) `pd.Timedelta % T`, `divmod(pd.Timedelta, T)`: pandas computes `x - (x // A) * A` itself,
+      a sound superset (`pd.Timedelta(hours=1) % T(1h, 2h)` held -1:00:00..0:00:00). no hook of pandas 3.0.6
+      makes the scalar defer: a probe class with `__pandas_priority__ = 5000` (read by Series, Index and
+      arrays only, `pandas/core/ops/common.py`), `__array_priority__`, `__array_ufunc__ = None` or `_typ` in
+      series/dateoffset/timedeltaindex/extension got `__rfloordiv__`, `__rmul__`, `__rsub__`, never
+      `__rmod__`. LEFT, documented (module and class docstrings, README, v2-plan: put the interval on the
+      left, `T(x) % A`, exact); pin `tests/test_time_pandas.py::test_pandas_timedelta_on_the_left_of_mod_is_sound_and_the_workaround_exact`
+      (the exact set inside pandas' result, the quotient exact, the workaround equal to python's)
+    * F7 (BLOCKING-rare) `degenerate_points` was a set, and the two instants of a DST fold compare and hash
+      equal in python: one was lost. now a tuple sorted by instant (the docstring says why not a set); pins
+      `::test_degenerate_points_keep_both_instants_of_a_fold` (NY 2024-11-03 01:30, fold 0 and 1),
+      `::test_degenerate_points_values`
+    * F2 aware read-outs went through the UTC datetime, which overflows near the range ends although the
+      local datetime exists (`9999-12-31 23:00-05:00`). `_aware_datetime`: `astimezone` first, else the wall
+      time w with `w - w.utcoffset()` the instant, from the zone's offsets (fold 0 and 1 tried); OverflowError
+      only when w itself is outside the range. docstring wording fixed. pins
+      `::test_aware_ends_near_the_range_read_back` (six, Tokyo LMT at year 1, ±23:59 offsets),
+      `::test_an_error_only_when_the_local_datetime_is_past_the_range`; `::test_aware_datetime_round_trips`
+      now over datetime's whole range, aware (its oracle no longer does datetime arithmetic)
+    * F3 the order of two bounds is checked on their readings by `MultiInterval`'s rule (`kernel.piece`),
+      for both classes (`_piece_cuts`), not on the values as written: `D(datetime(tue, 12), tue)` is noon
+      through Tuesday (raised), `D(tue, datetime(tue, 12), start_closed=False)` raises (was empty), slicing
+      the same. two consequences of the rule, recorded: `D(tue, mon)` (from Tuesday through Monday, read
+      `[Tue 00:00, Tue 00:00)`) is now EMPTY, as `MultiInterval(1, 1, end_closed=False)`, where the build
+      raised; `D(d, start_closed=False, end_closed=False)` (after d, before d) raises (was empty). pins
+      `::test_bounds_are_ordered_as_read` (replaces `test_reversed_dates_raise_and_crossed_flags_are_empty`),
+      `::test_durations_reversed_or_half_open_single_raise`
+    * F4 aware `dt + td` adds elapsed time, as `dt - dt` gives it (python's aware `+` is wall clock): LEFT as
+      designed (D30 (a): instants), documented beside the `dt - dt` note (module, class, README, v2-plan);
+      pin `::test_aware_plus_a_timedelta_adds_elapsed_time` (NY 2024-03-09 12:00 + 1 day = 03-10 13:00-04:00)
+    * F5 a tzinfo whose `dst()` is None read in but not out (`astimezone`'s `fromutc` refuses it); the F2
+      fallback reads it, and `str` catches ValueError too; pin `::test_a_tzinfo_without_dst_reads_out`
+    * NaT in arithmetic was a TypeError or a ValueError by operator: `_nat_refused` on every arithmetic
+      operator of both classes, either side, a ValueError as in the constructors (a `DateTimeInterval` has no
+      `*`, so `D * NaT` stays a TypeError); pin `tests/test_time_pandas.py::test_nat_is_refused_by_every_operator`
+    * `to_pandas()` past pandas' range raised OverflowError or pandas' OutOfBoundsDatetime: now a ValueError
+      as its other refusals; pin `tests/test_time_pandas.py::test_to_pandas_units_and_range`
+    * F8 (the properties did not reach the hard cases): the set-op, relation and arithmetic properties draw
+      naive or aware pairs (UTC, SGT, NY) and check the display zone and the unary results' kind and zone;
+      new `tests/test_time_pandas.py::test_pandas_and_numpy_scalars_on_the_left_are_the_numeric_ones` and
+      `::test_tz_dates_property` (an independent midnight oracle, nine zones: Havana, Santiago, Beirut at
+      midnight, Lord_Howe's 30-minute DST, Apia's skipped day, an odd fixed offset)
+    * spec review, records: v1 capabilities dropped without a record are now in §4's row (`T - datetime`,
+      `__getitem__` with an interval or a scalar, `.interval` → `.seconds`, `infimum`/`supremum` of an empty
+      set raise, `closed_hull` empty); `astimezone` of a set with no finite end is itself (docstring, pin
+      `::test_astimezone_of_a_set_with_no_finite_end`); the module docstring now says pandas is looked up in
+      `sys.modules`, never imported to read; the reading of a `Timestamp`/`Timedelta` is its `asm8` in its own
+      unit (`.value` is nanoseconds and overflows past 2262), not D30's `Fraction(ts.value, 10 ** 9)`: one of
+      the build's choices, recorded here; a doctest of a nanosecond `Timestamp`'s membership
+      (`_TimeInterval.__contains__`); the slice docstring says an aware interval refuses a date bound. LEFT as
+      a recorded note: a negative duration's `str` signs python's text as a whole (`[-2 days 1:00:00]` is
+      -49 h; python prints `-3 days, 23:00:00`)
+* **the sabotage review's 19 green rows**, each now with a test that turns it red: R1
+  `tests/test_time_pandas.py::test_every_pandas_unit_is_read_exactly` (s, ms, us, ns), R2
+  `::test_tz_date_at_the_end_of_the_range`, R3 `::test_fold_is_read_in`, R5
+  `::test_reflected_set_ops_keep_the_left_zone`, R6 `::test_expand`, R7 above, R8 above, R10
+  `::test_naive_and_aware_never_mix_in_any_relation`, R11 `::test_tz_date_flags`, R12 and R23
+  `::test_from_seconds_takes_a_number_exactly_and_a_tzinfo_only`, R13 and R14 in the sentinel and equality
+  pins, R15 and R16 above, R17 `::test_reflected_divmod`, R18 `::test_arithmetic_keeps_the_aware_zone`, R24
+  ten more refused pairings, R25 and R26 in the set-op property
+* **sabotage re-run** (2026-10-04, `.scratch/m8/snap-fix`: a `git archive` of the final code commit `db43aa9`; one row = exact-string
+  replacements, each anchor matched once, CRLF; `__pycache__` and `.hypothesis` cleared before and after,
+  `PYTHONDONTWRITEBYTECODE=1`, restored by `shutil.copy2` and checked with `filecmp.cmp(shallow=False)`, the snapshot's
+  own package checked to be the one imported; tests `tests/test_time_interval.py`, `tests/test_time_pandas.py`,
+  `tests/test_numpy_compat.py`, 575 items; a green row re-run under the fuzz profile). control green (575 passed).
+  every break red: the review's 19 green rows (R4, R9, R19-R22 were red already), the builder's S1-S41 re-made
+  on the new code (S31 is now "the order check off", the check having moved to `_piece_cuts`), and one row per
+  fix of this round (N). a first run on `e38f042` left R12 green (`0.1 == Fraction(0.1)` is True, so the pin
+  passed with the float kept); its pin now checks the type and `3 * 0.1`, and the second run is this one.
+  "red" is the number of failing items:
+
+  | row | break | red |
+  |---|---|---|
+  | R1 | pandas unit 'ms' read as 1e-4 s | 1 |
+  | R2 | date.max with tz=: the fallback day 1 s short | 1 |
+  | R3 | fold ignored when reading an aware datetime | 2 |
+  | R5 | reflected set op takes the RIGHT operand's display zone | 1 |
+  | R6 | expand() widens by twice the distance | 1 |
+  | R7 | degenerate_points read out negated | 9 |
+  | R8 | to_pandas: a microsecond end always takes the ns path | 1 |
+  | R10 | isdisjoint skips the naive/aware check | 1 |
+  | R11 | tz= date path: an open date start is its own midnight | 3 |
+  | R12 | from_seconds(number): a float kept as float | 1 |
+  | R13 | sentinel >= strict (POS_INF >= POS_INF False) | 1 |
+  | R14 | TimeDeltaInterval.__ne__ returns eq | 1 |
+  | R15 | TimeDeltaInterval: reversed bounds not checked (silently empty) | 3 |
+  | R16 | TimeDeltaInterval: half-open single bound accepted | 2 |
+  | R17 | reflected divmod: wrong quotient | 1 |
+  | R18 | td + aware datetime loses the display zone | 3 |
+  | R23 | from_seconds accepts a non-tzinfo tz | 1 |
+  | R24 | td_iv - real accepted | 2 |
+  | R25 | hull drops the kind/zone | 1 |
+  | R26 | iteration pieces drop the kind/zone | 1 |
+  | S1 | naive read through timestamp() | 35 |
+  | S2 | aware read as wall clock, the offset ignored | 32 |
+  | S3 | timedelta through total_seconds() | 11 |
+  | S4 | the kind check off in ops | 39 |
+  | S5 | the kind check off in the constructor | 4 |
+  | S6 | the display zone part of == | 6 |
+  | S7 | the display zone from the right operand | 3 |
+  | S8 | a sentinel not ordered against timedelta | 6 |
+  | S9 | sentinels pickled as copies | 1 |
+  | S10 | an infinite end read out as math.inf | 8 |
+  | S11 | a missing slice bound open (v1) | 1 |
+  | S12 | v1's end-of-day snap of a closed date end | 19 |
+  | S13 | v1's snap of a datetime end at midnight | 20 |
+  | S14 | a non-microsecond read-out rounded silently | 6 |
+  | S15 | NaT not refused | 13 |
+  | S16 | comparisons a bool, not a TruthSet | 4 |
+  | S17 | foreign == False, not NotImplemented | 1 |
+  | S18 | the hash includes the display zone | 4 |
+  | S19 | repr drops end_closed | 6 |
+  | S20 | dt - dt reversed | 4 |
+  | S21 | ^ computed as a union | 1 |
+  | S22 | td % td reversed | 7 |
+  | S23 | a float factor rounded to a microsecond's denominator | 3 |
+  | S24 | v1's `end or _end` (a zero end replaced) | 5 |
+  | S25 | pandas imported at load | 2 |
+  | S26 | Timestamp read through .value | 2 |
+  | S27 | the Timestamp unit ignored | 18 |
+  | S28 | to_pandas takes an infinite end | 3 |
+  | S29 | to_pandas rounds a non-ns end | 2 |
+  | S30 | an open date start at its own midnight | 7 |
+  | S31 | the order of the bounds not checked | 5 |
+  | S32 | a set with no finite end keeps a kind | 7 |
+  | S33 | astimezone of a naive interval allowed | 1 |
+  | S34 | tz= ignored for a date | 8 |
+  | S35 | __array_ufunc__ = None removed from the wrappers | 3 |
+  | S36 | a duration's str keeps the comma | 1 |
+  | S37 | the wrapper mutable | 1 |
+  | S38 | `date in A` a point, not the day | 1 |
+  | S39 | td + dt stays a duration | 8 |
+  | S40 | td / td a duration | 5 |
+  | S41 | a sentinel taken as an arithmetic operand | 3 |
+  | N1 | F6 numeric: normalize_value takes a timedelta64 as its count | 2 |
+  | N1b | F6 numeric: MultiInterval.__contains__ takes a timedelta64 | 1 |
+  | N1c | F6 numeric: `**` takes a timedelta64 as an int exponent | 1 |
+  | N1d | F6 numeric: rootn takes a timedelta64 degree | 1 |
+  | N1e | F6 numeric: round takes a timedelta64 ndigits | 1 |
+  | N1f | F6 numeric: pown_rev takes a timedelta64 exponent | 1 |
+  | N1g | F6 numeric: the 1788 layer's exponent takes a timedelta64 | 1 |
+  | N2 | F6 time: the sentinels' numpy hook removed (np.datetime64 < POS_INF is numpy's False) | 1 |
+  | N3 | F6 time: `_factor`'s refusal and normalize_value's both off | 2 |
+  | N4 | F7: degenerate_points a set again | 9 |
+  | N5 | F2: aware read-out only through the UTC datetime (no fallback) | 8 |
+  | N6 | F5: the fallback for OverflowError only (a dst()-None tzinfo raises again) | 1 |
+  | N7 | F3: a date bound skips the order check (after-the-2nd-until-its-noon silently empty) | 2 |
+  | N8 | F3: the order on values as written (a datetime start after a date end at its 00:00 raises) | 1 |
+  | N9 | NaT in arithmetic not refused | 8 |
+  | N10 | to_pandas past the range not turned into ValueError | 1 |
+* **gate** (2026-10-04, `tools/gate.py`, on the final code `db43aa9`, code id `c:3998457d2b73`): `gate:itf`
+  27795 passed in 28 s, `gate:rest` 6477 passed in 345 s (34272 items; the round adds 87: `tests/test_time_interval.py`
+  168 → 233, `tests/test_time_pandas.py` 32 → 52, one numpy pin, one doctest). the numeric-class commit `f617971` was
+  gated on its own code too (27795 + 6391). no file of `tools/gate.py::BACKEND_FILES` changed, so no `gate:gmpy2`
+* **left**: F1 (pandas' own `%` on the left; documented, pinned); F4 (elapsed-time `+`, by design, documented);
+  the negative duration's `str`; the F3 consequence `D(tue, mon)` empty rather than an error is the rule as decided
+  (`MultiInterval`'s), for the owner to confirm
 
 ### M9 `tests/itf1788/` (1½ days)
 * vendor a subset of `.itl` files (licence check first), a parser for the used subset (`add`,
@@ -4731,7 +4904,7 @@ independent of each other and were built in parallel worktrees, then merged on `
 | `apply_monotonic_{unary,binary}_function` | `applicator.apply_{unary,binary}(descriptor, ...)` |
 | `INFINITY_IS_NOT_FINITE`, `CONSISTENCY_CHECK` | deleted; `if __debug__` check in the class |
 | `interval.py` (`Interval`, `MultipleInterval`) | archived in `archive/v1/`; `tests/oracles.py` does its job |
-| `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; back at M8 (2026-10-04) as `intervals/time_interval.py`, with these renames (`infimum` → `inf`, `contiguous_intervals` → `pieces`, `cardinality` → `size`) and no in-place methods |
+| `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; back at M8 (2026-10-04) as `intervals/time_interval.py`, with these renames (`infimum` → `inf`, `contiguous_intervals` → `pieces`, `cardinality` → `size`, `.interval` (unix-timestamp seconds) → `.seconds` (wall-clock seconds for naive, UTC for aware)) and no in-place methods. dropped (M8 review round): `TimeDeltaInterval - datetime` (v1 gave a `DateTimeInterval`; python refuses `td - dt`: TypeError); `__getitem__` with an interval (use `A & B`) or a scalar (use `x in A` / `A & x`): slicing only, as `MultiInterval`; `infimum`/`supremum` of an empty set (v1 None): `inf`/`sup` raise ValueError, `closed_hull` is the empty set |
 | `exp()`, `log(base)` | `exp()`, `log(base=None)`, and the rest of `functions.py` (M12) |
 | `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | the same dunders, returning the set of values attained (`steps.py`, M12) |
 | `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | an integral number exponent is pown; any other real or interval exponent is 1788 `pow`, and `b ** A` works (M13d, D11); `pow(A, n, m)` dropped (D11) |
