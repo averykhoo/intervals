@@ -11,6 +11,10 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-10-04)
 
+* **shifts dropped, v1's leftovers settled (2026-10-04), not pushed**: `<<`/`>>` reverted (`0513109`), a
+  TypeError on every class and in numpy (`tests/test_multi_interval.py::test_no_shifts`); `merge`'s k-overlap
+  mode and parsing, `random_multi_interval` gone; `apply()` stays internal (`v2-plan.md` decision log
+  2026-10-04; the implementation plan's §4 map is current). v1 has nothing v2 lacks but the time layer (M8)
 * **the quadratic parse fixed, not pushed (2026-10-04)**: `parse(' ' * 30000 + 'x')` 37 s -> 0.0002 s, the
   tokenizer's white-space runs possessive (`6450502`; plan §2 "M14-breadth", "the parse fixed"). gate green on
   its branch's worktree (27795 + 6242), which the main checkout's ledger does not see: the push's prepush runs
@@ -19,7 +23,7 @@ session log below; nothing is listed as open and done at once), and list anythin
   `references/owner-questions-2026-10-03/` (2026-10-03); four streams built them and were merged into `master`
   (plan §2 "owner-answers"; D27-D29). behaviour changes: pown of exact operands past 2 ** 22 bits is the
   enclosure, pown to nearest correctly rounded (no libm), hex `repr` past 4300 digits, a method mixing the
-  two classes outward (was a defect), elementwise `==` against an ndarray, `<<`/`>>`, the 1788 layer's
+  two classes outward (was a defect), elementwise `==` against an ndarray, `<<`/`>>` (dropped the next day), the 1788 layer's
   `nan` for the empty set's numbers, `OutwardMultiInterval.rounded()`; CI gains a `gate-gmpy2` job. no
   question is open for the owner. **pushed** `912558b..c55ce20` (2026-10-04, the owner's go); CI run 37147322181
   green (all 8 jobs; the gate 34029 passed on python 3.12-3.14, `gate-gmpy2` 34029 with `name()` gmpy2) and fuzz
@@ -168,6 +172,15 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
 
 ## session log (newest first)
 
+* **2026-10-04** the owner asked how certain the library's correctness is (answered from the records: independent
+  oracles, ITF1788, CORE-MATH, the exhaustive grids, fuzz and sabotage; the weak spots are the still-owed list and
+  the discovery rate), then what v1 has that v2 lacks. a census of v1's class members against v2's found nothing
+  but renames, deliberate drops and three narrow gaps; the owner: `merge`'s k-overlap mode and parsing were
+  artifacts, `random_multi_interval` a test helper, `apply()` not public for now, and the shifts dropped (no use
+  case; the plausible one, fixed-point code over sets, wants python's floor; no integer ranges, none in 1788
+  either). `0513109` reverted, the pin `test_no_shifts` red on the old library (checked in a `git archive` copy
+  with its own `pytest.ini`: the repo's `pythonpath` otherwise imports the live package and the check passes
+  vacuously). Still owed: the push (prepush is an x10 fuzz); `kernel.overlap_count` is now used by its test only
 * **2026-10-04** m14b-open's quadratic parse (the owner: "optimize the regex so it's not quadratic"). a first
   agent with `isolation: worktree` vanished with no worktree, notes or commit; the session made the worktree
   itself (`../intervals-regex-linear`, branch `regex-linear`) and a second agent measured, fixed, pinned and

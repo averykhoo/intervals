@@ -139,13 +139,10 @@ def numpy_scalars(np, name):
 
 
 # the operators a numpy scalar can meet ours in, DERIVED from the classes' reflected dunders, so a
-# new one joins this test the day it is written, and is red until numpy_compat's table routes it if
-# its reflected form answers. the shifts refuse theirs (Q6-shift), so a numpy scalar on the left is refused
-# either way: their table rows are checked by test_binary_ufunc_is_the_method_or_the_operator
+# new one joins this test the day it is written, and is red until numpy_compat's table routes it
 _NOT_OPERATORS = {'__repr__', '__reduce__', '__reduce_ex__', '__round__'}
-# a reflected dunder has its forward one beside it (`__rshift__` is forward: there is no `__shift__`)
 REFLECTED = sorted({n for cls in OURS for n in dir(cls)
-                    if re.fullmatch(r'__r[a-z]+__', n) and n not in _NOT_OPERATORS and f'__{n[3:]}' in dir(cls)})
+                    if re.fullmatch(r'__r[a-z]+__', n) and n not in _NOT_OPERATORS})
 
 
 def _operator(dunder: str):
@@ -164,10 +161,8 @@ SCALAR_TYPES = ['float64', 'float32', 'float16', 'longdouble', 'int8', 'int64', 
 
 
 def test_the_operators_are_derived():
-    """the derivation found the thirteen reflected dunders there are today (a new one adds a row); the
-    shifts (Q6-shift, 2026-10-03) refuse their reflected form, so a numpy scalar on the left is refused too"""
-    assert {'add', 'sub', 'mul', 'truediv', 'floordiv', 'mod', 'divmod', 'pow', 'and', 'or', 'xor',
-            'lshift', 'rshift'} <= set(OPERATORS)
+    """the derivation found the eleven reflected dunders there are today (a new one adds a row)"""
+    assert {'add', 'sub', 'mul', 'truediv', 'floordiv', 'mod', 'divmod', 'pow', 'and', 'or', 'xor'} <= set(OPERATORS)
 
 
 # 1. NUMPY IS OPTIONAL
@@ -207,8 +202,8 @@ def test_numpy_scalar_operators_are_python_numbers(np, kind, op, data):
     s = data.draw(numpy_scalars(np, kind))
     x = data.draw(ours())
     fn = OPERATORS[op]
-    if op in ('pow', 'lshift', 'rshift') and isinstance(s, np.integer) and abs(int(s)) > 64:
-        return  # A ** 2**63 is an exact power of 2**63 digits, A << 2**63 a 2**63-bit scale: with any number type
+    if op == 'pow' and isinstance(s, np.integer) and abs(int(s)) > 64:
+        return  # A ** 2**63 is an exact power of 2**63 digits: too slow, with any number type
     p = python_number(np, s)
     assert_same_outcome(outcome(lambda: fn(s, x)), outcome(lambda: fn(p, x)))
     assert_same_outcome(outcome(lambda: fn(x, s)), outcome(lambda: fn(x, p)))
@@ -294,7 +289,7 @@ BINARY_OPERATORS = {
     'floor_divide': operator.floordiv, 'remainder': operator.mod, 'divmod': divmod, 'power': operator.pow,
     'bitwise_and': operator.and_, 'bitwise_or': operator.or_, 'bitwise_xor': operator.xor,
     'less': operator.lt, 'less_equal': operator.le, 'greater': operator.gt, 'greater_equal': operator.ge,
-    'equal': operator.eq, 'not_equal': operator.ne, 'left_shift': operator.lshift, 'right_shift': operator.rshift,
+    'equal': operator.eq, 'not_equal': operator.ne,
 }
 
 
@@ -787,17 +782,13 @@ def test_integer_arguments_take_numpy_ints(np):
         (lambda: a.log(np.float64(2)), lambda: a.log(2.0)),
         (lambda: a.log(np.longdouble(2)), lambda: a.log(2.0)),
         (lambda: Dual.variable(a).log(np.int64(2)), lambda: Dual.variable(a).log(2)),
-        (lambda: a << np.int64(3), lambda: a << 3), (lambda: a >> np.int8(-3), lambda: a >> -3),  # Q6-shift
-        (lambda: O(0.1) >> np.uint64(2), lambda: O(0.1) >> 2), (lambda: D(a) << np.int64(1), lambda: D(a) << 1),
-        (lambda: np.left_shift(a, 3), lambda: a << 3), (lambda: np.right_shift(a, np.int64(3)), lambda: a >> 3),
     ]
     for got, want in same:
         assert outcome(got) == outcome(want)
     for thunk in (lambda: a.rootn(np.bool_(True)), lambda: a.rootn(True), lambda: a.round(True),
                   lambda: a.round(np.bool_(True)), lambda: pown_rev(a, True), lambda: a.log(True),
                   lambda: a.log(np.bool_(True)), lambda: a.rootn(2.0), lambda: a.log('2'),
-                  lambda: a << np.bool_(True), lambda: a >> np.float64(1), lambda: np.int64(3) << a,
-                  lambda: np.left_shift(3, a), lambda: np.right_shift(np.array([1, 2]), a)):
+                  lambda: a << np.int64(3), lambda: np.left_shift(a, 3), lambda: np.right_shift(a, 3)):  # no shifts
         with pytest.raises(TypeError):
             thunk()
     for thunk in (lambda: a.log(math.nan), lambda: a.log(np.float64(math.nan)), lambda: a.log(1), lambda: a.log(-2)):

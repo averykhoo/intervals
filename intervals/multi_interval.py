@@ -282,36 +282,6 @@ class MultiInterval:
     def __rtruediv__(self, other):
         return self._binary(other, ops.div, reflected=True)
 
-    def __lshift__(self, n):
-        """
-        `A << n` is `A * 2 ** n`, exactly, for an int n of either sign (any `Integral` but bool, so
-        numpy's ints too): binary scaling, as `math.ldexp`, computed by `*`, so openness, the class and
-        the rounding are its. a float end rounds only where no double holds the scaled value (past
-        the largest double, or bits lost in the subnormal range), to nearest in `MultiInterval` and
-        outward in `OutwardMultiInterval`. `A >> n` is `A << -n`. unlike python's int shift,
-        `MultiInterval(3) >> 1` is `[3/2]`, not `[1]`, as `MultiInterval(1) / 3` is `[1/3]`: the floor
-        is `A // 2 ** n`. a set as the count, on either side, is a TypeError (`A * 2 ** B` scales by
-        a set)
-
-        >>> MultiInterval(3) >> 1, MultiInterval(0.1, 1, end_closed=False) << 3
-        (MultiInterval.parse('[3/2]'), MultiInterval.parse('[0.8, 8)'))
-        >>> MultiInterval(5e-324) >> 1, OutwardMultiInterval(5e-324) >> 1  # below the least double
-        (MultiInterval.parse('[0.0]'), OutwardMultiInterval.parse('(0.0, 5e-324)'))
-        """
-        scale = _power_of_two(n)
-        return NotImplemented if scale is NotImplemented else self._binary(scale, ops.mul)
-
-    def __rshift__(self, n):
-        """`A >> n` is `A * 2 ** -n`, exactly: `A << -n` (see `__lshift__`; `A // 2 ** n` is the floor)"""
-        scale = _power_of_two(n, -1)
-        return NotImplemented if scale is NotImplemented else self._binary(scale, ops.mul)
-
-    def __rlshift__(self, other):
-        return _refuse_shift_count(self, other, '<<')
-
-    def __rrshift__(self, other):
-        return _refuse_shift_count(self, other, '>>')
-
     def __neg__(self) -> 'MultiInterval':
         return self._wrap(ops.neg(self._cuts))
 
@@ -1048,20 +1018,6 @@ class MultiInterval:
 
     def __complex__(self) -> complex:
         return complex(self._point())
-
-
-def _power_of_two(n, sign: int = 1):
-    """`2 ** (sign * n)`, exact (an int or a Fraction), for an `Integral` n but bool, else NotImplemented"""
-    if isinstance(n, bool) or not isinstance(n, Integral):
-        return NotImplemented
-    n = sign * int(n)
-    return 1 << n if n >= 0 else Fraction(1, 1 << -n)
-
-
-def _refuse_shift_count(self, other, op: str):
-    """the reflected shifts, `n << A` and `n >> A`: a set is never a shift count (owner, 2026-10-03, Q6-shift)"""
-    raise TypeError(f'a {type(self).__name__} is not a shift count: {type(other).__name__} {op} '
-                    f'{type(self).__name__} is refused (`x * 2 ** A` scales by a set)')
 
 
 def _is_integral(v: Real) -> bool:

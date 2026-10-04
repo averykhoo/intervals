@@ -15,8 +15,6 @@ MultiInterval.parse('{ [0, 1) , (2, 3] }')
 { [-inf, -1/2] , [1/2, inf] }
 >>> print(MI(1) / MI(3))           # int and Fraction stay exact
 [1/3]
->>> print(MI(3) >> 1, MI(3) // 2)  # a shift scales by 2 ** -1, exactly; // is the floor
-[3/2] [1]
 >>> print(MI(0, 10) // 4)          # floor of the exact quotient, enumerated
 { [0] , [1] , [2] }
 >>> print(MI(1, 3) < MI(2, 4))     # comparisons are pointwise
@@ -116,10 +114,6 @@ Interval(float('-inf'), float('inf'))
   the set of values attained: an infinite endpoint is closed iff it is attained, a pole at a closed
   zero attains the infinity of its piece's sign, and a box that *is* an indeterminate point
   (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`) is empty with an `IndeterminateResultWarning`
-* **shifts**: `A << n` is `A * 2 ** n` and `A >> n` is `A * 2 ** -n`, exactly, for an int n of
-  either sign: binary scaling, so a float end rounds only past the largest double or in the
-  subnormal range. unlike python's int shift, `MI(3) >> 1` is `[3/2]`, as `MI(1) / 3` is `[1/3]`;
-  `A // 2 ** n` is the floor. a set as the count, or on the right (`3 << A`), is a `TypeError`
 * **power**: a number exponent with an integral value is 1788's pown, over every base
   (`MI(-3, 1) ** 2` is `[0, 9]`); any other real exponent, and every `MultiInterval` one, is 1788's
   pow, over the bases x > 0 and x = 0 where y > 0, the rest dropped with a `DomainClippedWarning`
@@ -181,7 +175,7 @@ Interval(float('-inf'), float('inf'))
   propagate the decoration as 1788 does (the weakest of the operands' and the op's own on the
   operands' sets: `DecoratedInterval(MI(1, 2)) / DecoratedInterval(MI(0, 1))` is `[1, inf]_trv`).
   the reverse ops take `DecoratedInterval` operands too and decorate the result trv, as 1788 does
-* **autodiff** (M15): `Dual.variable(X)` and the ops on it (`+ - * / **`, `<< >>`, `abs`, `reciprocal`, the
+* **autodiff** (M15): `Dual.variable(X)` and the ops on it (`+ - * / **`, `abs`, `reciprocal`, the
   elementary functions) carry a derivative beside the value, each a set, by the chain rule over the
   library's own ops; `derivative(f, X)` encloses `f'` over `X`. with `DecoratedInterval` parts the
   decorations prove `f` C¹ on `X` (dac or better on both), which an enclosure of `f'` alone does not

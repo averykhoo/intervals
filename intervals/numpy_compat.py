@@ -55,8 +55,6 @@ _OPERATORS = {
     'remainder': ('__mod__', '__rmod__', operator.mod),
     'divmod': ('__divmod__', '__rdivmod__', divmod),
     'power': ('__pow__', '__rpow__', operator.pow),
-    'left_shift': ('__lshift__', '__rlshift__', operator.lshift),
-    'right_shift': ('__rshift__', '__rrshift__', operator.rshift),
     'bitwise_and': ('__and__', '__rand__', operator.and_),
     'bitwise_or': ('__or__', '__ror__', operator.or_),
     'bitwise_xor': ('__xor__', '__rxor__', operator.xor),

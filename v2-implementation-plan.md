@@ -453,7 +453,9 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
 * **solver stack** (a; `v2-plan.md` "later (not in v2.0)"): its decorated type was brought forward
   to M13g by D16; autodiff and interval newton built as M15 (2026-09-27); the rest is open, `HANDOFF.md`
   H3 (numpy and gmpy2/mpfr recorded, not now: owner 2026-09-26)
-* **v1 surface with no v2 row in section 4** (a: port or record as gone): open, `HANDOFF.md` Q6
+* **v1 surface with no v2 row in section 4** (a: port or record as gone): closed 2026-10-04 (the owner:
+  shifts, `merge`'s k-overlap mode and parsing, `random_multi_interval` gone; `apply()` stays internal;
+  `v2-plan.md` decision log, 2026-10-04)
 * **smaller** (c): the old README's leftovers, `HANDOFF.md` H5
 * **archive deletion** (a): `HANDOFF.md` H4
 * done 2026-09-25, from the backlog: the M6 differential and the M6 review's extreme-float fuzz,
@@ -4462,7 +4464,8 @@ record (what changed by `file::symbol`, its pins and sabotage tables, its runs) 
   `numpy_compat._subclass_first` removed (a ufunc is the method). `==`/`!=` against an ndarray give a bool
   array; `fmin`/`fmax` are `minimum`/`maximum`; numpy in `[test]`, the README numpy section doctests, the
   trailing `numpy` gone from the workflows. `<<`/`>>` (Q6-shift) on `MultiInterval`, `DecoratedInterval`,
-  `Dual`, with `left_shift`/`right_shift` in `_OPERATORS`. every new or flipped pin red on `09435ca`; nine
+  `Dual`, with `left_shift`/`right_shift` in `_OPERATORS` (dropped 2026-10-04, owner: `0513109` reverted,
+  `tests/test_multi_interval.py::test_no_shifts`). every new or flipped pin red on `09435ca`; nine
   breaks of the new code each red
 * **backend and CI** (D24 as answered; `streams/backend.md`): `[fast]` pinned `gmpy2>=2.3,<3`
   (`tests/test_backend.py::test_the_fast_extra_installs_what_auto_takes`); CI job `gate-gmpy2` (python 3.13,
@@ -4546,11 +4549,11 @@ independent of each other and were built in parallel worktrees, then merged on `
 
 | v1 | v2 |
 |---|---|
-| `merge(*args, n_overlaps=)` classmethod, parses strings | `MultiInterval.parse(str)`; `union(*)`; `kernel.overlap_count(cuts_list, n)` |
+| `merge(*args, n_overlaps=)` classmethod, parses strings | `union(*)`, `intersection(*)`; `MultiInterval.parse(str)`, `from_pieces`. the k-overlap mode and the mixed-input parsing gone (owner 2026-10-04: artifacts of v1's code, not features) |
 | `update/intersection_update/...`, `add/discard/pop/remove/clear` | gone (immutable); `Builder` for incremental construction |
 | `merge_adjacent(distance=)`, `expand(d, inplace=)` | `expand(d)` pure; no distance rule anywhere (cuts make it exact) |
 | `cardinality -> (half_rays, length, half_points)` | `size -> Size(rays, length, points)` |
-| `overlapping(or_adjacent=)`, `overlaps` | `relations.overlaps/adjoins`, `A & B` for the overlap itself |
+| `overlapping(or_adjacent=)`, `overlaps` | `relations.overlaps/adjoins`, `A & B` for the overlap itself; v1's `overlapping` returned the whole pieces of self meeting other, now `[p for p in A if p.overlaps(B)]` |
 | no set operators (`\|` between two MultiIntervals raises); `~` = complement; `-` = subtraction | `\| & ^ ~` set algebra; `difference()` named; `-` still subtraction |
 | `__eq__` coerces scalars, unhashable | structural, no coercion, hashable |
 | `A[0:5]` reads a 0 bound as missing (`item.start or -inf`) | a 0 bound is a bound |
@@ -4566,6 +4569,6 @@ independent of each other and were built in parallel worktrees, then merged on `
 | `exp()`, `log(base)` | `exp()`, `log(base=None)`, and the rest of `functions.py` (M12) |
 | `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | the same dunders, returning the set of values attained (`steps.py`, M12) |
 | `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | an integral number exponent is pown; any other real or interval exponent is 1788 `pow`, and `b ** A` works (M13d, D11); `pow(A, n, m)` dropped (D11) |
-| `<<`, `>>` | to port (owner 2026-09-26, `HANDOFF.md` Q6-shift); the meaning on real sets is chosen when built |
-| `random_multi_interval` | to-do, undecided (owner 2026-09-26, `HANDOFF.md` Q6); the tests use hypothesis strategies instead |
-| public `apply()` | to-do, undecided (owner 2026-09-26, `HANDOFF.md` Q6); `applicator` and `OpDescriptor` are not exported |
+| `<<`, `>>` | gone, a TypeError (owner 2026-10-04: built 2026-10-03 as exact scaling, then dropped, no use case); `* 2 ** n`, `// 2 ** n` |
+| `random_multi_interval` | gone (owner 2026-10-04: a v1 test helper); the tests use hypothesis strategies |
+| public `apply()` | not now (owner 2026-10-04); `applicator` and `OpDescriptor` are not exported |

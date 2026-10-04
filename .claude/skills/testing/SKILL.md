@@ -133,6 +133,10 @@ goes and never push.
     same-size break restored within the same second can leave python running the broken `.pyc`
   * in process: replace the function with a no-op (`module.fn = lambda ...: ...`) and call the test's
     inner function on each example, `test.hypothesis.inner_test(*args)`, then restore it
+  * against an old commit: `git archive <rev> intervals | tar -x -C .scratch/<name>`, the test file
+    beside it, and an empty `pytest.ini` there, run with `-c pytest.ini`. without it pytest finds the
+    repo's `pyproject.toml`, whose `pythonpath = ["."]` imports the live package, and the old code is
+    never run: the check passes vacuously (2026-10-04; print `intervals.__file__` from a conftest)
 * check each example on its own: hypothesis stops at the first failing explicit example, so one red
   run says nothing about the others
 * watch for vacuous checks: a "not empty" assertion passed under sabotage when other pieces kept the

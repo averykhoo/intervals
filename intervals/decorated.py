@@ -44,7 +44,7 @@ Traceback (most recent call last):
 intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[1,]_com': com is for bounded non-empty intervals only
 
 propagation (M13g part 3; 1788-2015 §11): the type has the core's point functions (`+ - * /`, `%`,
-`//`, `**`, `<< >>`, `abs`, `reciprocal`, `minimum`, `maximum`, `fma`, `hypot`, `atan2`, the elementary
+`//`, `**`, `abs`, `reciprocal`, `minimum`, `maximum`, `fma`, `hypot`, `atan2`, the elementary
 functions, `log(base)`, `rootn(n)`, the step functions) and set operations. each computes the core's
 set on the intervals, then its decoration: the op's own on the box of the operands' sets (trv unless
 every point is in the op's domain, a set of reals, so an attained ±inf never is; def unless the op
@@ -79,7 +79,6 @@ from intervals.literals import nums_to_interval
 from intervals.literals import parse_literal
 from intervals.multi_interval import MultiInterval
 from intervals.multi_interval import _is_integral
-from intervals.multi_interval import _refuse_shift_count
 from intervals.rounding import exact_cuts
 
 
@@ -312,29 +311,6 @@ class DecoratedInterval:
         if base is NotImplemented:
             return NotImplemented
         return _pow(base, self)
-
-    def __lshift__(self, n):
-        """
-        `x << n` is `x * 2 ** n` for an int n of either sign (`MultiInterval.__lshift__`), decorated as
-        that product: defined and continuous wherever the operand is a set of reals, com if moreover
-        the operand and the result are bounded; `>>` likewise. a set as the count is a TypeError
-
-        >>> print(DecoratedInterval(MultiInterval(1, 3)) >> 1, set_dec(MultiInterval(1, 3), 'def') << 2)
-        [1/2, 3/2]_com [4, 12]_def
-        """
-        return self._scaled(self._interval.__lshift__(n))
-
-    def __rshift__(self, n):
-        return self._scaled(self._interval.__rshift__(n))
-
-    def _scaled(self, result):
-        return NotImplemented if result is NotImplemented else _propagate(result, (self,), _everywhere(self))
-
-    def __rlshift__(self, other):
-        return _refuse_shift_count(self, other, '<<')
-
-    def __rrshift__(self, other):
-        return _refuse_shift_count(self, other, '>>')
 
     def __neg__(self) -> 'DecoratedInterval':
         return _propagate(-self._interval, (self,), _everywhere(self))
