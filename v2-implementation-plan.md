@@ -12,14 +12,14 @@ open for the owner in `HANDOFF.md` (Q11 to Q16).
 **open work and open questions live in `HANDOFF.md`** (since 2026-09-26): ranked items, questions for
 the owner, loose ends, session log. this file keeps the spec (what to build, exits) and the records.
 
-## 0. decisions (D1–D8 from the 2026-09-23 reviews; D9–D17 for M13 and M14, 2026-09-25; D18 for M13, D19 for M15, 2026-09-27; D20–D24 for M16, 2026-09-28; D27–D29 from the owner's answers, 2026-10-03)
+## 0. decisions (D1–D8 from the 2026-09-23 reviews; D9–D17 for M13 and M14, 2026-09-25; D18 for M13, D19 for M15, 2026-09-27; D20–D24 for M16, 2026-09-28; D27–D29 from the owner's answers, 2026-10-03; D30 for M8, 2026-10-04)
 
 | # | question | recommended default | blocks |
 |---|---|---|---|
 | D1 | **decided: recommended default.** closure at infinity: `1/(-1, 0)` is written as `[-inf, -1)`, but the involution claim and `1/[1, inf)` = `(0, 1]` both need the flag to *propagate*: `(-inf, -1)`. state the rule as "±inf are ordinary points; an infinite endpoint is closed iff attained; a pole at a **closed** zero endpoint attains ±inf by the piece's sign". drop the "closure over limits" wording | propagate flags; `1/(-1,0)` = `(-inf,-1)` | M6 |
 | D2 | **decided: recommended default.** indeterminate corners: `[-inf,-1] * [0]` is written as the entire line, but `1/[-1,0]` already uses the sharp limit-along-the-box rule. the same rule for mul: at an indeterminate corner `(±inf, 0)` the corner contributes `0` if the infinite factor's interval is non-degenerate, and the signed infinity if the zero factor's interval is non-degenerate. so `[-inf]*[0,1]` = `[-inf]`, `[-inf,-1]*[0]` = `[0]`, `[-inf,-1]*[0,1]` = `[-inf,0]`, `[1,inf]/[1,inf]` = `[0,inf]`, all matching 1788 up to closure at inf. general form: an indeterminate corner contributes the limit along each non-degenerate edge that meets it, so for sub at `(inf, inf)` it contributes `-inf` if the minuend is non-degenerate and `+inf` if the subtrahend is (`[inf]-[1,inf]` = `[inf]`, `[1,inf]-[inf]` = `[-inf]`, `[1,inf]-[1,inf]` = entire, as 1788); add at `(inf, -inf)` likewise. a box that *is* the indeterminate point returns `∅` + warning (D7). through the itf1788 adapter's input rule (1788 unbounded → open at inf) the infinite corner is never in the box, so D2 does not change conformance — it only affects user-typed literal `[-inf, …]` bounds | sharp rule | M6 |
 | D3 | **decided: recommended default**, plus integral Fractions normalize to int in `Cut`. `int / int` that is not integral: Fraction (exact, per "never rounded") or float (what users expect)? | Fraction; `fmt` prints `1/3`; float only if an operand is float | M6 |
-| D4 | **deferred**: the time layer is not being rebuilt now; v1's is archived with the rest of v1 at M10 and comes back in M8 on top of the v2 class (see M8, M10). infinities for the time layer: v1 stores float unix seconds (loses sub-µs, dodges the question). v2 options: (a) Fraction seconds in the numeric kernel, thin wrapper; (b) native datetime cuts + two sentinel objects that compare below/above everything | (a) — reuses every kernel test unchanged, when M8 happens | M8 (deferred) |
+| D4 | **decided 2026-10-04 by owner: (a)**, with (b)'s two sentinels as read-outs of an infinite end only (D30). was deferred: the time layer is not being rebuilt now; v1's is archived with the rest of v1 at M10 and comes back in M8 on top of the v2 class (see M8, M10). infinities for the time layer: v1 stores float unix seconds (loses sub-µs, dodges the question). v2 options: (a) Fraction seconds in the numeric kernel, thin wrapper; (b) native datetime cuts + two sentinel objects that compare below/above everything | (a) — reuses every kernel test unchanged, when M8 happens | M8 |
 | D5 | **decided: every sign combination before release**, as its own milestone (M7b); the recommended Q1-only v2.0 is rejected. modulo scope for v2.0: the v3 work covers A ≥ 0, B > 0 only; Q2 primitive and zero-crossing operands are underived (design notes §4) | full modulo, M7a then M7b | release |
 | D6 | constructor default for an infinite bound: `MI(1, inf)` = `[1, inf]` (literal) or `[1, inf)` (1788 reading)? **settled (v2-plan.md current design): literal** — `[a, inf]` and `[a, inf)` are different sets and "a user-typed `[1, inf]` is taken literally". D2 removes the blow-up footgun that made this look open | literal | — |
 | D7 | **decided 2026-09-23 by owner**: a box that *is* an indeterminate point (`1/[0]`, `[0]*[inf]`, `[inf]-[inf]`, `[0]/[0]`) returns `∅` + `IndeterminateResultWarning` (was `[-inf] ∪ [inf]` / entire). isotonicity forces it: `[0]` is inside `[-1,0]` and `[0,1]`, so `1/[0] ⊆ [-inf,-1] ∩ [1,inf] = ∅`; `[0]*[inf] ⊆ [0]*[5,inf] ∩ [0,1]*[inf]` = `∅` and `[inf]-[inf] ⊆ [inf]-[1,inf] ∩ [1,inf]-[inf]` = `∅` under D2. solvers need isotone ops; matches 1788's empty. cost: `1/(1/[inf])` = `∅`; `1/x` round-trips only on sets with no degenerate piece at `0`, `inf`, `-inf`; the "later" direction tag stays the recovery path. separately, `f(A ∪ B) == f(A) ∪ f(B)` fails for reciprocal with any `1/[0]` (`A=[-1,0)`, `B=[0]`), so that law is only `⊇` for reciprocal/div | `∅` + warning | M6 |
@@ -45,6 +45,7 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D27 | **decided 2026-10-03 by owner** (the 1788 departures census, 2026-09-30, never asked before): four departures from 1788 that were build choices are deliberate: step functions are point sets (`floor([-1.5, 1.5])` is four points, 1788 `[-2, 1]`); an end that rounding moved is open (M12); the divergence categories "degenerate infinities" (D1, D6 and the domain-end rule) and "cut-based relations" (the 2026-08-16 principles). the stale category "domain-clipped functions" (no row since M13d) is removed from `tests/itf1788/test_itf1788.py::REASONS` and the current design | as stated | `references/owner-questions-2026-10-03/ieee1788.md` |
 | D28 | **decided 2026-10-03 by owner** (Q17, Q18, m14b-open's 4300 digits): pown of exact operands past one exact-result limit of about 2 ** 22 bits, shared by pown, `pow_` and exp2/exp10, is the tightest open float enclosure in the outward class and the value rounded to nearest in the nearest class, with a default-ignored warning; `elementary.EXACT_POWER_LIMIT` stays the float-corner threshold. pown to nearest is correctly rounded for every n (the exact power rounded once, `rounded_pow` past the threshold), not libm's `float ** int`. `repr` does not raise past python's 4300-digit limit (hex past it; `parse` reads it) | as stated | `references/owner-questions-2026-10-03/pown.md`; §2 "owner-answers" |
 | D29 | **decided 2026-10-03 by owner** (Q19, Q20): each end keeps its own number type. the outward class is isotone within one grid; across grids `f(A)` lies within the tightest double cover of `f(B)` (documented; a public method rounds every end onto the double grid, outward). the exact class's crossed piece is the piece between the two values, each end keeping its flag (`rootn((10 ** -30, 1.0000000000000003e-30], 5)` is `[1e-06, 1/1000000)`) | keep per-end typing | `references/owner-questions-2026-10-03/q19.md`, `q20.md`; §2 "fuzz-steps-isotone", "fuzz-rootn-crossed" |
+| D30 | **decided 2026-10-04 by owner: as recommended** (M8's three choices and the smaller ones with them; `references/m8-choices-2026-10-04/`). (a) a naive datetime is exact wall-clock seconds by subtraction from naive 1970-01-01, never `timestamp()`; an aware one its exact UTC seconds; mixing naive and aware raises `TypeError`; aware ends in different zones allowed, the left operand's zone kept for display only. (b) an infinite end reads out as one of two sentinels ordered below/above every datetime, date, timedelta and pandas type, taken back by the constructors; storage stays (a)'s ±inf, closed or open as written. (c) no end-of-day snap: a `date` is the half-open day `[d 00:00, d+1 00:00)`, a datetime an exact instant (v1's hour/minute/second snaps of datetime ends dropped too). with them: a non-microsecond end raises on read-out (a raw Fraction accessor beside it); comparisons return `TruthSet`; foreign `==` is `NotImplemented`, the wrappers hashable; `NaT`/nan raises | as decided | §2 M8 |
 
 implementability review (2026-09-23, second pass), written into "current design" and the
 milestones below: infinite result endpoints always go through attainment (the corner-flag rule is
@@ -367,14 +368,14 @@ every new property test (flip one comparison, watch red, restore).
       `test_floor_sound_and_sharp` red, and rounding the low end of a float result inward turned
       `test_sound_float` red
 
-### M8 `time_interval.py` (1½ days) — next (owner 2026-10-04; was deferred, D4)
+### M8 `time_interval.py` (1½ days) — next (owner 2026-10-04; was deferred, D4; its choices D30)
 * starts from `archive/v1/time_interval.py`, ported onto the v2 class with whatever tweaks that
   needs; the archived copy stays until the port works, then `archive/v1/` goes (`HANDOFF.md` H4)
 * before building, the owner's three choices (`HANDOFF.md` session log 2026-10-04): timezones (naive as
   wall clock? mixing aware and naive raises?), what an infinite end reads as, and whether the
-  end-of-day snap (23:59:59.999999) stays or becomes a half-open next midnight. recommended
-  (2026-10-04, a read-only agent; report and probes in `references/m8-choices-2026-10-04/`, whose
-  README lists the claims the session re-ran, each held), **not yet the owner's decision**:
+  end-of-day snap (23:59:59.999999) stays or becomes a half-open next midnight. **decided 2026-10-04 by
+  owner: as recommended** (D30; a read-only agent's report and probes in
+  `references/m8-choices-2026-10-04/`, whose README lists the claims the session re-ran, each held):
     * **timezones**: a naive datetime is wall-clock seconds, `d - datetime(1970, 1, 1)` as an exact
       Fraction, never `timestamp()`: on this laptop `timestamp()` raises `OSError` for the epoch, 1900,
       `datetime.min` and `datetime.max`, a local reading depends on the machine, and in a DST zone it
@@ -383,8 +384,8 @@ every new property test (flip one comparison, watch red, restore).
       datetime is its exact UTC seconds. mixing naive and aware raises `TypeError`, as python and pandas
       do; aware ends in different zones are allowed (the set is of instants), one zone kept for display
       only and not part of `==`. a timedelta reads as `days * 86400 + seconds + microseconds / 10 ** 6`
-      (`total_seconds()` loses the microsecond at 10 ** 6 days). left: the display zone's rule (the
-      left operand's, plus `astimezone`), a `tz=` keyword for a `date`
+      (`total_seconds()` loses the microsecond at 10 ** 6 days). the display zone is the left
+      operand's; `astimezone(tz)` gives a copy with another (the numbers do not change)
     * **an infinite end**: one pair of sentinel objects for both classes, below / above every datetime,
       date, `Timestamp`, timedelta and `Timedelta`, hashable, repr `-inf` / `inf`, taken back by the
       constructors and slicing; the wrapper maps them to `±inf` for the numeric class (storage stays
@@ -392,28 +393,33 @@ every new property test (flip one comparison, watch red, restore).
       `datetime.max` is a finite instant (a rebuilt interval would be bounded), `NaT` does not order. an
       infinite end is closed or open as written, as in v2, and a missing slice bound is closed, as
       `MultiInterval.__getitem__` (v1 opened it). `to_pandas()` of an unbounded interval raises (pandas
-      has no infinite `Timestamp`). left: the names (beside `EMPTY`, `REALS`)
+      has no infinite `Timestamp`)
     * **the end-of-day snap**: dropped. a `date` d is the half-open day `[d 00:00, d+1 00:00)`, its flag
       says whether the day is in (a closed end: through d; an open end: before d; an open start: after
       d). a datetime, midnight included, is an exact instant: v1's snap of a datetime end to the end of
       its hour, minute or second (`10:00` read as `10:59:59.999999`) goes too. with the snap, adjacent
       days stay two pieces (the gap is a non-empty set of exact seconds), `23:59:59.9999995` is not in
       its day and a day's size is not 86400; v1's own comment wished `[Tue, Sat) == [Tue, Fri]`, which
-      the half-open day makes true. left: `__str__` sugar for whole-day pieces (`repr` stays literal)
+      the half-open day makes true
     * the three fit together: under the wall-clock reading a day is always exactly 86400 s, so the
       half-open day is clean; the sentinels carry no zone
-* also to settle before or during the build (the report's "other decisions"): an end that is not a
-  whole number of microseconds cannot be a `datetime` or `timedelta` (`timedelta(seconds=Fraction(1,
-  3))` raises; recommended: raise, beside a raw Fraction accessor, never round silently); comparisons
-  return v2's `TruthSet`, not v1's bool, so a v1 caller's `if a < b:` can raise; `==` with a foreign
-  type is `NotImplemented`, and the wrappers get `__hash__` (v1's were unhashable); `NaT` or nan in the
-  constructor raises (v1 dropped it, `DateTimeInterval(NaT, t)` became the point t); v1's `end or
-  _end` (a falsy end, the epoch under the wall-clock reading, replaced) is not ported; whether
-  `td / td`, `//` and `%` join the arithmetic table; whether a time `parse` grammar is in M8 or the
-  `repr` is the constructor call
+* decided with them (the report's "other decisions", its leans accepted 2026-10-04, D30): an end that
+  is not a whole number of microseconds cannot be a `datetime` or `timedelta` (`timedelta(seconds=
+  Fraction(1, 3))` raises), so reading it out raises, naming a raw accessor that gives the exact
+  Fraction seconds; nothing is rounded silently. comparisons return v2's `TruthSet`, not v1's bool (a
+  v1 caller's `if a < b:` can raise; documented). `==` with a foreign type is `NotImplemented`, and
+  the wrappers are hashable (v1's were not). `NaT` or nan in the constructor raises (v1 dropped it:
+  `DateTimeInterval(NaT, t)` was the point t). v1's `end or _end` (a falsy end, the epoch under the
+  wall-clock reading, replaced) is not ported. equality is of the set of instants, never of the
+  display zone
+* left to the build (the session's defaults, to confirm with the owner after, as D19-D24 were): the
+  sentinels' names, beside `EMPTY` and `REALS`; `td / td`, `td // td` and `td % td` as python's
+  `timedelta` has them (a `MultiInterval`, a `MultiInterval`, a `TimeDeltaInterval`); no time `parse`
+  grammar in M8, `repr` is the constructor call and round-trips; `__str__` without whole-day sugar; a
+  `tz=` keyword for a `date` next to aware ends only if cheap, else later
 * `DateTimeInterval`, `TimeDeltaInterval` as thin wrappers over a numeric `MultiInterval` of
-  exact seconds (D4a), with the v1 cross-type arithmetic table; the `date` rule as the owner chooses
-  above (v1 snapped to 23:59:59.999999; document it); fill v1's gaps (`__repr__`, slicing on both,
+  exact seconds (D4a), with the v1 cross-type arithmetic table; a `date` is the half-open day (D30;
+  v1 snapped to 23:59:59.999999; document it); fill v1's gaps (`__repr__`, slicing on both,
   item methods dropped with immutability)
 * tests: the arithmetic table; pandas round-trips; `[-inf, t]` style open-ended ranges
 

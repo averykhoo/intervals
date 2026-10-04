@@ -16,7 +16,9 @@ session log below; nothing is listed as open and done at once), and list anythin
   mode and parsing, `random_multi_interval` gone; `apply()` stays internal (`v2-plan.md` decision log
   2026-10-04; the implementation plan's §4 map is current). v1 has nothing v2 lacks but the time layer (M8)
 * **next: M8, the time layer (owner 2026-10-04: "port time intervals first")**, then H4 deletes `archive/v1/`
-  (open items rows 1 and 2). start with the owner's three choices in row 1
+  (open items rows 1 and 2). its choices are decided (D30, 2026-10-04): ready to build
+* **pushed `c55ce20..5888c6e` (2026-10-04, the owner's go)** after a green prepush (x10: 27795 in 92 s + 6184 in
+  4358 s); CI and fuzz watched by a babysitter, results in the session log
 * **the quadratic parse fixed, not pushed (2026-10-04)**: `parse(' ' * 30000 + 'x')` 37 s -> 0.0002 s, the
   tokenizer's white-space runs possessive (`6450502`; plan §2 "M14-breadth", "the parse fixed"). gate green on
   its branch's worktree (27795 + 6242), which the main checkout's ledger does not see: the push's prepush runs
@@ -103,7 +105,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
-| 1 | M8 | the time layer on the v2 class: port `archive/v1/time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | **next** (owner 2026-10-04: "port time intervals first", before deleting v1); D4 recommends (a), Fraction seconds under a thin wrapper; three choices for the owner before building (timezones, what an infinite end reads as, the end-of-day snap): **recommendations written 2026-10-04, awaiting the owner's call** (plan §2 M8: naive as wall clock, mixing raises; a sentinel pair; the snap dropped, a date the half-open day; plus seven smaller decisions); about half of v1 ports as is | plan §2 "M8 `time_interval.py`"; D4 |
+| 1 | M8 | the time layer on the v2 class: port `archive/v1/time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | **next** (owner 2026-10-04: "port time intervals first", before deleting v1); D4 recommends (a), Fraction seconds under a thin wrapper; its choices **decided 2026-10-04 by the owner, as recommended** (D30; plan §2 M8: naive as wall clock, mixing raises; a sentinel pair for infinite ends; the snap dropped, a date the half-open day; the smaller ones with them; five left to the build's defaults); ready to build; about half of v1 ports as is | plan §2 "M8 `time_interval.py`"; D4 |
 | 2 | H4 | delete `archive/v1/` | after M8 (owner 2026-10-04). v2 has everything else of v1 (session log 2026-10-04). what still reads v1, each to go with it: `tests/test_kernel.py::test_matches_v1` (a third check of the set ops beside the membership oracle and the laws), `pyproject.toml`'s `pythonpath` entry `archive/v1`, the `sys.path` lines of `tools/itf1788_census.py` and `tools/backend_speed.py` (nothing there imports v1), the sample path `archive/v1/README.md` in `tests/test_gate_ledger.py`; the README's layout bullet. old mentions in the plans stay as history with the deleting commit noted | plan §2 M10 (last bullet before "done") |
 | 3 | trig-rev-far | a periodic reverse op whose domain piece reaches far from 0 is pure-path slow, then effectively hangs: `tan_rev(MultiInterval.parse('[-40.0, 0.1]'), MultiInterval.parse('(-X, -7.582732456406029]'))` took 1.6 s at X = 1e20, 3.4 s at 1e21, and ran past a 30 s timeout from 1e22 and a 60 s one at 1e300 (2026-09-28 at `7e148a2`, loaded laptop; reproduced by the session: 0.35 s at 1e20, past 30 s at 1e22; a stack sample sat in `reverse.py::_periodic_hull`'s branch walk, in `elementary._atan_rational`). found by M16e's soundness reviewer, whose set-level probe hung past 15 min on `sin_rev`/`tan_rev` with an end at 1e300 or 10**400. the backend declines `k != 0`, so both backends hang alike | not scheduled; measure where the time goes first | `v2-plan.md` "elementary and step functions" (D12's cap for the periodic ones) |
 | 4 | m14b-open | what M14-breadth found and left (2026-10-02): number-type quirks with no wrong value (a 0 end exact among float operands: `abs(M(-1.0, 1.0))` is `[0, 1.0]`; trunc's non-negative side ints; a one-point domain clip takes its low cut's type); `parse_value('+-5')` is 5, `'1 2'` is 12; `tests/test_extreme_floats.py::_float_samples` overflows on an exact piece wider than the doubles | ready, small (the 4300 digits done 2026-10-04: hex, D28; the quadratic parse done 2026-10-04, `6450502`) | plan §2 "M14-breadth" (left open) |
@@ -174,6 +176,13 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
 
 ## session log (newest first)
 
+* **2026-10-04** M8's choices (the owner: "send a fable agent to noodle over it", then "I'm okay with the
+  recommendations"). a read-only agent wrote one recommendation per choice and seven smaller decisions
+  (`references/m8-choices-2026-10-04/`); the session re-ran every claim they rest on with its own probe (each held,
+  listed in that README), then recorded them: D30, plan §2 M8, `v2-plan.md` decision log. meanwhile the prepush of
+  `0dc80eb` ran green under a haiku babysitter (fuzz-x10:itf 27795 passed in 92 s, fuzz-x10:rest 6184 in 4358 s;
+  the docs commit after it kept the src id) and `c55ce20..5888c6e` was pushed (the owner's go); a babysitter on
+  `tools/ci_watch.sh 5888c6e`. Still owed: CI and fuzz results of `5888c6e` into this entry
 * **2026-10-04** the owner asked how certain the library's correctness is (answered from the records: independent
   oracles, ITF1788, CORE-MATH, the exhaustive grids, fuzz and sabotage; the weak spots are the still-owed list and
   the discovery rate), then what v1 has that v2 lacks. a census of v1's class members against v2's found nothing
