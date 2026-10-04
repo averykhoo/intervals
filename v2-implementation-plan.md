@@ -4334,6 +4334,20 @@ exact among float operands, `abs(M(-1.0, 1.0))` is `[0, 1.0]`; trunc's non-negat
 `parse_value('+-5')` is 5 and `'1 2'` is 12; `tests/test_extreme_floats.py::_float_samples` raises
 `OverflowError` on an exact piece wider than the doubles.
 
+**the parse fixed (2026-10-04, `6450502`)**: the cause was `fmt.py::_TOKEN`'s leading `\s*` (and `_NUMBER`'s inner
+`[+-]?\s*`): with no token after a white-space run, the engine gave the run back one space at a time and at each
+retried `_NUMBER`, which re-read the rest of the run, O(n ** 2). every `\s*` there is now possessive `\s*+`, which
+cannot change a match (nothing after any of those runs begins with white space). measured before, per doubling of n
+from 1000 to 16000: 0.017, 0.068, 0.28, 1.10, 4.45 s for `' ' * n + 'x'` and its `'+x'` variant, the only
+superlinear shapes of the ones tried (trailing, inner and between-token white space, long or malformed numbers, many
+separators, unbalanced brackets, `parse_value`, `literals.parse_literal`, all linear already; `_LITERAL` was already
+possessive since M13g); after, 0.0002 s at 30000 and 0.001 s at 200000. an old-vs-new differential on 250019
+inputs (random over the grammar's alphabet, white-space-sprinkled valid texts, `'+-5'`, `'1 2'`, `'- 5'`): 0
+differences in tokens, values or exception types and messages. pinned by
+`tests/test_fmt.py::test_white_space_runs_parse_in_linear_time` (8 shapes at n = 100000, < 10 s each); on the
+old `fmt.py` 2 of them failed (186.8 s and 229.9 s), the other six were never quadratic. gate on the branch:
+27795 + 6242 passed (2026-10-04)
+
 ### fuzz-steps-isotone: outward isotonicity across number types (done 2026-10-03)
 
 **found** by a local x50 fuzz run (2026-10-03, replayed by the session): `tests/test_steps.py::test_isotone[round]`
