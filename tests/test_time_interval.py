@@ -982,6 +982,9 @@ def test_from_seconds_takes_a_number_exactly_and_a_tzinfo_only():
     """R12: a float number is its exact value; R23: tz must be a tzinfo"""
     assert D.from_seconds(0.1).inf_seconds == Fraction(0.1) != Fraction(1, 10)
     assert T.from_seconds(0.1).inf_seconds == Fraction(0.1)
+    # a float compares equal to its exact Fraction, so check the type and an op that would round a float
+    assert type(D.from_seconds(0.1).inf_seconds) is Fraction and type(T.from_seconds(0.1).inf_seconds) is Fraction
+    assert (T.from_seconds(0.1) * 3).inf_seconds == 3 * Fraction(0.1) != 0.1 * 3
     assert D.from_seconds(Fraction(1, 10)).inf_seconds == Fraction(1, 10) and D.from_seconds(3).inf_seconds == 3
     for bad in ('UTC', 8, SGT.key):
         with pytest.raises(TypeError):
