@@ -4904,10 +4904,28 @@ independent of each other and were built in parallel worktrees, then merged on `
 | `apply_monotonic_{unary,binary}_function` | `applicator.apply_{unary,binary}(descriptor, ...)` |
 | `INFINITY_IS_NOT_FINITE`, `CONSISTENCY_CHECK` | deleted; `if __debug__` check in the class |
 | `interval.py` (`Interval`, `MultipleInterval`) | archived in `archive/v1/`; `tests/oracles.py` does its job |
-| `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; back at M8 (2026-10-04) as `intervals/time_interval.py`, with these renames (`infimum` → `inf`, `contiguous_intervals` → `pieces`, `cardinality` → `size`, `.interval` (unix-timestamp seconds) → `.seconds` (wall-clock seconds for naive, UTC for aware)) and no in-place methods. dropped (M8 review round): `TimeDeltaInterval - datetime` (v1 gave a `DateTimeInterval`; python refuses `td - dt`: TypeError); `__getitem__` with an interval (use `A & B`) or a scalar (use `x in A` / `A & x`): slicing only, as `MultiInterval`; `infimum`/`supremum` of an empty set (v1 None): `inf`/`sup` raise ValueError, `closed_hull` is the empty set |
+| `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; back at M8 (2026-10-04) as `intervals/time_interval.py`, with these renames (`infimum` → `inf`, `contiguous_intervals` → `pieces`, `cardinality` → `size`, `.interval` (unix-timestamp seconds) → `.seconds` (wall-clock seconds for naive, UTC for aware)) and no in-place methods. dropped (M8 review round): `TimeDeltaInterval - datetime` (v1 gave a `DateTimeInterval`; python refuses `td - dt`: TypeError); `__getitem__` with an interval (use `A & B`) or a scalar (use `x in A` / `A & x`): slicing only, as `MultiInterval`; `infimum`/`supremum` of an empty set (v1 None): `inf`/`sup` raise ValueError, `closed_hull` is the empty set. differences the parity audit found unrecorded (2026-10-04, no capability lost): an empty time set is falsy (v1 had no `__bool__`, so always True; v2 delegates to `MultiInterval.__bool__`); `DateTimeInterval(None, t)` raises (v1's point `[t]` came from its NaT branch, `pd.isna(None)`; write `DateTimeInterval(t)`); `TimeDeltaInterval(start_closed=False)` with no bounds is the empty set (v1 ValueError); a slice step raises TypeError (v1 ValueError) |
 | `exp()`, `log(base)` | `exp()`, `log(base=None)`, and the rest of `functions.py` (M12) |
 | `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | the same dunders, returning the set of values attained (`steps.py`, M12) |
 | `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | an integral number exponent is pown; any other real or interval exponent is 1788 `pow`, and `b ** A` works (M13d, D11); `pow(A, n, m)` dropped (D11) |
 | `<<`, `>>` | gone, a TypeError (owner 2026-10-04: built 2026-10-03 as exact scaling, then dropped, no use case); `* 2 ** n`, `// 2 ** n` |
 | `random_multi_interval` | gone (owner 2026-10-04: a v1 test helper); the tests use hypothesis strategies |
 | public `apply()` | not now (owner 2026-10-04); `applicator` and `OpDescriptor` are not exported |
+
+**the parity audit (2026-10-04)**, run before H4 deletes `archive/v1/` (the owner asked whether everything v1 could do is
+possible in v2): ten auditors, one per slice of `archive/v1/` (every def, branch, accepted input type and README example),
+ran v1 and v2 side by side on the same inputs and compared the results as sets, 839,971 cases. a critic checked
+coverage and probe strength (17 uncovered items, 8 probes that could not fail), and a second round of eleven auditors
+closed them. every claimed gap went to two skeptics, one reproducing it, one searching the records. 558 rows: 138 equal,
+79 equivalent under another spelling, 135 v1 bugs v2 fixes, 121 documented differences, 74 documented drops,
+7 unrecorded differences, 3 unclear, 1 missing; no v2 regression. every v1 capability is possible in v2. the one
+missing item was three lines of the v1 README's illustration to-do, left out when `references/todo-from-v1-readme.md`
+was made, now restored. the unrecorded differences are the time row's four above (an auditor's fifth, the empty-by-flags
+constructor `MultiInterval(1, 1, end_closed=False)`, empty where v1 raised, is in `v2-plan.md` "representation: cuts"),
+v1 `Interval`'s TypeError for a non-bool flag (v2 reads flags by truthiness, HANDOFF Q22), and the plan's "bisect-insert
+for incremental" (§2 M2 `Builder`), which describes compare.py's benchmark: `Builder` appends and sorts once at
+`build()`, and v1's library never had a cheap sorted insert either. unclear: the v1 README's prose ("notes:", "Geminis
+feedback"), whose every actionable point is built (Q22); and accessors on an np.longdouble wider than a double, which
+this laptop cannot build (CI's linux runs `tests/test_numpy_compat.py::test_longdouble_is_exact`). the reports, the
+probe scripts and the skeptics' notes are in `references/v1-parity-2026-10-04/` (they import v1 from `archive/v1/`, so
+they run only on a tree that still has it)

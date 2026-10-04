@@ -11,6 +11,9 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-10-04)
 
+* **v1 parity audit (2026-10-04), not pushed**: every v1 capability is possible in v2, by 839,971 side-by-side cases
+  of v1 and v2 (plan §4, "the parity audit"; `references/v1-parity-2026-10-04/`). no v2 regression; the one missing
+  item, three lines of the v1 README's to-do, restored; two small questions for the owner, Q22. H4 is clear to go
 * **shifts dropped, v1's leftovers settled (2026-10-04), pushed at `5888c6e`**: `<<`/`>>` reverted (`0513109`), a
   TypeError on every class and in numpy (`tests/test_multi_interval.py::test_no_shifts`); `merge`'s k-overlap
   mode and parsing, `random_multi_interval` gone; `apply()` stays internal (`v2-plan.md` decision log
@@ -108,7 +111,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
-| 1 | H4 | delete `archive/v1/` | **next**: M8 is done (2026-10-04), so nothing of v1 is left unported (owner 2026-10-04: H4 after M8). v2 has everything else of v1 (session log 2026-10-04). what still reads v1, each to go with it: `tests/test_kernel.py::test_matches_v1` (a third check of the set ops beside the membership oracle and the laws), `pyproject.toml`'s `pythonpath` entry `archive/v1`, the `sys.path` lines of `tools/itf1788_census.py` and `tools/backend_speed.py` (nothing there imports v1), the sample path `archive/v1/README.md` in `tests/test_gate_ledger.py`; the README's layout bullet. old mentions in the plans stay as history with the deleting commit noted | plan §2 M10 (last bullet before "done") |
+| 1 | H4 | delete `archive/v1/` | **next**: M8 is done (2026-10-04), so nothing of v1 is left unported (owner 2026-10-04: H4 after M8). v2 has everything else of v1 (session log 2026-10-04). what still reads v1, each to go with it: `tests/test_kernel.py::test_matches_v1` (a third check of the set ops beside the membership oracle and the laws), `pyproject.toml`'s `pythonpath` entry `archive/v1`, the `sys.path` lines of `tools/itf1788_census.py` and `tools/backend_speed.py` (nothing there imports v1), the sample path `archive/v1/README.md` in `tests/test_gate_ledger.py`; the README's layout bullet. the parity audit (2026-10-04, plan §4) found nothing of v1 missing; its probes in `references/v1-parity-2026-10-04/` import `archive/v1/` and stop running with it (their records stay; Q22(b) first). old mentions in the plans stay as history with the deleting commit noted | plan §2 M10 (last bullet before "done") |
 | 2 | trig-rev-far | a periodic reverse op whose domain piece reaches far from 0 is pure-path slow, then effectively hangs: `tan_rev(MultiInterval.parse('[-40.0, 0.1]'), MultiInterval.parse('(-X, -7.582732456406029]'))` took 1.6 s at X = 1e20, 3.4 s at 1e21, and ran past a 30 s timeout from 1e22 and a 60 s one at 1e300 (2026-09-28 at `7e148a2`, loaded laptop; reproduced by the session: 0.35 s at 1e20, past 30 s at 1e22; a stack sample sat in `reverse.py::_periodic_hull`'s branch walk, in `elementary._atan_rational`). found by M16e's soundness reviewer, whose set-level probe hung past 15 min on `sin_rev`/`tan_rev` with an end at 1e300 or 10**400. the backend declines `k != 0`, so both backends hang alike | not scheduled; measure where the time goes first | `v2-plan.md` "elementary and step functions" (D12's cap for the periodic ones) |
 | 3 | m14b-open | what M14-breadth found and left (2026-10-02): number-type quirks with no wrong value (a 0 end exact among float operands: `abs(M(-1.0, 1.0))` is `[0, 1.0]`; trunc's non-negative side ints; a one-point domain clip takes its low cut's type); `parse_value('+-5')` is 5, `'1 2'` is 12; `tests/test_extreme_floats.py::_float_samples` overflows on an exact piece wider than the doubles | ready, small (the 4300 digits done 2026-10-04: hex, D28; the quadratic parse done 2026-10-04, `6450502`) | plan §2 "M14-breadth" (left open) |
 | 4 | vectors-ext | test data beyond ITF1788 (survey 2026-09-29, `references/test-vector-sources.md`). the 1788 set is complete. decided 2026-10-02 with the owner: outputs computed by MPFR are not worth vendoring (our arb oracle already checks correct rounding); what adds depth is the CHOICE of inputs, so the source is CORE-MATH's worst cases (MIT; they carry blocks of Lefevre's data, whose own files state no licence, §3f), built 2026-10-02 as `tools/coremath.py` and `tests/test_coremath.py` (§3g-§3h; the testing skill). left: (a) `tests/itf1788/itl.py::parse_file` collapses whitespace inside quoted strings, so 40 textToInterval vectors (e.g. `"[ Empty  ]"`) run weaker than upstream; (b) closed 2026-10-03 (owner): glibc's rows are conformance inputs, not hard cases; pown has CORE-MATH's integral-exponent pow rows since 2026-10-04 (`tests/coremath/pown.tsv`); (c) cuinterval's `custom.itl` (26, MIT), probably covered by `test_domain_ends_and_limits` | (a) ready, small | `references/test-vector-sources.md`; plan §2 M13a (the vendoring) |
@@ -130,6 +133,16 @@ session log below; nothing is listed as open and done at once), and list anythin
   and `divmod(pd.Timedelta, A)` are sound but wider than exact (pandas computes them itself; no hook defers it), the
   workaround `TimeDeltaInterval(x) % A` documented; (i) `degenerate_points` a tuple, not a set (a DST fold's two
   instants compare equal as datetimes)
+
+* **Q22 (the v1 parity audit, 2026-10-04; plan §4)**: (a) open/closed flags are read by truthiness everywhere
+  (`MultiInterval`, `from_pieces`, `Builder.add_piece`, the outward class, the time classes), so a string flag
+  silently builds the opposite end: `MultiInterval(0, 1, start_closed='no')` and `start_closed='False'` are `[0, 1]`.
+  v1's `MultiInterval` read them the same way; v1's `Interval` raised TypeError for anything but a bool. refuse a flag
+  that is not a `bool` (or a numpy bool) with TypeError? the session leans yes (a typo becomes a wrong set, silently);
+  it changes construction, so it needs a gate. (b) the v1 README's prose sections "notes:" and "Geminis feedback" are
+  kept nowhere outside `archive/v1/`; every actionable point in them is built (the audit's skeptics checked each), so
+  H4 loses only the prose, which git history keeps (`git show 22e16f8:archive/v1/README.md`). copy it to
+  `references/` before H4, or let history hold it?
 
 otherwise none open. Q9-Q20 and the owner's-call rows were answered 2026-10-03 (the owner accepted every
 recommendation of `references/owner-questions-2026-10-03/`; `v2-plan.md` "2026-10-03 revision: owner
@@ -189,6 +202,15 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
 
 ## session log (newest first)
 
+* **2026-10-04** the v1 parity audit (the owner: "send out a bunch of agents to read and run code, to verify that
+  everything in v1 is possible in v2"). one workflow, 44 agents: ten auditors, one per slice of `archive/v1/`, ran v1
+  and v2 side by side (839,971 cases, compared as sets); two skeptics per claimed gap (reproduce; records); a coverage
+  critic (17 uncovered items, 8 probes that could not fail) and eleven second-round auditors. 558 rows, no v2
+  regression, every v1 capability possible in v2. the session reproduced each surviving item itself (the to-do diff;
+  the flag, truthiness, `DateTimeInterval(None, t)` and no-bound `start_closed=False` cases). restored the three lines
+  `references/todo-from-v1-readme.md` had dropped; recorded the rest in plan §4 ("the parity audit") and Q22; the
+  reports, probes and skeptics' notes moved to `references/v1-parity-2026-10-04/` and `.scratch/v1-parity/` deleted.
+  docs only, the gate's code unchanged. Still owed: Q22; the push (x10 prepush) of `c0e6777..` HEAD
 * **2026-10-04** M8 built (the owner: "build the time intervals"; subagents on opus, the owner: "stick to opus
   unless you really need fable"). a builder in the worktree `../intervals-m8` (`fd79070`); three read-only reviews
   on private snapshots (spec: nothing blocking; soundness: numpy `timedelta64` read as an int (pre-existing in the
