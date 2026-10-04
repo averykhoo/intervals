@@ -367,9 +367,12 @@ every new property test (flip one comparison, watch red, restore).
       `test_floor_sound_and_sharp` red, and rounding the low end of a float result inward turned
       `test_sound_float` red
 
-### M8 `time_interval.py` (1½ days) — deferred (D4); not part of this plan's schedule
+### M8 `time_interval.py` (1½ days) — next (owner 2026-10-04; was deferred, D4)
 * starts from `archive/v1/time_interval.py`, ported onto the v2 class with whatever tweaks that
-  needs; the archived copy stays until the port works
+  needs; the archived copy stays until the port works, then `archive/v1/` goes (`HANDOFF.md` H4)
+* before building, the owner's three choices (`HANDOFF.md` session log 2026-10-04): timezones (naive as
+  wall clock? mixing aware and naive raises?), what an infinite end reads as, and whether the
+  end-of-day snap (23:59:59.999999) stays or becomes a half-open next midnight
 * `DateTimeInterval`, `TimeDeltaInterval` as thin wrappers over a numeric `MultiInterval` of
   exact seconds (D4a), with the v1 cross-type arithmetic table; keep the end-of-day snapping for
   `date` inputs (document it); fill v1's gaps (`__repr__`, slicing on both, item methods dropped
