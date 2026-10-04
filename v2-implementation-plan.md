@@ -372,11 +372,49 @@ every new property test (flip one comparison, watch red, restore).
   needs; the archived copy stays until the port works, then `archive/v1/` goes (`HANDOFF.md` H4)
 * before building, the owner's three choices (`HANDOFF.md` session log 2026-10-04): timezones (naive as
   wall clock? mixing aware and naive raises?), what an infinite end reads as, and whether the
-  end-of-day snap (23:59:59.999999) stays or becomes a half-open next midnight
+  end-of-day snap (23:59:59.999999) stays or becomes a half-open next midnight. recommended
+  (2026-10-04, a read-only agent; report and probes in `references/m8-choices-2026-10-04/`, whose
+  README lists the claims the session re-ran, each held), **not yet the owner's decision**:
+    * **timezones**: a naive datetime is wall-clock seconds, `d - datetime(1970, 1, 1)` as an exact
+      Fraction, never `timestamp()`: on this laptop `timestamp()` raises `OSError` for the epoch, 1900,
+      `datetime.min` and `datetime.max`, a local reading depends on the machine, and in a DST zone it
+      makes a day 82800 or 90000 s. the wall-clock reading is pandas' own (a naive `Timestamp` reads as
+      UTC; `Fraction(ts.value, 10 ** 9)`), so the pandas round-trips need no zone logic. an aware
+      datetime is its exact UTC seconds. mixing naive and aware raises `TypeError`, as python and pandas
+      do; aware ends in different zones are allowed (the set is of instants), one zone kept for display
+      only and not part of `==`. a timedelta reads as `days * 86400 + seconds + microseconds / 10 ** 6`
+      (`total_seconds()` loses the microsecond at 10 ** 6 days). left: the display zone's rule (the
+      left operand's, plus `astimezone`), a `tz=` keyword for a `date`
+    * **an infinite end**: one pair of sentinel objects for both classes, below / above every datetime,
+      date, `Timestamp`, timedelta and `Timedelta`, hashable, repr `-inf` / `inf`, taken back by the
+      constructors and slicing; the wrapper maps them to `±inf` for the numeric class (storage stays
+      D4's (a); (b)'s sentinels are read-outs only). `math.inf > datetime` raises `TypeError`,
+      `datetime.max` is a finite instant (a rebuilt interval would be bounded), `NaT` does not order. an
+      infinite end is closed or open as written, as in v2, and a missing slice bound is closed, as
+      `MultiInterval.__getitem__` (v1 opened it). `to_pandas()` of an unbounded interval raises (pandas
+      has no infinite `Timestamp`). left: the names (beside `EMPTY`, `REALS`)
+    * **the end-of-day snap**: dropped. a `date` d is the half-open day `[d 00:00, d+1 00:00)`, its flag
+      says whether the day is in (a closed end: through d; an open end: before d; an open start: after
+      d). a datetime, midnight included, is an exact instant: v1's snap of a datetime end to the end of
+      its hour, minute or second (`10:00` read as `10:59:59.999999`) goes too. with the snap, adjacent
+      days stay two pieces (the gap is a non-empty set of exact seconds), `23:59:59.9999995` is not in
+      its day and a day's size is not 86400; v1's own comment wished `[Tue, Sat) == [Tue, Fri]`, which
+      the half-open day makes true. left: `__str__` sugar for whole-day pieces (`repr` stays literal)
+    * the three fit together: under the wall-clock reading a day is always exactly 86400 s, so the
+      half-open day is clean; the sentinels carry no zone
+* also to settle before or during the build (the report's "other decisions"): an end that is not a
+  whole number of microseconds cannot be a `datetime` or `timedelta` (`timedelta(seconds=Fraction(1,
+  3))` raises; recommended: raise, beside a raw Fraction accessor, never round silently); comparisons
+  return v2's `TruthSet`, not v1's bool, so a v1 caller's `if a < b:` can raise; `==` with a foreign
+  type is `NotImplemented`, and the wrappers get `__hash__` (v1's were unhashable); `NaT` or nan in the
+  constructor raises (v1 dropped it, `DateTimeInterval(NaT, t)` became the point t); v1's `end or
+  _end` (a falsy end, the epoch under the wall-clock reading, replaced) is not ported; whether
+  `td / td`, `//` and `%` join the arithmetic table; whether a time `parse` grammar is in M8 or the
+  `repr` is the constructor call
 * `DateTimeInterval`, `TimeDeltaInterval` as thin wrappers over a numeric `MultiInterval` of
-  exact seconds (D4a), with the v1 cross-type arithmetic table; keep the end-of-day snapping for
-  `date` inputs (document it); fill v1's gaps (`__repr__`, slicing on both, item methods dropped
-  with immutability)
+  exact seconds (D4a), with the v1 cross-type arithmetic table; the `date` rule as the owner chooses
+  above (v1 snapped to 23:59:59.999999; document it); fill v1's gaps (`__repr__`, slicing on both,
+  item methods dropped with immutability)
 * tests: the arithmetic table; pandas round-trips; `[-inf, t]` style open-ended ranges
 
 ### M9 `tests/itf1788/` (1½ days)
