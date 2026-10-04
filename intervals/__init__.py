@@ -53,6 +53,11 @@ from intervals.autodiff import gradient
 from intervals.autodiff import jacobian
 from intervals.solver import RootBox
 from intervals.solver import solve
+# M8: the time layer, datetimes and timedeltas over exact seconds (D4, D30)
+from intervals.time_interval import DateTimeInterval
+from intervals.time_interval import NEG_INF
+from intervals.time_interval import POS_INF
+from intervals.time_interval import TimeDeltaInterval
 
 EMPTY = MultiInterval()
 REALS = MultiInterval(-_math.inf, _math.inf)  # the affine extended reals, both infinities included
@@ -112,4 +117,9 @@ __all__ = [
     'jacobian',
     'solve',
     'RootBox',
+    # M8: the time layer (D4, D30)
+    'DateTimeInterval',
+    'TimeDeltaInterval',
+    'NEG_INF',
+    'POS_INF',
 ]

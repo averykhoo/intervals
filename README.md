@@ -223,6 +223,49 @@ Interval(float('-inf'), float('inf'))
   [0] (1.5707963267948966, 1.5707963267948968)
 
   ```
+* **time** (M8): `DateTimeInterval` and `TimeDeltaInterval` are sets of instants and of durations,
+  immutable and hashable, thin wrappers over a `MultiInterval` of exact seconds with its set algebra,
+  relations and `TruthSet` comparisons, and datetime and timedelta arithmetic (`dt - dt` is a
+  `TimeDeltaInterval`, `td / td` a `MultiInterval`). a naive datetime is wall-clock time (never
+  `timestamp()`), an aware one its UTC instant, and the two never mix (`TypeError`); aware ends in
+  different zones do, one zone kept for display. a `date` is the half-open day `[d 00:00, d+1 00:00)`,
+  so days tile and a day is 86400 s; a datetime is an exact instant. `NEG_INF` and `POS_INF` are the
+  infinite ends, ordered against every time type. nothing is rounded: an end that is no whole number of
+  microseconds raises when read out as a datetime, and `inf_seconds`, `sup_seconds` and `seconds` give it
+  exactly. pandas' `Timestamp` and `Timedelta` are read exactly in their unit, `NaT` is refused, and
+  `to_pandas()` / `from_pandas()` convert one bounded piece to and from a `pd.Interval`; the library
+  never imports pandas otherwise:
+
+  ```python
+  >>> import datetime
+  >>> from zoneinfo import ZoneInfo
+  >>> from intervals import DateTimeInterval as DTI, TimeDeltaInterval as TDI, NEG_INF
+  >>> mon, tue = datetime.date(2024, 1, 1), datetime.date(2024, 1, 2)
+  >>> print(DTI(mon, tue))                       # a closed date end: through that day
+  [2024-01-01 00:00:00, 2024-01-03 00:00:00)
+  >>> DTI(mon) | DTI(tue) == DTI(mon, tue), DTI(mon).total_duration   # days tile
+  (True, datetime.timedelta(days=1))
+  >>> work = DTI(datetime.datetime(2024, 1, 1, 9), datetime.datetime(2024, 1, 1, 17))
+  >>> work - datetime.datetime(2024, 1, 1)
+  TimeDeltaInterval(datetime.timedelta(seconds=32400), datetime.timedelta(seconds=61200))
+  >>> print(work < datetime.datetime(2024, 1, 1, 12))      # pointwise, a TruthSet
+  BOTH
+  >>> until_noon = DTI(NEG_INF, datetime.datetime(2024, 1, 1, 12))
+  >>> until_noon.inf, until_noon.inf < datetime.datetime.min
+  (-inf, True)
+  >>> DTI(datetime.datetime(2024, 1, 1, 8, tzinfo=ZoneInfo('Asia/Singapore'))) == \
+  ...     DTI(datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc))   # the same instant
+  True
+  >>> TDI(datetime.timedelta(hours=1), datetime.timedelta(hours=3)) / datetime.timedelta(minutes=30)
+  MultiInterval.parse('[2, 6]')
+  >>> third = TDI(datetime.timedelta(seconds=1)) / 3
+  >>> third.inf
+  Traceback (most recent call last):
+  ValueError: 1/3 s is not a whole number of microseconds, so it has no datetime or timedelta; `inf_seconds` gives it exactly
+  >>> third.inf_seconds
+  Fraction(1, 3)
+
+  ```
 * **rounding**: `MultiInterval` rounds a float result to nearest; `OutwardMultiInterval` rounds it
   outward to the tightest float enclosure of the exact result, and an end that rounding moved is
   open. mixing the two gives an `OutwardMultiInterval`, by an operator or by a method taking another
@@ -330,6 +373,8 @@ Allen relations and matrices, `TruthSet` comparisons.
   magnitude, mignitude), `reductions` (sums and dot products of numbers), `reverse` (the reverse
   ops), `literals` (1788's interval literals and constructors), `decorated` (1788's decorated
   type), `autodiff` (`Dual`, `gradient`, `jacobian`), `solver` (`newton`, `solve`, `RootBox`),
+  `time_interval` (`DateTimeInterval`, `TimeDeltaInterval`, `NEG_INF`, `POS_INF`; pandas imported only by
+  `to_pandas()`),
   `numpy_compat` (numpy's hooks, numpy imported only when numpy calls them), `backend` and `_gmpy2`
   (the optional gmpy2 backend), `rounding`, `errors`; and `ieee1788` (1788's intervals over the
   library, not imported by `intervals`)
@@ -349,8 +394,8 @@ Allen relations and matrices, `TruthSet` comparisons.
 
 ## status
 
-`2.0.0.dev0`, on the `v2` branch. there is no time layer yet: v1's is archived and comes back on top
-of the v2 class later (M8 in the implementation plan).
+`2.0.0.dev0`, on the `v2` branch. the time layer is back on the v2 class (M8, 2026-10-04); v1's archived
+`time_interval.py` stays in `archive/v1/` until the archive goes (`HANDOFF.md` H4).
 
 ## tests
 
@@ -358,8 +403,8 @@ of the v2 class later (M8 in the implementation plan).
 C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q
 ```
 
-needs `pytest`, `hypothesis`, `python-flint` and `gmpy2` (`pip install -e .[test]`). the numpy
-tests skip without numpy; CI installs it beside the extra. the library's own
+needs `pytest`, `hypothesis`, `python-flint`, `gmpy2`, `numpy` and `pandas` (`pip install -e .[test]`);
+the library itself needs none of them. the library's own
 warnings are errors inside the suite. `HYPOTHESIS_PROFILE=fuzz` runs every hypothesis test
 randomized at `FUZZ_MULTIPLIER` (default 10; 100 until 2026-09-27) times its examples, as
 `.github/workflows/fuzz.yml` does on every push to `master` and `tools/prepush.sh` does locally.

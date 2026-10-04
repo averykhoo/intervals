@@ -368,7 +368,7 @@ every new property test (flip one comparison, watch red, restore).
       `test_floor_sound_and_sharp` red, and rounding the low end of a float result inward turned
       `test_sound_float` red
 
-### M8 `time_interval.py` (1½ days) — next (owner 2026-10-04; was deferred, D4; its choices D30)
+### M8 `time_interval.py` (1½ days) — done 2026-10-04, on branch `m8` (owner 2026-10-04; was deferred, D4; its choices D30)
 * starts from `archive/v1/time_interval.py`, ported onto the v2 class with whatever tweaks that
   needs; the archived copy stays until the port works, then `archive/v1/` goes (`HANDOFF.md` H4)
 * before building, the owner's three choices (`HANDOFF.md` session log 2026-10-04): timezones (naive as
@@ -422,6 +422,106 @@ every new property test (flip one comparison, watch red, restore).
   v1 snapped to 23:59:59.999999; document it); fill v1's gaps (`__repr__`, slicing on both,
   item methods dropped with immutability)
 * tests: the arithmetic table; pandas round-trips; `[-inf, t]` style open-ended ranges
+
+**done (2026-10-04, branch `m8` off `1660b73`).** the design as built is `v2-plan.md` "the time layer (M8)".
+
+* **built**: `intervals/time_interval.py`: `_TimeInterval` (the shared wrapper: set algebra, relations,
+  `TruthSet` comparisons, slicing, `expand`, pieces, read-outs, `repr`/`str`, `to_pandas`/`from_pandas`),
+  `DateTimeInterval` (kind and display zone, `tz=`, `astimezone`, `tz`), `TimeDeltaInterval` (the duration
+  arithmetic), the sentinels `NEG_INF`/`POS_INF` (`_Infinity`). exported from `intervals` (`__all__` +4,
+  `tests/test_applicator.py::test_package_exports_unchanged`); `pandas` in `[test]` (pyproject.toml); README
+  "time (M8)" with doctests, its layout, status and tests lines
+* **v1's surface, v2's names** (§4): `infimum`/`supremum` → `inf`/`sup` (+ `inf_closed`, `sup_closed` and the
+  raw `inf_seconds`, `sup_seconds`, `seconds`); `contiguous_intervals` → iteration / `pieces`; `cardinality`
+  → `size` (the seconds' `Size`); `total_seconds` (exact, ValueError when unbounded) and `total_duration`
+  kept; `__getitem__` slicing on both classes; `expand(td)` pure. not ported: in-place `update`/`*_update`,
+  `add/discard/pop/remove/clear`, `copy`, `__sizeof__` (immutable), `overlapping(or_adjacent=)` (§4: gone;
+  `overlaps`/`adjoins` and `&`). added from v2: `before after adjoins overlaps contains within allen
+  allen_matrix allen_relations weakly_less strictly_less eq_pointwise is_finite hull closed_hull interior
+  complement ~ | & ^ sort_key`, hash, pickle, `from_seconds`
+* **choices among the defaults** (to confirm with the owner after, as D19-D24 were): the sentinels are
+  `NEG_INF`/`POS_INF`; `td / td` and `td // td` a `MultiInterval`, `td % td` a `TimeDeltaInterval`, plus
+  `divmod` and the reflected forms with a timedelta on the left; no time `parse`; `repr` is the constructor
+  call (pieces joined by `|`, the sentinels by name, `from_seconds(MultiInterval.parse(...), tz=...)` for an
+  end with no datetime); `__str__` without whole-day sugar; `tz=` built (cheap): it reads a date bound as that
+  day in the zone and is the display zone, a naive datetime beside it is a TypeError
+* **the build's own choices**: a sentinel is not an arithmetic operand (`td + POS_INF` could be a timedelta or
+  a datetime; `TimeDeltaInterval(POS_INF)` is); a float factor (and a `MultiInterval` one's float ends, an
+  `OutwardMultiInterval` read exactly) is its exact value, so `td * 0.1` is exact and its read-out raises
+  (python's `timedelta * 0.1` rounds to the microsecond); `td // real` is a TypeError (`MultiInterval // n`
+  floors to whole seconds, which is not python's `timedelta // int`); reversed bounds are checked on the
+  values as written (a date as its 00:00), and bounds whose readings cross are empty, not an error
+  (`D(mon, mon, start_closed=False)`); the kind is a function of the set (no finite end, no kind); unary `-`,
+  `+`, `abs` on durations; `__array_ufunc__ = None` (numpy scalars reach the reflected operators);
+  `to_pandas()` imports pandas, a whole-microsecond end becomes a unit-`us` `Timestamp`, a nanosecond one a
+  unit-`ns` one; `str` of a duration is python's text signed as a whole without the comma (`-0:20:00`)
+* **deviations from D30**: none in substance. one consequence documented rather than decided: `dt - dt` of
+  aware ends is the elapsed time between instants even when both share a tzinfo, where python's own `-`
+  ignores a shared tzinfo and gives the wall-clock difference (they differ across a DST change; found by
+  `tests/test_time_interval.py::test_aware_readings_are_zone_invariant`, Africa/Abidjan 1912 LMT). D30 (a)
+  says the set is of instants, so the instants' difference is the one consistent with `==` and `<`
+* **tests**: `tests/test_time_interval.py` (168 items: a pin per D30 point, each naming it; the arithmetic
+  table, 36 rows, and 31 pairings that must be TypeErrors; properties: set ops, relations, comparisons and
+  arithmetic are the numeric class's on the seconds, naive datetimes and timedeltas round-trip over their
+  whole range against an independent oracle, aware ones in any zone, and aware readings are zone-invariant;
+  pandas never imported, in a subprocess) and `tests/test_time_pandas.py` (32 items: exact `Timestamp` and
+  `Timedelta` readings, past the ns range, NaT, the sentinels against pandas' types, the `pd.Interval` round
+  trips and refusals, a property over nanosecond intervals). together about 10 s locally
+* **sabotage** (2026-10-04, worktree only, one exact string of `intervals/time_interval.py` per row, `__pycache__`
+  cleared, `PYTHONDONTWRITEBYTECODE=1`, restored by `shutil.copy2` and checked with `filecmp`; the two test
+  files, 200 items). control (intact): green. every break red:
+
+  | row | break | red |
+  |---|---|---|
+  | S1 | naive read through `timestamp()` | 31 |
+  | S2 | aware read as wall clock, the offset ignored | 13 |
+  | S3 | timedelta through `total_seconds()` | 9 |
+  | S4 | the kind check off in ops | 13 |
+  | S5 | the kind check off in the constructor | 4 |
+  | S6 | the display zone part of `==` | 5 |
+  | S7 | the display zone from the right operand | 1 |
+  | S8 | a sentinel not ordered against timedelta | 6 |
+  | S9 | sentinels pickled as copies | 1 |
+  | S10 | an infinite end read out as `math.inf` | 7 |
+  | S11 | a missing slice bound open (v1) | 1 |
+  | S12 | v1's end-of-day snap of a closed date end | 14 |
+  | S13 | v1's snap of a datetime end at midnight | 14 |
+  | S14 | a non-microsecond read-out rounded silently | 6 |
+  | S15 | NaT not refused | 2 |
+  | S16 | comparisons a bool, not a `TruthSet` | 4 |
+  | S17 | foreign `==` False, not NotImplemented | 1 |
+  | S18 | the hash includes the display zone | 3 |
+  | S19 | `repr` drops `end_closed` | 6 |
+  | S20 | `dt - dt` reversed | 3 |
+  | S21 | `^` computed as a union | 1 |
+  | S22 | `td % td` reversed | 4 |
+  | S23 | a float factor rounded to a microsecond's denominator | 2 |
+  | S24 | v1's `end or _end` (a zero end replaced) | 4 |
+  | S25 | pandas imported at load | 1 |
+  | S26 | `Timestamp` read through `.value` | 2 |
+  | S27 | the `Timestamp` unit ignored | 12 |
+  | S28 | `to_pandas` takes an infinite end | 3 |
+  | S29 | `to_pandas` rounds a non-ns end | 2 |
+  | S30 | an open date start at its own midnight | 4 |
+  | S31 | reversed bounds not checked as written | 1 |
+  | S32 | a set with no finite end keeps a kind | 4 |
+  | S33 | `astimezone` of a naive interval allowed | 1 |
+  | S34 | `tz=` ignored for a date | 1 |
+  | S35 | `__array_ufunc__ = None` removed | 1 |
+  | S36 | a duration's `str` keeps the comma | 1 |
+  | S37 | the wrapper mutable | 1 |
+  | S38 | `date in A` a point, not the day | 2 |
+  | S39 | `td + dt` stays a duration | 6 |
+  | S40 | `td / td` a duration | 5 |
+  | S41 | a sentinel taken as an arithmetic operand | 3 |
+
+  "red" is the number of failing test items; each row's failing tests are the ones that name its guard
+  (S32 was expected to stay green without `::test_kind_is_a_function_of_the_set`, added before the sweep)
+* **gate** (2026-10-04, on the final code, `tools/gate.py`): `gate:itf` 27795 passed in 86 s; `gate:rest`
+  6390 passed in 1005 s; 34185 items, both on code id `c:79507331df2c` (src `s:be2a99c3b8bc`). the time
+  layer adds 200 test items and the README's time doctests (about 10 s)
+* **left**: `archive/v1/` and the tests reading it stay (H4); the defaults above to confirm with the owner;
+  pandas past `to_pandas()` (an `IntervalIndex` of several pieces, `IntervalArray`) not built
 
 ### M9 `tests/itf1788/` (1½ days)
 * vendor a subset of `.itl` files (licence check first), a parser for the used subset (`add`,
@@ -4631,7 +4731,7 @@ independent of each other and were built in parallel worktrees, then merged on `
 | `apply_monotonic_{unary,binary}_function` | `applicator.apply_{unary,binary}(descriptor, ...)` |
 | `INFINITY_IS_NOT_FINITE`, `CONSISTENCY_CHECK` | deleted; `if __debug__` check in the class |
 | `interval.py` (`Interval`, `MultipleInterval`) | archived in `archive/v1/`; `tests/oracles.py` does its job |
-| `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; comes back at M8 |
+| `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; back at M8 (2026-10-04) as `intervals/time_interval.py`, with these renames (`infimum` → `inf`, `contiguous_intervals` → `pieces`, `cardinality` → `size`) and no in-place methods |
 | `exp()`, `log(base)` | `exp()`, `log(base=None)`, and the rest of `functions.py` (M12) |
 | `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | the same dunders, returning the set of values attained (`steps.py`, M12) |
 | `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | an integral number exponent is pown; any other real or interval exponent is 1788 `pow`, and `b ** A` works (M13d, D11); `pow(A, n, m)` dropped (D11) |

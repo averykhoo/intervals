@@ -18,7 +18,10 @@ fast = ["gmpy2>=2.3,<3"]
 test = ["pytest", "hypothesis", "python-flint>=0.9", "gmpy2>=2.3,<3",
         # numpy for the same reason: tests/test_numpy_compat.py never skips, and README's numpy
         # section runs as doctests. the library itself never needs it (not in `dependencies`)
-        "numpy"]
+        "numpy",
+        # pandas for the same reason: tests/test_time_pandas.py never skips (the time layer's Timestamp and
+        # Timedelta readings and pd.Interval round trips, M8). the library imports it only for to_pandas()
+        "pandas"]
 
 [tool.setuptools]
 packages = ["intervals"]

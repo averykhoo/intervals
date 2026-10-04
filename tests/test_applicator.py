@@ -785,7 +785,9 @@ def test_package_exports_unchanged():
         # M15: autodiff and interval newton (intervals/autodiff.py, intervals/solver.py)
         'Dual', 'derivative', 'newton', 'Root',
         # M16a: several variables (intervals/autodiff.py, intervals/solver.py)
-        'gradient', 'jacobian', 'solve', 'RootBox'}
+        'gradient', 'jacobian', 'solve', 'RootBox',
+        # M8: the time layer (intervals/time_interval.py, D30)
+        'DateTimeInterval', 'TimeDeltaInterval', 'NEG_INF', 'POS_INF'}
     for name in ('add', 'mul', 'OpDescriptor', 'apply_binary', 'mod', 'floordiv', 'floor', 'sqrt', 'sign',
                  'fma', 'apply', 'step'):
         assert not hasattr(intervals, name), name

@@ -9,7 +9,8 @@ open work and open questions for the owner (including the ones raised in the dec
 ## current design (2026-09-23; brought up to date with the build at M12, 2026-09-25, and M13a,
 M13b, M13c, M13d, M13e, M13f, M13g, M13h and M14's fuzz job and oracle, 2026-09-26; M13's merge, 2026-09-27;
 M15, H3's first part: autodiff and interval newton, 2026-09-27; M16, H3's second part: several
-variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-28)
+variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-28; M8, the time layer,
+2026-10-04)
 
 ### domain and semantics
 
@@ -18,8 +19,8 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
 * `[inf]` and `[-inf]` are legal degenerate intervals; `[a, inf]` and `[a, inf)` are different sets
 * number types: int and Fraction (exact, never rounded), float (endpoint arithmetic goes through the
   rounding hook: to nearest in `MultiInterval`, outward in `OutwardMultiInterval` — see
-  arithmetic). datetime/timedelta: the time layer is deferred; v1's `time_interval.py` is archived
-  with the rest of v1 and returns once it runs on the v2 class (D4)
+  arithmetic). datetime/timedelta: the time layer wraps the exact class over seconds ("the time layer
+  (M8)" below; D4 (a), D30)
     * `int / int` that is not integral gives a Fraction; float only if an operand is float. a
       Fraction with denominator 1 is normalized to int in the Cut constructor, next to the `-0.0`
       normalization (they already compare and hash equal; this keeps types and printing clean)
@@ -1193,6 +1194,79 @@ type, never an array of numbers, so interop is four rules and one refusal:
   ours are ragged sets with structural `==`, `TruthSet` comparisons and set images without nan.
   an interval *array* type is the D23 alternative, "later" if ever
 
+### the time layer (M8, D4 (a) and D30, built 2026-10-04)
+
+`intervals/time_interval.py`: `DateTimeInterval` (a set of instants) and `TimeDeltaInterval` (a set of
+durations), exported with the two sentinels `NEG_INF` and `POS_INF`. the owner's choices are D30
+(decision log "2026-10-04 revision: the time layer's choices"); the build's own choices among the
+defaults are in `v2-implementation-plan.md` §2 M8.
+
+* **a thin wrapper over exact seconds** (D4 (a)): each holds an exact `MultiInterval` of seconds (`.seconds`,
+  int and Fraction ends and ±inf; a float end, of `from_seconds` or of a factor, is taken at its exact
+  value) and every set operation, relation, comparison and arithmetic op is the numeric class's on those
+  seconds, so `(A op B).seconds == A.seconds op B.seconds` (`tests/test_time_interval.py::test_set_ops_are_the_numeric_ones`,
+  `::test_relations_and_comparisons_are_the_numeric_ones`, `::test_arithmetic_is_the_numeric_one`). the
+  wrappers are immutable, hashable (the hash of the seconds) and pickle; `__array_ufunc__ = None` hands
+  numpy's operators back to python (`np.float64(2) * td` is `td.__rmul__`)
+* **readings**: a naive datetime is wall clock, `d - datetime(1970, 1, 1)` exactly, never `timestamp()`; an
+  aware one its UTC instant (`d - datetime(1970, 1, 1, tzinfo=utc)`); a timedelta `days * 86400 + seconds +
+  microseconds / 10 ** 6`; a pandas `Timestamp` or `Timedelta` its `asm8` in its own `unit` (`.value` is
+  nanoseconds and overflows past 2262; a naive `Timestamp` reads as wall clock, which is pandas' reading).
+  `NaT` is a `ValueError`, a number (nan too) a `TypeError`
+* **kinds and zones**: a `DateTimeInterval` is naive or aware, a function of the set: one with no finite end
+  (empty, `[-inf, inf]`, `[inf]`) has no kind and meets either. naive and aware never mix: the constructor,
+  every set op, relation, comparison, `in`, slicing and `dt - dt` raise `TypeError`, and `==` is False (as
+  python's). aware ends in different zones are one set of instants; the display zone is the constructor's
+  `tz=`, else its start's, else its end's, and of an op the first aware operand's, the left one's.
+  `A.tz` reads it, `A.astimezone(tz)` changes it (a naive interval: `TypeError`); it is never part of `==`
+  or the hash. `dt - dt` of aware ends is the elapsed time between the instants, also when both share a
+  tzinfo, where python's own `-` gives the wall-clock difference
+* **dates**: a `date` is the half-open day `[d 00:00, d+1 00:00)`; as a bound it is always a cut below a
+  midnight, its own for a closed start or an open end ("from d", "before d"), the next one for an open
+  start or a closed end ("after d", "through d"). so days tile (`D(mon) | D(tue) == D(mon, tue)`, one
+  piece), a naive day is 86400 s, `23:59:59.9999995` is in its day, and `[Tue, Sat) == [Tue, Fri]`. a date
+  is naive; `tz=` reads it as that day in a zone (aware; a DST day there is 23 or 25 h). a datetime,
+  midnight included, is an exact instant: none of v1's snaps. reversed bounds are a `ValueError` on the
+  values as written (a date as its 00:00); bounds whose readings cross (`D(mon, mon, start_closed=False)`,
+  after Monday through Monday) are empty. `date in A` asks whether the day is a subset of A
+* **the infinite ends**: `NEG_INF` and `POS_INF`, two module singletons, order below and above every
+  datetime, date, timedelta, pandas `Timestamp` and `Timedelta` and each other (through python's reflected
+  comparisons, since those types return NotImplemented), against `NaT` every comparison is False, and
+  anything else is a `TypeError`. they hash, pickle and copy as themselves, `-NEG_INF is POS_INF`, and print
+  `-inf` / `inf`. an infinite end reads out as one and the constructors and slicing take it back; the
+  numeric value underneath is ±inf, closed or open as written, and a missing slice bound is closed (as
+  `MultiInterval.__getitem__`). a sentinel is an operand of set ops and relations, read in the receiver's
+  class, but not of arithmetic (`td + POS_INF` could be either type): `TimeDeltaInterval(POS_INF)`
+* **read-outs, never rounded**: `inf`, `sup`, `degenerate_points` and `total_duration` give datetimes and
+  timedeltas; an end that is no whole number of microseconds raises `ValueError` naming the raw accessor
+  (`inf_seconds`, `sup_seconds`, `seconds`, `total_seconds`, `size`), which gives the exact seconds and
+  never fails, and an instant past datetime's range raises `OverflowError` the same way. iteration and
+  `pieces` give wrappers and never fail; `size` is the numeric `Size` of the seconds, `total_seconds` its
+  length (`ValueError` when unbounded)
+* **arithmetic**: dt ± td → dt; td + dt → dt; dt − dt → td; td ± td, td % td → td; td × real, real × td,
+  td ÷ real → td; td ÷ td and td // td → `MultiInterval`; `divmod(td, td)` the pair; unary `-`, `+`, `abs`
+  of a td. each operand an interval or a scalar of its kind (a date is its day), a real an int, Fraction,
+  float (its exact value: `td * 0.1` is exact and not a whole microsecond) or `MultiInterval` (an outward
+  one read exactly too). anything else is a `TypeError` through NotImplemented: `dt + dt`, `real × dt`,
+  `real / td`, `td // real`, `td ** n`. the numeric class's warnings pass through (`td / [0]`)
+* **comparisons and relations**: `< <= > >=` and `eq_pointwise` are `TruthSet`s, `before after adjoins
+  overlaps contains within allen allen_matrix allen_relations weakly_less strictly_less issubset
+  issuperset isdisjoint` bools, all on the seconds. `==` is structural, the same set of the same kind;
+  any other type is NotImplemented (so `D(t) == t` is False)
+* **text**: `repr` is the constructor call, pieces joined by `|`, with the sentinels by their exported names,
+  and evaluates back in a namespace of `datetime`, `zoneinfo` and the package's names; where an end has no
+  datetime it is `DateTimeInterval.from_seconds(MultiInterval.parse('...'), tz=...)`. `__str__` is
+  `[a, b)` / `{ [a, b) , [c] }` with iso datetimes (`2024-01-01 08:00:00+08:00`) and python's timedelta
+  text signed as a whole without the comma (`-0:20:00`, `2 days 1:00:00`), no whole-day sugar; it never
+  raises (an end that is no whole microsecond prints its whole microseconds and the exact rest,
+  `...00.333333+1/3us`; one past the range its seconds). there is no time `parse` grammar
+* **pandas, optional**: the library never imports it to read a value (it looks in `sys.modules`); only
+  `to_pandas()` imports it. `to_pandas()` of one bounded piece is a `pd.Interval` (ends in the display
+  zone, a whole-microsecond end as a unit-`us` `Timestamp`, a nanosecond one at unit `ns`), and
+  `from_pandas()` takes one back; an empty set, several pieces (`[p.to_pandas() for p in A]`), an infinite
+  end and an end that is no whole number of nanoseconds raise `ValueError`. pandas is in the `[test]` extra,
+  so `tests/test_time_pandas.py` never skips
+
 ### package layout
 
 modules export pure functions over cut tuples; one class file on top binds the dunders. no mixins.
@@ -1245,7 +1319,9 @@ imports only point downward.
                            arithmetic subtraction, as in v1)
         ieee1788.py        1788's inf-sup binary64 intervals, bare and decorated, over the
                            library (M16b); not imported by intervals
-        time_interval.py   the same kernel over datetime/timedelta values (deferred, D4)
+        time_interval.py   DateTimeInterval, TimeDeltaInterval, NEG_INF, POS_INF: thin wrappers over
+                           an exact MultiInterval of seconds (M8, D4 (a), D30); pandas imported
+                           only by to_pandas(); above the class
         __init__.py        public API, constants (EMPTY, REALS, ...)
     tests/
         oracles.py         sampling + attainment oracles, derived from the pointwise table only
@@ -1268,7 +1344,9 @@ imports only point downward.
                            layer and its conformance pass, M16b; test_relations.py gained
                            the allen matrix, M16c; test_numpy_compat.py, numpy, M16d;
                            test_backend.py, the backend differential, M16e;
-                           test_pown_huge.py, pown with a huge exponent, pown-huge)
+                           test_pown_huge.py, pown with a huge exponent, pown-huge;
+                           test_time_interval.py and test_time_pandas.py, the time
+                           layer, M8)
 
 * only the two class files know the class; everything below takes and returns tuples. this removes
   the mixin return-type problem, keeps fmt below the class, makes every kernel function
@@ -1486,6 +1564,15 @@ imports only point downward.
       exact text and interchange conversions, and every inf-sup type but binary64 (M16b)
 
 ## decision log
+
+### 2026-10-04 revision: M8, the time layer, built
+
+D30 built as decided, on branch `m8`; the design is now "the time layer (M8)" in current design, the record
+(choices among the defaults, the build's own, the sabotage table) `v2-implementation-plan.md` §2 M8. no
+deviation from D30; one consequence written down: `dt - dt` of aware ends is the elapsed time between the
+instants also when both share a tzinfo (python's `-` then gives the wall-clock difference). the build's
+choices for the owner to confirm: the sentinels' names `NEG_INF`/`POS_INF`; a sentinel is no arithmetic
+operand; a float factor is exact (`td * 0.1` is not a whole microsecond); `td // real` refused; `tz=` built
 
 ### 2026-10-04 revision: the time layer's choices (M8, D30)
 
