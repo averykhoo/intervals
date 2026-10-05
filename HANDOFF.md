@@ -137,13 +137,9 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## open questions for the owner
 
-* **Q23 (2026-10-05, from m14b-open's `parse_value` fix; behaviour unchanged until answered)**: (a) numbers side
-  by side with no white space: the tokenizer reads `[0.1.2]` as `[0.1, 0.2]`, `[-2-1]` as `[-2, -1]`, `{1-2}` as
-  `{-2, 1}`, `[1+2]` as `[1, 2]`. refuse (a number must be followed by white space or punctuation; the comment on
-  `tests/test_fmt.py::_SPACED` says "two bare numbers need one") or keep (`[0E0-0]` is a 2026-10-02 fuzz
-  `@example` whose test accepts either)? (b) non-ASCII digits: python's `\d`, `int` and `float` take them, so
-  `[١٢]` parses as `[12]`, in `parse` and `parse_value`. restrict to ASCII `[0-9]`, or keep? (plan §2
-  "M14-breadth", "parse_value strict")
+none open. Q23 was answered 2026-10-06 (a number is what python reads, split from the next by a separator, ASCII
+digits; `v2-plan.md` decision log "a number is what python reads"); its build is in the worktree
+`../intervals-q23` (branch `q23`), not merged yet.
 
 Q21 was answered 2026-10-05 (the session's recommendations accepted, all as built; `v2-plan.md` decision log, "M8's choices confirmed"). Q22 was answered 2026-10-04 (`v2-plan.md` decision log, "strict flags; v1 deleted"). Q9-Q20 and the owner's-call rows were answered 2026-10-03 (the owner accepted every
 recommendation of `references/owner-questions-2026-10-03/`; `v2-plan.md` "2026-10-03 revision: owner
