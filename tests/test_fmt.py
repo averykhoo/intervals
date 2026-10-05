@@ -8,18 +8,20 @@ the package's own text form: `multiinterval.fmt` (`format_cuts`, `parse`, `parse
   4300 digits and past them (hex, below), mixed types and many pieces; `repr` evaluates back to the
   same class and set, for `MultiInterval` and `OutwardMultiInterval`
 * spellings: a writer of its own, from the grammar in the module docstring (not from `format_cuts`), spells a
-  set every documented way (bare points, `[x, x]`, `,` or `;` inside a piece, any separator or none between
-  pieces, braces or not, pieces shuffled and repeated, empty pieces mixed in, white space anywhere around a
-  token and after a sign or around `/`, `inf`/`Infinity`/`∞` in any case, a float as `repr` or `%e`, an int
-  as `2k/k` or in hex, a Fraction unreduced or with hex parts, `-0.0`); the parse is the set, with the
-  design's one zero (v2-plan:
-  `-0.0` becomes `0.0`) and an integral Fraction read as an int
+  set every documented way (bare points, `[x, x]`, `,` or `;` inside a piece, any of the four separators
+  between pieces, braces or not, pieces shuffled and repeated, empty pieces mixed in, white space anywhere
+  around a token and around `/`, `inf`/`Infinity`/`∞` in any case, a float as `repr` or `%e`, an int as
+  `2k/k`, in hex or with `_` between digit groups, a Fraction unreduced or with hex parts, `-0.0`); the parse
+  is the set, with the design's one zero (v2-plan: `-0.0` becomes `0.0`) and an integral Fraction read as an int
 * `parse_value` reads back `format_value` of every number bit for bit (`-0.0` included: the parser's tokens
   are raw, the Cut constructor normalizes) and every other spelling of the number with its type; it reads a
   text iff the tokenizer reads it as one number (m14b-open, 2026-10-05: it read `'+-5'` as 5 and `'1 2'` as 12)
 * any text, random or a mutated valid output, either parses to a valid cut tuple whose own format is
   canonical, or raises ValueError, never anything else (texts of at most a few hundred characters)
 * the tables: v1's parser comments and the separators v2 adds
+* Q23 (owner, 2026-10-06): a number is what python's `int`, `float` or `Fraction` reads (ASCII digits only), and
+  it ends at white space, punctuation or the end; two items need an explicit separator, white space alone is
+  none. a pin per rule, each red on the `fmt.py` before it, and a property: `parse_value` agrees with python
 
 findings of M14-breadth (2026-10-02): a zero denominator raised ZeroDivisionError and a separator after a
 leading `[]` or `()` was refused, both fixed (the `@example`s of the any-text property); an int part past
@@ -97,13 +99,13 @@ def test_format_table(cuts, text):
     ('(123)', EMPTY),
     ('{ [1, 2) | [3, 4) }', mi((1, 2, True, False), (3, 4, True, False))),
     ('{[1,2),[3,4)}', mi((1, 2, True, False), (3, 4, True, False))),
-    ('[1,2)[3,4)', mi((1, 2, True, False), (3, 4, True, False))),
+    # v1's `[1,2)[3,4)`, pieces with nothing between them, is refused since Q23: test_white_space_alone_separates_nothing
     ('[1, 2) ∪ (2, 3]', mi((1, 2, True, False), (2, 3, False, True))),
     ('{1, 2, 3}', mi(1, 2, 3)),
     ('{1; 2}', mi(1, 2)),
     ('[1; 2]', mi((1, 2))),
     ('5', mi(5)),
-    ('[-inf, - 5]', mi((-inf, -5))),
+    ('[-inf, -5]', mi((-inf, -5))),  # `- 5` until Q23: the sign is attached now
     ('[-∞, ∞)', mi((-inf, inf, True, False))),
     ('[1e-05, 1/3)', mi((1e-05, Fraction(1, 3), True, False))),
     ('[1, 2) | [2, 3]', mi((1, 3))),
@@ -132,8 +134,9 @@ def test_parse_errors(text):
 
 @pytest.mark.parametrize('text, value', [
     ('3', 3), ('-3', -3), ('3.0', 3.0), ('1e-05', 1e-05), ('1E+16', 1e16), ('.5', 0.5),
-    ('1/3', Fraction(1, 3)), ('-1/3', Fraction(-1, 3)), ('- inf', -inf), ('Infinity', inf),
-    ('- 5', -5), (' + 5\n', 5), ('1 / 0x3', Fraction(1, 3)), ('- 0x1f', -31), ('1.', 1.0),
+    ('1/3', Fraction(1, 3)), ('-1/3', Fraction(-1, 3)), ('-inf', -inf), ('Infinity', inf),
+    ('-5', -5), (' +5\n', 5), ('1 / 0x3', Fraction(1, 3)), ('-0x1f', -31), ('1.', 1.0),
+    ('1_000', 1000), ('-1_0.5', -10.5), ('1_000/3', Fraction(1000, 3)),  # Q23: python's `_`
 ])
 def test_parse_value(text, value):
     parsed = parse_value(text)
@@ -142,14 +145,15 @@ def test_parse_value(text, value):
 
 # MALFORMED NUMBERS (m14b-open, 2026-10-05): `parse_value` deleted all white space and every leading sign, then
 # handed the rest to python's int/float/Fraction, so it read text no token of the grammar is: `'+-5'` was 5, `'1 2'`
-# 12, `'1/-3'` -1/3, `'1_000'` 1000. the grammar allows white space after the one sign and around `/`, nowhere else
+# 12, `'1/-3'` -1/3. the grammar allows white space around `/`, nowhere else inside a number. since Q23
+# (2026-10-06) not after the sign either, and python's `_` is read (`'1_000'` moved to test_digit_separators)
 
 @pytest.mark.parametrize('text', [
     '+-5', '-+5', '--5', '++5', '+ -5', '- -5',  # one sign at most
     '1 2', '1 . 5', '1. 5', '1 .5', '1e 5', '1 e5', '1e+ 5', '1 2/3', '1/2 3',  # white space inside the digits
     'i n f', 'in f', '-in finity', '0 x1f', '0x 1f', '0x1 f', '0x1f / 0x 3',
     '1/-3', '1/+3', '-1/-3',  # no sign after `/`
-    '1_000', '1_0.5', '1e1_0',  # python's digit separators are not the grammar's
+    '- 5', '+ 5', '- inf', '- 0x1f',  # the sign is attached (Q23): test_a_sign_is_attached
 ])
 def test_parse_value_refuses_malformed_numbers(text):
     with pytest.raises(ValueError, match='not a number'):
@@ -253,12 +257,13 @@ def test_repr_round_trip(cls, cuts):
 # SPELLINGS: a writer of the grammar of its own, so the parser is not checked against format_cuts alone
 
 _SPACE = st.sampled_from(['', '', ' ', '  ', '\t', '\n', ' \r\n '])
-_SPACED = st.sampled_from([' ', '  ', '\t', '\n'])  # never none: two bare numbers need one
+# no `_SPACED` since Q23 (2026-10-06): white space alone separated two items, now it separates nothing
 
 
 @st.composite
 def spelled_number(draw, value):
-    """`value` spelled some way the grammar reads as it: a sign, white space, then the body"""
+    """`value` spelled some way the grammar reads as it: a sign attached to the body (Q23: no white space
+    between them), the body with `_` between digit groups sometimes"""
     negative = value < 0
     magnitude = abs(value)
     if isinstance(value, float) and math.isinf(value):
@@ -270,7 +275,7 @@ def spelled_number(draw, value):
         spellings = [_hex(magnitude, draw)]  # any int may be hex; past python's limit it must be
         if magnitude < 10 ** 4000:  # decimal and `2k/k`, kept under python's 4300-digit limit
             k = draw(st.integers(1, 9))
-            spellings += [str(magnitude), f'{magnitude * k}{draw(_SPACE)}/{draw(_SPACE)}{k}']
+            spellings += [str(magnitude), f'{magnitude:_}', f'{magnitude * k}{draw(_SPACE)}/{draw(_SPACE)}{k}']
         body = draw(st.sampled_from(spellings))
         negative = negative or (value == 0 and draw(st.booleans()))  # `-0`
     else:
@@ -279,18 +284,23 @@ def spelled_number(draw, value):
         numerator, denominator = magnitude.numerator * k, magnitude.denominator * k
         body = f'{_int_text(numerator, draw)}{draw(_SPACE)}/{draw(_SPACE)}{_int_text(denominator, draw)}'
     sign = '-' if negative else draw(st.sampled_from(['', '+']))
-    return sign + (draw(_SPACE) if sign else '') + body
+    return sign + body
 
 
 def _hex(n: int, draw) -> str:
-    """`0x...` with the prefix and the digits in either case (the grammar reads hex case-blind)"""
+    """`0x...` with the prefix and the digits in either case (the grammar reads hex case-blind), with `_`
+    between groups of four digits or after `0x` sometimes, as `int(s, 0)` reads them"""
     text = hex(n)
-    return draw(st.sampled_from([text, text.upper(), '0x' + text[2:].upper()]))
+    grouped = f'0x{n:_x}'
+    return draw(st.sampled_from([text, text.upper(), '0x' + text[2:].upper(), grouped, '0X_' + grouped[2:]]))
 
 
 def _int_text(n: int, draw) -> str:
-    """one part of a fraction: decimal where python writes it, else hex; hex either way, sometimes"""
-    return _hex(n, draw) if n >= 10 ** 4000 or draw(st.booleans()) else str(n)
+    """one part of a fraction: decimal where python writes it, else hex; hex either way, sometimes, and
+    decimal with `_` between groups of three digits sometimes"""
+    if n >= 10 ** 4000 or draw(st.booleans()):
+        return _hex(n, draw)
+    return draw(st.sampled_from([str(n), f'{n:_}']))
 
 
 @st.composite
@@ -328,7 +338,7 @@ def spelled_empty(draw):
 @st.composite
 def spelled_set(draw, cuts):
     """the set every documented way: its pieces, some repeated, empty pieces mixed in, shuffled, between
-    them `,` `;` `|` `∪` or nothing, in braces or not"""
+    them `,` `;` `|` or `∪` (white space alone or nothing was a separator until Q23), in braces or not"""
     def space():
         return draw(_SPACE)
 
@@ -340,8 +350,8 @@ def spelled_set(draw, cuts):
     items = draw(st.permutations(items))
     text = items[0] if items else ''
     for at, item in enumerate(items[1:], 1):
-        separator = draw(st.sampled_from([',', ';', '|', '∪', '']))
-        text += (f'{space()}{separator}{space()}' if separator else draw(_SPACED)) + item
+        separator = draw(st.sampled_from([',', ';', '|', '∪']))
+        text += f'{space()}{separator}{space()}{item}'
     if not items or draw(st.booleans()):
         text = f'{{{space()}{text}{space()}}}'
     return f'{space()}{text}{space()}'
@@ -413,9 +423,20 @@ _LONG = 100_000
     ('1' + ' ' * _LONG, mi(1)),  # trailing
     (' ' * _LONG + '1', mi(1)),  # leading, then a token
     ('[1' + ' ' * _LONG + ', 2]', mi((1, 2))),  # between tokens
-    ('[-' + ' ' * _LONG + '5]', mi(-5)),  # between a sign and its digits
+    ('[-' + ' ' * _LONG + '5]', ValueError),  # between a sign and its digits: refused since Q23
     ('[1' + ' ' * _LONG + '/' + ' ' * _LONG + '3]', mi(Fraction(1, 3))),  # around `/`
-], ids=['then-junk', 'then-sign-junk', 'in-piece-then-junk', 'trailing', 'leading', 'between', 'after-sign', 'around-slash'])
+    # Q23 (2026-10-06): digit and `_` runs, each possessive like the white-space runs
+    ('[0.' + '1_' * _LONG + '1]', mi(float('0.' + '1' * (_LONG + 1)))),  # a long `_` run, read
+    ('[' + '1_' * _LONG + '_1]', ValueError),  # a long `_` run, then a doubled `_`
+    ('[' + '1' * _LONG + '-1]', ValueError),  # a long digit run, then a number side by side
+    ('[0.' + '1' * _LONG + '.2]', ValueError),
+    ('[0x' + '1_' * _LONG + 'g]', ValueError),  # hex
+    ('[1' + ' ' * _LONG + '2]', ValueError),  # white space alone between two numbers
+    ('[1]' + ' ' * _LONG + '[2]', ValueError),  # and between two items
+    ('[' + '1' * _LONG + ' ' * _LONG + '/x]', ValueError),  # a numerator, white space, `/`, then no denominator
+], ids=['then-junk', 'then-sign-junk', 'in-piece-then-junk', 'trailing', 'leading', 'between', 'after-sign', 'around-slash',
+        'underscores', 'underscores-doubled', 'digits-then-number', 'digits-then-dot', 'hex-underscores', 'space-in-piece',
+        'space-between-items', 'digits-slash-nothing'])
 def test_white_space_runs_parse_in_linear_time(text, outcome):
     started = time.perf_counter()
     if isinstance(outcome, type):
@@ -423,7 +444,7 @@ def test_white_space_runs_parse_in_linear_time(text, outcome):
             parse(text)
     else:
         assert parse(text) == outcome
-    assert time.perf_counter() - started < 10, 'a white-space run is read more than once'
+    assert time.perf_counter() - started < 10, 'a white-space, digit or `_` run is read more than once'
 
 
 @pytest.mark.parametrize('text, value', [
@@ -439,14 +460,14 @@ def test_parse_hex(text, value):
 @pytest.mark.parametrize('text', ['0x', '[0x1.8p1]', '[0x1.5e3]', '[1/0x3.5]', '0x1g', '[0x 1]',
                                   '[0x12.5]', '[1/0x35.5]', '{0X1F2.5}', '[-0x10.5]'])
 def test_hex_floats_and_bad_hex_are_refused(text):
-    """a hex float is not read, and never as `0x1` then `.8` (the grammar takes two bare numbers as a piece)"""
+    """a hex float is not read, and never as `0x1` then `.8` (until Q23 two numbers side by side were a piece)"""
     with pytest.raises(ValueError):
         parse(text)
 
 
 # ANY TEXT
 
-_GRAMMAR = '0123456789 .eE+-/[](){},;|∪∞infINFtyxXabcdef\t\n'
+_GRAMMAR = '0123456789 .eE+-/[](){},;|∪∞infINFtyxXabcdef\t\n_٣'  # `_` and a non-ASCII digit since Q23
 @st.composite
 def mutated_outputs(draw):
     """a valid output with a few characters inserted, deleted or replaced, or a slice repeated"""
@@ -468,14 +489,16 @@ def mutated_outputs(draw):
 @example('{[1, 2]} [3]')
 @example('[1, nan]')
 @example('[1e400, 1/3]')
-@example('٣/٤')  # unicode digits are digits to python's int()
-@example('[ınf]')  # a dotless i matches `i` under re.IGNORECASE
+@example('٣/٤')  # unicode digits are digits to python's int(); refused since Q23
+@example('[ınf]')  # a dotless i matched `i` under re.IGNORECASE, which the grammar no longer uses (Q23)
 @example('[1/0]')  # raised ZeroDivisionError (M14-breadth)
 @example('0/0')
 @example('[] , [1]')  # an empty item then a separator was refused (M14-breadth)
 @example('{() ∪ (), [2]}')
-@example('[0E0-0]')  # a point whose cuts differ in type: format wrote [0.0], losing the int (fuzz x10, 2026-10-02)
+@example('[0E0-0]')  # a point whose cuts differ in type: format wrote [0.0], losing the int (fuzz x10, 2026-10-02);
+# `0E0` and `-0` side by side, a ValueError since Q23 (2026-10-06): `[0.0, -0]` keeps the case
 @example('[1.0, 1]')
+@example('[0.0, -0]')
 def test_any_text_parses_or_raises_value_error(text):
     try:
         cuts = parse(text)
@@ -501,11 +524,12 @@ def _one_number(text):
 
 @st.composite
 def mangled_numbers(draw):
-    """a spelled number with a sign, white space, `.`, `_`, `e`, `x`, `/` or a digit put in or taken out"""
+    """a spelled number with a sign, white space, `.`, `_`, `e`, `x`, `/`, a digit or a non-ASCII digit put in or
+    taken out"""
     text = draw(spelled_number(draw(st.one_of(pool_values, st.integers(), st.fractions(), st.floats(allow_nan=False)))))
     for _ in range(draw(st.integers(1, 2))):
         i = draw(st.integers(0, len(text)))
-        char = draw(st.sampled_from(' +-._exX/09'))
+        char = draw(st.sampled_from(' +-._exX/09٣'))
         text = draw(st.sampled_from([text[:i] + char + text[i:], text[:i] + text[i + 1:]]))
     return text
 
@@ -515,8 +539,10 @@ def mangled_numbers(draw):
 @example('+-5')
 @example('1 2')
 @example('1/-3')
-@example('1_000')
+@example('1_000')  # refused until Q23, read since
 @example('0x 1f')
+@example('- 5')  # read until Q23
+@example('1-2')
 def test_parse_value_reads_one_number_or_raises(text):
     """`parse_value` reads a text iff the tokenizer reads it as one number, and then as `parse` does"""
     token = _one_number(text)
@@ -529,3 +555,200 @@ def test_parse_value_reads_one_number_or_raises(text):
         return
     assert token is not None, f'{text!r} is not one number of the grammar, read as {value!r}'
     assert typed(parse(text)) == typed(mi(value))
+
+
+# Q23 (owner, 2026-10-06): "each number should be something python can parse, split by a character that's not a
+# valid part of the number", and, as white space can sit inside a fraction (`1 / 3`), it separates nothing. each
+# test below is red on the `fmt.py` before Q23 (d2e2e8c); a row that only pins what stayed is marked so
+
+# a number side by side with another was a second number; now a ValueError naming the end. the message is matched,
+# so a row the old code refused for another reason (`[1e5-1]`, a reversed piece) still says something
+@pytest.mark.parametrize('text', [
+    '[0.1.2]', '[-2-1]', '{1-2}', '[1+2]', '[0E0-0]', '1-2', '1+2', '-1-2',  # a sign
+    '[1inf]', '[1∞]', '[∞∞]', '[-∞-1]', '[inf-inf]', '[infinity1]', '[inf0x1]',  # infinity
+    '[-0x1e-5]', '[0x1e+5]', '[1/0x3-1]',  # hex: its `e` is a digit, not an exponent
+    '[0..5]', '[1..5]', '[0.5.5]', '[1/3.5]', '[1e5.5]',  # `.`
+    '[1e5-1]', '[1/3-1]', '[1/3+1/3]', '[.5-.5]',
+    '[1,2-3]', '{1, 2-3}',
+])
+def test_numbers_side_by_side_are_refused(text):
+    with pytest.raises(ValueError, match='a number must end at white space, punctuation or the end'):
+        parse(text)
+
+
+# python's int, float and Fraction read the digits of every script (`int('١٢')` is 12): the grammar reads ASCII only
+@pytest.mark.parametrize('text', [
+    '[١٢]', '[1٢]', '[١/٢]', '[1, ١]', '[1e٣]', '[٣]', '[１]', '[१]', '{1, ٣}', '[0.٥]',
+])
+def test_non_ascii_digits_are_refused(text):
+    with pytest.raises(ValueError):
+        parse(text)
+    number = text.strip('[]{}').split(', ')[-1]
+    assert _python_reads(number) is not None  # python reads it: the refusal is the grammar's own
+    with pytest.raises(ValueError, match='not a number'):
+        parse_value(number)
+
+
+@pytest.mark.parametrize('text', ['- 5', '+ 5', '- inf', '-\tinf', '- ∞', '- 0x1f', '-\n1/3', '+ 1_000', '- 1.5'])
+def test_a_sign_is_attached(text):
+    """white space after the sign was allowed (`- 5` was -5); python refuses it (`float('- 5')`)"""
+    with pytest.raises(ValueError, match='not a number'):
+        parse_value(text)
+    with pytest.raises(ValueError):
+        parse(f'[{text}]')
+    assert parse_value(''.join(text.split())) is not None  # attached, it reads
+
+
+@pytest.mark.parametrize('text, value', [
+    ('1 / 3', Fraction(1, 3)), ('1/ 3', Fraction(1, 3)), ('1 /3', Fraction(1, 3)), (' -1\t/\n3 ', Fraction(-1, 3)),
+    ('0x10 / 3', Fraction(16, 3)), ('1_000 / 3', Fraction(1000, 3)),  # stays, as Fraction(' 1 / 3 ') reads it
+    ('1/-3', ValueError), ('1 / -3', ValueError), ('1/+3', ValueError),  # stays refused, as Fraction refuses it
+    ('[1 / 3 2]', ValueError), ('{1 / 3 2}', ValueError), ('{1 /3 2/ 3}', ValueError),  # new: the space is the number's
+])
+def test_white_space_around_the_slash_is_the_numbers(text, value):
+    """white space around `/` stays inside the number; so a number after a fraction needs a separator (red before
+    Q23 on the last three rows only: the rest pin what stayed)"""
+    if value is ValueError:
+        with pytest.raises(ValueError):
+            parse(text)
+        return
+    assert parse_value(text) == value and type(parse_value(text)) is Fraction
+    assert parse(f'[{text}]') == mi(value) and parse(f'{{{text}, {text}}}') == mi(value)
+
+
+@pytest.mark.parametrize('text, value', [
+    # read since Q23, as python reads them (red before)
+    ('1_000', 1000), ('1_0.5', 10.5), ('1e1_0', 1e10), ('1_000/3', Fraction(1000, 3)), ('1/1_000', Fraction(1, 1000)),
+    ('1.5_5', 1.55), ('.5_5', 0.55), ('1_0e1_0', 1e11), ('-1_000', -1000), ('0_0', 0), ('0_1', 1),
+    ('0x1_f', 31), ('0x_1f', 31), ('0X_1_F', 31), ('-0x_1f/0x_3', Fraction(-31, 3)),
+    # refused, as python refuses them (and as before)
+    ('_1', None), ('1_', None), ('1__0', None), ('1_.5', None), ('1._5', None), ('1e_5', None), ('1_e5', None),
+    ('1e5_', None), ('_1/3', None), ('1_/3', None), ('1/_3', None), ('1/3_', None), ('1._', None), ('._5', None),
+    ('0x1__f', None), ('0x1f_', None), ('0x_', None), ('0_x1f', None), ('0x__1', None),
+])
+def test_digit_separators(text, value):
+    """python's `_`, by python's rules: one between two digits, and after `0x` (`int(s, 0)`)"""
+    if value is None:
+        with pytest.raises(ValueError, match='not a number'):
+            parse_value(text)
+        with pytest.raises(ValueError):
+            parse(f'[{text}]')
+        return
+    parsed = parse_value(text)
+    assert parsed == value and type(parsed) is type(value)
+    assert typed(parse(f'[{text}]')) == typed(mi(value))
+
+
+@pytest.mark.parametrize('text', [
+    '[1 2]', '{1 2}', '1 2', '{[1, 2] [3, 4]}', '[1, 2] [3, 4]', '{1 / 3 2}', '[1\t2)', '{1\n2}', '[1] [2]',
+    '[1,2)[3,4)', '[1, 2) [3, 4)', '5[1, 2]', '[1]5', '{ [1] [2] , [3] }', '{(1, 2)(3, 4)}', '[]()', '1 2, 3',
+])
+def test_white_space_alone_separates_nothing(text):
+    """owner, 2026-10-06 (Q23): two items need `,` `;` `|` or `∪` between them, two numbers of a piece `,` or `;`;
+    white space alone (or nothing) was a separator"""
+    with pytest.raises(ValueError, match='between them'):
+        parse(text)
+
+
+@pytest.mark.parametrize('text, cuts', [
+    ('[1; 2]', mi((1, 2))), ('[1 ,2]', mi((1, 2))), ('{1 ; 2}', mi(1, 2)), ('{ [1] }', mi(1)), ('[1, 2]', mi((1, 2))),
+    ('5', mi(5)), (' 1 / 3 ', mi(Fraction(1, 3))), ('{1/3 , 2}', mi(Fraction(1, 3), 2)), ('[1] | [2]', mi(1, 2)),
+    ('[1]∪[2]', mi(1, 2)), ('[1],[2]', mi(1, 2)), ('{[1, 2];[3, 4]}', mi((1, 2), (3, 4))), ('( 1 , 2 )', mi((1, 2, False, False))),
+])
+def test_explicit_separators_stay(text, cuts):
+    """what stays (green before Q23 too): the explicit separators, and white space as padding around them"""
+    assert parse(text) == cuts
+
+
+def _python_reads(text):
+    """what python reads `text` as, by its shape: a Fraction if it has `/`, a float if `.` or an exponent, else an
+    int; None if that reader refuses it. a zero denominator (python: ZeroDivisionError) is None, as the grammar
+    refuses it with a ValueError (M14-breadth)"""
+    reader = Fraction if '/' in text else float if any(c in text for c in '.eE') else int
+    try:
+        return reader(text)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def _python_reads_any(text):
+    """whether any of python's int, float and Fraction reads `text` (a zero denominator aside)"""
+    for reader in (int, float, Fraction):
+        try:
+            reader(text)
+        except ValueError:
+            continue
+        except ZeroDivisionError:
+            return False
+        return True
+    return False
+
+
+_PYTHON_ALPHABET = '0123456789_.eE+- /\t\n'
+# near-numbers: digit groups with `_`, a `.`, an exponent, a `/`, white space and signs in places
+_NEAR_NUMBERS = st.from_regex(
+    r'[ \t]?[+-]?[ ]?[0-9_]{0,5}\.?[0-9_]{0,4}(?:[eE][+-]?[0-9_]{0,3})?(?:[ ]?/[ ]?[+-]?[0-9_]{0,4})?[ \n]?', fullmatch=True)
+
+
+@settings(max_examples=500, deadline=None)
+@given(st.one_of(st.text(_PYTHON_ALPHABET, max_size=14), _NEAR_NUMBERS))
+@example('1_000')  # python reads these (red before Q23)
+@example('1_0.5')
+@example('1e1_0')
+@example('1_000 / 3')
+@example('- 5')  # python refuses these (read before Q23)
+@example('+ 5')
+@example('_1')
+@example('1__0')
+@example('1_.5')
+@example('1._5')
+@example('1e_5')
+@example('1/0')
+@example('-0.0')
+@example('007')
+@example('1.e5')
+def test_parse_value_agrees_with_python(text):
+    """over digits, `_`, `.`, `e`, signs, `/` and white space, `parse_value` reads a text exactly when python's int,
+    float or Fraction does, and as the one its shape names does, type and bits (`-0.0`) included. the one
+    deliberate difference, non-ASCII digits, is test_non_ascii_digits_are_refused"""
+    expected = _python_reads(text)
+    assert (expected is not None) == _python_reads_any(text), f'{text!r}: the shape names a reader that refuses it'
+    try:
+        value = parse_value(text)
+    except ValueError:
+        assert expected is None, f'python reads {text!r} as {expected!r}, the grammar refuses it'
+        return
+    assert expected is not None, f'python refuses {text!r}, the grammar reads it as {value!r}'
+    assert type(value) is type(expected) and value == expected
+    if type(value) is float:
+        assert struct.pack('<d', value) == struct.pack('<d', expected)
+
+
+def _python_reads_hex(text):
+    try:
+        return int(text, 0)
+    except ValueError:
+        return None
+
+
+@settings(max_examples=300, deadline=None)
+@given(st.one_of(st.text('0123456789abcdefABCDEF_xX+- ', max_size=10),
+                 st.from_regex(r'[ ]?[+-]?0?[xX][_0-9a-fA-F]{0,6}[ ]?', fullmatch=True)).filter(lambda t: 'x' in t.lower()))
+@example('0x_1f')  # int(s, 0) reads these (red before Q23)
+@example('0x1_f')
+@example('- 0x1f')  # int(s, 0) refuses these
+@example('0x1__f')
+@example('0x_')
+@example('00x1')
+@example('0x1e-5')
+def test_parse_value_agrees_with_python_on_hex(text):
+    """a text with `x` over hex digits, `_`, signs and spaces: `parse_value` reads it exactly when `int(s, 0)`
+    does, as the same int"""
+    expected = _python_reads_hex(text)
+    try:
+        value = parse_value(text)
+    except ValueError:
+        assert expected is None, f'int(s, 0) reads {text!r} as {expected!r}, the grammar refuses it'
+        return
+    assert expected is not None, f'int(s, 0) refuses {text!r}, the grammar reads it as {value!r}'
+    assert type(value) is int and value == expected

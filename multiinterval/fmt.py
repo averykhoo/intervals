@@ -6,13 +6,23 @@ grammar (v1's, made strict -- anything left over is a ValueError):
     {}                          empty
     [1, 2)                      one piece
     [5]  or  5                  a degenerate piece
-    { [1, 2) , [3] }            several pieces; `,` `;` `|` `∪` or nothing between them
+    { [1, 2) , [3] }            several pieces; `,` `;` `|` or `∪` between them
     {1, 2, 3}                   a set of points
 
-numbers are ints, floats (`2.0`, `1e-05`), fractions (`1/3`) or `inf`/`-inf` (also `∞`). an int, and
-each part of a fraction, may also be hex (`0x1f`, `-0x1f/0x3`, `1/0x10`). white space may follow the
-one sign (`- 5`) and surround `/` (`1 / 3`), nowhere else inside a number: `+-5`, `1/-3`, `1_000`, `0x 1f`
-and `1e 5` are ValueErrors, and `1 2` is two numbers (to `parse_value`, a ValueError; m14b-open, 2026-10-05).
+two items need a separator between them, and the two numbers of a piece a `,` or `;`. white space only pads
+(around a separator, a bracket, a brace or `/`) and separates nothing, since it may sit inside a fraction
+(`1 / 3`): `[1 2]`, `{1 2}`, `1 2`, `{[1, 2] [3]}` and `[1, 2)[3, 4)` are ValueErrors (owner, Q23, 2026-10-06).
+
+a number is what python reads (owner, Q23, 2026-10-06): an int as `int` reads it (`5`, `-5`, `007`, `1_000`), a
+float as `float` does (`2.0`, `1.`, `.5`, `1e-05`, `1_0.5e1_0`, `inf` and `infinity` in any case, but not nan),
+or two ints as `Fraction` reads them (`1/3`, `-1 / 3`, `1_000/3`); `∞` is also infinity. an int, and each part of
+a fraction, may also be hex as `int(s, 0)` reads it (`0x1f`, `0X_1F`, `-0x1f/0x3`, `1/0x10`). so the one sign is
+attached and first (`- 5`, `+-5` and `1/-3` are errors, as `float('- 5')` is), white space inside a number is
+allowed only around `/`, and `_` only between two digits (`_1`, `1_`, `1__0`, `1_.5`, `1._5` and `1e_5` are
+errors). digits are ASCII `0-9` only: python's `int`, `float` and `Fraction` also read other scripts' digits
+(`'١٢'` is 12 to them), the grammar does not. a number ends at white space, punctuation or the end of the text;
+anything else after it is an error, never the start of another number: `[0.1.2]`, `[-2-1]`, `{1-2}`, `[1+2]`,
+`[0E0-0]` and `[inf0x1]` are ValueErrors (they were two numbers before Q23).
 `format` prints ints and fractions exactly and floats by `repr`, so `parse(format(x)) == x`. an int part
 python will not write in decimal (more than `sys.get_int_max_str_digits()` digits, 4300 by default:
 python's guard against slow conversions) is written in hex, which python converts in linear time and
@@ -33,18 +43,28 @@ from multiinterval.kernel import normalize
 from multiinterval.kernel import pairs
 from multiinterval.kernel import piece
 
-# a hex int is never followed by `.`: `0x1.8p1` is a hex float, which is not read (and not `0x1` then `.8`).
-# its digits are possessive (`++`): with `+` the refused `0x12.5` backtracked to `0x1`, whose next character
-# is `2`, and read as `0x1` then `2.5` (m14b-open, 2026-10-05)
-_INT = r'(?:0x[0-9a-f]++(?!\.)|\d+)'
-# every white-space run is possessive (`\s*+`): what follows each one (`/`, a digit, `.`, `0x`, inf, ∞, a
-# bracket) never begins with white space, so giving spaces back can never make a match, and a run that no
-# token follows (`' ' * 30000 + 'x'`) is refused in linear time, not quadratic (m14b-open, 2026-10-04)
-_NUMBER = (r'[+-]?\s*+(?:inf(?:inity)?|∞|0x[0-9a-f]++(?!\.)(?:\s*+/\s*+' + _INT + r')?'
-           r'|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*+/\s*+' + _INT + r')?)')
-_TOKEN = re.compile(fr'\s*+(?:(?P<num>{_NUMBER})|(?P<punct>[\[\](){{}},;|∪]))\s*+', flags=re.IGNORECASE)
+# the number grammar, python's own (Q23, 2026-10-06), spelled without re.IGNORECASE (which lets `ı` and `İ` match
+# `i`) and without `\d` (680 code points): ASCII only. every repetition is possessive (`++`, `*+`, `?+`): a digit,
+# `_` or white-space run is read once, and a number that cannot end where its run ends fails at once instead of
+# giving characters back one at a time, so a text no number reads is refused in linear time (m14b-open, 2026-10-04:
+# `parse(' ' * 30000 + 'x')` took 37 s; Q23 adds the digit and `_` runs). `_` is python's: one between two digits
+_DIGITS = r'[0-9]++(?:_[0-9]++)*+'
+# `int(s, 0)`'s hex: `0x`, then hex digits, each of which may follow one `_` (`0x_1f`, `0x1_f`)
+_HEX = r'0[xX](?:_?+[0-9a-fA-F])++'
+_INT = fr'(?:{_HEX}|{_DIGITS})'
+# `float`'s: `1`, `1.`, `1.5`, `.5`, each with an exponent or not
+_FLOAT = fr'(?:{_DIGITS}(?:\.(?:{_DIGITS})?+)?+|\.{_DIGITS})(?:[eE][+-]?+{_DIGITS})?+'
+_INFINITY = r'(?:[iI][nN][fF](?:[iI][nN][iI][tT][yY])?+|∞)'
+_PUNCT = r'[\[\](){},;|∪]'
+# a sign, then the body; the fraction first, so `1 / 3` is not read as `1`
+_BODY = fr'[+-]?+(?:{_INFINITY}|{_INT}\s*+/\s*+{_INT}|{_HEX}|{_FLOAT})'
+# a number ends at white space, punctuation or the end: `[0.1.2]` is not `[0.1, 0.2]` (Q23)
+_NUMBER = fr'{_BODY}(?![^\s\[\](){{}},;|∪])'
+_TOKEN = re.compile(fr'\s*+(?:(?P<num>{_NUMBER})|(?P<punct>{_PUNCT}))\s*+')
+# a number not followed by an end: only to say so in the error
+_UNENDED = re.compile(fr'\s*+{_BODY}')
 # `parse_value`'s whole text: one number of the grammar, white space around it
-_VALUE = re.compile(fr'\s*+{_NUMBER}\s*+', flags=re.IGNORECASE)
+_VALUE = re.compile(fr'\s*+(?P<number>{_NUMBER})\s*+')
 _SEPARATORS = {',', ';', '|', '∪'}
 
 
@@ -101,45 +121,47 @@ def parse_value(text: str) -> Value:
     """
     one number of the grammar (the module docstring), white space around it; anything else is a ValueError.
     it read any text before (m14b-open, 2026-10-05): it deleted all white space and every leading sign, so
-    `'+-5'` was 5 and `'1 2'` was 12
+    `'+-5'` was 5 and `'1 2'` was 12. the type is the shape's: a fraction is a Fraction, a number with `.` or
+    an exponent a float, else an int
 
-    >>> parse_value(' - 5'), parse_value('1 / 0x3')
-    (-5, Fraction(1, 3))
+    >>> parse_value(' -5'), parse_value('1 / 0x3'), parse_value('1_000.5')
+    (-5, Fraction(1, 3), 1000.5)
     """
-    if _VALUE.fullmatch(text) is None:
-        shown = text if len(text) <= 40 else f'{text[:20]}...{text[-10:]}'
-        raise ValueError(f'cannot parse {shown!r}: not a number')
-    text = ''.join(text.split())
-    sign = -1 if text.startswith('-') else 1
-    body = text.lstrip('+-').lower()
-    if body in ('inf', 'infinity', '∞'):
+    match = _VALUE.fullmatch(text)
+    if match is None:
+        raise ValueError(f'cannot parse {_shown(text)!r}: not a number')
+    number = match['number']
+    sign = -1 if number[0] == '-' else 1
+    body = number.lstrip('+-')
+    if body[0] in 'iI∞':
         return sign * math.inf
     if '/' in body:
         numerator, denominator = body.split('/')
-        try:
-            return sign * Fraction(_parse_int(numerator, text), _parse_int(denominator, text))
-        except ZeroDivisionError:  # a zero denominator is bad text like any other (M14-breadth)
-            raise ValueError(f'cannot parse {text!r}: a zero denominator') from None
-    if any(c in body for c in '.e') and not body.startswith('0x'):
-        return sign * float(body)
+        numerator, denominator = _parse_int(numerator.strip(), text), _parse_int(denominator.strip(), text)
+        if denominator == 0:  # a zero denominator is bad text like any other (M14-breadth)
+            raise ValueError(f'cannot parse {_shown(text)!r}: a zero denominator')
+        return sign * Fraction(numerator, denominator)
+    if body[:2] not in ('0x', '0X') and any(c in body for c in '.eE'):
+        return float(number)  # the sign too: `-0.0`
     return sign * _parse_int(body, text)
 
 
 def _parse_int(body: str, text: str) -> int:
     """
-    a decimal or `0x` hex int. python refuses a decimal of more than `sys.get_int_max_str_digits()`
-    digits; the ValueError then names the hex form, which has no limit
+    a decimal or `0x` hex int, as `int` and `int(s, 0)` read them. python refuses a decimal of more than
+    `sys.get_int_max_str_digits()` digits; the ValueError then names the hex form, which has no limit
     """
-    if body.startswith('0x'):
-        return int(body, 16)
+    if body[:2] in ('0x', '0X'):
+        return int(body, 0)
     try:
         return int(body)
-    except ValueError as e:
-        if not body.isdigit():  # `1.5/2`: not an int at all
-            raise ValueError(f'cannot parse {text!r}: {body!r} is not an int') from None
-        shown = text if len(text) <= 40 else f'{text[:20]}...{text[-10:]}'
-        raise ValueError(f'cannot parse {shown!r}: {e} (an int that long can be written in hex, 0x..., '
+    except ValueError as e:  # the grammar has checked the digits: only python's limit is left
+        raise ValueError(f'cannot parse {_shown(text)!r}: {e} (an int that long can be written in hex, 0x..., '
                          f'which has no limit)') from None
+
+
+def _shown(text: str) -> str:
+    return text if len(text) <= 40 else f'{text[:20]}...{text[-10:]}'
 
 
 def _tokenize(text: str) -> List[Tuple[str, str]]:
@@ -147,7 +169,12 @@ def _tokenize(text: str) -> List[Tuple[str, str]]:
     pos = 0
     while pos < len(text):
         match = _TOKEN.match(text, pos)
-        if match is None or match.end() == pos:
+        if match is None:
+            unended = _UNENDED.match(text, pos)
+            if unended is not None:  # a number, then a character that can neither end it nor go on with it (Q23)
+                at = unended.end()
+                raise ValueError(f'cannot parse {_shown(text)!r} at position {at}: a number must end at white '
+                                 f'space, punctuation or the end of the text, not {text[at:at + 10]!r}')
             raise ValueError(f'cannot parse {text!r} at position {pos}: {text[pos:pos + 10]!r}')
         tokens.append(('num', match['num']) if match['num'] is not None else ('punct', match['punct']))
         pos = match.end()
@@ -176,6 +203,7 @@ class _Parser:
         if braced:
             self.take()
         found, items = [], 0  # an empty piece is an item that adds nothing to found
+        separated = True  # a separator since the last item (Q23: white space alone is none)
         while True:
             kind, value = self.peek()
             if kind is None:
@@ -191,9 +219,13 @@ class _Parser:
                 if not items:
                     raise self.error(f'{value!r} before the first item')
                 self.take()
+                separated = True
                 continue
+            if not separated:
+                raise self.error(f'two items need ",", ";", "|" or "∪" between them, before {value!r}')
             found.extend(self.item())
             items += 1
+            separated = False
         return normalize(found)
 
     def item(self):
@@ -209,6 +241,8 @@ class _Parser:
             numbers.append(parse_value(self.take()[1]))
             if self.peek() in (('punct', ','), ('punct', ';')):
                 self.take()
+            elif self.peek()[0] == 'num':  # Q23: white space alone is no separator
+                raise self.error(f'two numbers need "," or ";" between them, before {self.peek()[1]!r}')
         kind, close = self.take()
         if close not in (']', ')'):
             raise self.error(f'expected "]" or ")", got {close!r}')

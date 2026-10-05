@@ -305,7 +305,10 @@ Interval(float('-inf'), float('inf'))
 * **text form**: `repr` evaluates back and `str` is what `MultiInterval.parse` reads. an int too long
   for python to write in decimal (past `sys.get_int_max_str_digits()`, 4300 digits by default) is
   written in hex (`0x...`), which `parse` reads, so `repr` never raises; `parse` keeps python's limit
-  on a decimal literal
+  on a decimal literal. a number in that text is one python's `int`, `float` or `Fraction` reads, in
+  ASCII digits (`-5`, `1_000`, `.5`, `1e-05`, `1 / 3`, `inf`; also `∞` and hex), and two items need
+  `,` `;` `|` or `∪` between them: white space only pads, so `[1 2]`, `- 5` and `[0.1.2]` are
+  `ValueError`s (`multiinterval.fmt` has the grammar)
 * **1788's signals** (M13g): `UndefinedOperation` raises `UndefinedOperationError`, a `ValueError`,
   so a 1788 constructor or `DecoratedInterval` given invalid input stops, as `MI(2, 1)` does; hence
   there is no NaI. `PossiblyUndefinedOperation` would be `PossiblyUndefinedOperationWarning`, an
