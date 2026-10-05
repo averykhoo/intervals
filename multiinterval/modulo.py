@@ -33,7 +33,7 @@ result float, rounded once at the end (to nearest, or outward with `outward=True
 end's flag is conservative, not a promise.
 
 `floor` enumerates the integers a set holds, up to `FLOOR_ENUMERATION_CAP` of them; above that, or
-for an unbounded piece, it returns their hull with a `HullWarning` (`intervals.steps`, which also has
+for an unbounded piece, it returns their hull with a `HullWarning` (`multiinterval.steps`, which also has
 ceil, trunc, round and sign).
 
 `floordiv` is `floor(div(A, B))` over the finite divisors, so it follows `div` at a zero divisor
@@ -48,7 +48,7 @@ again: the direction a value was approached from is lost at a degenerate point, 
 `-5 / inf`. `x = q * y + r` itself cannot hold at y = inf (`-1 * inf + inf` has no value).
 `divmod` is the pair of the two sets, which does not remember which quotient went with which remainder.
 
->>> from intervals.fmt import format_cuts, parse
+>>> from multiinterval.fmt import format_cuts, parse
 >>> format_cuts(mod(parse('[12, 37/2]'), parse('[15/2]')))
 '{ [0, 7/2] , [9/2, 15/2) }'
 >>> format_cuts(mod(parse('[3, 7]'), parse('{ [4] , [5] }')))
@@ -64,21 +64,21 @@ from itertools import product
 from typing import List
 from typing import Tuple
 
-from intervals import kernel
-from intervals import ops
-from intervals import steps
-from intervals.applicator import is_infinite
-from intervals.applicator import split_pieces
-from intervals.applicator import warn
-from intervals.cuts import Value
-from intervals.errors import DomainClippedWarning
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import IndeterminateResultWarning
-from intervals.kernel import Cuts
-from intervals.rounding import exact_cuts
-from intervals.rounding import float_cuts
-from intervals.rounding import has_finite_float
-from intervals.rounding import round_piece
+from multiinterval import kernel
+from multiinterval import ops
+from multiinterval import steps
+from multiinterval.applicator import is_infinite
+from multiinterval.applicator import split_pieces
+from multiinterval.applicator import warn
+from multiinterval.cuts import Value
+from multiinterval.errors import DomainClippedWarning
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import IndeterminateResultWarning
+from multiinterval.kernel import Cuts
+from multiinterval.rounding import exact_cuts
+from multiinterval.rounding import float_cuts
+from multiinterval.rounding import has_finite_float
+from multiinterval.rounding import round_piece
 
 INF = math.inf
 
@@ -98,7 +98,7 @@ def mod(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     """
     `{x mod y : x in a, y in b}`; see the module docstring
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(mod(parse('[3, 8]'), parse('[8, 12]')))  # 8 mod 8 is 0
     '{ [0] , [3, 8] }'
     >>> format_cuts(mod(parse('[3, 8]'), parse('(8, 12]')))
@@ -302,7 +302,7 @@ def floor(a: Cuts, outward: bool = False) -> Cuts:
     """
     `{floor(x) : x in a}`, with floor(±inf) = ±inf; a float keeps its type (`floor(2.5)` is 2.0)
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(floor(parse('{ (-1, 1/2] , (2, 3) }')))
     '{ [-1] , [0] , [2] }'
     """
@@ -313,7 +313,7 @@ def floordiv(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     """
     `floor(div(a, b))` over the finite divisors; an infinite divisor gives the limit (module docstring)
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(floordiv(parse('[1, 2)'), parse('[1]')))
     '[1]'
     >>> format_cuts(floordiv(parse('[-5, 5]'), parse('[inf]')))  # floor(div) would give [0]

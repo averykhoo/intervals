@@ -1,5 +1,5 @@
 """
-exhaustive differential for `intervals.modulo.mod` against the brute-force oracle (not part of the gate)
+exhaustive differential for `multiinterval.modulo.mod` against the brute-force oracle (not part of the gate)
 
 every pair of single pieces over an exact grid, with every open/closed combination, is checked for
 closure (each end closed iff the oracle attains it), interior sharpness (on probes through every gap,
@@ -17,12 +17,12 @@ import warnings
 from fractions import Fraction
 from itertools import product
 
-from intervals.errors import IntervalWarning
-from intervals.kernel import contains_point
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
-from intervals.modulo import mod
+from multiinterval.errors import IntervalWarning
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
+from multiinterval.modulo import mod
 from tests.oracles import attained
 from tests.oracles import pointwise
 from tests.oracles import sample

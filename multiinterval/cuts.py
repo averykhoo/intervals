@@ -85,7 +85,7 @@ def is_numpy_time(value) -> bool:
     a numpy `timedelta64` or `datetime64` (dtype kind 'm' or 'M'). numpy registers `timedelta64` as a
     `numbers.Integral`, so a real-number check takes it, and `int()` of it is its count in its own unit
     (`np.timedelta64(3, 'ns')` would be 3): a duration is no number, so the numeric class refuses it
-    (TypeError), as it refuses a `timedelta`. the time layer reads neither (`intervals.time_interval`)
+    (TypeError), as it refuses a `timedelta`. the time layer reads neither (`multiinterval.time_interval`)
     """
     return getattr(getattr(value, 'dtype', None), 'kind', None) in ('m', 'M')
 

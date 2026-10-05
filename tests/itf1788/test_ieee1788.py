@@ -1,5 +1,5 @@
 """
-ieee 1788 conformance through the 1788 layer (`intervals.ieee1788`, M16b): the third pass
+ieee 1788 conformance through the 1788 layer (`multiinterval.ieee1788`, M16b): the third pass
 
 the adapter's two passes (`tests/itf1788/test_itf1788.py`) test the library's own semantics, and
 hull both sides to compare. this pass runs every vendored vector through the layer, which answers
@@ -47,13 +47,13 @@ from fractions import Fraction
 
 import pytest
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import ieee1788
-from intervals.decorated import Decoration
-from intervals.errors import HullWarning
-from intervals.errors import PossiblyUndefinedOperationWarning
-from intervals.errors import UndefinedOperationError
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import ieee1788
+from multiinterval.decorated import Decoration
+from multiinterval.errors import HullWarning
+from multiinterval.errors import PossiblyUndefinedOperationWarning
+from multiinterval.errors import UndefinedOperationError
 from tests.itf1788 import test_itf1788 as T
 from tests.itf1788.itl import Interval as Literal
 from tests.itf1788.itl import Text

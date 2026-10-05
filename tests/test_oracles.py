@@ -13,12 +13,12 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals.fmt import parse
-from intervals.kernel import EMPTY
-from intervals.kernel import contains_point
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
+from multiinterval.fmt import parse
+from multiinterval.kernel import EMPTY
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
 from tests import oracles
 from tests.oracles import attained
 from tests.oracles import pointwise

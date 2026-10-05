@@ -1,5 +1,5 @@
 """
-the gmpy2 backend (`intervals/_gmpy2.py`) against the pure path, and the switch (`intervals/backend.py`)
+the gmpy2 backend (`multiinterval/_gmpy2.py`) against the pure path, and the switch (`multiinterval/backend.py`)
 
 the backend's whole contract is "the same doubles and the same flags, faster": at every input the pure
 path accepts it returns the same float with the same sign bit, or None, and then the pure path runs.
@@ -33,22 +33,22 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import _gmpy2
-from intervals import backend
-from intervals import cos_rev
-from intervals import elementary
-from intervals import newton
-from intervals import ops
-from intervals import pow_rev2
-from intervals import sin_rev
-from intervals import tan_rev
-from intervals.rounding import DOWN
-from intervals.rounding import MAX
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
-from intervals.rounding import round_rational
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import _gmpy2
+from multiinterval import backend
+from multiinterval import cos_rev
+from multiinterval import elementary
+from multiinterval import newton
+from multiinterval import ops
+from multiinterval import pow_rev2
+from multiinterval import sin_rev
+from multiinterval import tan_rev
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import MAX
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
+from multiinterval.rounding import round_rational
 from tests.test_oracle_flint import EXTREMES
 from tests.test_oracle_flint import points
 
@@ -790,12 +790,12 @@ def test_use_restores():
 
 
 def _run(value, prelude=''):
-    """`import intervals` in a fresh interpreter with INTERVALS_BACKEND=value (None: unset)"""
-    env = {k: v for k, v in os.environ.items() if k != 'INTERVALS_BACKEND'}
+    """`import multiinterval` in a fresh interpreter with MULTIINTERVAL_BACKEND=value (None: unset)"""
+    env = {k: v for k, v in os.environ.items() if k != 'MULTIINTERVAL_BACKEND'}
     if value is not None:
-        env['INTERVALS_BACKEND'] = value
-    code = (prelude + '\ntry:\n    import intervals, intervals.backend as b\n'
-            '    print(b.NAME, b.name(), "gmpy2" in sys.modules, "intervals._gmpy2" in sys.modules)\n'
+        env['MULTIINTERVAL_BACKEND'] = value
+    code = (prelude + '\ntry:\n    import multiinterval, multiinterval.backend as b\n'
+            '    print(b.NAME, b.name(), "gmpy2" in sys.modules, "multiinterval._gmpy2" in sys.modules)\n'
             'except Exception as e:\n    print(type(e).__name__, str(e).replace("\\n", " "))\n')
     r = subprocess.run([sys.executable, '-c', 'import sys\n' + code], cwd=ROOT, env=env, capture_output=True,
                        text=True, timeout=120)
@@ -839,7 +839,7 @@ def test_env_var(value, prelude, expected):
     (_fake('two point three'), 'two point three'),
 ])
 def test_forced_gmpy2_never_falls_back(prelude, says):
-    """INTERVALS_BACKEND=gmpy2 without a usable gmpy2 is an ImportError naming why, never the pure path"""
+    """MULTIINTERVAL_BACKEND=gmpy2 without a usable gmpy2 is an ImportError naming why, never the pure path"""
     got = _run('gmpy2', prelude)
     assert got.startswith('ImportError ') and says in got, got
 
@@ -886,7 +886,7 @@ def test_the_test_extra_installs_what_auto_takes():
 def test_the_fast_extra_installs_what_auto_takes():
     """
     the user-facing `[fast]` pins the same window (owner, Q16(d), 2026-10-03): unpinned, `pip install
-    intervals[fast]` could install a gmpy2 3 that `auto` then declines silently and `gmpy2` runs
+    multiinterval[fast]` could install a gmpy2 3 that `auto` then declines silently and `gmpy2` runs
     unverified. the pin moves with `CEILING` and `test`'s
     """
     import tomllib

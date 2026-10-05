@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import intervals.errors as errors
+import multiinterval.errors as errors
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -32,7 +32,7 @@ def test_suite_turns_library_warnings_into_errors():
 
 def test_default_filters():
     result = _run(
-        'import warnings, intervals.errors as e\n'
+        'import warnings, multiinterval.errors as e\n'
         'warnings.warn("empty", e.EmptySetPropagationWarning)\n'
         'warnings.warn("clipped", e.DomainClippedWarning)\n'
         'warnings.warn("indeterminate", e.IndeterminateResultWarning)\n'
@@ -50,7 +50,7 @@ def test_filter_installed_before_import_wins():
     result = _run(
         'import warnings\n'
         'warnings.simplefilter("error")\n'
-        'import intervals.errors as e\n'
+        'import multiinterval.errors as e\n'
         'warnings.warn("empty", e.EmptySetPropagationWarning)\n'
     )
     assert result.returncode != 0
@@ -59,7 +59,7 @@ def test_filter_installed_before_import_wins():
 
 def test_tripwire_after_import():
     result = _run(
-        'import warnings, intervals.errors as e\n'
+        'import warnings, multiinterval.errors as e\n'
         'warnings.simplefilter("error", e.EmptySetPropagationWarning)\n'
         'warnings.warn("empty", e.EmptySetPropagationWarning)\n'
     )

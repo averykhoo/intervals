@@ -8,12 +8,12 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import EMPTY
-from intervals import REALS
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import Size
-from intervals import kernel
+from multiinterval import EMPTY
+from multiinterval import REALS
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import Size
+from multiinterval import kernel
 from tests.strategies import cut_tuples
 from tests.strategies import endpoint_values
 from tests.strategies import probe_points
@@ -392,7 +392,7 @@ def test_conversions():
 
 def test_no_shifts():
     """`<<` and `>>` are not defined (owner, 2026-10-04: dropped; scaling is `* 2 ** n`, the floor `// 2 ** n`)"""
-    from intervals import DecoratedInterval, Dual
+    from multiinterval import DecoratedInterval, Dual
     for x in (P('[1, 3]'), OutwardMultiInterval(0.1), DecoratedInterval(P('[1, 3]')), Dual.variable(P('[1, 3]'))):
         for shift in (lambda: x << 1, lambda: x >> 1, lambda: 1 << x, lambda: 1 >> x):
             with pytest.raises(TypeError):

@@ -1,7 +1,7 @@
 """
-the elementary functions over sets: intervals.functions, and the class's methods
+the elementary functions over sets: multiinterval.functions, and the class's methods
 
-point values come from intervals.elementary, which tests/test_elementary.py checks against an
+point values come from multiinterval.elementary, which tests/test_elementary.py checks against an
 independent oracle; here the set logic is checked: domains and their warnings, which points attain an
 end, extrema and poles inside a piece, float typing and the two rounding modes. the two-argument pow
 and hypot, and rootn with its degree, are at the end.
@@ -16,37 +16,37 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals.elementary import POLE_AT_ZERO as POLES
-from intervals.elementary import exact
-from intervals.elementary import exact_pow
-from intervals.elementary import rounded
-from intervals.elementary import rounded_pow
-from intervals.errors import DomainClippedWarning
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import IndeterminateResultWarning
-from intervals.fmt import format_cuts
-from intervals.fmt import parse
-from intervals.functions import NAMES
-from intervals.functions import PERIODIC
-from intervals.functions import RECIPROCAL_TRIG
-from intervals.functions import apply
-from intervals.functions import atan2
-from intervals.functions import domain
-from intervals.functions import hypot
-from intervals.functions import pow_
-from intervals.kernel import EMPTY
-from intervals.kernel import contains_point
-from intervals.kernel import intersection
-from intervals.kernel import is_subset
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
-from intervals.kernel import union
-from intervals.rounding import DOWN
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval.elementary import POLE_AT_ZERO as POLES
+from multiinterval.elementary import exact
+from multiinterval.elementary import exact_pow
+from multiinterval.elementary import rounded
+from multiinterval.elementary import rounded_pow
+from multiinterval.errors import DomainClippedWarning
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import IndeterminateResultWarning
+from multiinterval.fmt import format_cuts
+from multiinterval.fmt import parse
+from multiinterval.functions import NAMES
+from multiinterval.functions import PERIODIC
+from multiinterval.functions import RECIPROCAL_TRIG
+from multiinterval.functions import apply
+from multiinterval.functions import atan2
+from multiinterval.functions import domain
+from multiinterval.functions import hypot
+from multiinterval.functions import pow_
+from multiinterval.kernel import EMPTY
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import intersection
+from multiinterval.kernel import is_subset
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
+from multiinterval.kernel import union
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
 from tests.oracles import sample
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples

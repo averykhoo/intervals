@@ -1,5 +1,5 @@
 """
-intervals.autodiff against an independent oracle: arb's taylor series, through python-flint (D14)
+multiinterval.autodiff against an independent oracle: arb's taylor series, through python-flint (D14)
 
 `arb_series([x, 1])` is the variable at x; arb carries it through each op as a truncated series whose
 coefficients are balls proven to hold the true ones, so coefficient 0 holds f(x) and coefficient 1
@@ -14,7 +14,7 @@ the checks:
 * random expression trees over the ops (depth 3), the same two checks at a point of X
 * decorations: the value and the derivative are dac or better on an interval inside the op's
   domain where it is differentiable, and not where it is not (sqrt, rootn, pow at 0, abs across 0, a
-  pole), which `intervals.solver` relies on
+  pole), which `multiinterval.solver` relies on
 
 a ball that straddles an end of our set is undecided at that precision; it is retried at a higher
 one, and past the last the example is rejected with `assume`
@@ -33,14 +33,14 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import DecoratedInterval
-from intervals import Decoration
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import kernel
-from intervals.autodiff import Dual
-from intervals.autodiff import _constant
-from intervals.autodiff import derivative
+from multiinterval import DecoratedInterval
+from multiinterval import Decoration
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import kernel
+from multiinterval.autodiff import Dual
+from multiinterval.autodiff import _constant
+from multiinterval.autodiff import derivative
 
 O = OutwardMultiInterval
 INF = math.inf
@@ -346,7 +346,7 @@ def test_decorated_derivative_is_dac_inside_the_domain(name):
     (lambda u: 1 / u, -1, 1, 'a pole'),
     (lambda u: u.tan(), 1, 2, "tan's pole"),
 ])
-@pytest.mark.filterwarnings('ignore::intervals.errors.IntervalWarning')  # the formula leaves its domain
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.IntervalWarning')  # the formula leaves its domain
 def test_decorated_not_differentiable_is_trv(f, lo, hi, what):
     y = f(_decorated(lo, hi))
     assert min(y.value.decoration, y.derivative.decoration) is Decoration.TRV, (what, y)
@@ -433,7 +433,7 @@ def test_pow_integral_exponent_derivative_is_exact(r, u, value, derivative):
     assert repr(y.value) == repr(O.parse(value)) and repr(y.derivative) == repr(O.parse(derivative))
 
 
-@pytest.mark.filterwarnings('ignore::intervals.errors.IntervalWarning')  # pow drops u < 0
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.IntervalWarning')  # pow drops u < 0
 def test_pow_number_exponent_nearest_examples():
     """
     the B1 fix in the nearest class (M16d review, 2026-09-28): an integral float exponent is the

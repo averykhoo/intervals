@@ -1,5 +1,5 @@
 """
-exhaustive differential for the arithmetic ops (`intervals.ops`) against the oracle (not part of the gate)
+exhaustive differential for the arithmetic ops (`multiinterval.ops`) against the oracle (not part of the gate)
 
 every 1- and 2-piece set over the grid {-inf, -2, -1, -1/2, 0, 1/2, 1, 2, inf}, with every open/closed
 combination, goes through neg, abs, reciprocal and `** n` for n in -3..3; add, sub, mul and div take every
@@ -26,15 +26,15 @@ import warnings
 from fractions import Fraction
 from itertools import product
 
-from intervals import applicator
-from intervals import ops
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import IndeterminateResultWarning
-from intervals.fmt import format_cuts
-from intervals.kernel import contains_point
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
+from multiinterval import applicator
+from multiinterval import ops
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import IndeterminateResultWarning
+from multiinterval.fmt import format_cuts
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
 from tests.oracles import attained
 from tests.oracles import pointwise
 from tests.strategies import probe_points

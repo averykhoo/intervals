@@ -1,5 +1,5 @@
 """
-the step functions: ceil, trunc, round (ties to even), round_ties_away and sign (intervals.steps; floor
+the step functions: ceil, trunc, round (ties to even), round_ties_away and sign (multiinterval.steps; floor
 has its own tests in tests/test_modulo.py, which now run through the same engine)
 
 the oracle is each function's preimages, written out independently: grid value n is in the result
@@ -35,22 +35,22 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import steps
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import HullWarning
-from intervals.fmt import format_cuts
-from intervals.fmt import parse
-from intervals.kernel import EMPTY
-from intervals.kernel import contains_point
-from intervals.kernel import intersection
-from intervals.kernel import is_subset
-from intervals.kernel import normalize
-from intervals.kernel import pairs
-from intervals.kernel import piece
-from intervals.kernel import pieces
-from intervals.kernel import union
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import steps
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import HullWarning
+from multiinterval.fmt import format_cuts
+from multiinterval.fmt import parse
+from multiinterval.kernel import EMPTY
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import intersection
+from multiinterval.kernel import is_subset
+from multiinterval.kernel import normalize
+from multiinterval.kernel import pairs
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
+from multiinterval.kernel import union
 from tests.oracles import _exact_cuts
 from tests.oracles import _finite_float
 from tests.oracles import sample

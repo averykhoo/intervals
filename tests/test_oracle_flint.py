@@ -1,5 +1,5 @@
 """
-intervals.elementary and intervals.functions against an independent oracle: arb, through python-flint
+multiinterval.elementary and multiinterval.functions against an independent oracle: arb, through python-flint
 
 arb evaluates f at a point as a ball proven to contain the true value (D14). the operand goes in
 exactly where it can (a float is an exact arb) and otherwise as a ball holding it (a Fraction through
@@ -38,16 +38,16 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import DomainClippedWarning
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import PowerLimitWarning
-from intervals import elementary
-from intervals import kernel
-from intervals.rounding import DOWN
-from intervals.rounding import MAX
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
+from multiinterval import DomainClippedWarning
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import PowerLimitWarning
+from multiinterval import elementary
+from multiinterval import kernel
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import MAX
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
 
 INF = math.inf
 PRECISIONS = (200, 1000, 4000)

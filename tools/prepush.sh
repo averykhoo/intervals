@@ -8,7 +8,7 @@
 #   only a README.md changed since that (or since origin/master): its doctests (the docs phase), seconds
 #   only markdown or references/ changed (owner, 2026-09-30), or everything already green: nothing
 #   and, besides any of those, if a backend file (tools/gate.py BACKEND_FILES) changed since origin/master
-#     and no gate:gmpy2 run is green on this src: the whole suite with INTERVALS_BACKEND=gmpy2, as
+#     and no gate:gmpy2 run is green on this src: the whole suite with MULTIINTERVAL_BACKEND=gmpy2, as
 #     ci.yml's gmpy2 job (owner, Q16(e), 2026-10-03). about 10-15 min here
 #
 # a fuzz run made before `git commit`, or by an earlier prepush on the same code, still counts: the

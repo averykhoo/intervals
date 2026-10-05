@@ -23,18 +23,18 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import EMPTY
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import REALS
-from intervals.errors import IntervalWarning
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
-from intervals.kernel import union
-from intervals.rounding import exact_cuts
-from intervals.rounding import float_cuts
-from intervals.rounding import is_float
+from multiinterval import EMPTY
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import REALS
+from multiinterval.errors import IntervalWarning
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
+from multiinterval.kernel import union
+from multiinterval.rounding import exact_cuts
+from multiinterval.rounding import float_cuts
+from multiinterval.rounding import is_float
 from tests.oracles import sample
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples

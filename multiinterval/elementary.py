@@ -26,13 +26,13 @@ from functools import lru_cache
 from typing import Optional
 from typing import Tuple
 
-from intervals.rounding import DOWN
-from intervals.rounding import MAX
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
-from intervals.rounding import is_infinite
-from intervals.rounding import round_rational
-from intervals import backend
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import MAX
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
+from multiinterval.rounding import is_infinite
+from multiinterval.rounding import round_rational
+from multiinterval import backend
 
 INF = math.inf
 
@@ -748,7 +748,7 @@ def rounded(name: str, x, direction: int, base=None) -> float:
     outside = _beyond(name, x, base)
     if outside is not None:
         return _round_outside(outside, direction)
-    fast = backend.fast  # read at each call: the backend only picks the double (intervals._gmpy2)
+    fast = backend.fast  # read at each call: the backend only picks the double (multiinterval._gmpy2)
     if fast is not None and (answer := fast.rounded(name, x, direction, base)) is not None:
         return answer
     return _ziv(lambda p: _enclose(name, x, p, base), direction)

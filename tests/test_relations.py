@@ -9,18 +9,18 @@ from hypothesis import example
 from hypothesis import given
 from hypothesis import strategies as st
 
-from intervals import EMPTY
-from intervals import Allen
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import TruthSet
-from intervals import kernel
-from intervals import relations
-from intervals.cuts import Cut
-from intervals.relations import BOTH
-from intervals.relations import FALSE
-from intervals.relations import NEITHER
-from intervals.relations import TRUE
+from multiinterval import EMPTY
+from multiinterval import Allen
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import TruthSet
+from multiinterval import kernel
+from multiinterval import relations
+from multiinterval.cuts import Cut
+from multiinterval.relations import BOTH
+from multiinterval.relations import FALSE
+from multiinterval.relations import NEITHER
+from multiinterval.relations import TRUE
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples
 

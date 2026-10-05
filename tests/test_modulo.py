@@ -1,5 +1,5 @@
 """
-modulo, floor, floordiv and divmod (intervals.modulo) against the brute-force oracle in tests.oracles
+modulo, floor, floordiv and divmod (multiinterval.modulo) against the brute-force oracle in tests.oracles
 
 the oracle enumerates the quotient k = floor(x / y) instead of solving for it, so it checks the
 far-edge shapes and the O(1) attainment test rather than restating them. soundness, endpoint
@@ -21,23 +21,23 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import modulo
-from intervals import ops
-from intervals.errors import DomainClippedWarning
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import HullWarning
-from intervals.errors import IndeterminateResultWarning
-from intervals.fmt import format_cuts
-from intervals.fmt import parse
-from intervals.kernel import EMPTY
-from intervals.kernel import contains_point
-from intervals.kernel import intersection
-from intervals.kernel import is_subset
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
-from intervals.kernel import union
+from multiinterval import MultiInterval
+from multiinterval import modulo
+from multiinterval import ops
+from multiinterval.errors import DomainClippedWarning
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import HullWarning
+from multiinterval.errors import IndeterminateResultWarning
+from multiinterval.fmt import format_cuts
+from multiinterval.fmt import parse
+from multiinterval.kernel import EMPTY
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import intersection
+from multiinterval.kernel import is_subset
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
+from multiinterval.kernel import union
 from tests.oracles import attained
 from tests.oracles import pointwise
 from tests.oracles import sample
@@ -52,8 +52,8 @@ P = MultiInterval.parse
 # the operand strategies clip +-inf dividends and 0 divisors on purpose; each warning is pinned by its
 # own pytest.warns test below
 pytestmark = [
-    pytest.mark.filterwarnings('ignore::intervals.errors.DomainClippedWarning'),
-    pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning'),
+    pytest.mark.filterwarnings('ignore::multiinterval.errors.DomainClippedWarning'),
+    pytest.mark.filterwarnings('ignore::multiinterval.errors.EmptySetPropagationWarning'),
 ]
 
 
@@ -563,8 +563,8 @@ def test_scalar_floordiv_matches_python(x, y):
 # fuzz (run 36540588320): a floor past MAX rounds to inf, where python's float() raises
 @example(a=one(Fraction(1, 2), True, 1, False), b=one(-math.inf, False, 2.2250738585e-313, True),
          rng=random.Random(0))
-@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
-@pytest.mark.filterwarnings('ignore::intervals.errors.HullWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.HullWarning')
 def test_floordiv_sound_float(a, b, rng):
     """the floor of the EXACT quotient of every sampled pair is in the result (as a float if rounded)"""
     result = _closed(modulo.floordiv(a, b))

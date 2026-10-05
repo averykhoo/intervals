@@ -1,4 +1,4 @@
-# intervals
+# multiinterval
 
 *A GLORIOUS EXERCISE IN YAK-SHAVING*
 
@@ -7,7 +7,7 @@ or closed at either end, with set algebra, pointwise comparisons and arithmetic 
 the set of values attained.
 
 ```python
->>> from intervals import MultiInterval as MI
+>>> from multiinterval import MultiInterval as MI
 >>> x = MI(0, 1, end_closed=False) | MI(2, 3, start_closed=False)
 >>> x
 MultiInterval.parse('{ [0, 1) , (2, 3] }')
@@ -41,7 +41,7 @@ Size(rays=0, length=2, points=0)
 [0, 3]
 >>> print(MI(1, 2).tan())            # a pole inside the piece: both sides, both infinities
 { [-inf, -2.185039863261519) , (1.557407724654902, inf] }
->>> from intervals import sqr_rev, mul_rev, sin_rev
+>>> from multiinterval import sqr_rev, mul_rev, sin_rev
 >>> print(sqr_rev(MI(1, 4)))         # reverse ops: the t with t ** 2 in [1, 4], not 1788's hull
 { [-2, -1] , [1, 2] }
 >>> print(mul_rev(MI(-1, 1), MI(1, 2)))   # the t with t * y in [1, 2] for some y in [-1, 1]
@@ -51,37 +51,37 @@ Size(rays=0, length=2, points=0)
 >>> import math
 >>> print(math.floor(MI(-1.5, 1.5)))
 { [-2.0] , [-1.0] , [0.0] , [1.0] }
->>> from intervals import OutwardMultiInterval as OMI
+>>> from multiinterval import OutwardMultiInterval as OMI
 >>> print(OMI(0.1) + 0.2)            # outward rounding: the exact sum is strictly between
 (0.3, 0.30000000000000004)
->>> from intervals import text_to_interval, text_to_decorated_interval, DecoratedInterval
+>>> from multiinterval import text_to_interval, text_to_decorated_interval, DecoratedInterval
 >>> print(text_to_interval('[0.1, infinity]'))   # 1788's literals, read exactly; an infinite end open
 [1/10, inf)
 >>> text_to_interval('[2, 1]')                   # 1788's UndefinedOperation raises
 Traceback (most recent call last):
     ...
-intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]': the lower bound exceeds the upper
+multiinterval.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]': the lower bound exceeds the upper
 >>> d = text_to_decorated_interval('[1, 4]_com')
 >>> print(d.sqrt())                              # decorations propagate as 1788's do
 [1, 2]_com
 >>> print(d / DecoratedInterval(MI(-1, 1)))      # 1/0 is outside the domain: trv
 { [-inf, -1] , [1, inf] }_trv
->>> from intervals import derivative, newton
+>>> from multiinterval import derivative, newton
 >>> print(derivative(lambda t: t ** 3 - 2 * t, MI(-1, 2)))   # forward-mode autodiff over a set
 [-2, 10]
 >>> for root in newton(lambda t: t ** 2 - 2, MI(-10, 10)):   # every zero, each proved unique
 ...     print(root.unique, root.interval)
 True (-1.4142135623730951, -1.414213562373095)
 True (1.414213562373095, 1.4142135623730951)
->>> from intervals import gradient, solve
+>>> from multiinterval import gradient, solve
 >>> print(*gradient(lambda x, y: x * y ** 2, [MI(1, 2), 3]))     # n passes, one variable seeded each
 [9] [6, 12]
 >>> for root in solve(lambda x, y: (x ** 2 + y ** 2 - 1, x - y), [MI(-10, 10), MI(-10, 10)]):
 ...     print(root.unique, *root.box)                            # a square system: krawczyk proves
 True (-0.7071067811865476, -0.7071067811865475) (-0.7071067811865476, -0.7071067811865475)
 True (0.7071067811865475, 0.7071067811865476) (0.7071067811865475, 0.7071067811865476)
->>> from intervals import ieee1788                 # 1788's own answers, as a thin layer
->>> from intervals.ieee1788 import Interval
+>>> from multiinterval import ieee1788                 # 1788's own answers, as a thin layer
+>>> from multiinterval.ieee1788 import Interval
 >>> Interval(1, 2) / 10                            # binary64, rounded outward
 Interval(0.09999999999999999, 0.2)
 >>> ieee1788.cancel_minus(Interval(0, 1), Interval(0, 2))   # 1788's "no answer"
@@ -243,7 +243,7 @@ Interval(float('-inf'), float('inf'))
   ```python
   >>> import datetime
   >>> from zoneinfo import ZoneInfo
-  >>> from intervals import DateTimeInterval as DTI, TimeDeltaInterval as TDI, NEG_INF
+  >>> from multiinterval import DateTimeInterval as DTI, TimeDeltaInterval as TDI, NEG_INF
   >>> mon, tue = datetime.date(2024, 1, 1), datetime.date(2024, 1, 2)
   >>> print(DTI(mon, tue))                       # a closed date end: through that day
   [2024-01-01 00:00:00, 2024-01-03 00:00:00)
@@ -282,14 +282,14 @@ Interval(float('-inf'), float('inf'))
   nothing); the outward class keeps it as `(MAX, inf)`. the reverse ops meet `x` before rounding, as
   1788 does: a part of the answer inside `x` that rounds wholly onto one double is that double, even
   an end `x` excludes (D26)
-* **a faster backend, optional** (M16e): `pip install intervals[fast]` adds gmpy2, and
-  `INTERVALS_BACKEND=gmpy2` (or `auto`: gmpy2 when it imports, else the pure path, silently) picks
-  it at `import intervals`. it computes the same doubles as the default pure-python path, only
+* **a faster backend, optional** (M16e): `pip install multiinterval[fast]` adds gmpy2, and
+  `MULTIINTERVAL_BACKEND=gmpy2` (or `auto`: gmpy2 when it imports, else the pure path, silently) picks
+  it at `import multiinterval`. it computes the same doubles as the default pure-python path, only
   faster (a few times for the elementary functions at a float, less over a whole set, little for
   arithmetic), and changes no flag, so every result is the same either way:
 
   ```python
-  >>> from intervals import OutwardMultiInterval
+  >>> from multiinterval import OutwardMultiInterval
   >>> OutwardMultiInterval(0.5, 2.0).exp()
   OutwardMultiInterval.parse('(1.648721270700128, 7.38905609893065)')
   >>> OutwardMultiInterval(0.1) + 0.2
@@ -297,7 +297,7 @@ Interval(float('-inf'), float('inf'))
 
   ```
 
-  reporting a result, say which backend computed it: `intervals.backend.name()` is `'python'` or
+  reporting a result, say which backend computed it: `multiinterval.backend.name()` is `'python'` or
   `'gmpy2'`
 * **warnings**: every lossy or surprising step warns with a subclass of `IntervalWarning`
   (`DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning`,
@@ -320,7 +320,7 @@ Interval(float('-inf'), float('inf'))
   vector needs a NaI, and 64 on a decoration alone (12 in the exact pass only; 52 `mulRevToPair`
   pairs whose set matches) (`tests/itf1788/`, measured 2026-09-27 at M13's merge). no statement is
   skipped
-* **the 1788 layer** (M16b): `from intervals import ieee1788` gives 1788's inf-sup binary64
+* **the 1788 layer** (M16b): `from multiinterval import ieee1788` gives 1788's inf-sup binary64
   intervals, bare and decorated, as one class, `ieee1788.Interval`, over the library: every set is
   the library's, converted in by 1788's input rule and out by its output rule (attained infinities
   dropped, the hull rounded outward to doubles, an infinite end open), with 1788's answer where it
@@ -335,7 +335,7 @@ Interval(float('-inf'), float('inf'))
 
 where the library answers otherwise than 1788, on purpose, and where each choice is recorded: `D` rows
 are `v2-implementation-plan.md` §0, headings are `v2-plan.md`'s, `Q` items are open questions in
-`HANDOFF.md`. 1788's own answers are in `intervals.ieee1788`, the thin layer. the itf1788 adapter
+`HANDOFF.md`. 1788's own answers are in `multiinterval.ieee1788`, the thin layer. the itf1788 adapter
 (`tests/itf1788/test_itf1788.py`) names the rows each departure produces; most produce none, since the
 adapter compares closed hulls in binary64 (`v2-plan.md` "ieee 1788"). surveyed 2026-09-30.
 
@@ -370,7 +370,7 @@ Allen relations and matrices, `TruthSet` comparisons.
 
 ## layout
 
-* `intervals/` — the package: `cuts` (the representation), `kernel` (set algebra on cut tuples),
+* `multiinterval/` — the package: `cuts` (the representation), `kernel` (set algebra on cut tuples),
   `fmt` (printing and parsing), `multi_interval` (the two classes), `relations`, `applicator` and
   `ops` (arithmetic), `modulo`, `steps` (floor, ceil, round, sign), `functions` and `elementary`
   (the elementary functions over sets, and at one point), `numeric` (midpoint, radius, width,
@@ -381,7 +381,7 @@ Allen relations and matrices, `TruthSet` comparisons.
   `to_pandas()`),
   `numpy_compat` (numpy's hooks, numpy imported only when numpy calls them), `backend` and `_gmpy2`
   (the optional gmpy2 backend), `rounding`, `errors`; and `ieee1788` (1788's intervals over the
-  library, not imported by `intervals`)
+  library, not imported by `multiinterval`)
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)

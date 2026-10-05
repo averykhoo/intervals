@@ -1,5 +1,5 @@
 """
-intervals.solver's `solve`: square systems in several variables (M16, H3's second part)
+multiinterval.solver's `solve`: square systems in several variables (M16, H3's second part)
 
 the oracle is constructed systems with every real zero known: `F(x) = A · G(B x + c)` with A and B
 invertible integer matrices, c integers and `G_i(u) = Π_j g_ij(u_i)`, each factor `u - z` (z an int,
@@ -28,17 +28,17 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import REALS
-from intervals import DecoratedInterval
-from intervals import Decoration
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import set_dec
-from intervals import solver
-from intervals.autodiff import Dual
-from intervals.solver import RootBox
-from intervals.solver import newton
-from intervals.solver import solve
+from multiinterval import REALS
+from multiinterval import DecoratedInterval
+from multiinterval import Decoration
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import set_dec
+from multiinterval import solver
+from multiinterval.autodiff import Dual
+from multiinterval.solver import RootBox
+from multiinterval.solver import newton
+from multiinterval.solver import solve
 from tests.test_autodiff import _arb
 from tests.test_autodiff import _inside
 
@@ -354,7 +354,7 @@ def test_c1_is_decided_on_the_closed_hull():
 I2 = ((O(1), O(0)), (O(0), O(1)))
 
 
-@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')  # the empty K
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.EmptySetPropagationWarning')  # the empty K
 def test_krawczyk_proves_only_inside_the_interior():
     """with Mx = I the K set is `m - b`, the zero of a linear F, so each condition shows alone"""
     m = (Q(1, 2), Q(1, 2))

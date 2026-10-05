@@ -1,8 +1,8 @@
 """
-the gmpy2/mpfr backend (`INTERVALS_BACKEND=gmpy2` or `auto`, see `intervals.backend`): which double
+the gmpy2/mpfr backend (`MULTIINTERVAL_BACKEND=gmpy2` or `auto`, see `multiinterval.backend`): which double
 
-each function here answers one question the pure path answers in `intervals.elementary` and in the
-outward hook (`intervals.ops.outward`), "which double is f(x) rounded down, to nearest or up", with
+each function here answers one question the pure path answers in `multiinterval.elementary` and in the
+outward hook (`multiinterval.ops.outward`), "which double is f(x) rounded down, to nearest or up", with
 a float, or None for "no one-call answer here", and then the pure path runs as before. it is called
 only after every decision that is not a rounding: `exact` (is the value rational, and which),
 `exact_pow`, `_beyond` and the other shortcuts past the float range, and every flag and attainment
@@ -45,9 +45,9 @@ import gmpy2
 from gmpy2 import mpfr
 from gmpy2 import mpq
 
-from intervals.rounding import DOWN
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
 
 BOUND = 1 << 20  # the most bits of an operand's numerator or denominator taken (class 15)
 ROOTN_LIMIT = 1 << 31  # rootn's n below this: a C unsigned long is 32 bits on windows, 64 on linux

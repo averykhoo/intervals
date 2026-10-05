@@ -8,7 +8,7 @@ a branch and prune over the pieces of `x`, each a connected set, kept on a stack
 * **newton step**, where `f` is C¹ on the piece (below) and the piece is bounded: for a zero `z` and a
   point `m` of the piece, the mean value theorem gives `f(m) + f'(ξ) (z - m) = 0` for a `ξ` between
   them, so in the piece. so `z - m` is in `mul_rev(F', -f(m))`, the `t` with `t * y = -f(m)` for a
-  `y` in `F'`, the derivative's set over the piece (`intervals.autodiff`). the piece becomes
+  `y` in `F'`, the derivative's set over the piece (`multiinterval.autodiff`). the piece becomes
   `piece ∩ (m + mul_rev(F', -f(m)))`. where `0 ∈ F'` that set has two pieces and so has the result:
   the step splits the piece at the gap in one go, which is what a multi-interval is for (1788's
   `mulRevToPair` gives the same two intervals as a pair; a connected interval type needs both, or
@@ -31,7 +31,7 @@ piece, and no newton set fits inside the interior there.
 **C¹, proved by decorations.** the mean value theorem needs `f` differentiable, which an enclosure of
 `f'` does not say (`abs` at 0 has one). so `f` is evaluated on a `Dual` of two `DecoratedInterval`s,
 and the step runs only where both the value and the derivative are decorated dac or com: every op,
-and every op of the chain rule, defined and continuous on the piece (see `intervals.autodiff`). where
+and every op of the chain rule, defined and continuous on the piece (see `multiinterval.autodiff`). where
 `f` is not C¹, as `sqrt` at 0, or has a pole or a jump, the pieces are only pruned and bisected
 
 **enclosures.** the pieces are `OutwardMultiInterval`s, so every value encloses; int and Fraction
@@ -40,7 +40,7 @@ elementary functions as methods), with numbers as its constants: it is called wi
 `Dual`, and with a single point as an `OutwardMultiInterval`. the library's warnings inside `f` are
 not the caller's (a piece the solver made up can be an indeterminate point), so they are silenced
 
->>> from intervals import MultiInterval as M
+>>> from multiinterval import MultiInterval as M
 >>> for root in newton(lambda x: x ** 2 - 2, M(-10, 10)):
 ...     print(root.unique, root.interval)
 True (-1.4142135623730951, -1.414213562373095)
@@ -58,13 +58,13 @@ from numbers import Real
 from typing import NamedTuple
 from typing import Tuple
 
-from intervals.autodiff import Dual
-from intervals.decorated import DecoratedInterval
-from intervals.decorated import Decoration
-from intervals.errors import IntervalWarning
-from intervals.multi_interval import MultiInterval
-from intervals.multi_interval import OutwardMultiInterval
-from intervals.reverse import mul_rev
+from multiinterval.autodiff import Dual
+from multiinterval.decorated import DecoratedInterval
+from multiinterval.decorated import Decoration
+from multiinterval.errors import IntervalWarning
+from multiinterval.multi_interval import MultiInterval
+from multiinterval.multi_interval import OutwardMultiInterval
+from multiinterval.reverse import mul_rev
 
 
 _MAX = 1.7976931348623157e308  # the largest float
@@ -92,7 +92,7 @@ def newton(f, x, *, tol=1e-10, max_steps=10_000) -> Tuple[Root, ...]:
     calls (on a decorated `Dual` over it, and at a point), and one output unproved up to two more
     (at its closed ends)
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> [str(r.interval) for r in newton(lambda x: x.sin(), M(-4, 4))]  # -pi, 0, pi
     ['(-3.1415926535897936, -3.141592653589793)', '[0.0]', '(3.141592653589793, 3.1415926535897936)']
     >>> newton(lambda x: x ** 2 + 1, M(-10, 10))   # no zero: pruned by range and by newton
@@ -326,7 +326,7 @@ def solve(F, xs, *, tol=1e-10, max_steps=10_000) -> Tuple[RootBox, ...]:
     giving its simplest point and up to 2n rest boxes. an exact end beyond the doubles makes the
     float preconditioner overflow `b`, so such a box is bisected, not stepped
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> for root in solve(lambda x, y: (x ** 2 + y ** 2 - 1, x - y), [M(-10, 10), M(-10, 10)]):
     ...     print(root.unique, *root.box)
     True (-0.7071067811865476, -0.7071067811865475) (-0.7071067811865476, -0.7071067811865475)

@@ -31,20 +31,20 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import EMPTY
-from intervals import EmptySetPropagationWarning
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import REALS
-from intervals import pow_rev1
-from intervals import pow_rev2
-from intervals import pown_rev
-from intervals.kernel import contains_point
-from intervals.kernel import intersection
-from intervals.kernel import pieces
-from intervals.reverse import negate
-from intervals.rounding import exact_cuts
-from intervals.rounding import is_float
+from multiinterval import EMPTY
+from multiinterval import EmptySetPropagationWarning
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import REALS
+from multiinterval import pow_rev1
+from multiinterval import pow_rev2
+from multiinterval import pown_rev
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import intersection
+from multiinterval.kernel import pieces
+from multiinterval.reverse import negate
+from multiinterval.rounding import exact_cuts
+from multiinterval.rounding import is_float
 from tests.oracles import sample
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples

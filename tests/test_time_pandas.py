@@ -17,11 +17,11 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import NEG_INF
-from intervals import POS_INF
-from intervals import DateTimeInterval as D
-from intervals import MultiInterval as M
-from intervals import TimeDeltaInterval as T
+from multiinterval import NEG_INF
+from multiinterval import POS_INF
+from multiinterval import DateTimeInterval as D
+from multiinterval import MultiInterval as M
+from multiinterval import TimeDeltaInterval as T
 
 dt, td = datetime.datetime, datetime.timedelta
 SGT = zoneinfo.ZoneInfo('Asia/Singapore')

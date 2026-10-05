@@ -1,5 +1,5 @@
 """
-intervals.autodiff's gradient and jacobian (M16, H3's second part) against arb, through python-flint
+multiinterval.autodiff's gradient and jacobian (M16, H3's second part) against arb, through python-flint
 
 column j of the jacobian at a point p is `∂F/∂x_j`, and arb gives it as coefficient 1 of
 `F(p_1, ..., p_j + t, ..., p_n)`: `arb_series([p_j, 1])` for x_j and `arb_series([p_k])` for the rest,
@@ -27,14 +27,14 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import DecoratedInterval
-from intervals import Decoration
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals.autodiff import Dual
-from intervals.autodiff import derivative
-from intervals.autodiff import gradient
-from intervals.autodiff import jacobian
+from multiinterval import DecoratedInterval
+from multiinterval import Decoration
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval.autodiff import Dual
+from multiinterval.autodiff import derivative
+from multiinterval.autodiff import gradient
+from multiinterval.autodiff import jacobian
 from tests.test_autodiff import _arb
 from tests.test_autodiff import _check
 from tests.test_autodiff import _coefficient

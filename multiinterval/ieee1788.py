@@ -5,7 +5,7 @@ a thin layer, a wrapper class and never a mode (the decision log, 2026-08-16): e
 by the library (`OutwardMultiInterval`, and `DecoratedInterval` over one), and the layer only converts
 in and out by 1788's rules, plus the few ops where 1788 defines a different answer than the
 library's set. nothing in `MultiInterval`, `OutwardMultiInterval` or `DecoratedInterval` changes
-meaning, and `intervals` does not import this module: `from intervals import ieee1788`.
+meaning, and `multiinterval` does not import this module: `from multiinterval import ieee1788`.
 
 * **the type**: `Interval(lo, hi, decoration)`, one class for both of 1788's flavours (`decoration`
   `None` is a bare interval). its set is in **1788's form**: empty, or one piece whose finite ends are
@@ -51,8 +51,8 @@ the functions carry 1788's names in snake_case (a trailing underscore on a pytho
 recommended `exp2m1`, `exp10m1`, `log2p1`, `log10p1`, `compoundm1`, `rsqrt` and the `*Pi` functions,
 the exact text and interchange conversions, and every inf-sup type but binary64.
 
->>> from intervals import ieee1788
->>> from intervals.ieee1788 import Interval
+>>> from multiinterval import ieee1788
+>>> from multiinterval.ieee1788 import Interval
 >>> Interval(1, 2) / 10
 Interval(0.09999999999999999, 0.2)
 >>> print(ieee1788.text_to_interval('[0.1, 1/3]'), ieee1788.sqrt(Interval(-1, 4, 'com')))
@@ -75,24 +75,24 @@ from fractions import Fraction
 from numbers import Integral
 from numbers import Real
 
-from intervals import decorated as _decorated
-from intervals import kernel as _kernel
-from intervals import literals as _literals
-from intervals import reductions as _reductions
-from intervals import reverse as _reverse
-from intervals.cuts import is_numpy_time as _is_numpy_time
-from intervals.decorated import DecoratedInterval as _DecoratedInterval
-from intervals.decorated import Decoration
-from intervals.errors import DomainClippedWarning
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import HullWarning
-from intervals.errors import IndeterminateResultWarning
-from intervals.multi_interval import MultiInterval as _MultiInterval
-from intervals.multi_interval import OutwardMultiInterval as _Outward
-from intervals.multi_interval import _is_integral
-from intervals.rounding import DOWN as _DOWN
-from intervals.rounding import UP as _UP
-from intervals.rounding import round_value as _round_value
+from multiinterval import decorated as _decorated
+from multiinterval import kernel as _kernel
+from multiinterval import literals as _literals
+from multiinterval import reductions as _reductions
+from multiinterval import reverse as _reverse
+from multiinterval.cuts import is_numpy_time as _is_numpy_time
+from multiinterval.decorated import DecoratedInterval as _DecoratedInterval
+from multiinterval.decorated import Decoration
+from multiinterval.errors import DomainClippedWarning
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import HullWarning
+from multiinterval.errors import IndeterminateResultWarning
+from multiinterval.multi_interval import MultiInterval as _MultiInterval
+from multiinterval.multi_interval import OutwardMultiInterval as _Outward
+from multiinterval.multi_interval import _is_integral
+from multiinterval.rounding import DOWN as _DOWN
+from multiinterval.rounding import UP as _UP
+from multiinterval.rounding import round_value as _round_value
 
 _INF = math.inf
 _LINE = _Outward(-_INF, _INF, start_closed=False, end_closed=False)  # 1788's entire
@@ -322,7 +322,7 @@ def from_set(s) -> Interval:
     is `x`. it encloses the set it is given, so a to-nearest `MultiInterval`'s float ends are read as
     exact values
 
-    >>> from intervals import MultiInterval
+    >>> from multiinterval import MultiInterval
     >>> from_set(MultiInterval.parse('[1, 2] | [inf]')), from_set(MultiInterval(2 ** 1024))
     (Interval(1.0, 2.0), Interval(1.7976931348623157e+308, float('inf')))
     """
@@ -368,7 +368,7 @@ def nums_to_decorated_interval(lo, hi) -> Interval:
 
 
 def text_to_interval(text: str) -> Interval:
-    """1788's `textToInterval`, bare: the literal read exactly (`intervals.text_to_interval`, which
+    """1788's `textToInterval`, bare: the literal read exactly (`multiinterval.text_to_interval`, which
     decides validity and never warns `PossiblyUndefinedOperation`), then hulled to doubles"""
     return from_set(_call(_literals.text_to_interval, text))
 
@@ -718,7 +718,7 @@ def _reduction(name: str, library):
         except ValueError:  # a nan operand, inf + -inf, 0 * inf: 1788's NaN
             return math.nan
     reduction.__name__ = reduction.__qualname__ = name
-    reduction.__doc__ = (f"ieee 1788's `{name}`: `intervals.{library.__name__}`, but `nan` for a nan operand, "
+    reduction.__doc__ = (f"ieee 1788's `{name}`: `multiinterval.{library.__name__}`, but `nan` for a nan operand, "
                          f"`inf + -inf` or `0 * inf`, as 1788 has it (the library raises ValueError)")
     return reduction
 

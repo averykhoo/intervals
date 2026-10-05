@@ -23,22 +23,22 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-import intervals
-from intervals import EMPTY
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import kernel
-from intervals import ops
-from intervals.applicator import OpDescriptor
-from intervals.applicator import apply_binary
-from intervals.applicator import apply_unary
-from intervals.applicator import evaluate_box
-from intervals.applicator import split_pieces
-from intervals.errors import DomainClippedWarning
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import IndeterminateResultWarning
-from intervals.fmt import format_cuts
-from intervals.fmt import parse
+import multiinterval
+from multiinterval import EMPTY
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import kernel
+from multiinterval import ops
+from multiinterval.applicator import OpDescriptor
+from multiinterval.applicator import apply_binary
+from multiinterval.applicator import apply_unary
+from multiinterval.applicator import evaluate_box
+from multiinterval.applicator import split_pieces
+from multiinterval.errors import DomainClippedWarning
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import IndeterminateResultWarning
+from multiinterval.fmt import format_cuts
+from multiinterval.fmt import parse
 from tests.oracles import BINARY
 from tests.oracles import attained
 from tests.oracles import pointwise
@@ -292,8 +292,8 @@ def test_evaluate_box_is_the_attained_set(name, desc, data, rng):
 
 @settings(max_examples=150, deadline=None)
 @given(exact_cut_tuples, exact_cut_tuples)
-@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
-@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.EmptySetPropagationWarning')
 def test_monotone_fast_path_matches_every_corner(a, b):
     for desc in (ops.ADD, ops.SUB):
         assert apply_binary(desc, a, b) == apply_binary(desc._replace(monotone=None), a, b)
@@ -305,8 +305,8 @@ def types(cuts):
 
 @settings(max_examples=60, deadline=None)
 @given(float_cut_tuples, float_cut_tuples)
-@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
-@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.EmptySetPropagationWarning')
 def test_monotone_fast_path_matches_every_corner_on_floats(a, b):
     # float corners, the outward hooks and min/max's own attainment: the same set, in the same types
     for desc in (ops.ADD, ops.SUB, ops.MIN, ops.MAX, ops.OUTWARD['add'], ops.OUTWARD['sub']):
@@ -495,8 +495,8 @@ def finite_ends(cuts):
 @pytest.mark.parametrize('name, desc', ALL_OPS, ids=OP_IDS)
 @settings(max_examples=40, deadline=None)
 @given(data=st.data())
-@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
-@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.EmptySetPropagationWarning')
 def test_number_types_follow_the_operands(name, desc, data):
     """
     D3: exact operands (int, Fraction, +-inf) give exact finite ends, an integral one as int, and are
@@ -624,8 +624,8 @@ def check_rounding_hook(desc, operands):
 @pytest.mark.parametrize('name, desc', ORACLE_OPS + MINMAX_OPS, ids=[name for name, _ in ORACLE_OPS + MINMAX_OPS])
 @settings(max_examples=40, deadline=None)
 @given(data=st.data())
-@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
-@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.EmptySetPropagationWarning')
 def test_rounding_hook_sees_every_finite_float_corner_and_nothing_else(name, desc, data):
     """
     a recording hook: each call is a corner of a box with a value, every coordinate finite and one a
@@ -653,8 +653,8 @@ def test_rounding_hook_reads_a_mixed_point_as_its_exact_twin(desc, operands):
 @pytest.mark.parametrize('name, desc', ALL_OPS, ids=OP_IDS)
 @settings(max_examples=40, deadline=None)
 @given(data=st.data())
-@pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning')
-@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.IndeterminateResultWarning')
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.EmptySetPropagationWarning')
 def test_result_is_canonical(name, desc, data):
     # the union of the boxes, normalized: strictly increasing cuts, so no empty, overlapping or touching pieces
     operands = [data.draw(st.one_of(mixed_cut_tuples, special_operands), label=f'operand {i}')
@@ -769,11 +769,11 @@ def test_package_exports_unchanged():
     # the ops, the applicator, modulo, steps and functions stay in their submodules; M7 adds only
     # HullWarning, M12 only OutwardMultiInterval, M13h only the reductions (point functions, exported
     # as M13e plans for the reverse ops)
-    assert set(intervals.__all__) == {
+    assert set(multiinterval.__all__) == {
         'MultiInterval', 'OutwardMultiInterval', 'EMPTY', 'REALS', 'Size', 'Builder', 'TruthSet', 'Allen',
         'Cut', 'Side', 'IntervalWarning', 'EmptySetPropagationWarning', 'DomainClippedWarning',
         'IndeterminateResultWarning', 'HullWarning', 'PowerLimitWarning', 'sum_', 'sum_abs', 'sum_sqr', 'dot',
-        # M13e: the reverse ops (intervals/reverse.py)
+        # M13e: the reverse ops (multiinterval/reverse.py)
         'sqr_rev', 'abs_rev', 'pown_rev', 'cosh_rev',
         'mul_rev',
         'sin_rev', 'cos_rev', 'tan_rev',
@@ -782,12 +782,12 @@ def test_package_exports_unchanged():
         'UndefinedOperationError', 'PossiblyUndefinedOperationWarning', 'text_to_interval', 'nums_to_interval',
         # M13g: ieee 1788's decorated type and its constructors
         'DecoratedInterval', 'Decoration', 'set_dec', 'text_to_decorated_interval', 'nums_to_decorated_interval',
-        # M15: autodiff and interval newton (intervals/autodiff.py, intervals/solver.py)
+        # M15: autodiff and interval newton (multiinterval/autodiff.py, multiinterval/solver.py)
         'Dual', 'derivative', 'newton', 'Root',
-        # M16a: several variables (intervals/autodiff.py, intervals/solver.py)
+        # M16a: several variables (multiinterval/autodiff.py, multiinterval/solver.py)
         'gradient', 'jacobian', 'solve', 'RootBox',
-        # M8: the time layer (intervals/time_interval.py, D30)
+        # M8: the time layer (multiinterval/time_interval.py, D30)
         'DateTimeInterval', 'TimeDeltaInterval', 'NEG_INF', 'POS_INF'}
     for name in ('add', 'mul', 'OpDescriptor', 'apply_binary', 'mod', 'floordiv', 'floor', 'sqrt', 'sign',
                  'fma', 'apply', 'step'):
-        assert not hasattr(intervals, name), name
+        assert not hasattr(multiinterval, name), name

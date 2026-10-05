@@ -26,7 +26,7 @@ symbolically here, so an infinite operand never makes a result float. a float co
 nearest, or with `outward=True` computed exactly and rounded down for a low end and up for a high
 one (the `OUTWARD` descriptors), which gives the tightest float enclosure of the exact result.
 
->>> from intervals.fmt import format_cuts, parse
+>>> from multiinterval.fmt import format_cuts, parse
 >>> format_cuts(reciprocal(parse('[-1, 0]')))
 '[-inf, -1]'
 >>> format_cuts(reciprocal(parse('(-1, 0)')))
@@ -46,33 +46,33 @@ from fractions import Fraction
 from functools import lru_cache
 from numbers import Integral
 
-from intervals import kernel
-from intervals.applicator import OpDescriptor
-from intervals.applicator import Unbuilt
-from intervals.applicator import apply_binary
-from intervals.applicator import apply_unary
-from intervals.applicator import is_infinite
-from intervals.applicator import sign
-from intervals.applicator import signed_inf
-from intervals.applicator import warn
-from intervals.cuts import Cut
-from intervals.cuts import Side
-from intervals.cuts import above
-from intervals.cuts import below
-from intervals.cuts import mirror
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import PowerLimitWarning
-from intervals.kernel import Cuts
-from intervals.rounding import DOWN
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
-from intervals.rounding import exact_cuts
-from intervals.rounding import float_cuts
-from intervals.rounding import has_finite_float
-from intervals.rounding import is_float
-from intervals.rounding import round_rational
-from intervals import backend
-from intervals import elementary
+from multiinterval import kernel
+from multiinterval.applicator import OpDescriptor
+from multiinterval.applicator import Unbuilt
+from multiinterval.applicator import apply_binary
+from multiinterval.applicator import apply_unary
+from multiinterval.applicator import is_infinite
+from multiinterval.applicator import sign
+from multiinterval.applicator import signed_inf
+from multiinterval.applicator import warn
+from multiinterval.cuts import Cut
+from multiinterval.cuts import Side
+from multiinterval.cuts import above
+from multiinterval.cuts import below
+from multiinterval.cuts import mirror
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import PowerLimitWarning
+from multiinterval.kernel import Cuts
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
+from multiinterval.rounding import exact_cuts
+from multiinterval.rounding import float_cuts
+from multiinterval.rounding import has_finite_float
+from multiinterval.rounding import is_float
+from multiinterval.rounding import round_rational
+from multiinterval import backend
+from multiinterval import elementary
 
 
 # POINTWISE (None where the op has no value)
@@ -200,7 +200,7 @@ def outward(desc: OpDescriptor) -> OpDescriptor:
     outward descriptor is built by `_power_descriptor` instead: its `fn` is exact while the power is
     short enough to build, and past that a marker equal to nothing, `_NOT_A_DOUBLE`). the five
     arithmetic descriptors (keyed on the object, not its name) ask the backend for the double first
-    (`intervals._gmpy2.outward`), read at each call; any other, and a None, keeps the pure rounding
+    (`multiinterval._gmpy2.outward`), read at each call; any other, and a None, keeps the pure rounding
     """
     fast_op = next((op for d, op in _FAST_OPS if d is desc), None)
 
@@ -482,7 +482,7 @@ def minimum(a: Cuts, b: Cuts) -> Cuts:
     """
     `{min(x, y) : x in a, y in b}`
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(minimum(parse('[3]'), parse('(1, 5)')))  # 3 = min(3, 4)
     '(1, 3]'
     """
@@ -497,7 +497,7 @@ def fma(a: Cuts, b: Cuts, c: Cuts, outward: bool = False) -> Cuts:
     """
     `{x * y + z}`: `add(mul(a, b), c)` computed exactly, then rounded once if an operand is float
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(fma(parse('[0.1]'), parse('[10]'), parse('[-1]')))  # 0.1 is a hair above 1/10
     '[5.551115123125783e-17]'
     """
@@ -517,7 +517,7 @@ def power(a: Cuts, n: int, outward: bool = False) -> Cuts:
     """
     `a ** n` for an int n (bool is refused)
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(power(parse('[-2, 1)'), 2))
     '[0, 4]'
     >>> format_cuts(power(parse('[-2, 1)'), -1))
@@ -587,7 +587,7 @@ def cancel_minus(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     a certificate that `b + X ⊆ a`, which an outward end can break by an ulp; the exact classes are:
     int and Fraction operands (a float as `Fraction(f)`) give `X` exactly
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(cancel_minus(parse('[0, 10]'), parse('[1, 3]')))
     '[-1, 7]'
     >>> format_cuts(cancel_minus(parse('[0, 10)'), parse('[1, 3]')))  # 10 is missing: x + 3 < 10
@@ -611,7 +611,7 @@ def cancel_plus(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     """
     `cancel_minus(a, neg(b))`: the largest `X` with `X - b ⊆ a`, ieee 1788's `cancelPlus`
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(cancel_plus(parse('[0, 10]'), parse('[1, 3]')))
     '[3, 11]'
     """

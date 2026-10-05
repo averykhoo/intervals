@@ -23,13 +23,13 @@ from fractions import Fraction
 from typing import List
 from typing import Tuple
 
-from intervals.cuts import Value
-from intervals.cuts import as_end
-from intervals.cuts import as_start
-from intervals.kernel import Cuts
-from intervals.kernel import normalize
-from intervals.kernel import pairs
-from intervals.kernel import piece
+from multiinterval.cuts import Value
+from multiinterval.cuts import as_end
+from multiinterval.cuts import as_start
+from multiinterval.kernel import Cuts
+from multiinterval.kernel import normalize
+from multiinterval.kernel import pairs
+from multiinterval.kernel import piece
 
 # a hex int is never followed by `.`: `0x1.8p1` is a hex float, which is not read (and not `0x1` then `.8`)
 _INT = r'(?:0x[0-9a-f]+(?!\.)|\d+)'

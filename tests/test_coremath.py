@@ -1,5 +1,5 @@
 """
-intervals.elementary at CORE-MATH's binary64 worst cases: the vendored sample, `tests/coremath/*.tsv`
+multiinterval.elementary at CORE-MATH's binary64 worst cases: the vendored sample, `tests/coremath/*.tsv`
 
 CORE-MATH's `.wc` files list inputs that are hard to round, per function, in blocks (worst cases found by
 search, special values, argument-reduction extremes, regressions). `tools/coremath.py sample` keeps every
@@ -25,11 +25,11 @@ from pathlib import Path
 
 import pytest
 
-from intervals import backend
-from intervals import elementary
-from intervals.rounding import DOWN
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
+from multiinterval import backend
+from multiinterval import elementary
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
 
 ROOT = Path(__file__).resolve().parent.parent
 _spec = importlib.util.spec_from_file_location('coremath', ROOT / 'tools' / 'coremath.py')
@@ -93,5 +93,5 @@ def test_the_sample_is_correctly_rounded(name, monkeypatch):
 def test_the_scalar_closure_is_read_from_the_source():
     """`status` reports changes to these files: elementary and what it imports, not the set layer"""
     files = coremath.closure()
-    assert {'intervals/elementary.py', 'intervals/rounding.py', 'intervals/backend.py'} <= set(files)
-    assert 'intervals/functions.py' not in files
+    assert {'multiinterval/elementary.py', 'multiinterval/rounding.py', 'multiinterval/backend.py'} <= set(files)
+    assert 'multiinterval/functions.py' not in files

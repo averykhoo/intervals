@@ -1,5 +1,5 @@
 """
-the 1788 layer's properties (`intervals.ieee1788`, M16b; the vectors' pass is
+the 1788 layer's properties (`multiinterval.ieee1788`, M16b; the vectors' pass is
 `tests/itf1788/test_ieee1788.py`)
 
 each property is checked against an oracle written here, never the layer's own helper: 1788's
@@ -24,19 +24,19 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-import intervals
-from intervals import DecoratedInterval
-from intervals import Decoration
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import ieee1788
-from intervals import kernel
-from intervals import reverse
-from intervals.errors import DomainClippedWarning
-from intervals.errors import IntervalWarning
-from intervals.errors import PossiblyUndefinedOperationWarning
-from intervals.errors import UndefinedOperationError
-from intervals.ieee1788 import Interval
+import multiinterval
+from multiinterval import DecoratedInterval
+from multiinterval import Decoration
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import ieee1788
+from multiinterval import kernel
+from multiinterval import reverse
+from multiinterval.errors import DomainClippedWarning
+from multiinterval.errors import IntervalWarning
+from multiinterval.errors import PossiblyUndefinedOperationWarning
+from multiinterval.errors import UndefinedOperationError
+from multiinterval.ieee1788 import Interval
 from tests.strategies import cut_tuples
 from tests.strategies import endpoint_values
 
@@ -626,8 +626,8 @@ def test_numbers_examples():
             part.mid()  # the library keeps D9
 
 
-REDUCTION_TABLE = [('sum', intervals.sum_, 1), ('sumAbs', intervals.sum_abs, 1),
-                   ('sumSquare', intervals.sum_sqr, 1), ('dot', intervals.dot, 2)]
+REDUCTION_TABLE = [('sum', multiinterval.sum_, 1), ('sumAbs', multiinterval.sum_abs, 1),
+                   ('sumSquare', multiinterval.sum_sqr, 1), ('dot', multiinterval.dot, 2)]
 
 
 @pytest.mark.parametrize('name, library, arity', REDUCTION_TABLE, ids=[n for n, _, _ in REDUCTION_TABLE])
@@ -870,10 +870,10 @@ def test_names():
 
 
 def test_not_exported():
-    """`from intervals import ieee1788` imports it; `import intervals` does not, and it is not in
+    """`from multiinterval import ieee1788` imports it; `import multiinterval` does not, and it is not in
     `__all__` (the default built, Q13 (a))"""
-    assert 'ieee1788' not in intervals.__all__
-    code = 'import sys, intervals; print("intervals.ieee1788" in sys.modules)'
+    assert 'ieee1788' not in multiinterval.__all__
+    code = 'import sys, multiinterval; print("multiinterval.ieee1788" in sys.modules)'
     out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, check=True).stdout
     assert out.strip() == 'False'
 

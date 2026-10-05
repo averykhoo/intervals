@@ -108,18 +108,18 @@ from numbers import Real
 from typing import Iterator
 from typing import Tuple
 
-from intervals import kernel
-from intervals.cuts import Cut
-from intervals.cuts import Value
-from intervals.cuts import below
-from intervals.cuts import end_cut
-from intervals.cuts import flag
-from intervals.cuts import is_numpy_time
-from intervals.cuts import normalize_value
-from intervals.cuts import start_cut
-from intervals.kernel import Size
-from intervals.multi_interval import MultiInterval
-from intervals.relations import TruthSet
+from multiinterval import kernel
+from multiinterval.cuts import Cut
+from multiinterval.cuts import Value
+from multiinterval.cuts import below
+from multiinterval.cuts import end_cut
+from multiinterval.cuts import flag
+from multiinterval.cuts import is_numpy_time
+from multiinterval.cuts import normalize_value
+from multiinterval.cuts import start_cut
+from multiinterval.kernel import Size
+from multiinterval.multi_interval import MultiInterval
+from multiinterval.relations import TruthSet
 
 _EPOCH = _dt.datetime(1970, 1, 1)
 _EPOCH_UTC = _dt.datetime(1970, 1, 1, tzinfo=_dt.timezone.utc)

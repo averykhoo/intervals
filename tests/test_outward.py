@@ -36,12 +36,12 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import kernel
-from intervals.cuts import Cut
-from intervals.cuts import Side
-from intervals.fmt import format_cuts
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import kernel
+from multiinterval.cuts import Cut
+from multiinterval.cuts import Side
+from multiinterval.fmt import format_cuts
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples
 from tests.strategies import probe_points
@@ -60,7 +60,7 @@ def test_a_fraction_base_stays_exact():
     36406179185; CPython 3.12 returns NotImplemented instead). hence python >= 3.12 (owner,
     2026-09-28); this is red on 3.11"""
     from fractions import Fraction
-    from intervals.autodiff import Dual
+    from multiinterval.autodiff import Dual
     assert Fraction(1, 3) ** O(2) == O.parse('[1/9]')
     assert Fraction(1, 3) ** M(2) == M.parse('[1/9]')
     assert Fraction(1, 9) in (Fraction(1, 3) ** Dual.variable(O(2))).value

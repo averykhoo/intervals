@@ -1,5 +1,5 @@
 """
-the time layer (M8, D30): `intervals/time_interval.py`. the pins name the D30 point each guards; the hypothesis
+the time layer (M8, D30): `multiinterval/time_interval.py`. the pins name the D30 point each guards; the hypothesis
 properties check that the wrapper is a homomorphism onto the numeric class (the seconds of `A op B` are
 `A.seconds op B.seconds`), that datetimes and timedeltas round-trip exactly over their whole range, and that an
 aware reading does not depend on the zone. pandas is in `tests/test_time_pandas.py`.
@@ -23,20 +23,20 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-import intervals
-from intervals import NEG_INF
-from intervals import POS_INF
-from intervals import DateTimeInterval
-from intervals import IndeterminateResultWarning
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import Size
-from intervals import TimeDeltaInterval
-from intervals import TruthSet
-from intervals.relations import BOTH
-from intervals.relations import FALSE
-from intervals.relations import NEITHER
-from intervals.relations import TRUE
+import multiinterval
+from multiinterval import NEG_INF
+from multiinterval import POS_INF
+from multiinterval import DateTimeInterval
+from multiinterval import IndeterminateResultWarning
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import Size
+from multiinterval import TimeDeltaInterval
+from multiinterval import TruthSet
+from multiinterval.relations import BOTH
+from multiinterval.relations import FALSE
+from multiinterval.relations import NEITHER
+from multiinterval.relations import TRUE
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples
 
@@ -52,7 +52,7 @@ HOUR = td(hours=1)
 JAN1 = date(2024, 1, 1)
 NOON = dt(2024, 1, 1, 12)
 JAN1_SECONDS = 1704067200  # 2024-01-01 00:00 since 1970-01-01 00:00, wall clock
-EVAL_NAMESPACE = {'datetime': datetime, 'zoneinfo': zoneinfo, **{n: getattr(intervals, n) for n in intervals.__all__}}
+EVAL_NAMESPACE = {'datetime': datetime, 'zoneinfo': zoneinfo, **{n: getattr(multiinterval, n) for n in multiinterval.__all__}}
 
 # exact seconds sets: the numeric class's strategies (int, Fraction and +-inf ends)
 naive_sets = exact_cut_tuples.map(lambda cuts: D.from_seconds(M.from_cuts(cuts)))
@@ -858,8 +858,8 @@ def test_pandas_is_never_imported():
     """the library imports pandas only for to_pandas(): reading datetimes, timedeltas, ops and str do not"""
     code = '\n'.join([
         'import sys, datetime',
-        'import intervals',
-        'from intervals import DateTimeInterval as D, TimeDeltaInterval as T, NEG_INF',
+        'import multiinterval',
+        'from multiinterval import DateTimeInterval as D, TimeDeltaInterval as T, NEG_INF',
         'a = D(datetime.date(2024, 1, 1)) | D(NEG_INF, datetime.datetime(2023, 1, 1))',
         't = T(datetime.timedelta(1)) / 3',
         'r = (repr(a), str(a), repr(t), str(t), a - datetime.datetime(2024, 1, 1), NEG_INF < datetime.date.min)',

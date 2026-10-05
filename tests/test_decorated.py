@@ -1,5 +1,5 @@
 """
-ieee 1788's decorated type (M13g): `intervals.decorated`, `DecoratedInterval`, `Decoration`, `set_dec`
+ieee 1788's decorated type (M13g): `multiinterval.decorated`, `DecoratedInterval`, `Decoration`, `set_dec`
 and the decorated constructors
 
 * the decorations against 1788's definitions, written out here: the empty set fits `trv` only, `com`
@@ -30,17 +30,17 @@ from hypothesis import example
 from hypothesis import given
 from hypothesis import strategies as st
 
-import intervals
-from intervals import DecoratedInterval
-from intervals import Decoration
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import UndefinedOperationError
-from intervals import nums_to_decorated_interval
-from intervals import nums_to_interval
-from intervals import set_dec
-from intervals import text_to_decorated_interval
-from intervals import text_to_interval
+import multiinterval
+from multiinterval import DecoratedInterval
+from multiinterval import Decoration
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import UndefinedOperationError
+from multiinterval import nums_to_decorated_interval
+from multiinterval import nums_to_interval
+from multiinterval import set_dec
+from multiinterval import text_to_decorated_interval
+from multiinterval import text_to_interval
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples
 from tests.test_literals import _ALPHABET
@@ -334,4 +334,4 @@ def test_str():
 def test_exported():
     for name in ('DecoratedInterval', 'Decoration', 'set_dec', 'text_to_decorated_interval',
                  'nums_to_decorated_interval'):
-        assert name in intervals.__all__
+        assert name in multiinterval.__all__

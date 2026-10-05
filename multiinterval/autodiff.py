@@ -11,14 +11,14 @@ as a set, and the sets enclose, exactly for int and Fraction and outward in an `
 *values*, not a proof that f is differentiable: `abs` at 0 gives `sign(0) = 0`, a value that is not a
 derivative. the parts may be `DecoratedInterval`s, and then the two decorations are that proof: a
 value and a derivative both decorated dac or better say that every op, and every op of the chain
-rule's formula, was defined and continuous on the input, so `f` is C¹ there (`intervals.solver`
+rule's formula, was defined and continuous on the input, so `f` is C¹ there (`multiinterval.solver`
 relies on it). a derivative formula is undefined exactly where its op is not differentiable (`sqrt`
 at 0 divides by 0; `abs` at 0 gives `sign`, not continuous there), so there it is trv or def
 
 a number or a bare interval in an op is a constant, with derivative `[0]`; a decorated `Dual` takes
 numbers as constants (a `DecoratedInterval` refuses a bare `MultiInterval`, and so does this)
 
->>> from intervals import MultiInterval as M
+>>> from multiinterval import MultiInterval as M
 >>> x = Dual.variable(M(1, 2))
 >>> y = x ** 2 - 3 * x                 # each set evaluated once: the value is not tight
 >>> print(y.value, y.derivative)
@@ -28,10 +28,10 @@ numbers as constants (a `DecoratedInterval` refuses a bare `MultiInterval`, and 
 """
 from numbers import Real
 
-from intervals import numpy_compat
-from intervals.decorated import DecoratedInterval
-from intervals.multi_interval import MultiInterval
-from intervals.multi_interval import _is_integral
+from multiinterval import numpy_compat
+from multiinterval.decorated import DecoratedInterval
+from multiinterval.multi_interval import MultiInterval
+from multiinterval.multi_interval import _is_integral
 
 _PART = (MultiInterval, DecoratedInterval)
 
@@ -401,7 +401,7 @@ def gradient(f, xs) -> tuple:
     needs, one-sided at its faces; it says nothing outside the box (`x ** 1.5` over `[0, 1]` is com,
     with no point below 0 in its domain, and `abs` over the point `[0]` has a dac derivative)
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> [str(d) for d in gradient(lambda x, y: x * y.sin(), [M(1, 2), 0])]
     ['[0]', '[1, 2]']
     """
@@ -414,7 +414,7 @@ def jacobian(F, xs) -> tuple:
     `gradient`; the same n passes, each giving one column of every row). `F` takes n positional
     arguments and returns a list or a tuple of m `Dual`s or numbers; the jacobian is m x n
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> for row in jacobian(lambda x, y: (x * y, x - y ** 2), [2, 3]):
     ...     print(*row)
     [3] [2]

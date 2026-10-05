@@ -8,7 +8,7 @@ reverse ops (M13e, D12): `sqr_rev`, `abs_rev`, `pown_rev`, `cosh_rev`, each `{t 
   end, which is the open double just past the true end, never more (tightness). `f(t)` comes from an
   oracle written here from the definitions, not from the library's set ops: `t ** n` exactly, with
   `(±inf) ** n` by parity for n > 0, 0 for n < 0, and no value at 0 for n < 0; cosh through
-  `intervals.elementary`, whose values have their own oracles (tests/test_elementary.py,
+  `multiinterval.elementary`, whose values have their own oracles (tests/test_elementary.py,
   tests/test_oracle_flint.py)
 * at set level: the largest set, `T ⊆ rev(C)` whenever `f(T) ⊆ C`, with the library's `f` on sets;
   `f(rev(f(T))) = f(T)` where the inverse is exact (all but cosh); isotone in `c` and in `x`;
@@ -35,29 +35,29 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import EMPTY
-from intervals import EmptySetPropagationWarning
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import REALS
-from intervals import abs_rev
-from intervals import cosh_rev
-from intervals import pown_rev
-from intervals import sqr_rev
-from intervals import elementary
-from intervals import mul_rev
-from intervals.errors import IntervalWarning
-from intervals.kernel import contains_point
-from intervals.kernel import intersection
-from intervals.kernel import is_subset
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
-from intervals.kernel import union
-from intervals.rounding import DOWN
-from intervals.rounding import UP
-from intervals.rounding import exact_cuts
-from intervals.rounding import is_float
+from multiinterval import EMPTY
+from multiinterval import EmptySetPropagationWarning
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import REALS
+from multiinterval import abs_rev
+from multiinterval import cosh_rev
+from multiinterval import pown_rev
+from multiinterval import sqr_rev
+from multiinterval import elementary
+from multiinterval import mul_rev
+from multiinterval.errors import IntervalWarning
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import intersection
+from multiinterval.kernel import is_subset
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
+from multiinterval.kernel import union
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import UP
+from multiinterval.rounding import exact_cuts
+from multiinterval.rounding import is_float
 from tests.oracles import sample
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples
@@ -866,21 +866,21 @@ def test_mul_rev_class_coercion_and_warnings():
 # PERIODIC: sin_rev, cos_rev, tan_rev (M13e, third part; D12)
 #
 # `{t in x : f(t) in c}` with f the library's sin, cos or tan at a point: no value at ±inf, none at
-# tan's poles. f(t) at an exact t comes from `intervals.elementary` (its own oracles:
+# tan's poles. f(t) at an exact t comes from `multiinterval.elementary` (its own oracles:
 # tests/test_elementary.py, tests/test_oracle_flint.py), as cosh's does above; the ends' own
 # rounding, `elementary.rounded_inverse_trig`, is checked against arb below. a bounded x gets the
 # exact pieces; a piece of x unbounded in the reals (or past ENUMERATION_CAP pieces) gets the hull of
 # its part and a HullWarning, which `trev` requires exactly where `trig_hulls` says
 
-from intervals import HullWarning  # noqa: E402
-from intervals import cos_rev  # noqa: E402
-from intervals import sin_rev  # noqa: E402
-from intervals import tan_rev  # noqa: E402
-from intervals.rounding import NEAREST  # noqa: E402
-from intervals.steps import ENUMERATION_CAP  # noqa: E402
-from intervals.cuts import Cut  # noqa: E402
-from intervals.cuts import Side  # noqa: E402
-from intervals.reverse import negate  # noqa: E402
+from multiinterval import HullWarning  # noqa: E402
+from multiinterval import cos_rev  # noqa: E402
+from multiinterval import sin_rev  # noqa: E402
+from multiinterval import tan_rev  # noqa: E402
+from multiinterval.rounding import NEAREST  # noqa: E402
+from multiinterval.steps import ENUMERATION_CAP  # noqa: E402
+from multiinterval.cuts import Cut  # noqa: E402
+from multiinterval.cuts import Side  # noqa: E402
+from multiinterval.reverse import negate  # noqa: E402
 
 TRIG = {'sin': sin_rev, 'cos': cos_rev, 'tan': tan_rev}
 trig_names = st.sampled_from(sorted(TRIG))
@@ -1362,7 +1362,7 @@ def test_trig_rev_sound_at_sampled_points(name, c, x, seed):
 
 from hypothesis import assume  # noqa: E402
 
-from intervals import reverse  # noqa: E402
+from multiinterval import reverse  # noqa: E402
 
 _PERIODIC = {'sin': reverse._SIN, 'cos': reverse._COS, 'tan': reverse._TAN}
 

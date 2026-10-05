@@ -13,10 +13,10 @@ from fractions import Fraction
 
 import pytest
 
-from intervals import MultiInterval
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import IndeterminateResultWarning
-from intervals.errors import IntervalWarning
+from multiinterval import MultiInterval
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import IndeterminateResultWarning
+from multiinterval.errors import IntervalWarning
 
 P = MultiInterval.parse
 BINARY = {'+': operator.add, '-': operator.sub, '*': operator.mul, '/': operator.truediv}

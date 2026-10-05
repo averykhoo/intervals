@@ -1,5 +1,5 @@
 """
-the numeric functions (intervals.numeric): mid, rad, wid, mag, mig, mid_rad (M13b, D9)
+the numeric functions (multiinterval.numeric): mid, rad, wid, mag, mig, mid_rad (M13b, D9)
 
 * exact operands: each value against its definition, `mag` and `mig` through `abs(A)` (ops.absolute,
   an independent path to the supremum and infimum of the absolute values)
@@ -20,13 +20,13 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import union
-from intervals.rounding import exact_cuts
-from intervals.rounding import has_finite_float
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import union
+from multiinterval.rounding import exact_cuts
+from multiinterval.rounding import has_finite_float
 from tests.oracles import sample
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples

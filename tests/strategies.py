@@ -4,10 +4,10 @@ from fractions import Fraction
 
 from hypothesis import strategies as st
 
-from intervals.cuts import Cut
-from intervals.cuts import Side
-from intervals.kernel import normalize
-from intervals.kernel import piece
+from multiinterval.cuts import Cut
+from multiinterval.cuts import Side
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
 
 finite_values = st.one_of(
     st.integers(-20, 20),

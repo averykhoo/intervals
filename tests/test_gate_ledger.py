@@ -49,7 +49,7 @@ def repo(tmp_path):
 
 
 @pytest.mark.parametrize('path, kind', [
-    ('intervals/ops.py', 'src'), ('pyproject.toml', 'src'), ('.github/workflows/fuzz.yml', 'src'),
+    ('multiinterval/ops.py', 'src'), ('pyproject.toml', 'src'), ('.github/workflows/fuzz.yml', 'src'),
     ('tests/itf1788/libieeep1788_elem.itl', 'src'), ('README.md', 'readme'), ('tests/itf1788/README.md', 'readme'),
     ('tools/README.md', 'readme'), ('references/owner-questions-2026-10-03/README.md', 'prose'), ('HANDOFF.md', 'prose'), ('.claude/skills/testing/SKILL.md', 'prose'),
     ('references/modulo-derivations/claude-fable/modulo_v3_prototype.py', 'prose'), ('tests\\x.md', 'prose'),
@@ -166,10 +166,10 @@ def test_a_run_whose_code_moved_counts_for_nothing(repo):
 
 def test_a_phase_gets_its_environment(repo, monkeypatch):
     """the pure phases remove the backend variable; gate:gmpy2 sets it, whatever the caller's says"""
-    monkeypatch.setenv('INTERVALS_BACKEND', 'gmpy2')
+    monkeypatch.setenv('MULTIINTERVAL_BACKEND', 'gmpy2')
     monkeypatch.setenv('HYPOTHESIS_PROFILE', 'fuzz')
     check = ('import os, sys\n'
-             'want = {"INTERVALS_BACKEND": %r, "HYPOTHESIS_PROFILE": %r, "FUZZ_MULTIPLIER": %r}\n'
+             'want = {"MULTIINTERVAL_BACKEND": %r, "HYPOTHESIS_PROFILE": %r, "FUZZ_MULTIPLIER": %r}\n'
              'got = {k: os.environ.get(k) for k in want}\n'
              'print("3 passed in 0.1s" if got == want else got)\n')
     assert gate.run_phase('gate:rest', repo, command=[sys.executable, '-c', check % (None, None, None)]) == 0
@@ -177,19 +177,19 @@ def test_a_phase_gets_its_environment(repo, monkeypatch):
     assert gate.run_phase('docs', repo, command=[sys.executable, '-c', check % (None, None, None)]) == 0
     for caller in ('auto', 'python', None):
         if caller is None:
-            monkeypatch.delenv('INTERVALS_BACKEND')
+            monkeypatch.delenv('MULTIINTERVAL_BACKEND')
         else:
-            monkeypatch.setenv('INTERVALS_BACKEND', caller)
+            monkeypatch.setenv('MULTIINTERVAL_BACKEND', caller)
         assert gate.run_phase('gate:gmpy2', repo, command=[sys.executable, '-c', check % ('gmpy2', None, None)]) == 0
 
 
 def test_phase_names_are_closed():
-    pure = {'INTERVALS_BACKEND': None, 'HYPOTHESIS_PROFILE': None, 'FUZZ_MULTIPLIER': None}
+    pure = {'MULTIINTERVAL_BACKEND': None, 'HYPOTHESIS_PROFILE': None, 'FUZZ_MULTIPLIER': None}
     assert gate.phase_spec('gate:itf') == (['tests/itf1788'], pure)
     assert gate.phase_spec('fuzz-x10:rest') == (['--ignore=tests/itf1788'],
                                                 {**pure, 'HYPOTHESIS_PROFILE': 'fuzz', 'FUZZ_MULTIPLIER': '10'})
     # no arguments: the whole suite, as ci.yml's gate-gmpy2 job runs it
-    assert gate.phase_spec('gate:gmpy2') == ([], {**pure, 'INTERVALS_BACKEND': 'gmpy2'})
+    assert gate.phase_spec('gate:gmpy2') == ([], {**pure, 'MULTIINTERVAL_BACKEND': 'gmpy2'})
     for bad in ('gate', 'gate:all', 'fuzz:itf', 'fuzz-x0:itf', 'fuzz-x10', 'lint', 'gmpy2', 'gate:gmpy',
                 'fuzz-x10:gmpy2', 'gate:gmpy2:itf'):
         with pytest.raises(ValueError):
@@ -222,33 +222,33 @@ def test_the_push_plan():
     ids = {'code': 'c:1', 'src': 's:1'}
     fuzzed = [_row(f'fuzz-x{gate.PUSH_MULTIPLIER}:{part}', 'PASSED', ids) for part in gate.PARTS]
     plan = lambda rows, changed, dirty=(): gate.plan(rows, ids, changed, list(dirty))[0]
-    assert plan([], ['intervals/kernel.py']) == 'fuzz'
-    assert plan(fuzzed, ['intervals/kernel.py']) == 'nothing'
-    assert plan(fuzzed[:1], ['intervals/kernel.py']) == 'fuzz', 'both parts'
+    assert plan([], ['multiinterval/kernel.py']) == 'fuzz'
+    assert plan(fuzzed, ['multiinterval/kernel.py']) == 'nothing'
+    assert plan(fuzzed[:1], ['multiinterval/kernel.py']) == 'fuzz', 'both parts'
     weak = [_row(f'fuzz-x{gate.PUSH_MULTIPLIER - 1}:{part}', 'PASSED', ids) for part in gate.PARTS]
-    assert plan(weak, ['intervals/kernel.py']) == 'fuzz', 'below the CI multiplier'
+    assert plan(weak, ['multiinterval/kernel.py']) == 'fuzz', 'below the CI multiplier'
     # a README edited after the fuzz run: same src, new code
     readme_later = [_row(r['phase'], 'PASSED', {'code': 'c:0', 'src': 's:1'}) for r in fuzzed]
-    assert plan(readme_later, ['intervals/kernel.py', 'README.md']) == 'docs'
-    assert plan(readme_later + [_row('docs', 'PASSED', ids)], ['intervals/kernel.py', 'README.md']) == 'nothing'
+    assert plan(readme_later, ['multiinterval/kernel.py', 'README.md']) == 'docs'
+    assert plan(readme_later + [_row('docs', 'PASSED', ids)], ['multiinterval/kernel.py', 'README.md']) == 'nothing'
     assert plan([], ['README.md', 'HANDOFF.md']) == 'docs'
     assert plan([_row('gate:itf', 'PASSED', ids), _row('gate:rest', 'PASSED', ids)], ['README.md']) == 'nothing'
     assert plan([], ['HANDOFF.md', 'references/x.md']) == 'nothing'
     assert plan([], []) == 'nothing'
-    assert plan(fuzzed, ['intervals/kernel.py'], dirty=['tools/x.py']) == 'dirty'
+    assert plan(fuzzed, ['multiinterval/kernel.py'], dirty=['tools/x.py']) == 'dirty'
     # a backend file changed: gate:gmpy2 too (owner, Q16(e)), keyed by src like the fuzz
     gmpy2 = [_row('gate:gmpy2', 'PASSED', ids)]
     assert plan([], None) == 'fuzz+gmpy2', 'no base: everything counts as changed'
     for rel in gate.BACKEND_FILES:
         assert plan([], [rel]) == 'fuzz+gmpy2', rel
-        assert plan(fuzzed, [rel, 'intervals/kernel.py']) == 'gmpy2', rel
+        assert plan(fuzzed, [rel, 'multiinterval/kernel.py']) == 'gmpy2', rel
         assert plan(fuzzed + gmpy2, [rel]) == 'nothing', rel
-    assert plan(gmpy2, ['intervals/ops.py']) == 'fuzz', 'gate:gmpy2 is not the fuzz'
-    assert plan(fuzzed + [_row('gate:gmpy2', 'PASSED', {'code': 'c:0', 'src': 's:1'})], ['intervals/ops.py']) == 'nothing'
-    assert plan(fuzzed + [_row('gate:gmpy2', 'PASSED', {'code': 'c:1', 'src': 's:0'})], ['intervals/ops.py']) == 'gmpy2'
-    assert plan(fuzzed + gmpy2 + [_row('gate:gmpy2', 'FAILED', ids)], ['intervals/ops.py']) == 'gmpy2', 'red rerun'
-    assert plan(readme_later, ['intervals/ops.py', 'README.md']) == 'docs+gmpy2'
-    assert plan(fuzzed + gmpy2, ['intervals/ops.py'], dirty=['tools/x.py']) == 'dirty'
+    assert plan(gmpy2, ['multiinterval/ops.py']) == 'fuzz', 'gate:gmpy2 is not the fuzz'
+    assert plan(fuzzed + [_row('gate:gmpy2', 'PASSED', {'code': 'c:0', 'src': 's:1'})], ['multiinterval/ops.py']) == 'nothing'
+    assert plan(fuzzed + [_row('gate:gmpy2', 'PASSED', {'code': 'c:1', 'src': 's:0'})], ['multiinterval/ops.py']) == 'gmpy2'
+    assert plan(fuzzed + gmpy2 + [_row('gate:gmpy2', 'FAILED', ids)], ['multiinterval/ops.py']) == 'gmpy2', 'red rerun'
+    assert plan(readme_later, ['multiinterval/ops.py', 'README.md']) == 'docs+gmpy2'
+    assert plan(fuzzed + gmpy2, ['multiinterval/ops.py'], dirty=['tools/x.py']) == 'dirty'
 
 
 def test_dirty_paths_ignore_prose(repo):
@@ -278,7 +278,7 @@ def test_the_plan_end_to_end(repo):
     assert word() == 'nothing'
     assert gate.changed_since('no-such-ref', repo) is None
     # a backend file: gate:gmpy2 is needed and earned on this src; a README edit after it stales nothing
-    _write(repo, 'intervals/ops.py', b'fast = None\n')
+    _write(repo, 'multiinterval/ops.py', b'fast = None\n')
     _git(repo, 'add', '-A')
     _git(repo, 'commit', '-qm', 'backend')
     assert word() == 'fuzz+gmpy2'
@@ -323,28 +323,28 @@ def test_ci_runs_the_gmpy2_phase():
     forced), no other job and no fuzz job sets the variable, so a pure verdict is never a gmpy2 one"""
     ci = _jobs('ci.yml')
     assert 'gate' in ci and 'exhaustive' in ci, sorted(ci)
-    gmpy2 = [job for job, text in ci.items() if 'INTERVALS_BACKEND' in text]
+    gmpy2 = [job for job, text in ci.items() if 'MULTIINTERVAL_BACKEND' in text]
     assert gmpy2 == ['gate-gmpy2'], gmpy2
     text = ci['gate-gmpy2']
-    assert re.search(r'^    env:\n      INTERVALS_BACKEND: gmpy2\n', text, re.M), text
+    assert re.search(r'^    env:\n      MULTIINTERVAL_BACKEND: gmpy2\n', text, re.M), text
     args, env = gate.phase_spec(gate.GMPY2)
-    assert env['INTERVALS_BACKEND'] == 'gmpy2' and env['HYPOTHESIS_PROFILE'] is None
+    assert env['MULTIINTERVAL_BACKEND'] == 'gmpy2' and env['HYPOTHESIS_PROFILE'] is None
     assert re.findall(r'^      - run: python -m pytest(.*)$', text, re.M) == [' -q' + ''.join(' ' + a for a in args)]
     assert re.search(r'^      - run: python -m pip install -e "\.\[test\]"', text, re.M), 'gmpy2 comes with [test]'
-    # forced, the whole suite cannot pass without gmpy2 (`import intervals` raises: 94 collection errors,
-    # probed 2026-10-03), but one file can: pytest's filterwarnings import of intervals.errors leaves the
+    # forced, the whole suite cannot pass without gmpy2 (`import multiinterval` raises: 94 collection errors,
+    # probed 2026-10-03), but one file can: pytest's filterwarnings import of multiinterval.errors leaves the
     # leaf modules in sys.modules (tests/test_cuts.py passed). so the job says so before the suite
-    assert re.search(r"^      - run: python -c \"import intervals\.backend as b;.*assert b\.name\(\) == 'gmpy2'\"\n"
+    assert re.search(r"^      - run: python -c \"import multiinterval\.backend as b;.*assert b\.name\(\) == 'gmpy2'\"\n"
                      r"      - run: python -m pytest", text, re.M), text
     for job, text in _jobs('fuzz.yml').items():
-        assert 'INTERVALS_BACKEND' not in text, f'fuzz.yml {job}: no gmpy2 fuzz job (owner, Q16(e))'
+        assert 'MULTIINTERVAL_BACKEND' not in text, f'fuzz.yml {job}: no gmpy2 fuzz job (owner, Q16(e))'
 
 
 def test_the_backend_files_are_the_modules_naming_it():
     """BACKEND_FILES, whose change makes a push need gate:gmpy2, is every library module that names the
     backend (the dispatch sites read `backend.fast`; `_gmpy2` is the backend). a new dispatch site
     outside it would let a push through without a forced run"""
-    naming = {p.relative_to(ROOT).as_posix() for p in (ROOT / 'intervals').rglob('*.py')
+    naming = {p.relative_to(ROOT).as_posix() for p in (ROOT / 'multiinterval').rglob('*.py')
               if re.search(r'\bbackend\b|_gmpy2', p.read_text(encoding='utf-8'))}
     assert naming == set(gate.BACKEND_FILES), naming ^ set(gate.BACKEND_FILES)
 

@@ -1,5 +1,5 @@
 """
-numpy interop (M16d, H3's second part): `intervals/numpy_compat.py`, the foreign-real rule of
+numpy interop (M16d, H3's second part): `multiinterval/numpy_compat.py`, the foreign-real rule of
 `cuts.normalize_value` and the integer arguments that take any `Integral`
 
 numpy is in the `[test]` extra (Q15(g), 2026-10-03), and a test-time import only, through the `np`
@@ -30,14 +30,14 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import DecoratedInterval
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import numpy_compat
-from intervals.autodiff import Dual
-from intervals.cuts import normalize_value
-from intervals.decorated import set_dec
-from intervals.reverse import pown_rev
+from multiinterval import DecoratedInterval
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import numpy_compat
+from multiinterval.autodiff import Dual
+from multiinterval.cuts import normalize_value
+from multiinterval.decorated import set_dec
+from multiinterval.reverse import pown_rev
 from tests.strategies import cut_tuples
 
 M = MultiInterval
@@ -168,10 +168,10 @@ def test_the_operators_are_derived():
 # 1. NUMPY IS OPTIONAL
 
 def test_numpy_is_never_imported_at_load():
-    code = ('import sys, pkgutil, importlib, intervals\n'
-            'for m in pkgutil.iter_modules(intervals.__path__):\n'
-            '    importlib.import_module("intervals." + m.name)\n'
-            'import intervals.numpy_compat\n'
+    code = ('import sys, pkgutil, importlib, multiinterval\n'
+            'for m in pkgutil.iter_modules(multiinterval.__path__):\n'
+            '    importlib.import_module("multiinterval." + m.name)\n'
+            'import multiinterval.numpy_compat\n'
             'bad = sorted(k for k in sys.modules if k.split(".")[0] == "numpy")\n'
             'assert not bad, bad\n')
     done = subprocess.run([sys.executable, '-c', code], cwd=ROOT, capture_output=True, text=True, timeout=120)
@@ -622,7 +622,7 @@ def test_elementwise_leaves_every_float_flag_alone(np):
 
 
 def test_elementwise_warning_is_the_callers(np):
-    from intervals.errors import IndeterminateResultWarning
+    from multiinterval.errors import IndeterminateResultWarning
     with pytest.warns(IndeterminateResultWarning) as caught:
         np.array([1.0, 0.0]) / M(0)
     assert {os.path.normcase(os.path.abspath(w.filename)) for w in caught} == {HERE}
@@ -826,7 +826,7 @@ def test_numpy_durations_are_no_numbers(np):
     count in its own unit, so `MultiInterval(np.timedelta64(3, 'ns'))` was `[3]` and `np.timedelta64(3, 'Y')` a 3
     (M8's review, F6, 2026-10-04): every place the numeric class takes a number, or an int argument, refuses dtype
     kinds 'm' and 'M' (TypeError), as it refuses a `datetime.timedelta`"""
-    from intervals import ieee1788
+    from multiinterval import ieee1788
     a = M(1, 2)
     for t in (np.timedelta64(3, 'ns'), np.timedelta64(3, 'Y'), np.timedelta64(3, 's'), np.timedelta64('NaT', 'ns'),
               np.datetime64(3, 'ns'), np.datetime64('2024-01-01')):

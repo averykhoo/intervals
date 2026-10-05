@@ -1,5 +1,5 @@
 """
-intervals.elementary against an independent oracle: python's decimal module
+multiinterval.elementary against an independent oracle: python's decimal module
 
 decimal's exp, ln, log10 and sqrt are correctly rounded at any precision; the trig functions here are
 plain taylor series in decimal with pi from the decimal docs' recipe. at 90 digits the oracle is far
@@ -19,17 +19,17 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import backend
-from intervals import elementary
-from intervals.elementary import compare
-from intervals.elementary import exact
-from intervals.elementary import floor_over_pi
-from intervals.elementary import rounded
-from intervals.rounding import DOWN
-from intervals.rounding import MAX
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
+from multiinterval import MultiInterval
+from multiinterval import backend
+from multiinterval import elementary
+from multiinterval.elementary import compare
+from multiinterval.elementary import exact
+from multiinterval.elementary import floor_over_pi
+from multiinterval.elementary import rounded
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import MAX
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
 
 INF = math.inf
 PREC = 90
@@ -464,8 +464,8 @@ def test_outside_the_domain_raises(name, x, base):
 
 def test_the_scalar_domain_is_the_set_layers():
     """`elementary._check_domain` refuses exactly the points outside `functions.domain`, which clips first"""
-    from intervals import functions
-    from intervals import kernel
+    from multiinterval import functions
+    from multiinterval import kernel
     tiny = Fraction(1, 2 ** 60)
     points = [-INF, INF, 0, tiny, -tiny]
     for k in (Fraction(1, 2), 1, 2, 3):
@@ -491,8 +491,8 @@ _DOMAIN_CASES = [(name, None) for name in elementary.NAMES] + [('rootn', n) for 
 def test_the_scalar_domain_is_the_set_layers_anywhere(case, x):
     """the same agreement at random points, the last strategy hugging -1 and 1, where four domains end; inside
     it, the scalar answers (a pole at 0 aside) rather than raising"""
-    from intervals import functions
-    from intervals import kernel
+    from multiinterval import functions
+    from multiinterval import kernel
     name, base = case
     inside = kernel.contains_point(functions.domain(name, base), x)
     try:

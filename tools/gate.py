@@ -5,7 +5,7 @@
     $PY tools/gate.py run docs              # the collected READMEs' doctests only
     $PY tools/gate.py run fuzz-x10:itf      # the fuzz profile at x10, as fuzz.yml (prepush runs these)
     $PY tools/gate.py run fuzz-x10:rest
-    $PY tools/gate.py run gate:gmpy2        # the whole suite with INTERVALS_BACKEND=gmpy2 forced, as ci.yml's job
+    $PY tools/gate.py run gate:gmpy2        # the whole suite with MULTIINTERVAL_BACKEND=gmpy2 forced, as ci.yml's job
     $PY tools/gate.py status                # what is green on the code in front of you
     $PY tools/gate.py status --require commit   # exit 1 unless the gate is green on this code
     $PY tools/gate.py status --require push     # exit 1 unless a push needs nothing more
@@ -37,8 +37,8 @@ reads a markdown file other than the collected READMEs, and none reads `referenc
 tests/test_gate_ledger.py::test_no_source_names_a_prose_path re-checks it mechanically.
 
 the backend (owner, Q16(e), 2026-10-03): every phase but `gate:gmpy2` runs the pure path, with
-INTERVALS_BACKEND removed, as CI's gate and fuzz jobs do; `gate:gmpy2` runs the whole suite with it
-set to `gmpy2`, as ci.yml's `gate-gmpy2` job does. forced, `import intervals` raises unless gmpy2
+MULTIINTERVAL_BACKEND removed, as CI's gate and fuzz jobs do; `gate:gmpy2` runs the whole suite with it
+set to `gmpy2`, as ci.yml's `gate-gmpy2` job does. forced, `import multiinterval` raises unless gmpy2
 is taken, so that run cannot pass on the pure path. it never covers the gate (a commit needs the
 pure path); a push needs it, keyed by src like the fuzz, only when a file of BACKEND_FILES changed
 since the base.
@@ -83,7 +83,7 @@ PHASE_RE = re.compile(r'^(?:gate:(itf|rest)|fuzz-x([1-9]\d*):(itf|rest)|docs|(ga
 GMPY2 = 'gate:gmpy2'
 # the modules that pick a double through the backend (the dispatch sites and the backend itself);
 # tests/test_gate_ledger.py::test_the_backend_files_are_the_modules_naming_it keeps the list whole
-BACKEND_FILES = ('intervals/_gmpy2.py', 'intervals/backend.py', 'intervals/elementary.py', 'intervals/ops.py')
+BACKEND_FILES = ('multiinterval/_gmpy2.py', 'multiinterval/backend.py', 'multiinterval/elementary.py', 'multiinterval/ops.py')
 COUNT_RE = re.compile(r'(\d+) (passed|failed|errors?|skipped|xfailed|xpassed|deselected)\b')
 SUMMARY_RE = re.compile(r'\b\d+ (?:passed|failed|errors?|skipped|xfailed|xpassed|deselected)\b.* in [\d.]+s')
 
@@ -185,19 +185,19 @@ def append_row(path, row):
 
 def phase_spec(phase, repo=REPO):
     """(pytest arguments, environment changes) for a phase name, or ValueError. a change of None removes
-    the variable: INTERVALS_BACKEND is removed for every phase but gate:gmpy2, which sets it"""
+    the variable: MULTIINTERVAL_BACKEND is removed for every phase but gate:gmpy2, which sets it"""
     m = PHASE_RE.match(phase or '')
     if not m:
         raise ValueError(f'unknown phase {phase!r}: gate:itf, gate:rest, docs, fuzz-x<N>:itf, fuzz-x<N>:rest, '
                          f'{GMPY2}')
     gate_part, multiplier, fuzz_part, gmpy2 = m.groups()
-    pure = {'INTERVALS_BACKEND': None, 'HYPOTHESIS_PROFILE': None, 'FUZZ_MULTIPLIER': None}
+    pure = {'MULTIINTERVAL_BACKEND': None, 'HYPOTHESIS_PROFILE': None, 'FUZZ_MULTIPLIER': None}
     if multiplier:
         return PARTS[fuzz_part], {**pure, 'HYPOTHESIS_PROFILE': 'fuzz', 'FUZZ_MULTIPLIER': multiplier}
     if gate_part:
         return PARTS[gate_part], pure
     if gmpy2:
-        return [], {**pure, 'INTERVALS_BACKEND': 'gmpy2'}  # no arguments: the whole suite, as ci.yml runs it
+        return [], {**pure, 'MULTIINTERVAL_BACKEND': 'gmpy2'}  # no arguments: the whole suite, as ci.yml runs it
     return collected_readmes(repo), pure
 
 
@@ -239,13 +239,13 @@ def run_phase(phase, repo=REPO, command=None):
 
     `command` replaces the pytest command (the ledger's own tests use a fake one). the backend
     variable is the phase's (`phase_spec`): removed for the pure phases, as CI's gate and fuzz jobs
-    run the pure path, so a verdict on INTERVALS_BACKEND=gmpy2 never stands for one on the default;
+    run the pure path, so a verdict on MULTIINTERVAL_BACKEND=gmpy2 never stands for one on the default;
     set to gmpy2 for gate:gmpy2, whatever the caller's environment says
     """
     args, changes = phase_spec(phase, repo)
     env = dict(os.environ)
-    if env.get('INTERVALS_BACKEND') and changes['INTERVALS_BACKEND'] is None:
-        print('gate: INTERVALS_BACKEND removed for this run (this phase runs the pure path)')
+    if env.get('MULTIINTERVAL_BACKEND') and changes['MULTIINTERVAL_BACKEND'] is None:
+        print('gate: MULTIINTERVAL_BACKEND removed for this run (this phase runs the pure path)')
     for key, value in changes.items():
         if value is None:
             env.pop(key, None)

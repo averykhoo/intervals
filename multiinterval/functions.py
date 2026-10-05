@@ -19,7 +19,7 @@ inverses, roots, and the two-argument atan2, pow and hypot
   have a pole at 0 with a side each way, as do cot and csc: a piece ending at 0 takes the one-sided
   limit there (closed iff the piece holds 0, as `1/[0, 1]` = `[1, inf]`), and the point 0 alone has
   no value (`IndeterminateResultWarning`, as `1/[0]`)
-* **values**: `intervals.elementary` computes each end, so a result is the same on every platform. an
+* **values**: `multiinterval.elementary` computes each end, so a result is the same on every platform. an
   exact end (int, Fraction, ±inf) gives an exact result where the value is rational (`sqrt([9/4])` =
   `[3/2]`, `exp([0])` = `[1]`) and otherwise its tightest float enclosure, so an exact operand never
   loses the true value: `sqrt([2])` is the open one-ulp piece around the square root of 2, open
@@ -27,7 +27,7 @@ inverses, roots, and the two-argument atan2, pow and hypot
   conservative reading, not a promise), or outward with `outward=True` (`OutwardMultiInterval`),
   where an end that rounding moved is open as well
 
->>> from intervals.fmt import format_cuts, parse
+>>> from multiinterval.fmt import format_cuts, parse
 >>> format_cuts(apply('sqrt', parse('[1/4, 9]')))
 '[1/2, 3]'
 >>> format_cuts(apply('exp', parse('[-inf, 0)')))
@@ -46,28 +46,28 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from intervals import elementary
-from intervals import fmt
-from intervals import kernel
-from intervals import ops
-from intervals.applicator import split_pieces
-from intervals.applicator import warn
-from intervals.cuts import Value
-from intervals.cuts import is_numpy_time
-from intervals.cuts import normalize_value
-from intervals.errors import DomainClippedWarning
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import IndeterminateResultWarning
-from intervals.errors import PowerLimitWarning
-from intervals.kernel import Cuts
-from intervals.rounding import DOWN
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
-from intervals.rounding import exact_cuts
-from intervals.rounding import has_finite_float
-from intervals.rounding import is_float
-from intervals.rounding import is_infinite
-from intervals.rounding import round_rational
+from multiinterval import elementary
+from multiinterval import fmt
+from multiinterval import kernel
+from multiinterval import ops
+from multiinterval.applicator import split_pieces
+from multiinterval.applicator import warn
+from multiinterval.cuts import Value
+from multiinterval.cuts import is_numpy_time
+from multiinterval.cuts import normalize_value
+from multiinterval.errors import DomainClippedWarning
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import IndeterminateResultWarning
+from multiinterval.errors import PowerLimitWarning
+from multiinterval.kernel import Cuts
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
+from multiinterval.rounding import exact_cuts
+from multiinterval.rounding import has_finite_float
+from multiinterval.rounding import is_float
+from multiinterval.rounding import is_infinite
+from multiinterval.rounding import round_rational
 
 INF = math.inf
 
@@ -118,7 +118,7 @@ def domain(name: str, base=None) -> Cuts:
     """
     the points of the reals where f has a value or a one-sided limit (`base` is rootn's n)
 
-    >>> from intervals.fmt import format_cuts
+    >>> from multiinterval.fmt import format_cuts
     >>> format_cuts(domain('acoth')), format_cuts(domain('rootn', -2))
     ('{ [-inf, -1] , [1, inf] }', '[0, inf]')
     """
@@ -137,7 +137,7 @@ def apply(name: str, a: Cuts, outward: bool = False, base=None) -> Cuts:
     real > 0 other than 1), and for `rootn` its degree n (an int other than 0), `rootn(x, n)` being
     the real n-th root of x (of `1/x` for n < 0), which needs x >= 0 for an even n
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(apply('log', parse('[1/8, 4]'), base=2))
     '[-3, 2]'
     >>> format_cuts(apply('rootn', parse('[-8, 27]'), base=3))
@@ -473,7 +473,7 @@ def atan2(y: Cuts, x: Cuts, outward: bool = False) -> Cuts:
     are two corners' values, each closed iff its corner is in the box, or it is reached along an edge
     at ±inf, where the angle is constant.
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(atan2(parse('[0, 1]'), parse('[1]')))
     '[0, 0.7853981633974484)'
     """
@@ -651,7 +651,7 @@ def pow_(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     (`[4] ** [1/2]` = `[2]`) and the tightest float enclosure where not; float operands round once,
     to nearest, or outward with `outward=True`
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(pow_(parse('[1/4, 4]'), parse('[1/2]')))
     '[1/2, 2]'
     >>> format_cuts(pow_(parse('[0, 2]'), parse('[1/2, 1]')))
@@ -764,7 +764,7 @@ def hypot(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     rational it is), then one square root, exact where rational for exact operands and else the
     tightest float enclosure; with a float operand it is rounded once, to nearest or (outward) outward
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(hypot(parse('[3, 5]'), parse('[-4, 0]')))
     '[3, 6.403124237432849)'
     """

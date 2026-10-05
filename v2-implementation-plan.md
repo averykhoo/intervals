@@ -30,18 +30,18 @@ the owner, loose ends, session log. this file keeps the spec (what to build, exi
 | D12 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13e), now in `v2-plan.md` "elementary and step functions", "empties and warnings" and "ieee 1788".** a reverse op whose answer has infinitely many or very many pieces (`sinRev`, `cosRev`, `tanRev` and their `*Bin` forms over an unbounded or wide `x`): the exact pieces up to the step functions' cap of 1000, past it their hull with a `HullWarning`, the rule `steps.py` already follows. a bounded `x` gets the exact union (`sinRev([0.5, 1], [0, 20])` has 4 pieces), which 1788 cannot give. ends are irrational, so each is its tightest float enclosure, open | exact to 1000 pieces, else hull + warning | M13e |
 | D13 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13f), now in `v2-plan.md` "arithmetic" and "ieee 1788".** `cancelMinus(A, B)` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A`, which is defined on any multi-intervals; `cancelPlus(A, B)` is `cancelMinus(A, -B)`. for connected `A` and `B` it is exactly 1788's answer whenever 1788 has one (`[a1 - b1, a2 - b2]` when `wid A ≥ wid B`). where 1788 has no answer it returns entire as a "no answer" signal, and ours is a real set: `cancelMinus([-inf,-1], [-1,5])` = `(-inf, -6]`, and `∅` when nothing fits. those vectors are divergence rows under a **new residual category, "cancellation as a Minkowski difference"**, approved with this decision | Minkowski difference; new divergence category | M13f |
 | D14 | **decided 2026-09-25 by owner: recommended default.** the independent oracle for the elementary functions is **`python-flint`** (Arb: every result is a ball proven to contain the true value), a test-only dependency in the `[test]` extra, installed into the `intervals` env and in CI. `mpmath` was the alternative (pure python, but its values carry no proven bound). python-flint 0.9.0 has Windows wheels for 3.10 and later (abi3), 3.13 and 3.14 included (checked on PyPI 2026-09-25) | python-flint | M14 |
-| D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `intervals/`, so no test file is distributed with the library. **corrected 2026-09-26 at M13a**, from every file's header: five files carry the all-permissive notice, not two (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`); the eleven `libieeep1788_*` are Apache 2.0 | vendor unmodified, with the licence files | M13a |
+| D15 | **decided 2026-09-25 by owner: recommended default.** licence. `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` are LGPL-2.1-or-later, the two `ieee1788-*.itl` files carry an all-permissive notice, the rest Apache 2.0, and this repo has no licence of its own. vendor all 19 files of oheim/ITF1788 at `b6ee1e2` unmodified into `tests/itf1788/`, replacing nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER` beside them. the wheel ships only `multiinterval/`, so no test file is distributed with the library. **corrected 2026-09-26 at M13a**, from every file's header: five files carry the all-permissive notice, not two (`ieee1788-constructors`, `ieee1788-exceptions`, `atan2`, `abs_rev`, `pow_rev`); the eleven `libieeep1788_*` are Apache 2.0 | vendor unmodified, with the licence files | M13a |
 | D16 | **decided 2026-09-25 by owner: recommended default; built 2026-09-26 (M13g), now in `v2-plan.md` "ieee 1788" (`DecoratedInterval`, `UndefinedOperationError`, `PossiblyUndefinedOperationWarning`).** decorations (com/dac/def/trv/ill), NaI and 1788's constructors go in a **separate decorated wrapper type**: the solver stack's (M11), brought forward. the core `MultiInterval` stays undecorated, so `v2-plan.md` "ieee 1788" ("decorations are not in the core") holds. 1788's signals, owner 2026-09-26 (`v2-plan.md` "2026-09-26 revision: owner answers"): `UndefinedOperation` **raises** (a `ValueError` subclass, so it reads like `MultiInterval(2, 1)`'s `ValueError`); `PossiblyUndefinedOperation` is an **`IntervalWarning` subclass** (the result is returned); names chosen when built. **no NaI** and no `ill` (owner 2026-09-26): its statements are rows under a new category, M13g | wrapper type; signals as the owner chose | M13g |
 | D17 | **decided 2026-09-25 by owner**: M13 does **not** block the 2.0.0 release, and there is no hurry to release either ("I have zero users and this is a yak shaving pet project"). M13 only adds methods and a type and gives a meaning to exponents that raise `TypeError` today, so nothing that works now changes | release whenever; not blocked | — |
 | D18 | **decided 2026-09-27 by owner**, on M13's proposed categories and choices: (a) **"tighter than the vector"** is an approved residual category (M13e): 11 keys, 18 vectors where 1788's expected hull is looser than the tightest double enclosure and ours is the tightest, checked with arb or exactly; the two grossly loose `pow_rev.itl:609`, `:642` stay in it. (b) **"exact parsing decides validity"** is approved (M13g): the 1788 text constructors read bounds exactly, so no `PossiblyUndefinedOperation` for a near-tie literal; 7 keys. (c) the 15 rows where an exact value past the doubles keeps com (`_BOUNDED_EXACTLY` 3, `PLAIN_ONLY` 12) stay under **decoration expectations**. (d) `set_dec` **demotes** as 1788's `setDec` does; only the `DecoratedInterval` constructor raises | both categories approved; rows stay; set_dec demotes | M13e, M13g |
-| D19 | **decided in the build 2026-09-27 (the session's defaults); confirmed 2026-10-03 by owner (Q11, as built; `tol` documented as absolute, `max_steps` as boxes).** the solver stack's first part (M15): (a) `intervals/autodiff.py` (`Dual`, `derivative`) and `intervals/solver.py` (`newton`, `Root`) are public and exported from `intervals`, not newton as a test only; (b) newton's step runs only where `f` is proved C¹ by decorations (dac or better on the value and the derivative), else the piece is pruned and bisected; (c) the step is `mul_rev`, never `/` (D7); (d) one variable; (e) `tol=1e-10` absolute, `max_steps=10_000` | as built | M15 |
-| D20 | **decided in the build 2026-09-28 (the session's defaults); confirmed 2026-10-03 by owner (Q12, as built).** the solver stack's second part (M16a): (a) a gradient or a jacobian is n passes of `F`, `Dual` untouched (not vector mode); (b) names `gradient`, `jacobian`, `solve`, `RootBox`, public and exported from `intervals`, `Root` unchanged; (c) `solve` at n == 1 is `newton`; (d) uniqueness by krawczyk only, on the closed hull, with a float preconditioner (identity fallback), narrowing by gauss-seidel with `mul_rev`; (e) before an unproved box is output, its simplest rational point (exactly `[0]`: a unique point) and then krawczyk on the box inflated within its region; (f) wide components bisected first, round robin, then the widest; (g) `tol=1e-10` absolute on the widest component, `max_steps=10_000` boxes; (h) no direction tag | as built | M16a |
-| D21 | **decided in the build 2026-09-28 (the session's defaults); confirmed 2026-10-03 by owner (Q13) but (b): the layer's numbers of the empty set are `nan`, 1788's answer, not the library's `ValueError`; Q9 and Q10 closed as built.** the 1788 layer (M16b): (a) `intervals/ieee1788.py`, one `Interval` class for both flavours, 1788's names in snake_case (`NAMES` has the camelCase), not exported from `intervals`; (b) `mid`, `rad`, `wid`, `mag`, `mig`, `mid_rad` of the empty set raise `ValueError`, where 1788 says NaN; (c) Q9 answered by the layer: `ieee1788.mul_rev_to_pair` is 1788's pair with its decoration, the library's `mul_rev` unchanged; (d) Q10 answered by the layer: its pass runs the constructors in binary64, no class argument on the library's; (e) where 1788 defines another answer than the library's set (cancellation, overlap, attained infinities), the layer gives 1788's and the library keeps its own | as built | M16b |
+| D19 | **decided in the build 2026-09-27 (the session's defaults); confirmed 2026-10-03 by owner (Q11, as built; `tol` documented as absolute, `max_steps` as boxes).** the solver stack's first part (M15): (a) `multiinterval/autodiff.py` (`Dual`, `derivative`) and `multiinterval/solver.py` (`newton`, `Root`) are public and exported from `multiinterval`, not newton as a test only; (b) newton's step runs only where `f` is proved C¹ by decorations (dac or better on the value and the derivative), else the piece is pruned and bisected; (c) the step is `mul_rev`, never `/` (D7); (d) one variable; (e) `tol=1e-10` absolute, `max_steps=10_000` | as built | M15 |
+| D20 | **decided in the build 2026-09-28 (the session's defaults); confirmed 2026-10-03 by owner (Q12, as built).** the solver stack's second part (M16a): (a) a gradient or a jacobian is n passes of `F`, `Dual` untouched (not vector mode); (b) names `gradient`, `jacobian`, `solve`, `RootBox`, public and exported from `multiinterval`, `Root` unchanged; (c) `solve` at n == 1 is `newton`; (d) uniqueness by krawczyk only, on the closed hull, with a float preconditioner (identity fallback), narrowing by gauss-seidel with `mul_rev`; (e) before an unproved box is output, its simplest rational point (exactly `[0]`: a unique point) and then krawczyk on the box inflated within its region; (f) wide components bisected first, round robin, then the widest; (g) `tol=1e-10` absolute on the widest component, `max_steps=10_000` boxes; (h) no direction tag | as built | M16a |
+| D21 | **decided in the build 2026-09-28 (the session's defaults); confirmed 2026-10-03 by owner (Q13) but (b): the layer's numbers of the empty set are `nan`, 1788's answer, not the library's `ValueError`; Q9 and Q10 closed as built.** the 1788 layer (M16b): (a) `multiinterval/ieee1788.py`, one `Interval` class for both flavours, 1788's names in snake_case (`NAMES` has the camelCase), not exported from `multiinterval`; (b) `mid`, `rad`, `wid`, `mag`, `mig`, `mid_rad` of the empty set raise `ValueError`, where 1788 says NaN; (c) Q9 answered by the layer: `ieee1788.mul_rev_to_pair` is 1788's pair with its decoration, the library's `mul_rev` unchanged; (d) Q10 answered by the layer: its pass runs the constructors in binary64, no class argument on the library's; (e) where 1788 defines another answer than the library's set (cancellation, overlap, attained infinities), the layer gives 1788's and the library keeps its own | as built | M16b |
 | D22 | **decided in the build 2026-09-28 (the session's defaults); confirmed 2026-10-03 by owner (Q14, as built; every cut-tuple relation asserts normalized operands).** the per-piece allen matrix (M16c): (a) `A.allen_matrix(B)`, a tuple of tuples of `Allen` (rows the pieces of `A`, columns those of `B`), and `relations.allen_matrix` over cut tuples; (b) `A.allen_relations(B)`, the `frozenset` of the relations holding between some pair of pieces, a second public name the H3 row did not list; (c) an empty operand gives `()` / one empty row per piece / `frozenset()`, no raise and no warning; (d) the matrix is the plain `n x m` loop over `allen()` (no dependence on normalized input; the design's ~2-3x faster fill + sweep not taken), the set view an `O(n + m)` sweep that never builds the matrix; (e) methods on `MultiInterval`, functions in `relations.py`, nothing at the top level, not on `DecoratedInterval`, the sparse `(i, j, relation)` view private | as built | nothing (additive: `allen()` and every existing name unchanged); M16c's record |
-| D23 | **decided in the build 2026-09-28 (the session's defaults); answered 2026-10-03 by owner (Q15): (a), (b), (d), (e), (h) as built; changed: (c) `==`/`!=` against an ndarray is elementwise, (f) `fmin`/`fmax` are `minimum`/`maximum`, (g) numpy is in `[test]`; and the methods follow (h)'s rule (a mixed method call returns the class the operators do).** numpy interop (M16d): (a) `__array_ufunc__` on `MultiInterval`, `DecoratedInterval`, `Dual` (`intervals/numpy_compat.py`), operator ufuncs as python's operators on our dunders only, the others the method of the same set image, the rest `TypeError`; `__array__` on `MultiInterval` only (a 0-d object array); the array API standard not built (the alternative: an interval-array type); (b) a foreign real is its exact value (a `Rational` by type, else where `float()` would round), alternatives refuse or keep `float()`; (c) an ndarray meeting ours is elementwise into an object array, `==`/`!=` never broadcast; (d) no numpy-named alias methods; (e) `np.invert` the complement; (f) `fmin`/`fmax` not mapped; (g) numpy not in `[test]`; (h) both operands ours in a method ufunc (`hypot minimum maximum arctan2`): the subclass decides, as for the operators | as built | M16d |
-| D24 | **decided in the build 2026-09-28 (the session's defaults); answered 2026-10-03 by owner (Q16): (a)-(c), (f) as built; changed: (d) `[fast]` pinned to `auto`'s window as `[test]` is, (e) one CI gate job on the forced gmpy2 backend.** the gmpy2/mpfr backend (M16e): (a) the default is the pure path; `INTERVALS_BACKEND=gmpy2` forces gmpy2 (ImportError if missing or below 2.3 / MPFR 4.2), `auto` takes it if importable and `2.3 <= version < 3`; (b) public surface: the env var and the `[fast]` extra only; `intervals.backend.name()` not exported, no setter; (c) non-dyadic points stay pure (no mpfr ziv loop), but atan, acot, atan2's angles and the hook's mixed operands; (d) `gmpy2>=2.3,<3` in `[test]`; (e) CI unchanged: the whole suite on the pure path, `tests/test_backend.py` compares both in every job; no gmpy2 fuzz job; (f) ships in 2.0 as an opt-in, or waits under "later" | as built | M16e |
+| D23 | **decided in the build 2026-09-28 (the session's defaults); answered 2026-10-03 by owner (Q15): (a), (b), (d), (e), (h) as built; changed: (c) `==`/`!=` against an ndarray is elementwise, (f) `fmin`/`fmax` are `minimum`/`maximum`, (g) numpy is in `[test]`; and the methods follow (h)'s rule (a mixed method call returns the class the operators do).** numpy interop (M16d): (a) `__array_ufunc__` on `MultiInterval`, `DecoratedInterval`, `Dual` (`multiinterval/numpy_compat.py`), operator ufuncs as python's operators on our dunders only, the others the method of the same set image, the rest `TypeError`; `__array__` on `MultiInterval` only (a 0-d object array); the array API standard not built (the alternative: an interval-array type); (b) a foreign real is its exact value (a `Rational` by type, else where `float()` would round), alternatives refuse or keep `float()`; (c) an ndarray meeting ours is elementwise into an object array, `==`/`!=` never broadcast; (d) no numpy-named alias methods; (e) `np.invert` the complement; (f) `fmin`/`fmax` not mapped; (g) numpy not in `[test]`; (h) both operands ours in a method ufunc (`hypot minimum maximum arctan2`): the subclass decides, as for the operators | as built | M16d |
+| D24 | **decided in the build 2026-09-28 (the session's defaults); answered 2026-10-03 by owner (Q16): (a)-(c), (f) as built; changed: (d) `[fast]` pinned to `auto`'s window as `[test]` is, (e) one CI gate job on the forced gmpy2 backend.** the gmpy2/mpfr backend (M16e): (a) the default is the pure path; `MULTIINTERVAL_BACKEND=gmpy2` forces gmpy2 (ImportError if missing or below 2.3 / MPFR 4.2), `auto` takes it if importable and `2.3 <= version < 3`; (b) public surface: the env var and the `[fast]` extra only; `multiinterval.backend.name()` not exported, no setter; (c) non-dyadic points stay pure (no mpfr ziv loop), but atan, acot, atan2's angles and the hook's mixed operands; (d) `gmpy2>=2.3,<3` in `[test]`; (e) CI unchanged: the whole suite on the pure path, `tests/test_backend.py` compares both in every job; no gmpy2 fuzz job; (f) ships in 2.0 as an opt-in, or waits under "later" | as built | M16e |
 | D25 | **decided 2026-09-28 by owner**: CPython 3.11's `Fraction.__pow__` rounds a Fraction base to a float before `MultiInterval.__rpow__` runs, so on 3.11 `Fraction(1, 3) ** OutwardMultiInterval(2)` misses 1/9, and nothing in the library can see it (the other Fraction operators defer correctly; 3.12 returns NotImplemented). drop 3.11, or keep it with `Fraction ** interval` documented as unsupported there? | **python >= 3.12**: `pyproject.toml` `requires-python`, CI's gate matrix 3.12-3.14; `tests/test_outward.py::test_a_fraction_base_stays_exact` is red on 3.11 | — |
-| D26 | **decided 2026-09-30 by owner** (fuzz-rev-inf): to nearest, a reverse op's exact preimage wholly past MAX squeezes to the point `[±inf]` (IEEE 754 rounds such a value to ±inf; `_widened` reads it as `[MAX, inf]`), and intersecting with `x` after that rounding lost it whenever `x` is open at that infinity: `pown_rev(c, -1, (-inf, -2))` for `c = (-2.2e-309, 0)` was `{}` though its exact answer `(-inf, -4.49e308)` is not empty; the same at a finite double (`sqr_rev([2, 2.0000000000000004], (1.4142135623730951, 2])` was `{}`). options weighed with the owner: (a) `x` meets the preimage before the rounding, 1788's order; (b) keep it and document it; (c) the nearest class saturates an overflow to `(MAX, inf)`, 1788's enclosure rule, no longer python's float | **(a)**, in the reverse ops only (`reverse._keep_squeezed`): a part of the exact answer inside `x` that rounds wholly onto one double is that double, as a point: an end `x` excludes (the case above; the one way a result leaves `x`), or a point of `x` where the rounding kept an end open (`mul_rev(10, (1, 2), [0.1])`, whose exact answer holds the double 0.1, was `{}`, now `[0.1]`; a known loss M13e's tests had worked around by leaving `x` out of their checks). the nearest class keeps IEEE 754 round-to-nearest (as python's float) everywhere; forward ops unchanged: `[inf] & (0, inf)` is still `{}` (documented, README "rounding"). not a 1788 divergence row: the vectors test the outward class, which was already right | `intervals/reverse.py`; `tests/test_reverse.py::test_float_operands` (two `@example`s), `::test_exactly_the_points_with_f_in_c` |
+| D26 | **decided 2026-09-30 by owner** (fuzz-rev-inf): to nearest, a reverse op's exact preimage wholly past MAX squeezes to the point `[±inf]` (IEEE 754 rounds such a value to ±inf; `_widened` reads it as `[MAX, inf]`), and intersecting with `x` after that rounding lost it whenever `x` is open at that infinity: `pown_rev(c, -1, (-inf, -2))` for `c = (-2.2e-309, 0)` was `{}` though its exact answer `(-inf, -4.49e308)` is not empty; the same at a finite double (`sqr_rev([2, 2.0000000000000004], (1.4142135623730951, 2])` was `{}`). options weighed with the owner: (a) `x` meets the preimage before the rounding, 1788's order; (b) keep it and document it; (c) the nearest class saturates an overflow to `(MAX, inf)`, 1788's enclosure rule, no longer python's float | **(a)**, in the reverse ops only (`reverse._keep_squeezed`): a part of the exact answer inside `x` that rounds wholly onto one double is that double, as a point: an end `x` excludes (the case above; the one way a result leaves `x`), or a point of `x` where the rounding kept an end open (`mul_rev(10, (1, 2), [0.1])`, whose exact answer holds the double 0.1, was `{}`, now `[0.1]`; a known loss M13e's tests had worked around by leaving `x` out of their checks). the nearest class keeps IEEE 754 round-to-nearest (as python's float) everywhere; forward ops unchanged: `[inf] & (0, inf)` is still `{}` (documented, README "rounding"). not a 1788 divergence row: the vectors test the outward class, which was already right | `multiinterval/reverse.py`; `tests/test_reverse.py::test_float_operands` (two `@example`s), `::test_exactly_the_points_with_f_in_c` |
 | D27 | **decided 2026-10-03 by owner** (the 1788 departures census, 2026-09-30, never asked before): four departures from 1788 that were build choices are deliberate: step functions are point sets (`floor([-1.5, 1.5])` is four points, 1788 `[-2, 1]`); an end that rounding moved is open (M12); the divergence categories "degenerate infinities" (D1, D6 and the domain-end rule) and "cut-based relations" (the 2026-08-16 principles). the stale category "domain-clipped functions" (no row since M13d) is removed from `tests/itf1788/test_itf1788.py::REASONS` and the current design | as stated | `references/owner-questions-2026-10-03/ieee1788.md` |
 | D28 | **decided 2026-10-03 by owner** (Q17, Q18, m14b-open's 4300 digits): pown of exact operands past one exact-result limit of about 2 ** 22 bits, shared by pown, `pow_` and exp2/exp10, is the tightest open float enclosure in the outward class and the value rounded to nearest in the nearest class, with a default-ignored warning; `elementary.EXACT_POWER_LIMIT` stays the float-corner threshold. pown to nearest is correctly rounded for every n (the exact power rounded once, `rounded_pow` past the threshold), not libm's `float ** int`. `repr` does not raise past python's 4300-digit limit (hex past it; `parse` reads it) | as stated | `references/owner-questions-2026-10-03/pown.md`; §2 "owner-answers" |
 | D29 | **decided 2026-10-03 by owner** (Q19, Q20): each end keeps its own number type. the outward class is isotone within one grid; across grids `f(A)` lies within the tightest double cover of `f(B)` (documented; a public method rounds every end onto the double grid, outward). the exact class's crossed piece is the piece between the two values, each end keeping its flag (`rootn((10 ** -30, 1.0000000000000003e-30], 5)` is `[1e-06, 1/1000000)`) | keep per-end typing | `references/owner-questions-2026-10-03/q19.md`, `q20.md`; §2 "fuzz-steps-isotone", "fuzz-rootn-crossed" |
@@ -67,7 +67,7 @@ vendoring.
   `python-flint>=0.9`, so CI's `pip install -e ".[test]"` picks it up
 * gate: `C:/Users/user/anaconda3/envs/intervals/python.exe -m pytest -q` from the repo root. add
   `pyproject.toml` (package metadata, `[tool.pytest.ini_options] testpaths = ["tests"]` and
-  `pythonpath = ["."]` so the v1 modules at the root and the `intervals/` package import without
+  `pythonpath = ["."]` so the v1 modules at the root and the `multiinterval/` package import without
   relying on `python -m` putting cwd on `sys.path`, and a
   `filterwarnings` entry turning the library's own warnings into errors inside the suite once
   the warning classes exist)
@@ -92,7 +92,7 @@ vendoring.
   `a1d45a9` all 8 green, the gate 272-285 s on each python. M15 and M16's first, CI run 36402681261 at `3aaf8f4` (M15 and M16's first, 2026-09-28): 7 of 8 jobs green, the gate 33330 passed on python 3.12-3.14 in 365-429 s; on python 3.11 `1 failed, 33329 passed in 393 s`, `tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers[longdouble-pow]`: the oracle's `Fraction(2 ** 60 + 1, 2 ** 60) ** (-inf, -2)` gave `[1.0]`. first misread as numpy 2.4 comparing a long double as its double (`42234f0` made the oracle decide exactly, and run 36406179185 failed the same way); the cause is CPython 3.11's `Fraction.__pow__`, which answers any non-rational exponent with `float(a) ** b`, so a Fraction base is rounded before the library's `__rpow__` sees it: on 3.11 `Fraction(1, 3) ** O(2)` is `(0.11111111111111109, 0.1111111111111111)`, missing 1/9, through `Dual` too (checked with a local 3.11.15; `+ - * / // % divmod` stay exact; 3.12 returns NotImplemented). nothing in the library can see it (its `__rpow__` gets a float), so the owner set python >= 3.12 (D25); `tests/test_outward.py::test_a_fraction_base_stays_exact` is red on 3.11. the exhaustive jobs 19 s to 8 min 54 s; pushed at `c1552b1`, CI run 36415649083 is green (all 7 jobs, 2026-09-28): the gate 33332 passed on each of python 3.12-3.14 in 355-410 s, the exhaustive jobs 23 s (sabotage) to 12 min 12 s (modulo), no 3.11 job
 * v1 files stay in place, untouched, until M10, then move to `archive/v1/`. **no v1 file is ever
   deleted by this plan**: the archive is the reference until v2 works. v1 is the differential
-  oracle for set ops and for `A % scalar`. the package is `intervals/`, so `import multi_interval`
+  oracle for set ops and for `A % scalar`. the package was `intervals/` (now `multiinterval/`), so `import multi_interval`
   (v1) and `from intervals import MultiInterval` (v2) coexist, before and after the move
 * since M10 (2026-09-25): v1 is in `archive/v1/`, pytest's `pythonpath` is `[".", "archive/v1"]`,
   and `testpaths` also collects `README.md` as a doctest. v1 is imported in one place,
@@ -309,7 +309,7 @@ every new property test (flip one comparison, watch red, restore).
 * tests: extend the prototype's corner suite and fuzz to all four quadrants and zero-crossing
   operands; attainment oracle on exact operands; python's `%` sign convention (result takes the
   divisor's sign) as the scalar reference
-* done 2026-09-24 (M7a and M7b together): `intervals/modulo.py` (`mod floor floordiv divmod_`), the class's
+* done 2026-09-24 (M7a and M7b together): `multiinterval/modulo.py` (`mod floor floordiv divmod_`), the class's
   `% // divmod` with their reflected forms and `floor()`, `HullWarning`, and `tests/test_modulo.py`.
   choices made while building:
     * **D8 is implemented as its recommended default, confirmed by the owner the same day**: `±inf mod y`
@@ -359,7 +359,7 @@ every new property test (flip one comparison, watch red, restore).
     * `python -m tests.exhaustive_modulo` (every single-piece pair over `{-inf, -3, -2, -3/2, -1,
       -1/2, 0, 1/2, 1, 3/2, 2, 3, inf}`, all flags): 105,625 boxes, 0 mismatches against the
       brute-force oracle in `tests/oracles.py`, 1002 s
-    * the Fable prototype and `intervals/modulo.py` were written independently; they agree on all
+    * the Fable prototype and `multiinterval/modulo.py` were written independently; they agree on all
       105,625 of those pairs
     * sabotage, each run against `tests/test_modulo.py`: skipping the exact check at the two extreme
       quotients, dropping the Q2 left edge, keeping unattained degenerate pieces, reading every
@@ -427,10 +427,10 @@ every new property test (flip one comparison, watch red, restore).
 
 **done (2026-10-04, branch `m8` off `1660b73`).** the design as built is `v2-plan.md` "the time layer (M8)".
 
-* **built**: `intervals/time_interval.py`: `_TimeInterval` (the shared wrapper: set algebra, relations,
+* **built**: `multiinterval/time_interval.py`: `_TimeInterval` (the shared wrapper: set algebra, relations,
   `TruthSet` comparisons, slicing, `expand`, pieces, read-outs, `repr`/`str`, `to_pandas`/`from_pandas`),
   `DateTimeInterval` (kind and display zone, `tz=`, `astimezone`, `tz`), `TimeDeltaInterval` (the duration
-  arithmetic), the sentinels `NEG_INF`/`POS_INF` (`_Infinity`). exported from `intervals` (`__all__` +4,
+  arithmetic), the sentinels `NEG_INF`/`POS_INF` (`_Infinity`). exported from `multiinterval` (`__all__` +4,
   `tests/test_applicator.py::test_package_exports_unchanged`); `pandas` in `[test]` (pyproject.toml); README
   "time (M8)" with doctests, its layout, status and tests lines
 * **v1's surface, v2's names** (§4): `infimum`/`supremum` → `inf`/`sup` (+ `inf_closed`, `sup_closed` and the
@@ -470,7 +470,7 @@ every new property test (flip one comparison, watch red, restore).
   pandas never imported, in a subprocess) and `tests/test_time_pandas.py` (32 items: exact `Timestamp` and
   `Timedelta` readings, past the ns range, NaT, the sentinels against pandas' types, the `pd.Interval` round
   trips and refusals, a property over nanosecond intervals). together about 10 s locally
-* **sabotage** (2026-10-04, worktree only, one exact string of `intervals/time_interval.py` per row, `__pycache__`
+* **sabotage** (2026-10-04, worktree only, one exact string of `multiinterval/time_interval.py` per row, `__pycache__`
   cleared, `PYTHONDONTWRITEBYTECODE=1`, restored by `shutil.copy2` and checked with `filecmp`; the two test
   files, 200 items). control (intact): green. every break red:
 
@@ -753,7 +753,7 @@ finding; a fixer reproduced every one on the current code first (all reproduced)
 ### M11 backlog: everything not yet built (listed 2026-09-25)
 not a milestone with an exit criterion: the open work left after M10, from a sweep of both plans,
 the old README (`archive/v1/README.md`), v1's public surface and the code (no TODO, FIXME, skip or
-xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owner decision first,
+xfail in `multiinterval/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owner decision first,
 **(b)** ready to build, **(c)** housekeeping. items become milestones when picked up
 * **release** (a, then c): merge `v2` into `master`, `version = "2.0.0"` in `pyproject.toml`, tag.
   D5's blocker (M7b) is met; D17: no hurry. status: `HANDOFF.md` H1
@@ -764,7 +764,7 @@ xfail in `intervals/` or `tests/` as of 2026-09-25). tags: **(a)** needs an owne
   owner 2026-09-25: build, as M13e
 * **power beyond int exponents** (a: scope; owner 2026-09-25: build 1788's `pow`, as M13d; built
   2026-09-26, see M13d): `A ** 0.5`, `A ** B`, `2 ** A` were TypeError until then
-  (`intervals/multi_interval.py::MultiInterval.__pow__`); v1 took an interval exponent on a
+  (`multiinterval/multi_interval.py::MultiInterval.__pow__`); v1 took an interval exponent on a
   positive base. 3-argument `pow(A, n, m)` (v1: integers only; old README "allow interval modulo
   for `__pow__()`"). settled by D11: integral exponents stay pown, others are 1788 pow, and
   3-argument `pow` is dropped
@@ -805,15 +805,15 @@ vectors), `1ed5e70` (the unit tests), `5d584c1` (atan2); the design is in `v2-pl
 design" (arithmetic, "elementary and step functions (M12)", ieee 1788) and its decision log entry
 "2026-09-25 revision: M12"
 * built:
-    * `intervals/elementary.py`: sqrt, exp, exp2, exp10, log (any base), log2, log10, sin, cos, tan,
+    * `multiinterval/elementary.py`: sqrt, exp, exp2, exp10, log (any base), log2, log10, sin, cos, tan,
       asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh and the atan2 angle at one exact point,
       correctly rounded down, to nearest and up, in pure python (no libm)
-    * `intervals/functions.py`: those functions and atan2 over sets; methods of the class
-    * `intervals/steps.py`: floor, ceil, trunc, round (and `round(A, ndigits)`), round_ties_away,
+    * `multiinterval/functions.py`: those functions and atan2 over sets; methods of the class
+    * `multiinterval/steps.py`: floor, ceil, trunc, round (and `round(A, ndigits)`), round_ties_away,
       sign; `math.floor/ceil/trunc` and `round()` return sets; `modulo.floor` delegates here
-    * `intervals/ops.py`: `minimum`, `maximum`, `fma`, and the `OUTWARD` descriptors;
-      `intervals/rounding.py`; `outward=` on every rounding op, `mod` and `floordiv` included
-    * `OutwardMultiInterval`, exported from `intervals`
+    * `multiinterval/ops.py`: `minimum`, `maximum`, `fma`, and the `OUTWARD` descriptors;
+      `multiinterval/rounding.py`; `outward=` on every rounding op, `mod` and `floordiv` included
+    * `OutwardMultiInterval`, exported from `multiinterval`
     * itf1788: `libieeep1788_tests_bool.itl`, `_num.itl`, `_overlap.itl`, `_rec_bool.itl` and
       `atan2.itl` vendored unmodified (git blob hashes equal upstream's), the parser reads numbers,
       booleans and overlap states, and every interval-valued vector runs a second time through
@@ -965,7 +965,7 @@ statements
 * unbounded: `mid` of entire is 0, of a half-bounded set ±max float; `rad` and `wid` are inf.
   empty raises `ValueError`, like `.inf`; the adapter maps that to `NaN`
 * done 2026-09-26. built:
-    * `intervals/numeric.py::mid`, `::rad`, `::wid`, `::mag`, `::mig`, `::mid_rad` over cut
+    * `multiinterval/numeric.py::mid`, `::rad`, `::wid`, `::mag`, `::mig`, `::mid_rad` over cut
       tuples, bound as the methods `MultiInterval.mid()`, `.rad()`, `.wid()`, `.mag()`, `.mig()`,
       `.mid_rad()` (a pair). `OutwardMultiInterval` inherits them unchanged: a number is not an
       interval, and its direction is 1788's for the function, so both classes give the same numbers
@@ -1040,11 +1040,11 @@ statements
   in the vectors is `A.within(B.interior)`. 1788's unbounded ends arrive open at inf through the
   input rule, which is what makes `interior [1, infinity] [0, infinity]` true
 * done 2026-09-26. built:
-    * `intervals/relations.py::weakly_less`, `::strictly_less` over cut tuples, and the methods
+    * `multiinterval/relations.py::weakly_less`, `::strictly_less` over cut tuples, and the methods
       `MultiInterval.weakly_less(B)`, `.strictly_less(B)` (a number is coerced to a point, anything
       else is a `TypeError`, as for `within`). on the ends as values, so a multi-interval's are its
       hull's and open or closed does not matter (`[0, 2]` is weakly, not strictly, less than
-      `[0, 2)`). `intervals/kernel.py::interior` and the property `MultiInterval.interior` (the
+      `[0, 2)`). `multiinterval/kernel.py::interior` and the property `MultiInterval.interior` (the
       class is kept, so an `OutwardMultiInterval`'s is one)
     * empty sets as 1788's vectors have them: two empty sets are weakly and strictly less than each
       other, an empty and a non-empty set are neither (`less [empty] [1.0,2.0] = false`); the
@@ -1098,7 +1098,7 @@ statements
   `strictLess` as `weakly_less` 10, `less` with its operands swapped 34
 
 **M13d power and the rest of the elementary functions (done 2026-09-26)** (D11). every value correctly rounded in
-pure python, in `intervals/elementary.py` at one point and `intervals/functions.py` over sets, as at
+pure python, in `multiinterval/elementary.py` at one point and `multiinterval/functions.py` over sets, as at
 M12; each checked against the D14 oracle (M14)
 * `pow` 1431: `__pow__` as D11 (integral exponent → pown as today; non-integral float or
   `MultiInterval` exponent → 1788 pow, negative bases dropped with `DomainClippedWarning`,
@@ -1110,7 +1110,7 @@ M12; each checked against the D14 oracle (M14)
   coth, csch split a piece as tan's do; `acoth`'s domain is `|x| ≥ 1` with the M12 rule for a
   domain's end (the one-sided limit, so ±inf at ±1: expect degenerate-infinity rows like atanh's)
 * done 2026-09-26. built:
-    * `intervals/elementary.py`: the twelve functions at an exact point in `NAMES` (and `rootn`
+    * `multiinterval/elementary.py`: the twelve functions at an exact point in `NAMES` (and `rootn`
       through the `base` argument, as its degree n), with their exact values (`exact`: 0 or 1 at
       the obvious points, the rational roots, the limits at ±inf and at a domain's end) and their
       enclosures (`_enclose`): `::_expm1_fractions` (exp at extra precision near 0, by
@@ -1123,7 +1123,7 @@ M12; each checked against the D14 oracle (M14)
       `::_exact_root` and the integer root `::_iroot`; not built past `EXACT_POWER_LIMIT` bits)
       and `::rounded_pow` (`exp(y ln x)` through ziv, overflow and underflow decided first from
       `::_ln_bracket`, two rationals of one sign within a factor of 3.1 of `ln x`)
-    * `intervals/functions.py`: the new names in `NAMES`, a public `::domain(name, base)`, the
+    * `multiinterval/functions.py`: the new names in `NAMES`, a public `::domain(name, base)`, the
       tables `MONOTONE` (expm1, log1p, cbrt, acot, sech with its new `'above 0'`, acoth on
       `|x| ≥ 1`), `RECIPROCAL_TRIG` (cot, csc, sec: the poles' and extrema's offsets in pi) and
       `POLE_AT_ZERO` (coth, csch). `_Function.reciprocal_trig` cuts a piece at its poles and
@@ -1132,7 +1132,7 @@ M12; each checked against the D14 oracle (M14)
       `rootn` through `apply(name, a, base=n)` (`::_check_degree`). `::pow_` over boxes as atan2
       does (`::_power_box`, `::_power_corner`, `::_POW_EXTREMES`), and `::hypot` (exact sums of
       squares, one square root; `_Function`'s new `float_operands`)
-    * `intervals/multi_interval.py`: the methods `expm1()`, `log1p()`, `cbrt()`, `rootn(n)`,
+    * `multiinterval/multi_interval.py`: the methods `expm1()`, `log1p()`, `cbrt()`, `rootn(n)`,
       `hypot(B)`, `cot()`, `sec()`, `csc()`, `acot()`, `coth()`, `csch()`, `sech()`, `acoth()`;
       `__pow__` per D11 (`::_is_integral` for a number's value) and `__rpow__`, overridden in
       `OutwardMultiInterval` as the other reflected dunders are
@@ -1221,7 +1221,7 @@ M12; each checked against the D14 oracle (M14)
   without them ziv doubles the precision until the ends agree, so the value is the same
 
 **M13e reverse ops (done 2026-09-26)** (D12). 1955 statements
-* a new module `intervals/reverse.py`, the functions exported from `intervals`, each taking the
+* a new module `multiinterval/reverse.py`, the functions exported from `multiinterval`, each taking the
   constraint first and the domain `x` last, defaulting to the whole line: `sqr_rev(c, x=REALS)`,
   `abs_rev(c, x=REALS)`, `pown_rev(c, n, x=REALS)`, `sin_rev`, `cos_rev`, `tan_rev`, `cosh_rev`
   (all `(c, x=REALS)`), `mul_rev(b, c, x=REALS)`, `pow_rev1(b, c, x=REALS)` (the bases x with
@@ -1236,8 +1236,8 @@ M12; each checked against the D14 oracle (M14)
 * **part 1 done 2026-09-26 (branch `m13e`): `sqr_rev`, `abs_rev`, `pown_rev`,
   `cosh_rev`** (476 statements); sin, cos, tan, mul and pow in parts 2 to 4 and the close-out
   below. built:
-    * `intervals/reverse.py`: `::sqr_rev`, `::abs_rev`, `::pown_rev`, `::cosh_rev`, exported from
-      `intervals` (`tests/test_applicator.py::test_package_exports_unchanged` lists them). the
+    * `multiinterval/reverse.py`: `::sqr_rev`, `::abs_rev`, `::pown_rev`, `::cosh_rev`, exported from
+      `multiinterval` (`tests/test_applicator.py::test_package_exports_unchanged` lists them). the
       engine, for the later reverse ops (the design is in the module docstring): `::Branch` (a
       piece of f's domain where f is continuous and strictly monotone, given by its image, each end
       closed iff attained, and its inverse as `exact` and `rounded`), `::named` (a branch whose
@@ -1308,7 +1308,7 @@ M12; each checked against the D14 oracle (M14)
   2026-09-26: `tests/itf1788` 14953 passed in 33.6 s, the rest 3401 passed in 392.7 s (18354 in
   all; 17346 at M13d)
 * sabotage (section 2), 2026-09-26: 22 breaks, each run by a throwaway harness against
-  `tests/test_reverse.py`, the doctests of `intervals/reverse.py` and every itf1788 item matching
+  `tests/test_reverse.py`, the doctests of `multiinterval/reverse.py` and every itf1788 item matching
   `rev` (1018 items), the file restored from a copy and byte-compared (`filecmp`, all equal),
   results appended as they landed. red: an irrational end closed 6 (the enclosure, defining,
   sampled-soundness and arb tests, 2 doctests; **no vector**: the closed hull hides a flag); the
@@ -1331,8 +1331,8 @@ M12; each checked against the D14 oracle (M14)
   empty when the exact one is not) and two `@example`s on it; re-run, each now turns 2 red
 * **part 2 done 2026-09-26 (branch `m13e`): `mul_rev`** (mulRev 182, mulRevTen 10, mulRevToPair
   347 statements). built:
-    * `intervals/reverse.py::mul_rev(b, c, x=REALS)`, `{t ∈ x : t * y ∈ c for some y ∈ b}` with the
-      library's `*`, exported from `intervals` (`test_package_exports_unchanged` lists it). `*` is
+    * `multiinterval/reverse.py::mul_rev(b, c, x=REALS)`, `{t ∈ x : t * y ∈ c for some y ∈ b}` with the
+      library's `*`, exported from `multiinterval` (`test_package_exports_unchanged` lists it). `*` is
       the set of the values of the defined pairs, so `t` is in iff `{t} * b` meets `c`;
       `::_mul_preimage` takes the cases by the kind of `t` (the derivation is in `mul_rev`'s
       docstring): `t = 0` iff `0 ∈ c` and `b` has a finite point (`0 * ±inf` has no value); a
@@ -1421,8 +1421,8 @@ M12; each checked against the D14 oracle (M14)
   passes), `mulRevToPair` without the pair rule 344
 * **part 3 done 2026-09-26 (branch `m13e`): `sin_rev`, `cos_rev`, `tan_rev`** (sinRev 12, sinRevBin
   40, cosRev 12, cosRevBin 42, tanRev 10, tanRevBin 20 statements). built:
-    * `intervals/reverse.py::sin_rev(c, x=REALS)`, `::cos_rev`, `::tan_rev`, exported from
-      `intervals` (`test_package_exports_unchanged` lists them): `{t ∈ x : f(t) ∈ c}` for the
+    * `multiinterval/reverse.py::sin_rev(c, x=REALS)`, `::cos_rev`, `::tan_rev`, exported from
+      `multiinterval` (`test_package_exports_unchanged` lists them): `{t ∈ x : f(t) ∈ c}` for the
       library's sin, cos, tan at a point, which have no value at ±inf (`functions.domain`) and tan
       none at its poles. part 1's engine: `::_Periodic` names an op's branches and
       `::_trig_branch` makes the k-th, a `Branch` whose inverse is `m pi + sign g(v)`, g being
@@ -1439,7 +1439,7 @@ M12; each checked against the D14 oracle (M14)
       past it, a `c` that is not the whole image has more than 1000 pieces, since each period holds
       a solution and a point that is not one. `::_reverse` is reused with `given=(x,)`
       (`::_periodic`): the preimage needs `x` to know which branches to list
-    * `intervals/elementary.py::rounded_inverse_trig(name, v, sign, k, direction)`: `k pi + sign
+    * `multiinterval/elementary.py::rounded_inverse_trig(name, v, sign, k, direction)`: `k pi + sign
       f(v)` correctly rounded by ziv's loop, the working precision grown by k's bits so that a branch
       far out needs no extra doublings; `acos(-1)` = pi is folded into k, since `(k + sign) pi` is 0
       at `k = -sign`
@@ -1573,9 +1573,9 @@ M12; each checked against the D14 oracle (M14)
 * **part 4 done 2026-09-26 (branch `m13e`): `pow_rev1`, `pow_rev2`** (powRev1 429, powRev2 375
   statements, all in `pow_rev.itl`, all with the domain given; none in `libieeep1788_rev.itl`).
   built:
-    * `intervals/reverse.py::pow_rev1(b, c, x=REALS)`, the bases `{t ∈ x : t ** y ∈ c for some y ∈
+    * `multiinterval/reverse.py::pow_rev1(b, c, x=REALS)`, the bases `{t ∈ x : t ** y ∈ c for some y ∈
       b}`, and `::pow_rev2(a, c, y=REALS)`, the exponents `{s ∈ y : t ** s ∈ c for some t ∈ a}`,
-      `**` the library's pow (`functions.pow_`, D11) at a point; exported from `intervals`
+      `**` the library's pow (`functions.pow_`, D11) at a point; exported from `multiinterval`
       (`test_package_exports_unchanged` lists them). no branch engine, as for `mul_rev`: pow is not
       a function of one variable. `::_pow1_preimage` and `::_pow2_preimage` take a case per special
       point of pow (the derivations are in the two docstrings): a base 0 (`0 ** y` = 0 for y in `(0,
@@ -1590,7 +1590,7 @@ M12; each checked against the D14 oracle (M14)
       signs of `ln t` and `ln v`, the limits at 0, 1 and inf, never 1 with 1 nor 0 or inf with 0 or
       inf), each end `elementary.rounded('log', v, direction, t)`. `::_reverse` with `given=(b,)`
       does the coercion, class, empty-operand warning and `∩` the domain after rounding
-    * `intervals/elementary.py::_exact_log` rewritten, with `::_perfect_power` and `::_primes_below`:
+    * `multiinterval/elementary.py::_exact_log` rewritten, with `::_perfect_power` and `::_primes_below`:
       `log_b x` is rational iff x and b are powers of one rational, found by writing each as `r **
       h` with h as large as it can be (then `log_b x` = h/g iff the two roots agree). both helpers
       were replaced at the review (2026-09-27) by `::_log_ratio` and `::_divide_out`, below
@@ -1702,14 +1702,14 @@ M12; each checked against the D14 oracle (M14)
   narrow enough; now 1, `log_3` of `(1e300, 1e300 + ulp)` is one double to nearest)
 * **the close-out, done 2026-09-26 (branch `m13e`): M13e is complete**, all 1955 statements of the
   19 reverse ops run and none is skipped. built, over the four parts:
-    * `intervals/reverse.py`: ten functions, exported from `intervals`, the constraint first and the
+    * `multiinterval/reverse.py`: ten functions, exported from `multiinterval`, the constraint first and the
       domain last, defaulting to `[-inf, inf]`: `::sqr_rev`, `::abs_rev`, `::pown_rev`, `::cosh_rev`
       (part 1), `::mul_rev` (part 2), `::sin_rev`, `::cos_rev`, `::tan_rev` (part 3), `::pow_rev1`,
       `::pow_rev2` (part 4). the one-variable ops share the branch engine (`::Branch`,
       `::branch_preimage`, `::_trig_branch` for the periodic ones), the two-variable ones take a case
       per special point; all go through `::_reverse` (coercion, class, the empty-operand warning,
       `∩` the domain after rounding). two library helpers came with them:
-      `intervals/elementary.py::rounded_inverse_trig` (part 3) and the rational `::_exact_log`
+      `multiinterval/elementary.py::rounded_inverse_trig` (part 3) and the rational `::_exact_log`
       (part 4, fixing a hang of `MultiInterval(2).log(4)`)
     * the close-out: the module docstring no longer calls the engine's later users "still to come";
       three reverse-op lines in the README's doctest block (`sqr_rev`, `mul_rev`, `sin_rev` over a
@@ -1759,7 +1759,7 @@ M12; each checked against the D14 oracle (M14)
   bit length, so a large exact operand that is not a perfect power was very slow (measured
   2026-09-27 at c6a3b3d: `MultiInterval(3 ** 5000 + 1).log2()` 1.51 s, `.log10()` 1.69 s,
   `pow_rev2(M(2), M(3 ** 5000 + 1))` 3.08 s; the reviewers had 356 s for `3 ** 20000 + 1`). fixed:
-  `intervals/elementary.py::_exact_log` now reduces to the numerators and the denominators, each by
+  `multiinterval/elementary.py::_exact_log` now reduces to the numerators and the denominators, each by
   `::_log_ratio`, euclid on the exponents (`a = b ** t * a'`, `log_b a = t + 1 / log_a' b`, t by
   `::_divide_out` in binary); `_perfect_power` and `_primes_below` are gone. the same cases now
   0.00 s, `3 ** 20000 + 1` 0.01 s, `2 ** 60000 + 1` 0.02 s; on 19859 random operands the value and
@@ -1767,7 +1767,7 @@ M12; each checked against the D14 oracle (M14)
   loop at that size, not the exact test, and not new.) pinned by
   `tests/test_elementary.py::test_rational_log_of_large_operands_is_fast` (7 cases, 5 s each).
   **three unpinned clauses, now pinned**: to nearest, a moved end keeps its flag in
-  `intervals/reverse.py::_end` (pinned by `tests/test_reverse.py::test_nearest_keeps_the_flag_of_a_moved_end`:
+  `multiinterval/reverse.py::_end` (pinned by `tests/test_reverse.py::test_nearest_keeps_the_flag_of_a_moved_end`:
   `pown_rev(c, -1)` is `c ** -1`, closed, for 3 float c) and in `::_log_corner` (by
   `tests/test_pow_rev.py::test_pow_rev2_nearest_keeps_the_flag_of_a_moved_log`: `pow_rev2([a], c)`
   is `c.log(a)`, closed, 4 cases); D12's count running across the pieces of x in
@@ -1822,7 +1822,7 @@ M12; each checked against the D14 oracle (M14)
   set, often `∅`: those rows get the new residual category **"cancellation as a Minkowski
   difference"**, added to `REASONS` and to `v2-plan.md` "ieee 1788" when this lands
 * done 2026-09-26. built:
-    * `intervals/ops.py::cancel_minus`, `::cancel_plus` over cut tuples (helpers `::_fitting`,
+    * `multiinterval/ops.py::cancel_minus`, `::cancel_plus` over cut tuples (helpers `::_fitting`,
       `::_piece_fits`), and the methods `MultiInterval.cancel_minus(B)`, `.cancel_plus(B)` (a
       number is coerced to a point, anything else is a `TypeError`; the result has the receiver's
       class, as `fma`). the derivation is in `cancel_minus`'s docstring: `+` is the set of values
@@ -1934,15 +1934,15 @@ plus a decoration check on every decorated vector
   bare constructors, the new category.** left for parts 2 and 3 then (both built, below): the decorated wrapper type,
   `d-textToInterval`, `d-numsToInterval`, `setDec`, `newDec`, `intervalPart`, `decorationPart`, and
   the adapter checking decorations. built:
-    * signals (`intervals/errors.py`): `UndefinedOperationError(ValueError)` and
-      `PossiblyUndefinedOperationWarning(IntervalWarning)`, exported from `intervals`
+    * signals (`multiinterval/errors.py`): `UndefinedOperationError(ValueError)` and
+      `PossiblyUndefinedOperationWarning(IntervalWarning)`, exported from `multiinterval`
       (`tests/test_applicator.py::test_package_exports_unchanged` lists them)
-    * `intervals/literals.py`, a new module (not `ieee1788.py`, which `HANDOFF.md` H3 keeps for a
+    * `multiinterval/literals.py`, a new module (not `ieee1788.py`, which `HANDOFF.md` H3 keeps for a
       later thin adapter): `::parse_literal` reads 1788's interval literal (1788-2015 §9.7) into a
       `::Literal` (exact `lo`, `hi`, `None` for empty, and the decoration if any); `::number` one
       number literal; `::text_to_interval` (1788's `b-textToInterval`) and `::nums_to_interval`
       (`b-numsToInterval`) give a bare `MultiInterval` under 1788's input rule (a finite end closed,
-      an infinite one open, `::_bare`), both exported from `intervals`. the grammar, from the
+      an infinite one open, `::_bare`), both exported from `multiinterval`. the grammar, from the
       vectors of `libieeep1788_class.itl`, `ieee1788-constructors.itl`, `ieee1788-exceptions.itl`:
       `[l, u]`, `[x]`, `[l,]`, `[,u]`, `[,]`, `[ ]`, `[empty]`, `[entire]`; the uncertain form
       `m?r`, `m?`, `m??` with a direction `u`/`d` and an exponent `e`; decimal, hex (`0x...p...`),
@@ -2049,13 +2049,13 @@ plus a decoration check on every decorated vector
   1503 vectors of other ops carry a decoration (1022 of built ops: `libieeep1788_elem.itl` 493,
   `bool` 210, `cancel` 121, `num` 87, `rec_bool` 72, `overlap` 29, `set` 10; 481 of the reverse
   ops; counted with `tests/itf1788/itl.py::parse_file`, 2026-09-26). built:
-    * `intervals/decorated.py`, a new module above `literals.py`: `::Decoration`, an enum `COM`,
+    * `multiinterval/decorated.py`, a new module above `literals.py`: `::Decoration`, an enum `COM`,
       `DAC`, `DEF`, `TRV` (values the 1788 names) ordered `TRV < DEF < DAC < COM`, no `ILL`;
       `::DecoratedInterval(interval, decoration=None)`, immutable and hashable, with the properties
       `.interval` (1788's `intervalPart`) and `.decoration` (`decorationPart`); `::set_dec`
       (`setDec`); `::text_to_decorated_interval` (`d-textToInterval`, `literals.py::parse_literal`
       then the literal's decoration or newDec's) and `::nums_to_decorated_interval`
-      (`d-numsToInterval`). all five exported from `intervals`
+      (`d-numsToInterval`). all five exported from `multiinterval`
       (`tests/test_applicator.py::test_package_exports_unchanged` lists them)
     * **a core bug found and fixed**: `MultiInterval.is_finite` and `.finite` raised `OverflowError`
       on an exact end past the doubles (`MultiInterval(10**400).is_finite`), since `math.isfinite`
@@ -2166,7 +2166,7 @@ plus a decoration check on every decorated vector
   of the core, set operations trv, and the adapter checking the decoration of every decorated
   vector.** left for M13g after it: the reverse ops' decorated vectors, with M13e (a parallel
   branch; the hook below). built:
-    * `intervals/decorated.py`: `DecoratedInterval` gains the core's point functions: `+ - * /` and
+    * `multiinterval/decorated.py`: `DecoratedInterval` gains the core's point functions: `+ - * /` and
       their reflected forms, `%`, `//`, `divmod`, `**` (D11's dispatch: an integral real exponent is
       pown, `::_pown`, anything else pow, `::_pow`) and `__rpow__`, `-x`, `+x`, `abs`, `reciprocal`,
       `minimum`, `maximum`, `fma`, `hypot`, `atan2` (`::_atan2`), `log(base)`, `rootn(n)`, the 29
@@ -2328,11 +2328,11 @@ plus a decoration check on every decorated vector
   pass, from the review):
   every statement of its ops is a vector that matches or is a row, every decorated vector's
   decoration is checked, and nothing of M13g is skipped. built, over the three parts:
-    * the signals, `intervals/errors.py::UndefinedOperationError` (a `ValueError`) and
+    * the signals, `multiinterval/errors.py::UndefinedOperationError` (a `ValueError`) and
       `::PossiblyUndefinedOperationWarning` (an `IntervalWarning`); 1788's literals,
-      `intervals/literals.py::parse_literal`, and the bare constructors `::text_to_interval`,
+      `multiinterval/literals.py::parse_literal`, and the bare constructors `::text_to_interval`,
       `::nums_to_interval` (part 1)
-    * the decorated type, `intervals/decorated.py::Decoration` and `::DecoratedInterval` (newDec,
+    * the decorated type, `multiinterval/decorated.py::Decoration` and `::DecoratedInterval` (newDec,
       `.interval`, `.decoration`), `::set_dec`, `::text_to_decorated_interval`,
       `::nums_to_decorated_interval` (part 2); decoration propagation through every point function of
       the core and trv for its set operations, `::_propagate`, `::_trivial` (part 3). the core
@@ -2460,13 +2460,13 @@ plus a decoration check on every decorated vector
 **M13h reductions (done 2026-09-26)**. `sum_nearest`, `sum_abs_nearest`, `sum_sqr_nearest`,
 `dot_nearest`, 1 each as counted 2026-09-25 by the old parser, which saw only the first statement of
 each of the file's 4 testcases; M13a's parser reads the 11 it dropped (2026-09-26): 3, 3, 3 and 6
-* `intervals/reductions.py`: `sum_`, `sum_abs`, `sum_sqr`, `dot` over sequences of numbers, the
+* `multiinterval/reductions.py`: `sum_`, `sum_abs`, `sum_sqr`, `dot` over sequences of numbers, the
   exact value through `Fraction` then rounded once, to nearest by default. point ops, not interval
   ops, so no M14 properties beyond a random differential against `Fraction` arithmetic
 * done 2026-09-26. built:
-    * `intervals/reductions.py::sum_`, `::sum_abs`, `::sum_sqr`, `::dot`, exported from `intervals`
+    * `multiinterval/reductions.py::sum_`, `::sum_abs`, `::sum_sqr`, `::dot`, exported from `multiinterval`
       (M13e's precedent for the reverse ops; `tests/test_applicator.py::test_package_exports_unchanged`,
-      which pins `intervals.__all__`, lists the four now). any iterable of real numbers (int, Fraction, float,
+      which pins `multiinterval.__all__`, lists the four now). any iterable of real numbers (int, Fraction, float,
       mixed; `bool` and non-reals are a `TypeError`, as in `cuts.py::normalize_value`); each operand
       is held exactly, the value summed as a Fraction and rounded once by
       `rounding.round_rational`. the result is always a float, never `-0.0`; `sum_([])` is `0.0`
@@ -2515,14 +2515,14 @@ it, so a file that gains an op cannot quietly add skips
 
 **exit (done 2026-09-27, on branch `m13-merge`: `m13e` at `6453703` merged with `m13g` at `7e6681c`)**
 * the merge: the conflicts were insertion points, resolved keeping both sides, M13e's first
-  (`intervals/__init__.py` and `tests/test_applicator.py::test_package_exports_unchanged`, the union
+  (`multiinterval/__init__.py` and `tests/test_applicator.py::test_package_exports_unchanged`, the union
   of the exports; `tests/itf1788/test_itf1788.py`'s `OPS`, `REASONS`, `DIVERGENCES`, docstring;
   README and `v2-plan.md`). the one semantic conflict, as M13g's review predicted: the textual merge
   put M13e's `PAIRS` branch of `run_outward` inside `::_outward_hull`, where there is no `vector`;
   it is back in `::run_outward`. at the merge commit `tests/itf1788` had 2 red by design, M13g's
   reminders `::test_decorated_vectors_run_decorated` and `::test_no_decorated_pair_goes_unchecked`
 * **the decorated reverse ops** (M13g's hook): given a `DecoratedInterval` operand, each reverse op
-  is the core's set on the intervals, decorated trv (`intervals/reverse.py::_reverse`,
+  is the core's set on the intervals, decorated trv (`multiinterval/reverse.py::_reverse`,
   `::_decorated`, `decorated.py::_trivial`); a bare `MultiInterval` beside a decorated operand is
   a `TypeError`, but for the omitted `x`. in the adapter `::REVERSE` joins `::PROPAGATED`, and
   `::_pair_outcome` compares a decorated pair as (pieces, decoration), 1788's decoration being its
@@ -2674,7 +2674,7 @@ land with M13a so that every later M13 op arrives with them
       locally (`tools/prepush.sh`), not weekly (`v2-plan.md` "2026-09-29 revision: fuzz on push")
 * **the flint oracle, built 2026-09-26** (`tests/test_oracle_flint.py`, 9 test functions, 122
   tests parametrised; python-flint 0.9.0 in the env and `python-flint>=0.9` in the `[test]` extra;
-  `intervals/` unchanged):
+  `multiinterval/` unchanged):
     * per function, all 19 of M12, at a drawn float, int or Fraction point: soundness (DOWN ≤ value
       ≤ UP); sharpness (no double strictly between either end and the value, so each end is the
       correctly rounded bound, which a 1-ulp outward error already fails); NEAREST the correct one
@@ -2726,11 +2726,11 @@ gmpy2/mpfr stay out (owner 2026-09-26, recorded, not now); the direction tag was
 the design). the choices the build made are D19, open for the owner as `HANDOFF.md` Q11. the
 design is `v2-plan.md` "the solver stack"; here the spec, the exit and the record.
 
-* **`intervals/autodiff.py`**: `Dual(value, derivative)`, two `MultiInterval`s (either class) or two
+* **`multiinterval/autodiff.py`**: `Dual(value, derivative)`, two `MultiInterval`s (either class) or two
   `DecoratedInterval`s; `Dual.variable`, `Dual.constant`, `derivative(f, x)`; the arithmetic
   dunders, `reciprocal`, `abs`, `**` (number, `Dual` or set exponent, and `number ** Dual`) and
   every elementary method of `MultiInterval` with its chain rule
-* **`intervals/solver.py`**: `newton(f, x, *, tol, max_steps)` and `Root(interval, unique)`: branch
+* **`multiinterval/solver.py`**: `newton(f, x, *, tol, max_steps)` and `Root(interval, unique)`: branch
   and prune, a newton step `piece ∩ (m + mul_rev(F', -f(m)))` where decorations prove `f` C¹ on a
   bounded piece, the uniqueness proof (`solver.py::_newton_step`), bisection (by exponent on a
   piece spanning more than a factor of 16), exact zeros at a point or a closed end
@@ -2821,10 +2821,10 @@ the owner, 2026-09-27: "get the rest of h3 done", which superseded 2026-09-26's 
 gmpy2/mpfr recorded, not now" (M15 above: "gmpy2/mpfr stay out"). H3's rest was built as M16, H3's
 second part, in five streams on five branches, each off `v2` at `04946af`: M16a nd-solver
 (`h3-nd-solver`: `gradient`, `jacobian`, `solve`, `RootBox`; D20, `HANDOFF.md` Q12), M16b ieee1788
-(`h3-ieee1788`: `intervals/ieee1788.py`, the 1788 layer; D21, Q13), M16c allen-matrix
+(`h3-ieee1788`: `multiinterval/ieee1788.py`, the 1788 layer; D21, Q13), M16c allen-matrix
 (`h3-allen-matrix`: `allen_matrix`, `allen_relations`; D22, Q14), M16d numpy (`h3-numpy`:
-`intervals/numpy_compat.py`; D23, Q15) and M16e gmpy2 (`h3-gmpy2`: `intervals/backend.py`,
-`intervals/_gmpy2.py`, opt-in, pure by default; D24, Q16). each stream was designed by one agent
+`multiinterval/numpy_compat.py`; D23, Q15) and M16e gmpy2 (`h3-gmpy2`: `multiinterval/backend.py`,
+`multiinterval/_gmpy2.py`, opt-in, pure by default; D24, Q16). each stream was designed by one agent
 and critiqued by an adversarial one, then built by a builder with properties and sabotage,
 reviewed by three read-only reviewers (lenses soundness, sabotage audit, spec/regression), fixed by
 a fixer that reproduced each finding first, and checked by a verifier, in its own worktree. the
@@ -2838,9 +2838,9 @@ sharing the laptop, so every time is loaded.
 (D20). the design is `v2-plan.md` "the solver stack" (its M16a bullets); the choices are D20, open
 as `HANDOFF.md` Q12.
 
-* **`intervals/autodiff.py`**: `gradient(f, xs)`, `jacobian(F, xs)` (and the private `_box`,
+* **`multiinterval/autodiff.py`**: `gradient(f, xs)`, `jacobian(F, xs)` (and the private `_box`,
   `_entry`, `_passes`, `_sequence`), appended below `derivative`; nothing above it edited
-* **`intervals/solver.py`**: `RootBox(box, unique)`, `solve(F, xs, *, tol, max_steps)`, and the
+* **`multiinterval/solver.py`**: `RootBox(box, unique)`, `solve(F, xs, *, tol, max_steps)`, and the
   private `_input_box`, `_outputs`, `_values`, `_jacobian`, `_points`, `_mid`, `_inverse`,
   `_combine`, `_precondition`, `_krawczyk`, `_gauss_seidel`, `_width`, `_wide`, `_choose`,
   `_simplest_between`, `_simplest_point`, `_finish_box`, `_regions`, `_inflate`, `_rounded`,
@@ -2848,7 +2848,7 @@ as `HANDOFF.md` Q12.
   `_magnitude_split`, `_bisect`, `_PAST_TOL`) but `_point_in`, whose `float(mid)` now falls back to
   the exact midpoint where it overflows (review F2, which `newton` shared); the module docstring
   unchanged
-* `intervals/__init__.py`: the four names imported and in `__all__`, under "M16: the solver stack's
+* `multiinterval/__init__.py`: the four names imported and in `__all__`, under "M16: the solver stack's
   second part, several variables (H3)"
 * exit: the jacobian against arb (soundness at points of boxes, sharpness at a point) and equal to
   `derivative` at n == 1; `solve` sound and its uniqueness claims true on constructed systems with
@@ -2891,7 +2891,7 @@ record (2026-09-28):
     a budget only: they do not detect the C¹ gate removed (review spec F1: forced off, the budgeted
     test and 25 draws at `max_steps` 100 to 400 stayed green); the gate is pinned by the examples
   * the gate found `tests/test_applicator.py::test_package_exports_unchanged` red: it pins
-    `intervals.__all__`; the four names are added there
+    `multiinterval.__all__`; the four names are added there
   * a split of a box already proved unique needs a step whose new preconditioner leaves 0 in a
     diagonal entry, which no example reached (sabotage "a split box keeps unique": green). pinned
     directly: `::test_a_split_box_is_unproved` makes `_krawczyk` claim the first box, which the step
@@ -2999,14 +2999,14 @@ record (2026-09-28):
   * the gate, from the worktree root, on the tree committed: `C:/Users/user/anaconda3/envs/intervals/python.exe
     -m pytest -q tests/itf1788`: 18246 passed in 40.3 s; the rest (`--ignore=tests/itf1788`: 4158
     collected) in four calls, each with `--ignore=tests/itf1788` and explicit paths: the four solver
-    test files, `intervals` and `README.md`: 334 passed in 104.3 s; the first 14 other test files
+    test files, `multiinterval` and `README.md`: 334 passed in 104.3 s; the first 14 other test files
     (alphabetical): 2361 passed in 192.3 s; the other 13: 1460 passed in 245.3 s; `tests/oracles.py`
     (its doctests): 3 passed in 0.2 s. sum 4158 passed in 542 s. the whole tree collects 22404 in
     one process (test basenames unique)
   * the gate after the review, from the worktree root, on the tree committed (2026-09-28, five
     streams sharing the laptop): `tests/itf1788`: 18246 passed in 48.8 s; the rest (4160 collected)
     in three calls, each with `--ignore=tests/itf1788` and explicit paths: the four solver test
-    files, `intervals` and `README.md`: 336 passed in 115.6 s; the first 14 other test files
+    files, `multiinterval` and `README.md`: 336 passed in 115.6 s; the first 14 other test files
     (alphabetical): 2361 passed in 251.9 s; the other 13 and `tests/oracles.py`: 1463 passed in
     292.7 s. sum 4160 passed in 660 s. the whole tree collects 22406 in one process
     (`python -m pytest --collect-only -q`; basenames unique)
@@ -3194,7 +3194,7 @@ the reviewers' evidence beyond their findings (2026-09-28, over `c8c9e08`; their
 the owner, 2026-09-27: "get the rest of h3 done". the layer is H3's "thin `ieee1788.py`" and
 Q9's pair op; the design is `v2-plan.md` "the 1788 layer", the choices D21 (owner question Q13).
 
-* **`intervals/ieee1788.py`**: `Interval(lo, hi, decoration)`, `from_set`, `Overlap` (16 states),
+* **`multiinterval/ieee1788.py`**: `Interval(lo, hi, decoration)`, `from_set`, `Overlap` (16 states),
   `NAMES` (104 names: 1788's 102 and itf1788's `d-numsToInterval`, `d-textToInterval`), and the
   104 functions: the constructors (`nums_to_interval`,
   `text_to_interval`, their decorated twins, `empty`, `entire`), `new_dec`, `set_dec`,
@@ -3277,7 +3277,7 @@ record (2026-09-28):
 * **measured 2026-09-28, after the review's fixes** (shared laptop, five H3 streams running at
   once, so every time is loaded): the pass, `python -m pytest -q tests/itf1788/test_ieee1788.py`,
   9549 passed (9542 vectors and its seven rules) in 38 s; the properties and the module's doctests,
-  `python -m pytest -q tests/test_ieee1788_layer.py intervals/ieee1788.py`, 292 passed in 22 s
+  `python -m pytest -q tests/test_ieee1788_layer.py multiinterval/ieee1788.py`, 292 passed in 22 s
   (287 at `027d8e6`, before the review). the pass's rows: 94 keys, 104 vectors (76 no NaI, 11
   tighter than the vector, 7 exact parsing), `python tools/itf1788_census.py` (its new last line,
   "layer pass rows"). the gate in three calls from the worktree root: `pytest -q tests/itf1788`
@@ -3296,7 +3296,7 @@ record (2026-09-28):
   with rc=1, and its output was lost (its log was deleted and overwritten mid-run); it ran on this
   tree less the one test edit below, and both later runs of that call on the final tree are
   green, so it is recorded here and not explained; a likely cause, found after the merge: `tests/test_literals.py::test_any_text_is_an_interval_or_undefined`, in that call, asserted `result.is_contiguous`, false for `text_to_interval('[]')`, the empty literal, so it failed whenever hypothesis drew `'[]'` (pre-existing at `04946af`, a test-oracle bug; found by M16e's verifier). fixed 2026-09-28 at the merge: `@example('[]')`, red on the old assertion, and the assertion is now `result.is_empty or result.is_contiguous`
-* **files**: `intervals/ieee1788.py`, `tests/itf1788/test_ieee1788.py`, `tests/test_ieee1788_layer.py`
+* **files**: `multiinterval/ieee1788.py`, `tests/itf1788/test_ieee1788.py`, `tests/test_ieee1788_layer.py`
   (new); `tools/itf1788_census.py` (prints the layer pass's rows). no library module and no existing
   test was edited, so the library's behaviour is unchanged
 * **sabotage** (a throwaway harness copied from M15's: each break alone, `.hypothesis` cleared, the
@@ -3469,7 +3469,7 @@ refuses a non-real `hi`
 | S6 | sabotage | fixed (F1's gap) | as F1: three `@example`s and a generator branch |
 | S7 | sabotage | fixed (F2's wording) | as F2 |
 | m1 | spec | fixed (F2's wording) | as F2 |
-| m2 | spec | fixed | `intervals/ieee1788.py::Interval._init` holds the `_is_1788_form` assertion; the design cites it |
+| m2 | spec | fixed | `multiinterval/ieee1788.py::Interval._init` holds the `_is_1788_form` assertion; the design cites it |
 | m3 | spec | fixed | the measured bullet names the gate's three calls by file |
 | m4 | spec | fixed | testing bullet reworded; `::test_mul_rev_to_pair_decorated`'s docstring says what it pins |
 
@@ -3480,11 +3480,11 @@ spec pointer is `v2-plan.md` "v2 consolidated decisions (2026-08-16)" / "compari
 the build made are D22, open for the owner as `HANDOFF.md` Q14; the design is `v2-plan.md`
 "comparisons".
 
-* **`intervals/relations.py`**: `allen_matrix(a, b)` (the plain loop), `allen_relations(a, b)`
+* **`multiinterval/relations.py`**: `allen_matrix(a, b)` (the plain loop), `allen_relations(a, b)`
   (the sweep and two corners), `_allen_pairs(pa, pb)` (the sweep, private; it calls `allen` as the
   module global, which the cost test counts); `allen_relations` asserts its operands normalized
   (the review, F1); two sentences in the module docstring
-* **`intervals/multi_interval.py`**: `MultiInterval.allen_matrix`, `MultiInterval.allen_relations`,
+* **`multiinterval/multi_interval.py`**: `MultiInterval.allen_matrix`, `MultiInterval.allen_relations`,
   each coercing through `_coerce_or_raise`, each with doctests (the worked example and an empty
   operand)
 * exit: every entry is `allen()` of its pair of pieces and the set view is the matrix's entries,
@@ -3522,7 +3522,7 @@ record (2026-09-28):
     `::test_allen_matrix_does_not_need_normalized_operands` (two cut tuples laid end to end give
     the two matrices stacked) holds it; the design's fill + sweep goes red there
 * **tests** (`tests/test_relations.py`, and the two methods' doctests in
-  `intervals/multi_interval.py`), all at hypothesis's default settings (no `@settings`, so the
+  `multiinterval/multi_interval.py`), all at hypothesis's default settings (no `@settings`, so the
   fuzz profile multiplies them like the rest); written first, against stubs raising `NotImplementedError`: 43 failed (every new test) and 30 passed (the module's old ones) in 206 s, 2026-09-28:
   * operands: `::operand_pairs`, a mixture of two independent `::operands`
     (`exact_cut_tuples` or `::dense`, a grid with ±inf) and pairs where one is derived from the
@@ -3568,7 +3568,7 @@ record (2026-09-28):
   worktree root with the env's interpreter, written `$PY` below: `PY=C:/Users/user/anaconda3/envs/intervals/python.exe`
   (bare `python` is a Microsoft Store stub on this laptop):
   * the stream: `$PY -m pytest -q -p no:cacheprovider tests/test_relations.py
-    intervals/relations.py intervals/multi_interval.py`: 103 passed in 36.4 s at `9bc9e7c`; after
+    multiinterval/relations.py multiinterval/multi_interval.py`: 103 passed in 36.4 s at `9bc9e7c`; after
     the review's two tests, 105 passed in 26.1 s
   * the module three times each, `.hypothesis` cleared before every run, `$PY -m pytest -q -p
     no:cacheprovider <module>`: at `04946af` 47 tests in 21.1, 25.2, 26.6 s; at `9bc9e7c` 73 tests
@@ -3586,8 +3586,8 @@ record (2026-09-28):
     import time
     from fractions import Fraction
 
-    from intervals import kernel, relations
-    from intervals.relations import Allen
+    from multiinterval import kernel, relations
+    from multiinterval.relations import Allen
 
 
     def fill_sweep(a, b):  # the design's matrix, not taken
@@ -3737,7 +3737,7 @@ through `MultiInterval`**. found and fixed:
 the owner, 2026-09-27: "get the rest of h3 done". the design is `v2-plan.md` "numpy"; the choices
 are D23, open as `HANDOFF.md` Q15. here the spec, the exit and the record.
 
-* **`intervals/numpy_compat.py`**: `array_ufunc` (the `__array_ufunc__` of `MultiInterval`,
+* **`multiinterval/numpy_compat.py`**: `array_ufunc` (the `__array_ufunc__` of `MultiInterval`,
   `DecoratedInterval`, `Dual`) and `array` (`MultiInterval.__array__`); imports no numpy at load
 * **`cuts.py::normalize_value`**: the foreign-real exact path (`cuts.py::_exact_value`)
 * **integer arguments**: `functions.py::_check_degree`, `steps.py::step` (`ndigits`),
@@ -4026,13 +4026,13 @@ record. what it blocks: nothing. every answer keeps today's behaviour (the pure 
 variable; Q16(a) (default automatic) and Q16(f) (in 2.0 or not) are the only ones whose answer
 would change what a user without the variable sees, and neither blocks H1.
 
-* **`intervals/backend.py`**: `INTERVALS_BACKEND` read at import (`::_select`: unset, `''`,
+* **`multiinterval/backend.py`**: `MULTIINTERVAL_BACKEND` read at import (`::_select`: unset, `''`,
   `python` → pure; `gmpy2` forced; `auto`; else `ValueError`), `NAME`, `fast`, `name()`, the version
   floor `::_supported` (gmpy2 `>= 2.3`, a pre-release counting as just before its release, a
   `+local` label read on a release or a pre-release; MPFR `>= 4.2`; `auto` also `< 3`; an
   unparsable string unsupported), `::_load` (lazy import of
   `_gmpy2`), `::_use` (the tests' switch)
-* **`intervals/_gmpy2.py`**: `rounded`, `rounded_pow`, `rounded_angle`, `rounded_inverse_trig`,
+* **`multiinterval/_gmpy2.py`**: `rounded`, `rounded_pow`, `rounded_angle`, `rounded_inverse_trig`,
   `outward`; each a float or None. the exact input (`::_operand`, `::_ratio`, `::_int`), the two
   guards (`::_value`: nan, and a ternary value of 0 on an elementary result), `BOUND = 2**20`,
   `ROOTN_LIMIT = 2**31`
@@ -4044,7 +4044,7 @@ would change what a user without the variable sees, and neither blocks H1.
   15 edge classes, None exactly where the table says; the set-level `repr` of every method equal
   under both; the switch, the env var and the version floor pinned; every new property sabotaged
   once and seen red; the gate green on the default (pure) backend, and once more with
-  `INTERVALS_BACKEND=gmpy2`
+  `MULTIINTERVAL_BACKEND=gmpy2`
 
 record (2026-09-28):
 * **what the build found on its way**, each fixed before the record:
@@ -4125,16 +4125,16 @@ record (2026-09-28):
       first group 3251 passed in 540.9 s; the second 1554 passed in 455.7 s; so 4805 in 996.6 s
       (pytest's own times; M15's one call was 482 s on an unloaded laptop, this one ran beside four
       other streams)
-    * **`INTERVALS_BACKEND=gmpy2`, 2026-09-28 08:48-09:06**: `tests/itf1788` 18246 passed in 110.8 s;
+    * **`MULTIINTERVAL_BACKEND=gmpy2`, 2026-09-28 08:48-09:06**: `tests/itf1788` 18246 passed in 110.8 s;
       3251 passed in 477.4 s; 1554 passed in 464.3 s; so 4805 in 941.7 s. the evidence that the
       backend passes the whole suite (the forced setting raises at import if gmpy2 is not taken).
       the two runs' times are not a speed comparison (load)
     * after the last edit (a docstring), `tests/test_backend.py` re-run: 717 passed in 43.4 s, and
-      717 in 39.1 s with `INTERVALS_BACKEND=gmpy2`
+      717 in 39.1 s with `MULTIINTERVAL_BACKEND=gmpy2`
     * **after the review's fixes, default (pure), 2026-09-28 10:14-10:30** (the same three calls;
       the x10 fuzz below ran beside the first two): `tests/itf1788` 18246 passed in 77.1 s; 3269
       passed in 442.2 s; 1554 passed in 420.6 s; so 4823 in 862.8 s. `tests/test_backend.py` alone:
-      735 passed in 43.4 s, and 735 in 41.6 s with `INTERVALS_BACKEND=gmpy2`. the forced whole gate
+      735 passed in 43.4 s, and 735 in 41.6 s with `MULTIINTERVAL_BACKEND=gmpy2`. the forced whole gate
       was not re-run: the review changed the library only in `backend.py::_PRE` (a version string)
       and comments. `pytest --collect-only -q` over the whole tree in one process: 23069 items
     * **the x10 fuzz of the differential** (`HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10 python -m
@@ -4262,7 +4262,7 @@ N5): each red on the test the table names, so no row was false. their own breaks
 in the backend as built**: the soundness lens checked about 41k primitive answers against arb, about
 118k hook answers exactly and 1200 set-level `repr`s under both backends, 0 wrong; the spec lens ran
 `tests/itf1788`, `tests/test_elementary.py` and `tests/test_backend.py` under
-`INTERVALS_BACKEND=gmpy2`, 19354 passed (both 2026-09-28, from their notes). every finding below was reproduced on `adeeb97` first (a git-archive
+`MULTIINTERVAL_BACKEND=gmpy2`, 19354 passed (both 2026-09-28, from their notes). every finding below was reproduced on `adeeb97` first (a git-archive
 copy, the break alone, `tests/test_backend.py` and the pure twin under `-x`, 2026-09-28: 718
 passed for each green one), then fixed with a test seen red, or rejected with evidence. ids are the
 reviewers' own, prefixed by lens, since three lenses reused `F1`:
@@ -4276,7 +4276,7 @@ reviewers' own, prefixed by lens, since three lenses reused `F1`:
 | sabotage F5 | sabotage | the bound's exact edge untested: the "just past" operands had b + 2 bits, so `> BOUND + 1` stayed green | fixed | reproduced: R9 green. `::_bound_cases` now uses `2**b` and `1/2**b` (b + 1 bits); R9 (B2b) now red by `::test_past_the_bound_is_declined_at_a_small_bound` |
 | soundness F3 | soundness | the bound's rationale said a dyadic past MPFR's range "flushes to 0 or inf with a ternary value of 0" | fixed (wording) | reproduced (gmpy2 2.3.1 / MPFR 4.2.2, 2026-09-28): `mpfr(2**(2**30 + 1), 2, context())` is `inf` with rc 1; `mpfr(mpq(1, 2**(2**30 + 1)), 2, context())` is `0.0` with rc 0. now "to 0 with a ternary value of 0 (to inf with 1), silently" in `_gmpy2.py`'s docstring, `tests/test_backend.py`'s class-15 comment and `v2-plan.md` "elementary and step functions"; the conclusion (decline) stands |
 | sabotage F6 | sabotage | the rootn bound's reason: gmpy2 takes n as a C `unsigned long`, accepts `2**31` and `2**32 - 1`, and raises `OverflowError` only from `2**32` (windows); `ROOTN_LIMIT`'s comment said "a C long" | fixed (wording) | reproduced (same versions, 2026-09-28): `ieee(64).rootn(mpfr(2), 2**31)` is 1.0000000003227718, `2**32` raises. `2**31` kept as a margin that holds on every platform; `_gmpy2.py`, the class-10 comment, `v2-plan.md` "elementary and step functions" and its decision-log revision say so |
-| spec R1 | spec | the readme example had no blank line before the closing fence, so doctest read the fence as expected output | fixed | reproduced: the section extracted and run with `python -m doctest` failed under both backends (1 of 3). blank line added; 3 passed under `INTERVALS_BACKEND=python` and `gmpy2` |
+| spec R1 | spec | the readme example had no blank line before the closing fence, so doctest read the fence as expected output | fixed | reproduced: the section extracted and run with `python -m doctest` failed under both backends (1 of 3). blank line added; 3 passed under `MULTIINTERVAL_BACKEND=python` and `gmpy2` |
 | spec V1 | spec | `[test]` had `gmpy2>=2.3` with no ceiling while `auto` takes only `< 3`: a gmpy2 3 on PyPI turns `test_env_var`'s auto row red in every CI job | fixed | `[test]` now `gmpy2>=2.3,<3`; `::test_the_test_extra_installs_what_auto_takes` reads `pyproject.toml` and asserts the pin equals `backend.FLOOR`/`CEILING` and that the installed gmpy2 is in the window: red on `adeeb97`, and red again with the pin removed (the table's V1). `[fast]` stays unpinned (Q16(d)) |
 | spec F1 | spec | the record says `fuzz.yml`'s x10 run fuzzes the differential, with no cost | fixed (a number) | the spec lens measured `tests/test_backend.py` under `HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10` at 579.47 s (717 passed, loaded); re-measured on the fixed tree 2026-09-28 10:14-10:20, beside this fix's gate: 735 passed in 387.51 s. with the last whole x10 run at 5037 s (`HANDOFF.md` M14-run, 2026-09-27) that is about 5400-5600 s against `fuzz.yml`'s 180 min; in "measured" above, `HANDOFF.md` Q16(e) and "still owed" |
 | spec S1 | spec | the speed table and the class-15 cost cited gitignored `.scratch` scripts | fixed | the loop is now tracked, `tools/backend_speed.py` (and `--bound` for the class-15 cost; run 2026-09-28 10:03, loaded: at `2**16` bits sin 3.46 s, exp 1.46 s, 5.94 s for the list; `2**20` cheap 0.15 s). the set-level `+ * /` claim softened to about 1.0-1.3x, with the spec lens's 0.72x-1.4x re-runs |
@@ -4317,7 +4317,7 @@ holds an exact int (the pin would hang under both designs; it must be `O(2.0)`),
 bases `u ** (2 ** 60 - 1)` and `u ** 2 ** 60` give the same saturated enclosure, so the B1 break
 stays green there; only a negative base or one near 1 tells them apart.
 
-**what was built** (`intervals/ops.py` only; the applicator, `elementary`, `_gmpy2` and the class
+**what was built** (`multiinterval/ops.py` only; the applicator, `elementary`, `_gmpy2` and the class
 layers are unchanged):
 * `_exact_power_descriptor(n)` is the old body (fn, pole, split points byte for byte);
   `_power_descriptor(n, rounds_outward)` (still `lru_cache(64)`) dispatches
@@ -4519,7 +4519,7 @@ point is sound either way, only its rounding differs.
 **pins**: `tests/test_reverse.py::test_symmetry`'s `@example(op=('pown', -7),
 cut_tuples_c=one(Fraction(1, 2), 0.5))`; `tests/test_ops_properties.py::test_neg_and_pos_keep_each_cuts_type`
 (`-` is the typed cut mirror and an involution, `+` the identity; two mixed-point `@example`s). both
-red with `intervals/ops.py` as at `548ac78` (`__pycache__` cleared, `PYTHONDONTWRITEBYTECODE=1`),
+red with `multiinterval/ops.py` as at `548ac78` (`__pycache__` cleared, `PYTHONDONTWRITEBYTECODE=1`),
 green with the fix. `test_trig_rev_symmetry`'s docstring updated (its `negate` stays).
 
 **gate**: green, 2026-09-29 on the fixed tree (shared laptop, rc captured without a pipe): `tests/itf1788` 27795 passed in 57 s, the rest 5608 passed in 591 s (5607 before plus the new neg/pos test) = 33403; `test_trig_rev_symmetry`'s docstring was edited during the second call (text only). the fuzz rerun on `fuzz-run` (run 36540588320, 2026-09-29) passed `test_symmetry` (on its `@example`: the saved cache held no examples) and found fuzz-floordiv-overflow below
@@ -4771,7 +4771,7 @@ record (what changed by `file::symbol`, its pins and sabotage tables, its runs) 
   `float ** int` and the `2 ** 53` seam are gone. `ops._NotADouble`'s proof re-derived for any rational
   corner before the build (`streams/pown.md` step 1). ints past python's 4300-digit limit print in hex and
   `parse` reads `0x` (`fmt`, `cuts`). `tests/coremath/pown.tsv`: 2857 rows from pow.wc's integral exponents;
-  `tools/coremath.py` reads a cache elsewhere through `INTERVALS_COREMATH_CACHE`. **changed at the merge**:
+  `tools/coremath.py` reads a cache elsewhere through `MULTIINTERVAL_COREMATH_CACHE`. **changed at the merge**:
   the stream built "rounded to nearest" for `MultiInterval` past the limit, from a misread summary; the
   report's (c) is the enclosure in both classes (one class only was (d), rejected), so the nearest descriptor
   got rounding hooks (a float corner to nearest, an exact corner outward). sabotage: the stream's 44 of 46
@@ -4792,12 +4792,12 @@ record (what changed by `file::symbol`, its pins and sabotage tables, its runs) 
   breaks of the new code each red
 * **backend and CI** (D24 as answered; `streams/backend.md`): `[fast]` pinned `gmpy2>=2.3,<3`
   (`tests/test_backend.py::test_the_fast_extra_installs_what_auto_takes`); CI job `gate-gmpy2` (python 3.13,
-  `INTERVALS_BACKEND=gmpy2`, asserts `backend.name() == 'gmpy2'` first: a forced but missing gmpy2 fails
+  `MULTIINTERVAL_BACKEND=gmpy2`, asserts `backend.name() == 'gmpy2'` first: a forced but missing gmpy2 fails
   collection for most files but not all, `tests/test_cuts.py` passes, so the assert is the guard, pinned);
   ledger phase `gate:gmpy2`, keyed by src, never part of the commit verdict, required for a push only when a
   file of `tools/gate.py::BACKEND_FILES` changed since the base (`tools/prepush.sh` runs it; `CLAUDE.md`
   push). the whole suite on gmpy2 locally: 33833 passed in 777 s (2026-10-04, on the stream's tree). 13
-  sabotage rows red. README: `intervals.backend.name()` for bug reports; `tools/backend_speed.py` cites §2
+  sabotage rows red. README: `multiinterval.backend.name()` for bug reports; `tools/backend_speed.py` cites §2
   M16e
 * **the rest** (D21, D22, D20, D29; `streams/small.md`): the 1788 layer's numbers of the empty set are `nan`
   and its four reductions return `nan` for a nan operand, `inf + -inf` and `0 * inf` (the library keeps D9);
@@ -4841,7 +4841,7 @@ the owner's answers to Q22 (`v2-plan.md` decision log, "strict flags; v1 deleted
 * **the parity audit's unrecorded time differences**, pinned: `tests/test_time_interval.py::test_empty_is_falsy`,
   `::test_no_bounds_with_any_flags_is_empty`, `::test_slice_step_is_a_type_error` (`D(None, t)` raising was pinned
   already, `::test_nan_and_foreign_bounds_refused`)
-* **sabotage** (2026-10-04; each break in a private copy of `intervals/` and `tests/` with its own `pyproject.toml`,
+* **sabotage** (2026-10-04; each break in a private copy of `multiinterval/` and `tests/` with its own `pyproject.toml`,
   checked to import the copy; the six new tests run, `-x`): control intact green; red for each of: `flag` reading
   truthiness, numpy's bool refused, `MultiInterval.__init__` unchecked, `from_pieces` unchecked, `Builder.add_piece`
   unchecked, `DateTimeInterval.__init__` unchecked, `TimeDeltaInterval.__init__` unchecked, the time classes'
@@ -4942,12 +4942,12 @@ verdict, so the owner's docs-only rule (2026-09-30) became a property of the ids
 fuzz run needs only the docs phase. not taken: zanzibar's run lock (its defect was two runs sharing one
 fixed log path; here each run has its own log and its own row); count floors (recorded, not enforced).
 added here: a run whose ids moved while it ran is MOVED and counts for nothing (agents edit this tree
-in parallel); `INTERVALS_BACKEND` is removed for a run; a fuzz run below fuzz.yml's x10 does not clear
+in parallel); `MULTIINTERVAL_BACKEND` is removed for a run; a fuzz run below fuzz.yml's x10 does not clear
 a push (before, `FUZZ_MULTIPLIER=1 tools/prepush.sh` exited 0).
 
 **the scope survey** (2026-10-01; an exclusion is a fail-open surface): the suite reads `pyproject.toml`,
 `tests/itf1788`'s data and `archive/v1` (pythonpath), and collects exactly `README.md` and
-`tests/itf1788/README.md` as doctests; nothing under `tests/`, `intervals/` or `archive/` names another
+`tests/itf1788/README.md` as doctests; nothing under `tests/`, `multiinterval/` or `archive/` names another
 markdown file or `references/`. `tests/test_gate_ledger.py::test_no_source_names_a_prose_path` re-runs
 that survey on every gate (red on a probe file naming `HANDOFF.md`, 2026-10-01).
 
@@ -4997,7 +4997,7 @@ independent of each other and were built in parallel worktrees, then merged on `
 | `apply_monotonic_{unary,binary}_function` | `applicator.apply_{unary,binary}(descriptor, ...)` |
 | `INFINITY_IS_NOT_FINITE`, `CONSISTENCY_CHECK` | deleted; `if __debug__` check in the class |
 | `interval.py` (`Interval`, `MultipleInterval`) | archived in `archive/v1/`; `tests/oracles.py` does its job |
-| `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; back at M8 (2026-10-04) as `intervals/time_interval.py`, with these renames (`infimum` → `inf`, `contiguous_intervals` → `pieces`, `cardinality` → `size`, `.interval` (unix-timestamp seconds) → `.seconds` (wall-clock seconds for naive, UTC for aware)) and no in-place methods. dropped (M8 review round): `TimeDeltaInterval - datetime` (v1 gave a `DateTimeInterval`; python refuses `td - dt`: TypeError); `__getitem__` with an interval (use `A & B`) or a scalar (use `x in A` / `A & x`): slicing only, as `MultiInterval`; `infimum`/`supremum` of an empty set (v1 None): `inf`/`sup` raise ValueError, `closed_hull` is the empty set. differences the parity audit found unrecorded (2026-10-04, no capability lost): an empty time set is falsy (v1 had no `__bool__`, so always True; v2 delegates to `MultiInterval.__bool__`); `DateTimeInterval(None, t)` raises (v1's point `[t]` came from its NaT branch, `pd.isna(None)`; write `DateTimeInterval(t)`); `TimeDeltaInterval(start_closed=False)` with no bounds is the empty set (v1 ValueError); a slice step raises TypeError (v1 ValueError) |
+| `time_interval.py` (`DateTimeInterval`, `TimeDeltaInterval`) | archived in `archive/v1/`; back at M8 (2026-10-04) as `multiinterval/time_interval.py`, with these renames (`infimum` → `inf`, `contiguous_intervals` → `pieces`, `cardinality` → `size`, `.interval` (unix-timestamp seconds) → `.seconds` (wall-clock seconds for naive, UTC for aware)) and no in-place methods. dropped (M8 review round): `TimeDeltaInterval - datetime` (v1 gave a `DateTimeInterval`; python refuses `td - dt`: TypeError); `__getitem__` with an interval (use `A & B`) or a scalar (use `x in A` / `A & x`): slicing only, as `MultiInterval`; `infimum`/`supremum` of an empty set (v1 None): `inf`/`sup` raise ValueError, `closed_hull` is the empty set. differences the parity audit found unrecorded (2026-10-04, no capability lost): an empty time set is falsy (v1 had no `__bool__`, so always True; v2 delegates to `MultiInterval.__bool__`); `DateTimeInterval(None, t)` raises (v1's point `[t]` came from its NaT branch, `pd.isna(None)`; write `DateTimeInterval(t)`); `TimeDeltaInterval(start_closed=False)` with no bounds is the empty set (v1 ValueError); a slice step raises TypeError (v1 ValueError) |
 | `exp()`, `log(base)` | `exp()`, `log(base=None)`, and the rest of `functions.py` (M12) |
 | `__round__`, `__trunc__`, `__floor__`, `__ceil__` (endpoint-wise) | the same dunders, returning the set of values attained (`steps.py`, M12) |
 | `**` with an interval exponent on a positive base; `pow(A, n, m)` on integers | an integral number exponent is pown; any other real or interval exponent is 1788 `pow`, and `b ** A` works (M13d, D11); `pow(A, n, m)` dropped (D11) |

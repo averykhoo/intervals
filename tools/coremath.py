@@ -1,5 +1,5 @@
 """
-CORE-MATH's binary64 worst cases against `intervals.elementary`, a manual tool (never run by CI)
+CORE-MATH's binary64 worst cases against `multiinterval.elementary`, a manual tool (never run by CI)
 
 CORE-MATH (https://gitlab.inria.fr/core-math/core-math, MIT) keeps, per function, a file of inputs that
 are hard to round (`src/binary64/<f>/<f>.wc`: hex floats, `x,y` for two operands, `#` lines heading
@@ -14,7 +14,7 @@ they cannot, is `references/test-vector-sources.md` §3h.
     $PY tools/coremath.py pin [<commit>]     # move the pin (master by default): rewrites the manifest
 
 the cache is `.scratch/coremath-cache/<commit>/` (gitignored, kept between sessions: `CLAUDE.md`), or the
-directory `INTERVALS_COREMATH_CACHE` names (a worktree reads the main checkout's cache that way). the
+directory `MULTIINTERVAL_COREMATH_CACHE` names (a worktree reads the main checkout's cache that way). the
 pin and every file's sha256 are `tests/coremath/MANIFEST.tsv`; a file whose bytes differ is refused.
 pown has no file of its own: its rows are pow.wc's with an integral exponent (`DERIVED`), through pown's
 own descriptors (`ops._power_descriptor`), so `status`'s scalar closure does not cover it.
@@ -40,7 +40,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'tests' / 'coremath'
 MANIFEST = DATA / 'MANIFEST.tsv'
 RUNS = ROOT / 'references' / 'coremath-runs.tsv'  # prose to the ledger: a check's row stales no gate run
-CACHE = Path(os.environ.get('INTERVALS_COREMATH_CACHE') or ROOT / '.scratch' / 'coremath-cache')
+CACHE = Path(os.environ.get('MULTIINTERVAL_COREMATH_CACHE') or ROOT / '.scratch' / 'coremath-cache')
 REPO = 'https://gitlab.inria.fr/core-math/core-math'
 API = 'https://gitlab.inria.fr/api/v4/projects/35719'
 
@@ -148,7 +148,7 @@ def _parse(text: str, pair: bool):
 
 def _oracle():
     import gmpy2
-    from intervals.rounding import DOWN, NEAREST, UP
+    from multiinterval.rounding import DOWN, NEAREST, UP
     modes = {DOWN: gmpy2.RoundDown, NEAREST: gmpy2.RoundToNearest, UP: gmpy2.RoundUp}
     contexts = {d: gmpy2.context(precision=53, emin=-1073, emax=1024, subnormalize=True, round=r)
                 for d, r in modes.items()}
@@ -168,7 +168,7 @@ def _oracle():
 def inside(name: str, operand) -> bool:
     """whether the scalar call takes this operand: the set layer's cases (a domain's outside, a zero
     of atan2, a base <= 0 of pow) are not the scalar's"""
-    from intervals import elementary
+    from multiinterval import elementary
     if name == 'atan2':
         return operand[0] != 0 and operand[1] != 0
     if name == 'hypot':
@@ -186,8 +186,8 @@ def inside(name: str, operand) -> bool:
 
 def ours(name: str, operand, direction: int) -> float:
     """the library's scalar answer: the call the set layer makes for an end"""
-    from intervals import elementary
-    from intervals.rounding import DOWN, NEAREST
+    from multiinterval import elementary
+    from multiinterval.rounding import DOWN, NEAREST
     if name == 'atan2':
         x, y = operand
         q = Fraction(y) / Fraction(x)
@@ -198,7 +198,7 @@ def ours(name: str, operand, direction: int) -> float:
     if name == 'pow':
         return elementary.rounded_pow(Fraction(operand[0]), Fraction(operand[1]), direction)
     if name == 'pown':  # a float corner of `A ** n`: the nearest descriptor's value, the outward one's hooks
-        from intervals import ops
+        from multiinterval import ops
         x, n = operand[0], int(operand[1])
         if direction == NEAREST:
             return ops._power_descriptor(n).fn(x)
@@ -229,7 +229,7 @@ def _hex(operand) -> str:
 
 
 def sample_text(name: str) -> str:
-    from intervals.rounding import DOWN, NEAREST, UP
+    from multiinterval.rounding import DOWN, NEAREST, UP
     value = _oracle()
     commit, files = read_manifest()
     source = DERIVED.get(name, name)
@@ -272,8 +272,8 @@ def sample(check: bool) -> int:
 
 def _check_chunk(job):
     name, operands = job
-    from intervals import backend
-    from intervals.rounding import DOWN, NEAREST, UP
+    from multiinterval import backend
+    from multiinterval.rounding import DOWN, NEAREST, UP
     value, bad, slow = _oracle(), [], []
     with backend._use('python'):
         for operand in operands:
@@ -327,9 +327,9 @@ def check(jobs: int, only) -> int:
 
 # ---- status ----------------------------------------------------------------------------------------------------
 
-def closure(start: str = 'intervals/elementary.py'):
+def closure(start: str = 'multiinterval/elementary.py'):
     """the files the scalar evaluator imports, transitively, read from the source (importing
-    `intervals` would pull in the whole package through its __init__)"""
+    `multiinterval` would pull in the whole package through its __init__)"""
     seen, todo = set(), [start]
     while todo:
         path = todo.pop()
@@ -337,15 +337,15 @@ def closure(start: str = 'intervals/elementary.py'):
             continue
         seen.add(path)
         for node in ast.walk(ast.parse((ROOT / path).read_text(encoding='utf-8'))):
-            if isinstance(node, ast.ImportFrom) and node.module and node.module.split('.')[0] == 'intervals':
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.split('.')[0] == 'multiinterval':
                 parts = node.module.split('.')[1:]
                 if parts:
-                    todo.append('intervals/' + '/'.join(parts) + '.py')
+                    todo.append('multiinterval/' + '/'.join(parts) + '.py')
                 else:
-                    todo += [f'intervals/{alias.name}.py' for alias in node.names]
+                    todo += [f'multiinterval/{alias.name}.py' for alias in node.names]
             elif isinstance(node, ast.Import):
-                todo += ['intervals/' + '/'.join(a.name.split('.')[1:]) + '.py' for a in node.names
-                         if a.name.startswith('intervals.')]
+                todo += ['multiinterval/' + '/'.join(a.name.split('.')[1:]) + '.py' for a in node.names
+                         if a.name.startswith('multiinterval.')]
     return sorted(seen)
 
 

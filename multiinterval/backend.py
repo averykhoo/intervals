@@ -2,10 +2,10 @@
 which code picks a rounded double: the pure path (`python`, the default) or gmpy2/mpfr (`gmpy2`)
 
 the backend is an implementation detail with one public knob, the environment variable
-`INTERVALS_BACKEND`, read once when `intervals` is imported:
+`MULTIINTERVAL_BACKEND`, read once when `multiinterval` is imported:
 
 * unset, `''` or `python`: the pure path; gmpy2 is never imported
-* `gmpy2`: `intervals._gmpy2`, and an `ImportError` at import if gmpy2 is missing or below the floor
+* `gmpy2`: `multiinterval._gmpy2`, and an `ImportError` at import if gmpy2 is missing or below the floor
   (gmpy2 2.3 with MPFR 4.2): a job that asks for gmpy2 never falls back and passes on the pure path
 * `auto`: gmpy2 if it imports and is at the floor and in the series verified (2.3 <= version < 3),
   else the pure path, silently
@@ -13,7 +13,7 @@ the backend is an implementation detail with one public knob, the environment va
 
 both give the same doubles and the same flags: the pure path is correctly rounded in every direction
 already, and gmpy2 answers only "which double", after every exactness, flag and attainment decision
-the pure path makes (`intervals._gmpy2`). the only difference is speed, and the failure mode of a
+the pure path makes (`multiinterval._gmpy2`). the only difference is speed, and the failure mode of a
 library bug (a missed exact case raises in every direction under gmpy2). `_use` switches the backend
 for the tests, which compare the two in one process; it is a module global, not thread safe, and never
 used by the library. the backend is untested on free-threaded builds.
@@ -24,13 +24,13 @@ from contextlib import contextmanager
 from typing import Optional
 from typing import Tuple
 
-VARIABLE = 'INTERVALS_BACKEND'
+VARIABLE = 'MULTIINTERVAL_BACKEND'
 FLOOR = (2, 3, 0)  # gmpy2's; its context API, `ieee()` and `mpfr(x, precision, context)` are leaned on
 CEILING = 3  # `auto` takes only gmpy2 2.x from 2.3: the series verified (2.3.1, 2026-09-28)
 MPFR_FLOOR = (4, 2)
 
 NAME = 'python'
-fast = None  # the module `intervals._gmpy2` when NAME == 'gmpy2', else None
+fast = None  # the module `multiinterval._gmpy2` when NAME == 'gmpy2', else None
 
 
 def name() -> str:
@@ -77,7 +77,7 @@ def _supported(version: str, mpfr_version: str, ceiling: bool = True) -> bool:
 
 
 def _load(forced: bool):
-    """`intervals._gmpy2`, or None (auto only) where gmpy2 is missing or not supported"""
+    """`multiinterval._gmpy2`, or None (auto only) where gmpy2 is missing or not supported"""
     try:
         import gmpy2
     except ImportError as e:
@@ -90,12 +90,12 @@ def _load(forced: bool):
             raise ImportError(f'{VARIABLE}=gmpy2 needs gmpy2 >= {".".join(map(str, FLOOR[:2]))} with MPFR >= '
                               f'{".".join(map(str, MPFR_FLOOR))}; found gmpy2 {version} with {mpfr_version}')
         return None
-    from intervals import _gmpy2
+    from multiinterval import _gmpy2
     return _gmpy2
 
 
 def _select(value: Optional[str]):
-    """`(NAME, fast)` for a value of `INTERVALS_BACKEND` (None: unset)"""
+    """`(NAME, fast)` for a value of `MULTIINTERVAL_BACKEND` (None: unset)"""
     if value in (None, '', 'python'):
         return 'python', None
     if value in ('gmpy2', 'auto'):

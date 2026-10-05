@@ -1,4 +1,4 @@
-# intervals: working rules
+# multiinterval: working rules
 
 the durable contract. what is true now (open items, questions, the session log) is in `HANDOFF.md`;
 read it in full at session start. the design is `v2-plan.md`, the milestones `v2-implementation-plan.md`.

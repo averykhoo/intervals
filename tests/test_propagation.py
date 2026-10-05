@@ -2,7 +2,7 @@
 ieee 1788's decoration propagation on `DecoratedInterval` (M13g part 3; 1788-2015 §11)
 
 the rule, written out here from 1788's definitions and decided by brute force, independently of
-`intervals.decorated`: an op's local decoration on the box of its operands' sets is trv unless every
+`multiinterval.decorated`: an op's local decoration on the box of its operands' sets is trv unless every
 point of the box is in the op's domain (a set of reals, so an attained ±inf is never in it), def
 unless the op restricted to the box is continuous, dac unless it is also continuous at every point
 of the box and every operand is bounded, else com; the result's decoration is the min of that, each
@@ -37,25 +37,25 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import DecoratedInterval
-from intervals import Decoration
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import abs_rev
-from intervals import cos_rev
-from intervals import cosh_rev
-from intervals import mul_rev
-from intervals import pow_rev1
-from intervals import pow_rev2
-from intervals import pown_rev
-from intervals import set_dec
-from intervals import sin_rev
-from intervals import sqr_rev
-from intervals import tan_rev
-from intervals.errors import DomainClippedWarning
-from intervals.errors import HullWarning
-from intervals.errors import IntervalWarning
-from intervals.rounding import exact_cuts
+from multiinterval import DecoratedInterval
+from multiinterval import Decoration
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import abs_rev
+from multiinterval import cos_rev
+from multiinterval import cosh_rev
+from multiinterval import mul_rev
+from multiinterval import pow_rev1
+from multiinterval import pow_rev2
+from multiinterval import pown_rev
+from multiinterval import set_dec
+from multiinterval import sin_rev
+from multiinterval import sqr_rev
+from multiinterval import tan_rev
+from multiinterval.errors import DomainClippedWarning
+from multiinterval.errors import HullWarning
+from multiinterval.errors import IntervalWarning
+from multiinterval.rounding import exact_cuts
 from tests.strategies import cut_tuples
 from tests.test_decorated import bounded
 
@@ -66,7 +66,7 @@ WORST_TO_BEST = [TRV, DEF, DAC, COM]
 MAX = 1.7976931348623157e308
 PI = Fraction(314159265358979323846264338327950, 10 ** 32)  # pi to 32 digits, error < 1e-31
 
-quiet = pytest.mark.filterwarnings('ignore::intervals.errors.IntervalWarning')
+quiet = pytest.mark.filterwarnings('ignore::multiinterval.errors.IntervalWarning')
 
 
 def newdec(x: MultiInterval) -> Decoration:

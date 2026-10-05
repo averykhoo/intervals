@@ -27,8 +27,8 @@ from typing import FrozenSet
 from typing import Iterator
 from typing import Tuple
 
-from intervals import kernel
-from intervals.kernel import Cuts
+from multiinterval import kernel
+from multiinterval.kernel import Cuts
 
 
 class TruthSet:

@@ -1,5 +1,5 @@
 """
-intervals.solver: interval newton over multi-intervals
+multiinterval.solver: interval newton over multi-intervals
 
 the properties, on polynomials built from drawn roots (so every real zero is known, exactly):
 * soundness: every zero in x is in a returned `Root`, whatever `tol` and `max_steps`
@@ -19,13 +19,13 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import REALS
-from intervals import solver
-from intervals.autodiff import Dual
-from intervals.solver import Root
-from intervals.solver import newton
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import REALS
+from multiinterval import solver
+from multiinterval.autodiff import Dual
+from multiinterval.solver import Root
+from multiinterval.solver import newton
 
 M = MultiInterval
 PI = math.pi
@@ -125,7 +125,7 @@ def test_not_c1_would_lose_a_zero(monkeypatch):
     assert not any(Fraction(-1, 2) in r.interval for r in roots)
 
 
-@pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning')  # the empty step
+@pytest.mark.filterwarnings('ignore::multiinterval.errors.EmptySetPropagationWarning')  # the empty step
 def test_newton_step_proves_uniqueness_only_without_zero_slope():
     """the three conditions of `_newton_step`'s proof, each on its own"""
     piece = OutwardMultiInterval(0, 4)

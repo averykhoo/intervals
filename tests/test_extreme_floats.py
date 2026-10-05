@@ -40,16 +40,16 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import ops
-from intervals.applicator import apply_binary
-from intervals.applicator import apply_unary
-from intervals.kernel import contains_point
-from intervals.kernel import is_subset
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import ops
+from multiinterval.applicator import apply_binary
+from multiinterval.applicator import apply_unary
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import is_subset
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
 from tests.oracles import _exact
 from tests.oracles import _exact_cuts
 from tests.oracles import _inf

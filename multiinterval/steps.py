@@ -17,7 +17,7 @@ and trunc is floor above 0 and ceil below it. up to `ENUMERATION_CAP` values are
 or for a piece reaching ±inf, their hull is returned with a `HullWarning`. `f(±inf)` = ±inf (sign:
 ±1). a float end keeps its type, as python's float `floor` does not (`floor([2.5])` = `[2.0]`).
 
->>> from intervals.fmt import format_cuts, parse
+>>> from multiinterval.fmt import format_cuts, parse
 >>> format_cuts(ceil(parse('(1, 3]')))
 '{ [2] , [3] }'
 >>> format_cuts(round_(parse('[1/2, 5/2]')))  # ties to even: 1/2 -> 0, 5/2 -> 2
@@ -34,16 +34,16 @@ from typing import Callable
 from typing import Optional
 from typing import Tuple
 
-from intervals import kernel
-from intervals.applicator import split_pieces
-from intervals.applicator import warn
-from intervals.cuts import is_numpy_time
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import HullWarning
-from intervals.kernel import Cuts
-from intervals.rounding import is_float
-from intervals.rounding import is_infinite
-from intervals.rounding import round_piece
+from multiinterval import kernel
+from multiinterval.applicator import split_pieces
+from multiinterval.applicator import warn
+from multiinterval.cuts import is_numpy_time
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import HullWarning
+from multiinterval.kernel import Cuts
+from multiinterval.rounding import is_float
+from multiinterval.rounding import is_infinite
+from multiinterval.rounding import round_piece
 
 INF = math.inf
 
@@ -92,7 +92,7 @@ def step(name: str, a: Cuts, ndigits: Optional[int] = None, outward: bool = Fals
     the values `f(x)` for x in a, f one of floor, ceil, trunc, round, round_ties_away, sign;
     `ndigits` (round and round_ties_away only) rounds to multiples of `10 ** -ndigits`
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(step('round', parse('[0.125, 0.135]'), ndigits=2))
     '{ [0.12] , [0.13] , [0.14] }'
     """
@@ -160,7 +160,7 @@ def _value(n, unit: Fraction):
 
 def floor(a: Cuts, outward: bool = False) -> Cuts:
     """
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(floor(parse('{ (-1, 1/2] , (2, 3) }')))
     '{ [-1] , [0] , [2] }'
     """
@@ -173,7 +173,7 @@ def ceil(a: Cuts, outward: bool = False) -> Cuts:
 
 def trunc(a: Cuts, outward: bool = False) -> Cuts:
     """
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(trunc(parse('(-2, 2)')))
     '{ [-1] , [0] , [1] }'
     """
@@ -186,7 +186,7 @@ def round_(a: Cuts, ndigits: Optional[int] = None, outward: bool = False) -> Cut
 
 def round_ties_away(a: Cuts, ndigits: Optional[int] = None, outward: bool = False) -> Cuts:
     """
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(round_ties_away(parse('[1/2, 5/2]')))
     '{ [1] , [2] , [3] }'
     """

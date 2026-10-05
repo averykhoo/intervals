@@ -42,23 +42,23 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import DecoratedInterval
-from intervals import IndeterminateResultWarning
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import PowerLimitWarning
-from intervals import elementary
-from intervals import kernel
-from intervals import ops
-from intervals.autodiff import Dual
-from intervals.applicator import apply_unary
-from intervals.cuts import above
-from intervals.cuts import below
-from intervals.rounding import DOWN
-from intervals.rounding import MAX
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
-from intervals.rounding import round_rational
+from multiinterval import DecoratedInterval
+from multiinterval import IndeterminateResultWarning
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import PowerLimitWarning
+from multiinterval import elementary
+from multiinterval import kernel
+from multiinterval import ops
+from multiinterval.autodiff import Dual
+from multiinterval.applicator import apply_unary
+from multiinterval.cuts import above
+from multiinterval.cuts import below
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import MAX
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
+from multiinterval.rounding import round_rational
 
 M, O = MultiInterval, OutwardMultiInterval
 INF = math.inf
@@ -116,9 +116,9 @@ _PRELUDE = '''
 import math, warnings
 warnings.simplefilter('ignore')
 from fractions import Fraction
-from intervals import MultiInterval as M, OutwardMultiInterval as O, DecoratedInterval as D, Decoration
-import intervals.ieee1788 as I
-from intervals.autodiff import Dual
+from multiinterval import MultiInterval as M, OutwardMultiInterval as O, DecoratedInterval as D, Decoration
+import multiinterval.ieee1788 as I
+from multiinterval.autodiff import Dual
 try:
     import numpy as np
 except ImportError:
@@ -488,7 +488,7 @@ def test_no_power_limit_warning(expr):
 def test_the_power_limit_warning_is_ignored_by_default_and_can_be_an_error():
     code = (
         'import warnings\n'
-        'from intervals import MultiInterval as M, PowerLimitWarning\n'
+        'from multiinterval import MultiInterval as M, PowerLimitWarning\n'
         'with warnings.catch_warnings(record=True) as w:\n'
         '    M(2) ** 2 ** 60\n'
         'print(len(w))\n'

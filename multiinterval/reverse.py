@@ -16,7 +16,7 @@ union `[-2, -1] ∪ [1, 2]`, whose hull is 1788's answer (up to 1788 having no i
 an end that is irrational (`sqrt 2`) is its tightest float enclosure, open, so an exact operand never
 loses a true point; a float operand gives float ends, rounded to nearest in a `MultiInterval` (flags
 kept) and outward in an `OutwardMultiInterval` (a moved end open), the rules of the functions
-(`intervals.functions`). the result is an `OutwardMultiInterval` if either operand is one. a number
+(`multiinterval.functions`). the result is an `OutwardMultiInterval` if either operand is one. a number
 is taken as the point it is; an empty operand gives the empty set and an
 `EmptySetPropagationWarning`, as the functions do. an empty result from non-empty operands is an
 ordinary answer (no solution there), with no warning
@@ -34,7 +34,7 @@ ordinary answer (no solution there), with no warning
 * g at a piece's end is exact where rational (`exact` returns int, Fraction or ±inf) and otherwise
   rounded down for a low end and up for a high end, open (`_end`, the rule of
   `functions._Function.end`); `named(name, image, ...)` makes a branch whose inverse is one of
-  `intervals.elementary`'s correctly rounded functions (`sqrt`, `rootn`, `acosh` here; `asin`,
+  `multiinterval.elementary`'s correctly rounded functions (`sqrt`, `rootn`, `acosh` here; `asin`,
   `acos`, `atan` shifted by k pi for the periodic ones are written the same way, with their own
   `exact` and `rounded`: `_trig_branch`)
 * an op is the union of its branches' preimages, **then** the intersection with `x`, after the
@@ -67,11 +67,11 @@ operand is then a `DecoratedInterval` or a real number; a bare `MultiInterval` i
 for the wrapper's other ops. mulRevToPair is the one op 1788 decorates better (its first interval as
 the decorated division `c / b` where `0 ∉ b`); ours is one set, `mul_rev`'s, trv
 
->>> from intervals import DecoratedInterval as D, MultiInterval as M
+>>> from multiinterval import DecoratedInterval as D, MultiInterval as M
 >>> print(sqr_rev(D(M(1, 4))), mul_rev(D(M(2, 4)), D(M(1, 8)), D(M(0, 1))))
 { [-2, -1] , [1, 2] }_trv [1/4, 1]_trv
 
->>> from intervals import MultiInterval as M
+>>> from multiinterval import MultiInterval as M
 >>> sqr_rev(M(1, 4))
 MultiInterval.parse('{ [-2, -1] , [1, 2] }')
 >>> sqr_rev(M(1, 4), M(0, 10))
@@ -90,34 +90,34 @@ from typing import NamedTuple
 from typing import Optional
 from typing import Tuple
 
-from intervals import elementary
-from intervals import functions
-from intervals import kernel
-from intervals import ops
-from intervals.applicator import warn
-from intervals.cuts import Value
-from intervals.cuts import is_numpy_time
-from intervals.cuts import mirror
-from intervals.decorated import DecoratedInterval
-from intervals.decorated import _quietly
-from intervals.decorated import _trivial
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import HullWarning
-from intervals.kernel import Cuts
-from intervals.multi_interval import MultiInterval
-from intervals.multi_interval import OutwardMultiInterval
-from intervals.rounding import DOWN
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
-from intervals.rounding import has_finite_float
-from intervals.rounding import is_float
-from intervals.rounding import is_infinite
-from intervals.rounding import round_rational
-from intervals.steps import ENUMERATION_CAP
+from multiinterval import elementary
+from multiinterval import functions
+from multiinterval import kernel
+from multiinterval import ops
+from multiinterval.applicator import warn
+from multiinterval.cuts import Value
+from multiinterval.cuts import is_numpy_time
+from multiinterval.cuts import mirror
+from multiinterval.decorated import DecoratedInterval
+from multiinterval.decorated import _quietly
+from multiinterval.decorated import _trivial
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import HullWarning
+from multiinterval.kernel import Cuts
+from multiinterval.multi_interval import MultiInterval
+from multiinterval.multi_interval import OutwardMultiInterval
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
+from multiinterval.rounding import has_finite_float
+from multiinterval.rounding import is_float
+from multiinterval.rounding import is_infinite
+from multiinterval.rounding import round_rational
+from multiinterval.steps import ENUMERATION_CAP
 
 INF = math.inf
 
-_REALS = MultiInterval(-INF, INF)  # the default x: the affine extended reals (intervals.REALS)
+_REALS = MultiInterval(-INF, INF)  # the default x: the affine extended reals (multiinterval.REALS)
 
 
 class Branch(NamedTuple):
@@ -134,7 +134,7 @@ class Branch(NamedTuple):
 
 
 def named(name: str, image: Cuts, increasing: bool = True, base=None) -> Branch:
-    """the branch whose inverse is `intervals.elementary`'s `name` (`base`: rootn's degree)"""
+    """the branch whose inverse is `multiinterval.elementary`'s `name` (`base`: rootn's degree)"""
     return Branch(image, lambda v: elementary.exact(name, v, base),
                   lambda v, direction: elementary.rounded(name, v, direction, base), increasing)
 
@@ -173,7 +173,7 @@ def branch_preimage(c: Cuts, branch: Branch, outward: bool) -> Cuts:
     `{t in the branch : f(t) in c}`: g applied to each piece of `c ∩ image`, whose ends map to the
     preimage's (swapped for a decreasing f), each closed iff it was and not moved by rounding
 
-    >>> from intervals.fmt import format_cuts, parse
+    >>> from multiinterval.fmt import format_cuts, parse
     >>> format_cuts(branch_preimage(parse('[-1, 9/4]'), named('sqrt', _NON_NEGATIVE), outward=False))
     '[0, 3/2]'
     """
@@ -297,7 +297,7 @@ def sqr_rev(c, x=_REALS) -> MultiInterval:
     """
     `{t in x : t ** 2 in c}` (ieee 1788's sqrRev; with `x`, sqrRevBin)
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> sqr_rev(M(0.0, 25.0), M(-4.1, 6.0))
     MultiInterval.parse('[-4.1, 5.0]')
     >>> sqr_rev(M(-10, -1))
@@ -313,7 +313,7 @@ def abs_rev(c, x=_REALS) -> MultiInterval:
     """
     `{t in x : abs(t) in c}` (ieee 1788's absRev; with `x`, absRevBin)
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> abs_rev(M.parse('[-1, 1) | (2, 3]'))
     MultiInterval.parse('{ [-3, -2) , (-1, 1) , (2, 3] }')
     """
@@ -325,7 +325,7 @@ def pown_rev(c, n: int, x=_REALS) -> MultiInterval:
     `{t in x : t ** n in c}` for an int n (ieee 1788's pownRev; with `x`, pownRevBin). `t ** 0` is 1
     everywhere, ±inf included; for n < 0, 0 has no value (`1/[0]` is empty) and `(±inf) ** n` is 0
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> pown_rev(M(-8, 27), 3)
     MultiInterval.parse('[-2, 3]')
     >>> pown_rev(M(1, 4), -2)
@@ -350,7 +350,7 @@ def cosh_rev(c, x=_REALS) -> MultiInterval:
     """
     `{t in x : cosh(t) in c}` (ieee 1788's coshRev; with `x`, coshRevBin)
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> cosh_rev(M(1, 2), M(0, 10))
     MultiInterval.parse('[0, 1.3169578969248168)')
     """
@@ -367,7 +367,7 @@ def mul_rev(b, c, x=_REALS) -> MultiInterval:
     `{t in x : t * y in c for some y in b}`, `*` being the library's (ieee 1788's mulRev; with `x`,
     mulRevTen; mulRevToPair's two intervals are the pieces of this one set)
 
-    `*` is the set of the values of the defined pairs (`intervals.ops`), so `t` is in the result iff
+    `*` is the set of the values of the defined pairs (`multiinterval.ops`), so `t` is in the result iff
     `{t} * b` meets `c`. `0 * ±inf` has no value and `±inf * y` is the signed infinity for `y != 0`,
     so, by the kind of `t` (the derivation, for `_mul_preimage`):
 
@@ -380,12 +380,12 @@ def mul_rev(b, c, x=_REALS) -> MultiInterval:
 
     ieee 1788 answers the hull (or two intervals, mulRevToPair) and has no infinite points: `0 * y =
     0` for every `y` there. every end is 0, ±inf or a quotient `v / w` of an end of `c` by one of `b`,
-    computed by the library's own division (`intervals.ops.div`), so it is rounded exactly where the
+    computed by the library's own division (`multiinterval.ops.div`), so it is rounded exactly where the
     division `c / w` would round it: exact for int and Fraction ends, and where a float is involved
     to nearest in a `MultiInterval` (flags kept) or outward in an `OutwardMultiInterval` (a moved end
     open). a point `b = [w]`, `w` finite and nonzero, gives `c / w` in both classes. then `∩ x`
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> mul_rev(M(2, 4), M(1, 8))
     MultiInterval.parse('[1/4, 4]')
     >>> mul_rev(M(-1, 1), M(1, 2))  # 1788 answers entire (mulRev) or the two pieces (mulRevToPair)
@@ -583,7 +583,7 @@ def sin_rev(c, x=_REALS) -> MultiInterval:
     the default among them), their hull and a `HullWarning` (D12). a `c` holding [-1, 1] needs no
     hull: every finite t is a solution
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> len(sin_rev(M(0.5, 1), M(0, 20)).pieces)  # D12's example
     4
     >>> sin_rev(M(0), M(-1, 4))
@@ -601,7 +601,7 @@ def cos_rev(c, x=_REALS) -> MultiInterval:
     `{t in x : cos(t) in c}` (ieee 1788's cosRev; with `x`, cosRevBin): as `sin_rev`, the ends
     `2k pi ± acos v`
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> cos_rev(M(1), M(-1, 7))
     MultiInterval.parse('{ [0] , (6.283185307179586, 6.283185307179587) }')
     """
@@ -615,7 +615,7 @@ def tan_rev(c, x=_REALS) -> MultiInterval:
     of `pown_rev(c, -1)`), even for a `c` holding ±inf, which is therefore no solution at all; since
     every branch has one, any `c` with a finite point over an unbounded `x` gives a hull
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> tan_rev(M(1), M(0, 4))
     MultiInterval.parse('{ (0.7853981633974483, 0.7853981633974484) , (3.9269908169872414, 3.926990816987242) }')
     >>> tan_rev(M.parse('[inf]'))
@@ -668,7 +668,7 @@ def pow_rev1(b, c, x=_REALS) -> MultiInterval:
 
     1788 answers the hull and has no infinite points. then `∩ x`
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> pow_rev1(M(2), M(4, 9))
     MultiInterval.parse('[2, 3]')
     >>> pow_rev1(M(-1, 1), M(2))  # t = 2 ** (1/y): [2, inf) for y in (0, 1], (0, 1/2] for y in [-1, 0)
@@ -742,7 +742,7 @@ def pow_rev2(a, c, y=_REALS) -> MultiInterval:
 
     1788 answers the hull and has no infinite points. then `∩ y`
 
-    >>> from intervals import MultiInterval as M
+    >>> from multiinterval import MultiInterval as M
     >>> pow_rev2(M(2), M(4, 8))
     MultiInterval.parse('[2, 3]')
     >>> pow_rev2(M(1, 4), M(2))  # log_t 2 for t in (1, 4]: [1/2, inf); 1 ** s is never 2

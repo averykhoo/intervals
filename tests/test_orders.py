@@ -22,14 +22,14 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import EMPTY
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals.kernel import contains_point
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
-from intervals.kernel import union
+from multiinterval import EMPTY
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
+from multiinterval.kernel import union
 from tests.oracles import sample
 from tests.strategies import cut_tuples
 from tests.strategies import probe_points

@@ -11,6 +11,10 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-10-05)
 
+* **renamed `multiinterval` (2026-10-05), not pushed**: `intervals` is another project's on PyPI; the package
+  directory, every import and `pip install` name is now `multiinterval`, the backend's variable `MULTIINTERVAL_BACKEND`
+  (`v2-plan.md` decision log "the package is `multiinterval`"). the conda env, the repo folder and `references/` keep
+  the old name. the push needs the x10 prepush and `gate:gmpy2` (every file moved)
 * **trig-rev-far fixed (2026-10-05), on `master` at `8e709b3`, not pushed**: the far periodic reverse ops (`sin_rev`/`cos_rev`/`tan_rev`
   with an end at 1e22..10**400, which hung) answer in under a second with identical results: `reverse.py::_leap` skips the branches
   that round outside x, `elementary.py::_inverse_enclosure` caches f(v) (plan §2 "trig-rev-far"). gate 27795 + 6509 (2026-10-05).
@@ -28,7 +32,7 @@ session log below; nothing is listed as open and done at once), and list anythin
   tests, after a parity audit found every v1 capability possible in v2 (839,971 side-by-side cases; plan §4 "the
   parity audit", §2 "q22-h4"; `references/v1-parity-2026-10-04/`)
 * **M8, the time layer, built and merged (2026-10-04), not pushed**: `DateTimeInterval`, `TimeDeltaInterval`,
-  `NEG_INF`/`POS_INF` (`intervals/time_interval.py`) as D30 decided; three reviews, a fix round (one pre-existing
+  `NEG_INF`/`POS_INF` (`multiinterval/time_interval.py`) as D30 decided; three reviews, a fix round (one pre-existing
   numeric bug: a numpy `timedelta64` read as an int, now refused), 77 sabotage breaks red (plan §2 M8, its review
   round). the owner's confirmations are Q21. H4 done the same day (above)
 * **pushed `c55ce20..5888c6e` (2026-10-04, the owner's go)** after a green prepush (x10: 27795 in 92 s + 6184 in
@@ -73,7 +77,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 * **fuzz-symmetry fixed on `v2`, not pushed (2026-09-29)**: the fuzz run's one failure was the
   library's: `-` of a point whose cuts differ in type (an exact 1/2 and a float 0.5) came back in one
   type, so a reverse op was not odd. `-` is now the typed cut mirror and `+` the identity
-  (`intervals/ops.py`). gate green: 27795 + 5608 = 33403 passed, 2026-09-29. record: plan §2 "fuzz-symmetry"; `v2-plan.md`
+  (`multiinterval/ops.py`). gate green: 27795 + 5608 = 33403 passed, 2026-09-29. record: plan §2 "fuzz-symmetry"; `v2-plan.md`
   2026-09-29 decision-log entry. the fuzz rerun that checks it on GitHub is row 1's
 * **pown-huge built on branch `pown-huge` (`409b2e6`..`3ed888f`, off `v2` at `7288e81`), merged
   into `v2` by fast-forward 2026-09-29 (the owner's go), not pushed**: outward pown of a float never builds a power past
@@ -81,22 +85,22 @@ session log below; nothing is listed as open and done at once), and list anythin
   `ops._NOT_A_DOUBLE`), the nearest class past `|n| = 2 ** 53` is `rounded_pow` to nearest (it lost
   n's parity: `M(-1.0) ** (2 ** 60 + 1)` was `[1.0]`, and `M(0.5) ** 10 ** 400` was `[inf]`), and the
   descriptor name is bounded (`A ** 2 ** 20000` raised python's 4300-digit ValueError). only
-  `intervals/ops.py` changed in the library. every float reproduction of the old row now answers in
+  `multiinterval/ops.py` changed in the library. every float reproduction of the old row now answers in
   under 0.1 s; exact int/Fraction operands still hang (Q17). gate green at `3ed888f`: 27795 passed in
   57 s + 5607 in 579 s = 33402, 2026-09-29. record: plan §2 "pown-huge"; `v2-plan.md` 2026-09-29
   decision-log entry
 * **M16 (H3's second part) built on `v2` (merged in `h3-merge`, then fast-forwarded), pushed 2026-09-28**: the owner, 2026-09-27: "get
   the rest of h3 done". five streams, each on its own branch off `v2` at `04946af`, merged into
   `h3-merge` without conflicts: M16a the solver in several variables (`gradient`, `jacobian`,
-  `solve`, `RootBox`, exported from `intervals`), M16b the 1788 layer (`intervals/ieee1788.py`, not
-  imported by `intervals`), M16c the per-piece allen matrix (`allen_matrix`, `allen_relations`),
-  M16d numpy interop (`intervals/numpy_compat.py`; numpy optional), M16e the gmpy2/mpfr backend
-  (`intervals/backend.py`, `intervals/_gmpy2.py`; opt-in, the pure path by default). the choices
+  `solve`, `RootBox`, exported from `multiinterval`), M16b the 1788 layer (`multiinterval/ieee1788.py`, not
+  imported by `multiinterval`), M16c the per-piece allen matrix (`allen_matrix`, `allen_relations`),
+  M16d numpy interop (`multiinterval/numpy_compat.py`; numpy optional), M16e the gmpy2/mpfr backend
+  (`multiinterval/backend.py`, `multiinterval/_gmpy2.py`; opt-in, the pure path by default). the choices
   the build made are D20-D24, owner questions Q12-Q16. gate on the merged tree green: 27795 passed in 84 s (`tests/itf1788`) + 5535 in 747 s (the rest) = 33330, 2026-09-28 at `511056d` (the merged code; the doc commit after it changes docs and one comment only). records:
   plan §2 M16; design: `v2-plan.md` "current design" and its five 2026-09-28 revisions
 * **M15 (H3's first part) built on `v2` (`04946af`), pushed 2026-09-28 with M16**: forward-mode autodiff
-  (`intervals/autodiff.py`, `Dual`, `derivative`) and interval newton (`intervals/solver.py`,
-  `newton`, `Root`), exported from `intervals`. the choices the build made are D19, owner question
+  (`multiinterval/autodiff.py`, `Dual`, `derivative`) and interval newton (`multiinterval/solver.py`,
+  `newton`, `Root`), exported from `multiinterval`. the choices the build made are D19, owner question
   Q11. record: plan §2 M15; design: `v2-plan.md` "the solver stack". M16 is on top of it
 
 * branch `v2`: M13 finished and merged 2026-09-27 (branches `m13e`, `m13g`, merged in `m13-merge`,
@@ -171,7 +175,7 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
 * M16c: the other relations over cut tuples in `relations.py` (`before`, `adjoins`, ...) also read
   normalized operands and do not assert it; only `allen_relations`, whose wrong answer would be
   silent and partial, does. the methods are unaffected
-* M16e: the whole suite under `INTERVALS_BACKEND=gmpy2` runs in CI's `gate-gmpy2` job since 2026-10-04
+* M16e: the whole suite under `MULTIINTERVAL_BACKEND=gmpy2` runs in CI's `gate-gmpy2` job since 2026-10-04
   (Q16(e)) and locally as `gate:gmpy2` when a backend file changed. the backend is verified only with gmpy2 2.3.1 / MPFR
   4.2.2 on windows (python 3.13); CI's linux jobs run `tests/test_backend.py` with the PyPI wheel, no
   other MPFR build has been run. free-threaded builds untested (the three contexts are shared module
@@ -188,6 +192,14 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
 
 ## session log (newest first)
 
+* **2026-10-05** the name (the owner: "I need a good name for this library that isn't already on pypi", then
+  `multiinterval`, one word, "do the rename in this repo now"). candidates checked against PyPI's JSON API (404 =
+  no project): `multiinterval`, `multi-interval`, `atoll`, `attained`, `realsets` free; `intervalset`, `dedekind`,
+  `archipelago`, `enclosure` taken. `git mv intervals multiinterval` and a scripted byte-level pass (CRLF kept)
+  over every tracked file but `references/`: imports, `intervals.x` and `intervals/x` pointers, quoted names,
+  `INTERVALS_*` variables; then by hand the bare `intervals` identifiers in four tests, `tools/coremath.py`'s import
+  walker paths and the directory mentions in the docs. the ledger's `ALGO` id kept (a new one would orphan every row).
+  Still owed: the push (x10 prepush and `gate:gmpy2`); claiming the name on PyPI (the first upload)
 * **2026-10-05** trig-rev-far (the owner: "get a subagent to do that"). an opus agent in the worktree `../intervals-trig-rev-far`
   measured (branch count, not cost per branch: ~ulp(X)/(2 pi) branches round onto x's open end to nearest, onto ±inf past the
   doubles), fixed with identical results, pinned (a differential hypothesis test against the old walk; 18 far cases under a
@@ -205,7 +217,7 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
   37213772220 green, fuzz run 37213772177 red on a test oracle (a DST gap; plan §2 "fuzz-dst-gap"), reproduced by
   the session, fixed and pinned, sabotaged red. gate 27795 + 6490; prepush green; pushed `a984e26..48631f5`; CI run
   37223604634 and fuzz run 37223604624 both green (34285 passed). the first babysitter's "reproduced locally" rested
-  on a script importing a name that does not exist (`from intervals import Interval`); the session reproduced the
+  on a script importing a name that does not exist (`from multiinterval import Interval`); the session reproduced the
   case itself. Still owed: Q21; the CORE-MATH full check is the owner's call (`cuts.py` and `kernel.py` changed: the
   flag check in constructors only)
 * **2026-10-04** the v1 parity audit (the owner: "send out a bunch of agents to read and run code, to verify that
@@ -387,9 +399,9 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
   own branch off `v2` at `04946af`; merged into `h3-merge` without conflicts. built: M16a
   `gradient`, `jacobian` (n passes, `Dual` untouched) and `solve`, `RootBox` (krawczyk proves,
   gauss-seidel with `mul_rev` narrows; the direction tag argued not needed in n variables); M16b
-  `intervals/ieee1788.py`, the 1788 layer, with `mul_rev_to_pair` and a third, exact conformance
+  `multiinterval/ieee1788.py`, the 1788 layer, with `mul_rev_to_pair` and a third, exact conformance
   pass (all match but 104 vectors under 94 rows), Q9's and Q10's defaults built in it; M16c
-  `allen_matrix` and `allen_relations`; M16d numpy interop (`intervals/numpy_compat.py`, numpy
+  `allen_matrix` and `allen_relations`; M16d numpy interop (`multiinterval/numpy_compat.py`, numpy
   optional), which also fixed a soundness hole M15 shipped: `Dual ** r` computed `r - 1` in r's own
   float arithmetic (`Dual.variable(O(1e300)) ** 0.1` missed its derivative, bare and decorated;
   `Dual.variable(O(-1)) ** 2.0 ** 60` had its sign flipped); M16e the gmpy2/mpfr backend
@@ -421,9 +433,9 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
   test-oracle gap, fixed in `d7e46c2`, CI green at `a1d45a9` (plan §1). fuzz ×10 measured locally,
   ×100 does not fit, the default is now ×10 (M14-run). `.scratch/m13` still not recycled (the
   VisualBasic recycle call refused it; `.scratch/fuzz` went through)
-* **2026-09-27** M13 finished, as an orchestrated build: M13e (reverse ops, `intervals/reverse.py`:
+* **2026-09-27** M13 finished, as an orchestrated build: M13e (reverse ops, `multiinterval/reverse.py`:
   sqr, abs, pown, cosh, mul, sin, cos, tan, pow_rev1, pow_rev2) and M13g (`DecoratedInterval`,
-  `intervals/literals.py`'s 1788 text syntax, the four constructors, `set_dec`, the signals
+  `multiinterval/literals.py`'s 1788 text syntax, the four constructors, `set_dec`, the signals
   `UndefinedOperationError` and `PossiblyUndefinedOperationWarning`, propagation through every op)
   were built in parallel worktrees, each by sequential builders with properties and sabotage, then
   three independent reviewers each (math differential, sabotage audit, spec) and a fixer that

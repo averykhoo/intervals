@@ -5,15 +5,15 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from intervals.cuts import Cut
-from intervals.cuts import Side
-from intervals.cuts import above
-from intervals.cuts import as_end
-from intervals.cuts import as_start
-from intervals.cuts import below
-from intervals.cuts import end_cut
-from intervals.cuts import mirror
-from intervals.cuts import start_cut
+from multiinterval.cuts import Cut
+from multiinterval.cuts import Side
+from multiinterval.cuts import above
+from multiinterval.cuts import as_end
+from multiinterval.cuts import as_start
+from multiinterval.cuts import below
+from multiinterval.cuts import end_cut
+from multiinterval.cuts import mirror
+from multiinterval.cuts import start_cut
 from tests.strategies import cuts
 from tests.strategies import values
 

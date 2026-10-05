@@ -128,7 +128,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
       with the default `INFINITY_IS_NOT_FINITE = True`, constructing `(1, inf]` raises `ValueError`;
       with the flag off `(1, inf]` and `[1, inf)` give `(1, -inf, 0)` and `[-inf, 1]` gives
       `(1, -inf, 2)`)
-* **numeric functions** (D9, built at M13b 2026-09-26; `intervals/numeric.py`): 1788's `mid`,
+* **numeric functions** (D9, built at M13b 2026-09-26; `multiinterval/numeric.py`): 1788's `mid`,
   `rad`, `wid`, `mag`, `mig`, `midRad` as the methods `mid()`, `rad()`, `wid()`, `mag()`, `mig()`,
   `mid_rad()` (the pair `(mid(), rad())`). `mid`, `rad`, `wid` are **of the hull**: a midpoint
   outside the set (`mid([0,1] ∪ [9,10])` = 5) is still a valid bisection point, a per-piece form
@@ -150,7 +150,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
       starting past max float has its start as midpoint)
     * the empty set raises `ValueError` (`the empty set has no midpoint`, and so on), as `inf` and
       `sup` do; 1788 answers `NaN`, and the itf1788 adapter reads the error as that `NaN`
-* **interior** (D10, built at M13c 2026-09-26; `intervals/kernel.py::interior`): the property
+* **interior** (D10, built at M13c 2026-09-26; `multiinterval/kernel.py::interior`): the property
   `A.interior`, a set operation in its own right, is every end opened, the infinite ones too: the
   interior in the topology of the reals. a degenerate piece drops out (`[2]` → `∅`), and so does a
   closed end at ±inf, a point with no neighbourhood of reals (`[5, inf]` → `(5, inf)`, `[inf]` →
@@ -189,7 +189,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
 * `allen(a, b)` on contiguous pieces only (raise otherwise). cuts make it finer than classical Allen:
   tiling-without-sharing (`[1,2) meets [2,3]`) vs sharing one point (`[1,2] ∩ [2,3] = {2}`)
 * **allen of any operands, per piece** (M16c, H3's second part, built 2026-09-28;
-  `intervals/relations.py::allen_matrix`, `::allen_relations`, `::_allen_pairs`):
+  `multiinterval/relations.py::allen_matrix`, `::allen_relations`, `::_allen_pairs`):
   `A.allen_matrix(B)` is `allen()` of every pair of pieces, a tuple of tuples of `Allen` with a row
   per piece of `A` and a column per piece of `B`, both in order (`A.allen_matrix(B)[i][j] is
   A.pieces[i].allen(B.pieces[j])`). `A.allen_relations(B)` is the `frozenset` of the relations
@@ -226,7 +226,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   mix. not on `DecoratedInterval`: relations go through `.interval`, as `allen` does
   (`tests/test_propagation.py::NOT_ON_THE_WRAPPER` lists both names). nothing new at the top level
   (`Allen` already is); the sparse view `(i, j, relation)` stays private (`_allen_pairs`)
-* **interval orders** (D10, built at M13c 2026-09-26; `intervals/relations.py::weakly_less`,
+* **interval orders** (D10, built at M13c 2026-09-26; `multiinterval/relations.py::weakly_less`,
   `::strictly_less`): 1788's `less` and `strictLess` are the methods `A.weakly_less(B)` (`inf A ≤
   inf B` and `sup A ≤ sup B`) and `A.strictly_less(B)` (both strict, except that two starts at
   -inf and two ends at +inf count, as 1788 writes it, so `(-inf, inf)` is strictly less than
@@ -353,7 +353,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   applicator has always used for `+ - * /`, whose ends are the least and greatest corner values
   (`MultiInterval(1 - Fraction(1, 10 ** 30), 1.0) * Fraction(1, 3)` is `[0.3333333333333333,
   333333333333333333333333333333/1000000000000000000000000000000]`, before `912558b` too)
-* **power** (D11, built at M13d 2026-09-26; `intervals/multi_interval.py::MultiInterval.__pow__`,
+* **power** (D11, built at M13d 2026-09-26; `multiinterval/multi_interval.py::MultiInterval.__pow__`,
   `::__rpow__`): a number exponent with an integral value (int, or a float or Fraction equal to one;
   never bool) is 1788's **pown**, over every base, as python's numbers do (`[-3, 1] ** 2.0` =
   `[0, 9]`). every other real exponent and **every `MultiInterval` exponent**, `[2]` included, is
@@ -361,7 +361,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   `[0, 1]`. `b ** A` for a real `b` is `MultiInterval(b) ** A`, in `A`'s class, and a subclass's
   `__rpow__` keeps `MultiInterval(2) ** OutwardMultiInterval(...)` outward. 3-argument `pow` is a
   `TypeError`: dropped (not 1788; v1 had it on integers only). pown has one rule
-  (`intervals/ops.py::_power_descriptor`; pown-huge 2026-09-29, Q17 and Q18 2026-10-03): a corner's
+  (`multiinterval/ops.py::_power_descriptor`; pown-huge 2026-09-29, Q17 and Q18 2026-10-03): a corner's
   power is built exactly while it is short, else rounded by `elementary.rounded_pow` (1788's pow
   route); outward in two directions with attainment against `ops._NOT_A_DOUBLE`, a marker equal to
   nothing (such a power is neither a double nor a rounding breakpoint, for any rational corner), to
@@ -382,16 +382,16 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   defined on any class, nor numpy's `left_shift`/`right_shift`: a TypeError
   (`tests/test_multi_interval.py::test_no_shifts`). scaling by a power of two is `A * 2 ** n`, exact
   as any product, and python's int-shift floor is `A // 2 ** n`
-* **reductions** (M13h, 2026-09-26; `intervals/reductions.py`): 1788's `sum`, `sumAbs`,
+* **reductions** (M13h, 2026-09-26; `multiinterval/reductions.py`): 1788's `sum`, `sumAbs`,
   `sumSquare`, `dot` as `sum_(xs)`, `sum_abs(xs)`, `sum_sqr(xs)`, `dot(xs, ys)`, exported from
-  `intervals`. point ops over any iterable of real numbers, not interval ops: each operand is held
+  `multiinterval`. point ops over any iterable of real numbers, not interval ops: each operand is held
   exactly, the value is computed as a Fraction and rounded once to a float, to nearest (ties to
   even) by default or by the keyword-only `rounding='down'` / `'up'`, so the operands' order never
   matters. the result is always a float, never `-0.0`; the empty sum is `0.0`. ±inf are points: a
   sum reaching one infinity is that infinity in every direction. a `nan` operand, `inf + -inf` and
   `0 * inf` raise `ValueError` (1788 answers `NaN`; ours follows the constructors' `nan` rule and
   D9's empty-set rule), as do sequences of different lengths in `dot`
-* **cancellation** (D13, built at M13f 2026-09-26; `intervals/ops.py::cancel_minus`, `::cancel_plus`):
+* **cancellation** (D13, built at M13f 2026-09-26; `multiinterval/ops.py::cancel_minus`, `::cancel_plus`):
   1788's `cancelMinus` and `cancelPlus` as the methods `A.cancel_minus(B)` and `A.cancel_plus(B)`.
   `cancel_minus` is the **Minkowski difference**, the largest `X` with `B + X ⊆ A` (the `+` above),
   defined on any multi-intervals, open or closed ends, ±inf points included; `cancel_plus(B)` is
@@ -483,13 +483,13 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
       `exp(y ln x)`; pow decides overflow and underflow from a bracket of `ln x` good to a factor of
       3.1, before any series
     * **the backend** (M16e, 2026-09-28): which code picks the rounded double, the pure path
-      (`python`) or gmpy2/mpfr (`gmpy2`, `intervals/_gmpy2.py`). **the default is the pure path**; the
-      environment variable `INTERVALS_BACKEND`, read once at `import intervals`
-      (`intervals/backend.py`), selects: unset, `''` or `python` the pure path (gmpy2 never imported);
+      (`python`) or gmpy2/mpfr (`gmpy2`, `multiinterval/_gmpy2.py`). **the default is the pure path**; the
+      environment variable `MULTIINTERVAL_BACKEND`, read once at `import multiinterval`
+      (`multiinterval/backend.py`), selects: unset, `''` or `python` the pure path (gmpy2 never imported);
       `gmpy2` gmpy2, and an `ImportError` at import if it is missing or below the floor (gmpy2 2.3 with
       MPFR 4.2); `auto` gmpy2 if it imports and `2.3 <= version < 3`, else the pure path, silently;
       anything else a `ValueError`. no public setter (rounding is a property of the type, never an
-      ambient mode); `intervals.backend.name()` says which, and is not exported from `intervals`
+      ambient mode); `multiinterval.backend.name()` says which, and is not exported from `multiinterval`
       (the README names it for anyone reporting a result). the extra `[fast]` installs gmpy2 in
       `auto`'s window, `gmpy2>=2.3,<3`, as `[test]` does (owner, Q16(d), 2026-10-03), so "I installed
       `[fast]`" means the backend is on when asked; both pins move with `backend.CEILING`
@@ -534,7 +534,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
 * `ops.minimum/maximum` (the class's `minimum()`, `maximum()`; builtin `min` needs a bool from `<`):
   descriptors with their own attainment, since min is flat where the other operand is out of reach.
   `ops.fma`: `add(mul(a, b), c)` computed exactly, rounded once
-* **reverse ops** (M13e, D12; `intervals/reverse.py`, exported from `intervals`; built 2026-09-26:
+* **reverse ops** (M13e, D12; `multiinterval/reverse.py`, exported from `multiinterval`; built 2026-09-26:
   `sqr_rev(c, x=REALS)`, `abs_rev(c, x=REALS)`, `pown_rev(c, n, x=REALS)`, `cosh_rev(c,
   x=REALS)` here, `mul_rev`, `sin_rev`, `cos_rev`, `tan_rev`, `pow_rev1`, `pow_rev2` below): each
   is `{t ∈ x : f(t) has a value and f(t) ∈ c}` for the library's own f at a point,
@@ -740,7 +740,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
       merge, 2026-09-27, with M13g's pin: `::test_nothing_is_skipped` asserts `SKIPPED` empty)
     * (M13's merge, 2026-09-27) **decorated reverse ops**: given a `DecoratedInterval` operand, each
       reverse op is 1788's decorated one, the core's set on the intervals decorated trv
-      (`intervals/reverse.py::_decorated`); every interval operand is then a `DecoratedInterval` or a
+      (`multiinterval/reverse.py::_decorated`); every interval operand is then a `DecoratedInterval` or a
       number, a bare `MultiInterval` a `TypeError`. the 19 reverse ops are in
       `tests/itf1788/test_itf1788.py::PROPAGATED` (`::REVERSE`), so every decorated reverse vector
       (481, 2026-09-27) runs on `DecoratedInterval` operands with its decoration compared in both
@@ -798,7 +798,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   each file keeps its own licence: Apache 2.0 for the 11 `libieeep1788_*`, LGPL-2.1-or-later for
   `mpfi`, `fi_lib`, `c-xsc`, all-permissive for `ieee1788-constructors`, `ieee1788-exceptions`,
   `atan2`, `abs_rev`, `pow_rev` (`tests/itf1788/README.md`). they are test data: the wheel ships
-  only `intervals/`. `git hash-object` of all 22 files equals the fork's blob at the pin (checked
+  only `multiinterval/`. `git hash-object` of all 22 files equals the fork's blob at the pin (checked
   2026-09-26), and `tests/itf1788/.gitattributes` marks them `-text` so a checkout keeps the bytes
 * decorations (`com/dac/def/trv`) are **not in the core; they are in a wrapper** (D16, built at
   M13g, 2026-09-26). they answer "was f defined and continuous on the whole input", which the result
@@ -807,7 +807,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   `DecoratedInterval` (the next two bullets) wraps one with 1788's decoration, brought forward from
   the solver stack for the itf1788 vectors. 1788's `ill` and NaI are not built (owner, 2026-09-26,
   Q8): invalid input raises `UndefinedOperationError` instead
-* (M13g part 2, 2026-09-26, D16) **the decorated type**, `intervals/decorated.py`: `DecoratedInterval`
+* (M13g part 2, 2026-09-26, D16) **the decorated type**, `multiinterval/decorated.py`: `DecoratedInterval`
   is a `MultiInterval` (any subclass, kept) with a `Decoration`, an enum `COM`, `DAC`, `DEF`, `TRV`
   ordered `TRV < DEF < DAC < COM` (so the weaker of two is `min`), with **no `ill` and no NaI**.
   immutable, hashable, equal iff both parts are, never equal to its bare set. 1788's ops:
@@ -820,7 +820,7 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
   ones plus the literal's decoration or newDec's. a decoration is a `Decoration` or its lower-case
   name; `ill` and any other name raise `UndefinedOperationError`, anything else is a `TypeError`.
   `str` is the set in our syntax then `_com`. propagation: the next bullet
-* (M13g part 3, 2026-09-26, D16) **decoration propagation** (1788-2015 §11), `intervals/decorated.py`:
+* (M13g part 3, 2026-09-26, D16) **decoration propagation** (1788-2015 §11), `multiinterval/decorated.py`:
   `DecoratedInterval` has the core's point functions (`+ - * /`, `**` as D11, `reciprocal`, `abs`,
   `minimum`, `maximum`, `fma`, `hypot`, `atan2`, the elementary functions, `log(base)`, `rootn`, the
   step functions with `round(ndigits)`, `%`, `//`, `divmod`) and set operations (`& | ^ ~`,
@@ -853,13 +853,13 @@ variables, the 1788 layer, the allen matrix, numpy, the gmpy2 backend, 2026-09-2
 
 ### the 1788 layer (M16b, H3's second part, 2026-09-28)
 
-* **a wrapper, never a mode** (the 2026-08-16 principle): `intervals/ieee1788.py` gives 1788's
+* **a wrapper, never a mode** (the 2026-08-16 principle): `multiinterval/ieee1788.py` gives 1788's
   answers over the library and changes nothing in it. every set is computed by the library
   (`OutwardMultiInterval`, and `DecoratedInterval` over one); the layer converts in by 1788's input
   rule and out by its output rule, and has its own logic only where 1788 *defines* another answer
   than the library's set (cancellation, overlap, `mulRevToPair`'s decoration, NaN for the numbers
   of the empty set and a reduction with no value). no library module
-  was edited. not exported from `intervals` and not imported by it: `from intervals import
+  was edited. not exported from `multiinterval` and not imported by it: `from multiinterval import
   ieee1788`
 * **one class for both flavours**: `ieee1788.Interval(lo, hi, decoration)`, immutable and hashable,
   a set in **1788's form** (empty, or one piece whose finite ends are closed python floats and whose
@@ -960,7 +960,7 @@ built: forward-mode automatic differentiation and an interval newton solver, the
 what multi-intervals are for (M15), then its n-variable form (M16a, the last bullets). what stays
 of H3 is under "later" below.
 
-* **`Dual`** (`intervals/autodiff.py`): a value and a derivative, each a `MultiInterval` (either
+* **`Dual`** (`multiinterval/autodiff.py`): a value and a derivative, each a `MultiInterval` (either
   class) or each a `DecoratedInterval`, never one of each. `Dual.variable(x)` seeds `[1]`,
   `Dual.constant(x)` `[0]`; a number or a bare set in an op is a constant. its ops are the
   arithmetic dunders, `reciprocal`, `abs`, `**` (a number exponent as `MultiInterval.__pow__` reads
@@ -978,7 +978,7 @@ of H3 is under "later" below.
   `f` is C¹ there. each formula is undefined exactly where its op is not differentiable (`sqrt`,
   `rootn`, `cbrt`, pow at 0, `asin` at ±1, `acosh` at 1: a division by 0, trv; `abs` across 0:
   `sign` is def), which `tests/test_autodiff.py` pins op by op
-* **`newton(f, x, *, tol=1e-10, max_steps=10_000)`** (`intervals/solver.py`) returns `Root(interval,
+* **`newton(f, x, *, tol=1e-10, max_steps=10_000)`** (`multiinterval/solver.py`) returns `Root(interval,
   unique)`s, disjoint, in order, each a connected piece of `x`, and every zero of `f` in `x` is in
   one: a branch and prune over the pieces of `x` (a multi-piece `x` is fine), in
   `OutwardMultiInterval` (int and Fraction stay exact). per piece: prune if `0 ∉ f(piece)`; where
@@ -1014,8 +1014,8 @@ of H3 is under "later" below.
   can be an indeterminate point (`1/[0]`), which is no news to the caller
 * the direction tag under "later" was not needed: the C¹ gate keeps newton off anything holding
   ±inf as a point, and a range check on such a piece needs no tag
-* **`gradient(f, xs)` and `jacobian(F, xs)`** (`intervals/autodiff.py`, below `derivative`; exported
-  from `intervals`): n passes of `f`, pass j calling `f(c_1, ..., Dual.variable(x_j), ..., c_n)` with
+* **`gradient(f, xs)` and `jacobian(F, xs)`** (`multiinterval/autodiff.py`, below `derivative`; exported
+  from `multiinterval`): n passes of `f`, pass j calling `f(c_1, ..., Dual.variable(x_j), ..., c_n)` with
   `c_k = Dual.constant(x_k)` and reading the derivatives: column j of the jacobian. `Dual` is not
   touched (no vector mode: a tangent tuple inside `Dual` would edit the 42 chain rules M15 pinned).
   `xs` is a list or a tuple of n sets or numbers, every set bare or every set decorated (checked up
@@ -1030,7 +1030,7 @@ of H3 is under "later" below.
   needs (one-sided at its faces). not on an open set holding the box: `x ** 1.5` over `[0, 1]` is com
   with nothing below 0 in its domain, and `abs` over the point `[0]` has a dac derivative (review
   F1)
-* **`solve(F, xs, *, tol=1e-10, max_steps=10_000)`** (`intervals/solver.py`, below `newton`) returns
+* **`solve(F, xs, *, tol=1e-10, max_steps=10_000)`** (`multiinterval/solver.py`, below `newton`) returns
   `RootBox(box, unique)`s (`box` a tuple of n connected `OutwardMultiInterval`s), pairwise disjoint in
   some coordinate, inside `xs`, sorted by the components' `sort_key`s, and every zero of `F` in `xs`
   is in one. `xs` as for `newton` per coordinate (a `DecoratedInterval` refused); n == 1 is `newton`
@@ -1102,7 +1102,7 @@ of H3 is under "later" below.
 
 ### numpy (M16d, H3's second part, 2026-09-28)
 
-numpy is optional: never imported at load (`intervals/numpy_compat.py` imports numpy inside the two
+numpy is optional: never imported at load (`multiinterval/numpy_compat.py` imports numpy inside the two
 hooks, which only numpy calls), not in `[project]` dependencies; it is in the `[test]` extra (owner,
 2026-10-03, Q15(g)), as gmpy2 is, so the gate's numpy tests never skip and README's numpy section
 runs as doctests. a multi-interval is a *scalar* to numpy, one value of a number-like
@@ -1196,7 +1196,7 @@ type, never an array of numbers, so interop is four rules and one refusal:
 
 ### the time layer (M8, D4 (a) and D30, built 2026-10-04)
 
-`intervals/time_interval.py`: `DateTimeInterval` (a set of instants) and `TimeDeltaInterval` (a set of
+`multiinterval/time_interval.py`: `DateTimeInterval` (a set of instants) and `TimeDeltaInterval` (a set of
 durations), exported with the two sentinels `NEG_INF` and `POS_INF`. the owner's choices are D30
 (decision log "2026-10-04 revision: the time layer's choices"); the build's own choices among the
 defaults are in `v2-implementation-plan.md` §2 M8.
@@ -1292,9 +1292,10 @@ defaults are in `v2-implementation-plan.md` §2 M8.
 ### package layout
 
 modules export pure functions over cut tuples; one class file on top binds the dunders. no mixins.
-imports only point downward.
+imports only point downward. the distribution and the import package are both `multiinterval`
+(decision log "2026-10-05 revision: the package is `multiinterval`").
 
-    intervals/
+    multiinterval/
         errors.py          warning and exception classes
         numpy_compat.py    numpy's hooks: array_ufunc (the __array_ufunc__ of MultiInterval,
                            DecoratedInterval, Dual) and array (MultiInterval.__array__); numpy
@@ -1307,7 +1308,7 @@ imports only point downward.
                            the interval orders weakly_less strictly_less (M13c),
                            allen_matrix allen_relations of every pair of pieces (M16c)
         rounding.py        rounding an exact value to a double: nearest, down, up
-        backend.py         which code picks a rounded double: INTERVALS_BACKEND, python (default),
+        backend.py         which code picks a rounded double: MULTIINTERVAL_BACKEND, python (default),
                            gmpy2 or auto; imports _gmpy2 only when selected (M16e)
         _gmpy2.py          the gmpy2/mpfr backend: the same doubles as elementary.py and the
                            outward hook, faster, or None (then the pure path) (M16e)
@@ -1543,7 +1544,7 @@ imports only point downward.
   Q16(e), 2026-10-03) in ci.yml's `gate-gmpy2` job (python 3.13, ubuntu, the PyPI wheel's MPFR) on
   every push, and locally as the ledger phase `gate:gmpy2` (`tools/gate.py`), which a push needs only
   when a backend file (`tools/gate.py::BACKEND_FILES`) changed since `origin/master` and a commit never
-  needs. forced, `import intervals` raises without gmpy2, so the suite cannot pass on the pure path;
+  needs. forced, `import multiinterval` raises without gmpy2, so the suite cannot pass on the pure path;
   the job asserts `backend.name()` first, since one test file alone can. no gmpy2 fuzz job
 * a **fuzz profile** (M14, 2026-09-26): `HYPOTHESIS_PROFILE=fuzz` makes `tests/conftest.py` run
   every hypothesis test randomized, with no deadline, at `FUZZ_MULTIPLIER` (default 10; 100 until
@@ -1587,6 +1588,17 @@ imports only point downward.
       exact text and interchange conversions, and every inf-sup type but binary64 (M16b)
 
 ## decision log
+
+### 2026-10-05 revision: the package is `multiinterval`
+
+the owner, 2026-10-05: the library needs a name not taken on PyPI (`intervals` is another project's, so the two
+could not be installed side by side). chosen: `multiinterval`, one word, singular, the same spelling for
+`pip install` and `import` (the stdlib's and PEP 8's style for packages; it names the main class). the package
+directory `intervals/` is now `multiinterval/`, every import, path and doc pointer follows (the dated snapshots
+in `references/` keep the old name), and the backend's variable is `MULTIINTERVAL_BACKEND` (was
+`INTERVALS_BACKEND`; never released), likewise `MULTIINTERVAL_COREMATH_CACHE`. unchanged: the class names, the
+repo folder, the conda env `intervals`, and the run ledger's format id `intervals-gate-ledger/1`. `multiinterval`
+was free on PyPI on 2026-10-05 (no project under the name; claimed only by the first upload)
 
 ### 2026-10-05 revision: M8's choices confirmed (Q21)
 
@@ -1790,7 +1802,7 @@ cons and when it is the better choice (`README.md` there is the table). where a 
 the owner, 2026-09-27: "get the rest of h3 done", which supersedes 2026-09-26's "numpy and
 gmpy2/mpfr recorded, not now" (`HANDOFF.md` H3; plan §2 M15: "gmpy2/mpfr stay out"). built as M16e,
 one of M16's five streams. the choices, each the build's default, open for the owner (D24, Q16):
-* **the pure path is the default**; gmpy2 only with `INTERVALS_BACKEND=gmpy2` (forced) or `auto`.
+* **the pure path is the default**; gmpy2 only with `MULTIINTERVAL_BACKEND=gmpy2` (forced) or `auto`.
   the design had automatic-when-importable; its critique held that the conservative reading wins:
   the pure path is the reference, the local gate and itf1788 then keep checking it, and a user's
   gmpy2 (linked to whatever MPFR their distribution ships) never changes code paths unasked
@@ -1866,8 +1878,8 @@ gmpy2/mpfr recorded, not now"; H3's rest was built as M16 in five streams, this 
 `ieee1788.py`, never a mode on MultiInterval") is now built, as designed there. the choices the
 build made, each the session's default, open for the owner (`HANDOFF.md` Q13; D21 in
 `v2-implementation-plan.md`):
-* **shape**: `intervals/ieee1788.py`, one class `Interval` for both flavours, snake_case 1788 names
-  with 1788's camelCase in `NAMES`, not exported from `intervals`
+* **shape**: `multiinterval/ieee1788.py`, one class `Interval` for both flavours, snake_case 1788 names
+  with 1788's camelCase in `NAMES`, not exported from `multiinterval`
 * **numbers of the empty set raise** (`ValueError`, D9's answer, as the owner chose for the
   reductions, Q2) where 1788 says NaN; `inf`/`sup` of it are `±inf` either way
 * **Q9 and Q10 answered by the layer, pending Q13 (c), (d)**: 1788's pair with its decoration is
@@ -1918,8 +1930,8 @@ build's defaults, open for the owner (Q12; D20):
 the owner asked for H3 first; its suggested first pick (2026-09-26 revision below) was built. the
 choices the build made, each the session's default, open for the owner (`HANDOFF.md` Q11; D19 in
 v2-implementation-plan.md):
-* **public, in the package**: `intervals/autodiff.py` (`Dual`, `derivative`) and
-  `intervals/solver.py` (`newton`, `Root`), exported from `intervals`, as the 2025-12 layout sketch
+* **public, in the package**: `multiinterval/autodiff.py` (`Dual`, `derivative`) and
+  `multiinterval/solver.py` (`newton`, `Root`), exported from `multiinterval`, as the 2025-12 layout sketch
   named them (`autodiff.py`, `solver.py`), rather than newton "as a test" only
 * **C¹ is proved by decorations** (dac or better on the value and on the derivative), the decorated
   type's use in the solver that the "later" list kept back; where it fails the piece is only pruned
@@ -1954,7 +1966,7 @@ for M13"). M13 is done: every statement of the 19 files is a vector of an op in 
 itself decided, each the conservative reading:
 * **the reverse ops take decorated operands** ("ieee 1788" above, decorated reverse ops): the
   core's set, decorated trv, as 1788 decorates a reverse op's result
-  (`intervals/reverse.py::_decorated`); a bare `MultiInterval` beside a `DecoratedInterval` is a
+  (`multiinterval/reverse.py::_decorated`); a bare `MultiInterval` beside a `DecoratedInterval` is a
   `TypeError`, as for the wrapper's other ops
 * **mulRevToPair's better decoration is not built**: 1788 decorates the pair's first interval as
   the decorated division `c / b` where `0 ∉ b`, but its mulRev, the same set's hull, trv. ours is
@@ -2019,7 +2031,7 @@ their exact pieces and D12's cap for the periodic ones), empties and warnings (`
 the periodic ones past the cap or over an unbounded piece of `x`) and ieee 1788 (the reverse ops,
 reverse multiplication, the periodic and the power reverse ops, and all of them together). the
 choices the plan left open are the four parts' entries below; the close-out made none. in short:
-* **ten functions in `intervals/reverse.py`**, exported from `intervals`, each the exact set
+* **ten functions in `multiinterval/reverse.py`**, exported from `multiinterval`, each the exact set
   `{t ∈ x : f(t) ∈ c}` (for `mul_rev`, `pow_rev1`, `pow_rev2`, `∃` over the other operand) with the
   library's own f, ±inf points like any other, where 1788 answers its hull; an irrational end is its
   tightest float enclosure, open, and the domain is intersected after rounding
@@ -2129,7 +2141,7 @@ reading, are now current design too:
 * **an empty operand warns** (`EmptySetPropagationWarning`, off by default), as the functions do;
   an empty answer from non-empty operands does not warn: "no solution here" is a normal answer
 * **the result class is `OutwardMultiInterval` if either operand is one**, as for the dunders;
-  the functions are module-level (`intervals.sqr_rev`), not methods, as the plan's signatures say
+  the functions are module-level (`multiinterval.sqr_rev`), not methods, as the plan's signatures say
 * **the adapter compares the closed hulls** (the output rule unchanged): 1788's reverse op is the
   hull of the preimage by definition
 * **a proposed new residual category, "tighter than the vector" (not yet approved)**: two
@@ -2187,7 +2199,7 @@ decorated vector of those ops. the choices the plan left open, each the conserva
 ### 2026-09-26 revision: M13g part 2, the decorated type, built
 
 built and measured 2026-09-26 on branch `m13g`; details in v2-implementation-plan.md (M13g, "part 2").
-the decorated wrapper of D16 is `DecoratedInterval` (`intervals/decorated.py`, "ieee 1788" above),
+the decorated wrapper of D16 is `DecoratedInterval` (`multiinterval/decorated.py`, "ieee 1788" above),
 named after M8's `DateTimeInterval`, with a `Decoration` enum and no `ill`. the choices the plan left
 open, each the conservative reading, flagged:
 * **the constructor is strict, `set_dec` is 1788's**: `DecoratedInterval(x, d)` raises
@@ -2209,7 +2221,7 @@ open, each the conservative reading, flagged:
 
 built and measured 2026-09-26 on branch `m13g`; details in v2-implementation-plan.md (M13g, "part 1").
 the signals as the owner chose them (Q1): `UndefinedOperationError(ValueError)` raises,
-`PossiblyUndefinedOperationWarning(IntervalWarning)` would warn and return. `intervals/literals.py`
+`PossiblyUndefinedOperationWarning(IntervalWarning)` would warn and return. `multiinterval/literals.py`
 reads 1788's interval literals, a syntax separate from `MultiInterval.parse`, **exactly**: a decimal
 is the rational it spells, so validity is decided exactly and the warning is never emitted today.
 `text_to_interval` and `nums_to_interval` give a bare `MultiInterval` with an infinite end open.
@@ -2322,7 +2334,7 @@ the most conservative reading, are now current design too:
 built and measured 2026-09-26; details in v2-implementation-plan.md (M13h). no D row covered it, so
 the choices below were made while building, each the most conservative reading of the plan, and
 are now "current design" (arithmetic, ieee 1788, testing):
-* **exported from `intervals`**: `sum_`, `sum_abs`, `sum_sqr`, `dot`, following M13e's plan for
+* **exported from `multiinterval`**: `sum_`, `sum_abs`, `sum_sqr`, `dot`, following M13e's plan for
   the reverse ops (`sum_` keeps its underscore so it never shadows the builtin)
 * **the direction is a keyword-only string**, `rounding='nearest'` by default, `'down'`, `'up'`:
   no public API took a direction before, and `rounding.py`'s constants stay internal
@@ -2381,7 +2393,7 @@ in short:
 * **D14** `python-flint` (Arb) is the independent oracle for the elementary functions, test-only
   (built 2026-09-26; now in "current design", testing)
 * **D15** the fork's LGPL-2.1+ files (`mpfi`, `fi_lib`, `c-xsc`) are vendored unmodified as test
-  data with their licence files; the wheel ships only `intervals/` (built 2026-09-26; now in
+  data with their licence files; the wheel ships only `multiinterval/` (built 2026-09-26; now in
   "current design", ieee 1788. five files are all-permissive, not the two `ieee1788-*` alone)
 * **D16** decorations, NaI and 1788's constructors in a separate decorated wrapper type, brought
   forward from "later"; the core stays undecorated. open: 1788's signals as warnings or exceptions
@@ -2663,7 +2675,7 @@ model the UX on how python/IEEE already treat -0.0 (equal, same hash, sign prese
 
 split by domain, layered so imports only point downward (no cycles):
 
-    intervals/
+    multiinterval/
         __init__.py      public API assembly; constants (EMPTY, REALS, ...)
         errors.py        warning/exception classes                 -- layer 0
         config.py        zero_mode + rounding policy               -- layer 0

@@ -10,7 +10,7 @@ and lists them). the adapter's rules:
 * **precision rule**: operands are the literals' doubles, held exactly (tests.itf1788.itl), and our
   exact result is rounded outward to doubles. an expected value is the tightest double enclosure,
   so this checks soundness and sharpness together, not just overlap. functions whose value is
-  irrational already return their tightest enclosure (`intervals.elementary`)
+  irrational already return their tightest enclosure (`multiinterval.elementary`)
 * **outward rule**: every interval-valued vector runs a second time with the operands as floats in an
   `OutwardMultiInterval`, and its closed hull is compared with no rounding by the adapter: the
   library's own outward rounding must give 1788's tightest enclosure
@@ -36,7 +36,7 @@ and lists them). the adapter's rules:
   decorations stripped (the fork has many statements twice, `atanh [1.0,1.0]_def = [empty]_trv` beside
   `atanh [1.0,1.0] = [empty]`), except a row on a decoration alone (`PLAIN_ONLY`, and
   `DECORATION_ONLY`, whose set must match), keyed with them. the reverse ops (`REVERSE`) are in
-  `PROPAGATED` since M13's merge: `intervals.reverse` decorates their results trv, as 1788 does.
+  `PROPAGATED` since M13's merge: `multiinterval.reverse` decorates their results trv, as 1788 does.
   there is no NaI (D16, owner 2026-09-26), so a vector with a `[nai]` in it, and every `isNaI`, is
   a row under "no NaI: invalid input raises", generated below
 * **decorated ops** (M13g, `DECORATED`: the `d-` constructors, `newDec`, `setDec`, `intervalPart`,
@@ -70,7 +70,7 @@ in `OPS` would have its statements counted in `SKIPPED`, which M13's exit keeps 
 `test_parser_reads_every_statement`.
 
 this adapter tests the library's own semantics. 1788's own answers are the 1788 layer's
-(`intervals.ieee1788`, M16b), and a third pass, `tests/itf1788/test_ieee1788.py`, runs every vector
+(`multiinterval.ieee1788`, M16b), and a third pass, `tests/itf1788/test_ieee1788.py`, runs every vector
 through it and compares exactly, with no hull and no rounding. so a row here is a true statement
 about the library, and each row of a category that pass has none of (degenerate infinities, cut-based
 relations, cancellation as a Minkowski difference, decoration expectations) has a second reading:
@@ -85,36 +85,36 @@ from pathlib import Path
 
 import pytest
 
-from intervals import EMPTY
-from intervals import DecoratedInterval
-from intervals import Decoration
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import REALS
-from intervals import abs_rev
-from intervals import cos_rev
-from intervals import cosh_rev
-from intervals import dot
-from intervals import mul_rev
-from intervals import nums_to_decorated_interval
-from intervals import nums_to_interval
-from intervals import pow_rev1
-from intervals import pow_rev2
-from intervals import pown_rev
-from intervals import set_dec
-from intervals import sin_rev
-from intervals import sqr_rev
-from intervals import sum_
-from intervals import sum_abs
-from intervals import sum_sqr
-from intervals import tan_rev
-from intervals import text_to_decorated_interval
-from intervals import text_to_interval
-from intervals.errors import IntervalWarning
-from intervals.errors import PossiblyUndefinedOperationWarning
-from intervals.errors import UndefinedOperationError
-from intervals.kernel import pieces
-from intervals.relations import Allen
+from multiinterval import EMPTY
+from multiinterval import DecoratedInterval
+from multiinterval import Decoration
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import REALS
+from multiinterval import abs_rev
+from multiinterval import cos_rev
+from multiinterval import cosh_rev
+from multiinterval import dot
+from multiinterval import mul_rev
+from multiinterval import nums_to_decorated_interval
+from multiinterval import nums_to_interval
+from multiinterval import pow_rev1
+from multiinterval import pow_rev2
+from multiinterval import pown_rev
+from multiinterval import set_dec
+from multiinterval import sin_rev
+from multiinterval import sqr_rev
+from multiinterval import sum_
+from multiinterval import sum_abs
+from multiinterval import sum_sqr
+from multiinterval import tan_rev
+from multiinterval import text_to_decorated_interval
+from multiinterval import text_to_interval
+from multiinterval.errors import IntervalWarning
+from multiinterval.errors import PossiblyUndefinedOperationWarning
+from multiinterval.errors import UndefinedOperationError
+from multiinterval.kernel import pieces
+from multiinterval.relations import Allen
 from tests.itf1788.itl import Interval
 from tests.itf1788.itl import Vector
 from tests.itf1788.itl import parse_file
@@ -516,7 +516,7 @@ DECORATED = frozenset({'d-textToInterval', 'd-numsToInterval', 'newDec', 'setDec
 # propagated by the op and checked (1788's decorated arithmetic, functions and set operations). any
 # other op of a decorated vector takes the interval part of each operand (BARE_PART), as 1788 defines
 # the booleans and numbers of a decorated interval. the reverse ops (M13e, `REVERSE`) are in it since
-# M13's merge: `intervals.reverse` takes DecoratedInterval operands and decorates the result trv, as
+# M13's merge: `multiinterval.reverse` takes DecoratedInterval operands and decorates the result trv, as
 # 1788 does (`reverse.py::_decorated`); a pair (mulRevToPair) is compared with its decoration by the
 # pair rule (`_pair_outcome`)
 REVERSE = frozenset({'sqrRev', 'sqrRevBin', 'absRev', 'absRevBin', 'pownRev', 'pownRevBin', 'coshRev',

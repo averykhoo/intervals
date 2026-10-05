@@ -22,19 +22,19 @@ import math
 from fractions import Fraction
 from typing import Tuple
 
-from intervals.cuts import Value
-from intervals.cuts import normalize_value
-from intervals.kernel import Cuts
-from intervals.kernel import pieces
-from intervals.rounding import DOWN
-from intervals.rounding import MAX
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
-from intervals.rounding import has_finite_float
-from intervals.rounding import is_infinite
-from intervals.rounding import is_float
-from intervals.rounding import round_rational
-from intervals.rounding import round_value
+from multiinterval.cuts import Value
+from multiinterval.cuts import normalize_value
+from multiinterval.kernel import Cuts
+from multiinterval.kernel import pieces
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import MAX
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
+from multiinterval.rounding import has_finite_float
+from multiinterval.rounding import is_infinite
+from multiinterval.rounding import is_float
+from multiinterval.rounding import round_rational
+from multiinterval.rounding import round_value
 
 INF = math.inf
 

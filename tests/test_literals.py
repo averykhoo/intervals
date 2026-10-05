@@ -1,5 +1,5 @@
 """
-ieee 1788's interval literals and the bare constructors (M13g): `intervals.literals`,
+ieee 1788's interval literals and the bare constructors (M13g): `multiinterval.literals`,
 `text_to_interval` and `nums_to_interval`, and the signals `UndefinedOperationError` and
 `PossiblyUndefinedOperationWarning`
 
@@ -31,17 +31,17 @@ from hypothesis import example
 from hypothesis import given
 from hypothesis import strategies as st
 
-import intervals
-from intervals import MultiInterval
-from intervals import PossiblyUndefinedOperationWarning
-from intervals import UndefinedOperationError
-from intervals import nums_to_interval
-from intervals import text_to_interval
-from intervals.errors import IntervalWarning
-from intervals.literals import DECORATIONS
-from intervals.literals import Literal
-from intervals.literals import number
-from intervals.literals import parse_literal
+import multiinterval
+from multiinterval import MultiInterval
+from multiinterval import PossiblyUndefinedOperationWarning
+from multiinterval import UndefinedOperationError
+from multiinterval import nums_to_interval
+from multiinterval import text_to_interval
+from multiinterval.errors import IntervalWarning
+from multiinterval.literals import DECORATIONS
+from multiinterval.literals import Literal
+from multiinterval.literals import number
+from multiinterval.literals import parse_literal
 from tests.strategies import probe_points
 
 M = MultiInterval
@@ -393,7 +393,7 @@ def test_the_signals():
     assert not ignored, ignored
     for name in ('UndefinedOperationError', 'PossiblyUndefinedOperationWarning', 'text_to_interval',
                  'nums_to_interval'):
-        assert name in intervals.__all__
+        assert name in multiinterval.__all__
     with pytest.raises(ValueError, match='lower bound exceeds'):
         text_to_interval('[2, 1]')
     with pytest.raises(ValueError, match='numsToInterval'):

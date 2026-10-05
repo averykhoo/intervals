@@ -2,7 +2,7 @@
 rounding an exact value to a double: to nearest, down or up
 
 int and Fraction are exact and never rounded by the package on their own; a value is rounded when a
-float is involved, or when the exact value is irrational (a function's value, see `intervals.elementary`).
+float is involved, or when the exact value is irrational (a function's value, see `multiinterval.elementary`).
 the rounding direction is a property of the type that asks for it (`MultiInterval` rounds to nearest,
 `OutwardMultiInterval` outward), never an ambient mode.
 """
@@ -10,7 +10,7 @@ import math
 import sys
 from fractions import Fraction
 
-from intervals import kernel
+from multiinterval import kernel
 
 DOWN, NEAREST, UP = -1, 0, 1
 

@@ -31,7 +31,7 @@ is 1788's forgiving `setDec` and demotes it instead (`setDec([1, inf], com)` is 
 "bounded" is decided on the exact set: `[1.0E+400]` is bounded here, and `com`, where 1788's binary64
 enclosure `[max, inf]` is not.
 
->>> from intervals import MultiInterval
+>>> from multiinterval import MultiInterval
 >>> DecoratedInterval(MultiInterval(1, 2))
 DecoratedInterval(MultiInterval.parse('[1, 2]'), Decoration.COM)
 >>> print(set_dec(MultiInterval.parse('[1, inf)'), 'com'), set_dec(MultiInterval(), Decoration.DEF))
@@ -41,7 +41,7 @@ DecoratedInterval(MultiInterval.parse('[1, 2]'), Decoration.COM)
 >>> text_to_decorated_interval('[1,]_com')
 Traceback (most recent call last):
     ...
-intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[1,]_com': com is for bounded non-empty intervals only
+multiinterval.errors.UndefinedOperationError: invalid 1788 interval literal '[1,]_com': com is for bounded non-empty intervals only
 
 propagation (M13g part 3; 1788-2015 §11): the type has the core's point functions (`+ - * /`, `%`,
 `//`, `**`, `abs`, `reciprocal`, `minimum`, `maximum`, `fma`, `hypot`, `atan2`, the elementary
@@ -69,17 +69,17 @@ import warnings
 from fractions import Fraction
 from numbers import Real
 
-from intervals import elementary
-from intervals import kernel
-from intervals import numpy_compat
-from intervals.errors import UndefinedOperationError
-from intervals.functions import _inside_k
-from intervals.literals import _bare
-from intervals.literals import nums_to_interval
-from intervals.literals import parse_literal
-from intervals.multi_interval import MultiInterval
-from intervals.multi_interval import _is_integral
-from intervals.rounding import exact_cuts
+from multiinterval import elementary
+from multiinterval import kernel
+from multiinterval import numpy_compat
+from multiinterval.errors import UndefinedOperationError
+from multiinterval.functions import _inside_k
+from multiinterval.literals import _bare
+from multiinterval.literals import nums_to_interval
+from multiinterval.literals import parse_literal
+from multiinterval.multi_interval import MultiInterval
+from multiinterval.multi_interval import _is_integral
+from multiinterval.rounding import exact_cuts
 
 
 class Decoration(enum.Enum):
@@ -611,7 +611,7 @@ def _propagate(result: MultiInterval, operands, defined: bool, restricted: bool 
 def _trivial(result: MultiInterval) -> 'DecoratedInterval':
     """a set operation's result, trv whatever the operands (1788 decorates intersection, convexHull,
     cancelMinus and cancelPlus so). 1788 decorates every reverse op's result trv too, so the decorated
-    reverse ops are `_trivial(<reverse op on the intervals>)` (`intervals.reverse._decorated`)"""
+    reverse ops are `_trivial(<reverse op on the intervals>)` (`multiinterval.reverse._decorated`)"""
     return DecoratedInterval(result, Decoration.TRV)
 
 

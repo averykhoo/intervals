@@ -17,15 +17,15 @@ from typing import NamedTuple
 from typing import Tuple
 from typing import Union
 
-from intervals.cuts import Cut
-from intervals.cuts import Value
-from intervals.cuts import above
-from intervals.cuts import as_end
-from intervals.cuts import as_start
-from intervals.cuts import below
-from intervals.cuts import end_cut
-from intervals.cuts import flag
-from intervals.cuts import start_cut
+from multiinterval.cuts import Cut
+from multiinterval.cuts import Value
+from multiinterval.cuts import above
+from multiinterval.cuts import as_end
+from multiinterval.cuts import as_start
+from multiinterval.cuts import below
+from multiinterval.cuts import end_cut
+from multiinterval.cuts import flag
+from multiinterval.cuts import start_cut
 
 Cuts = Tuple[Cut, ...]
 Pair = Tuple[Cut, Cut]

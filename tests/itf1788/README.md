@@ -20,7 +20,7 @@ each `.itl` file keeps its own copyright and licence header. read from the heade
 | `mpfi.itl`, `fi_lib.itl`, `c-xsc.itl` | GNU LGPL 2.1 or (at your option) any later version (`COPYING.LESSER`); vectors converted from those libraries' own test suites |
 | `ieee1788-constructors.itl`, `ieee1788-exceptions.itl`, `atan2.itl`, `abs_rev.itl`, `pow_rev.itl` | all-permissive: "Copying and distribution of this file, with or without modification, are permitted in any medium without royalty provided the copyright notice and this notice are preserved. This file is offered as-is, without any warranty." |
 
-these files are test data only: the wheel ships `intervals/` alone, so none of them is distributed
+these files are test data only: the wheel ships `multiinterval/` alone, so none of them is distributed
 with the library.
 
 ## the hash check

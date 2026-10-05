@@ -69,11 +69,11 @@ README edit stales only the doctests (`$PY tools/gate.py run docs`, seconds). ph
 statuses: PASSED (rc 0 and a passing pytest summary), FAILED, INCONSISTENT (rc 0 without one),
 MOVED (the code changed while it ran: it counts for nothing; do not edit sources during a run),
 INTERRUPTED. a log with no row is a run killed or still running. every phase but `gate:gmpy2` removes
-`INTERVALS_BACKEND` (CI's gate and fuzz run the pure path); all set the fuzz variables from the phase name.
+`MULTIINTERVAL_BACKEND` (CI's gate and fuzz run the pure path); all set the fuzz variables from the phase name.
 
-`gate:gmpy2` (owner, Q16(e), 2026-10-03) is the whole suite, one call, with `INTERVALS_BACKEND=gmpy2`
+`gate:gmpy2` (owner, Q16(e), 2026-10-03) is the whole suite, one call, with `MULTIINTERVAL_BACKEND=gmpy2`
 set whatever your environment says: what ci.yml's `gate-gmpy2` job runs (python 3.13, ubuntu, the
-PyPI wheel's MPFR). forced, `import intervals` raises without gmpy2, so the suite cannot pass on the
+PyPI wheel's MPFR). forced, `import multiinterval` raises without gmpy2, so the suite cannot pass on the
 pure path (one test file alone can: a failed package import leaves leaf modules importable; the CI
 job asserts `backend.name()` first). it is keyed by src like the fuzz, never covers the gate (a commit
 needs the pure path), and a push needs it only when `tools/gate.py::BACKEND_FILES` (`backend`,
@@ -136,7 +136,7 @@ goes and never push.
   * against an old commit: `git archive <rev> intervals | tar -x -C .scratch/<name>`, the test file
     beside it, and an empty `pytest.ini` there, run with `-c pytest.ini`. without it pytest finds the
     repo's `pyproject.toml`, whose `pythonpath = ["."]` imports the live package, and the old code is
-    never run: the check passes vacuously (2026-10-04; print `intervals.__file__` from a conftest)
+    never run: the check passes vacuously (2026-10-04; print `multiinterval.__file__` from a conftest)
 * check each example on its own: hypothesis stops at the first failing explicit example, so one red
   run says nothing about the others
 * watch for vacuous checks: a "not empty" assertion passed under sabotage when other pieces kept the
@@ -174,7 +174,7 @@ commit that row. the files live in `.scratch/coremath-cache/` (kept; `fetch` res
 
 * `$PY tools/itf1788_census.py`: the itf1788 counts quoted in the docs (vectors, ops, divergence keys
   by category), read from the adapter, so a count in a doc can be regenerated rather than copied
-* `INTERVALS_BACKEND=gmpy2 $PY -m pytest -q ...`: a file on the gmpy2/MPFR backend (opt-in; the whole
+* `MULTIINTERVAL_BACKEND=gmpy2 $PY -m pytest -q ...`: a file on the gmpy2/MPFR backend (opt-in; the whole
   suite is the `gate:gmpy2` phase above and ci.yml's `gate-gmpy2` job; every pure job also runs
   `tests/test_backend.py`'s differential); `$PY tools/backend_speed.py [--bound]` for its speed
 * `tests/itf1788/`: the vendored ITF1788 vectors (unmodified; `tests/itf1788/README.md`), the parser

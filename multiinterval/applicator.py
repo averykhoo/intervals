@@ -36,12 +36,12 @@ from typing import NamedTuple
 from typing import Optional
 from typing import Tuple
 
-from intervals import fmt
-from intervals import kernel
-from intervals.cuts import Value
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import IndeterminateResultWarning
-from intervals.kernel import Cuts
+from multiinterval import fmt
+from multiinterval import kernel
+from multiinterval.cuts import Value
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import IndeterminateResultWarning
+from multiinterval.kernel import Cuts
 
 Piece = Tuple[Value, bool, Value, bool]
 Box = Tuple[Piece, ...]
@@ -99,7 +99,7 @@ def signed_inf(s: int) -> float:
 
 def apply_unary(desc: OpDescriptor, a: Cuts) -> Cuts:
     """
-    >>> from intervals.ops import RECIPROCAL
+    >>> from multiinterval.ops import RECIPROCAL
     >>> fmt.format_cuts(apply_unary(RECIPROCAL, fmt.parse('[-1, 1]')))
     '{ [-inf, -1] , [1, inf] }'
     """
@@ -108,7 +108,7 @@ def apply_unary(desc: OpDescriptor, a: Cuts) -> Cuts:
 
 def apply_binary(desc: OpDescriptor, a: Cuts, b: Cuts) -> Cuts:
     """
-    >>> from intervals.ops import MUL
+    >>> from multiinterval.ops import MUL
     >>> fmt.format_cuts(apply_binary(MUL, fmt.parse('[0, 1]'), fmt.parse('(2, 3)')))
     '[0, 3)'
     """
@@ -163,7 +163,7 @@ def evaluate_box(desc: OpDescriptor, box: Box) -> Optional[Piece]:
     """
     the image of one box as `(lo, lo_closed, hi, hi_closed)`, or None if no point of it has a value
 
-    >>> from intervals.ops import ADD
+    >>> from multiinterval.ops import ADD
     >>> evaluate_box(ADD, ((math.inf, True, math.inf, True), (1, False, 2, False)))
     (inf, True, inf, True)
     """

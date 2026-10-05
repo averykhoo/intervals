@@ -1,5 +1,5 @@
 """
-the package's own text form: `intervals.fmt` (`format_cuts`, `parse`, `parse_value`) and the classes'
+the package's own text form: `multiinterval.fmt` (`format_cuts`, `parse`, `parse_value`) and the classes'
 `repr`, `str` and `parse`, which go through it
 
 * round trip: `parse(format_cuts(x))` is `x` with every value's type kept (an int stays an int, a float a
@@ -38,19 +38,19 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals.cuts import Cut
-from intervals.cuts import Side
-from intervals.fmt import format_cuts
-from intervals.fmt import format_value
-from intervals.fmt import parse
-from intervals.fmt import parse_value
-from intervals.kernel import EMPTY
-from intervals.kernel import REALS
-from intervals.kernel import is_valid
-from intervals.kernel import normalize
-from intervals.kernel import piece
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval.cuts import Cut
+from multiinterval.cuts import Side
+from multiinterval.fmt import format_cuts
+from multiinterval.fmt import format_value
+from multiinterval.fmt import parse
+from multiinterval.fmt import parse_value
+from multiinterval.kernel import EMPTY
+from multiinterval.kernel import REALS
+from multiinterval.kernel import is_valid
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
 from tests.strategies import cut_tuples
 from tests.strategies import pool_values
 

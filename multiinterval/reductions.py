@@ -38,11 +38,11 @@ from typing import Iterable
 from typing import List
 from typing import Union
 
-from intervals.rounding import DOWN
-from intervals.rounding import NEAREST
-from intervals.rounding import UP
-from intervals.rounding import is_infinite
-from intervals.rounding import round_rational
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import NEAREST
+from multiinterval.rounding import UP
+from multiinterval.rounding import is_infinite
+from multiinterval.rounding import round_rational
 
 INF = math.inf
 

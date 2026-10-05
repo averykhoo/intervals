@@ -1,5 +1,5 @@
 """
-pointwise minimum and maximum, and fma (intervals.ops)
+pointwise minimum and maximum, and fma (multiinterval.ops)
 
 min and max are flat wherever the other operand cannot reach (`min(1, y)` is 1 for every y >= 1), so
 the applicator's face rule does not decide their ends; they carry their own attainment. the oracle
@@ -15,20 +15,20 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import ops
-from intervals.errors import EmptySetPropagationWarning
-from intervals.errors import IndeterminateResultWarning
-from intervals.fmt import format_cuts
-from intervals.fmt import parse
-from intervals.kernel import EMPTY
-from intervals.kernel import contains_point
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
-from intervals.rounding import exact_cuts
-from intervals.rounding import round_rational
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import ops
+from multiinterval.errors import EmptySetPropagationWarning
+from multiinterval.errors import IndeterminateResultWarning
+from multiinterval.fmt import format_cuts
+from multiinterval.fmt import parse
+from multiinterval.kernel import EMPTY
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
+from multiinterval.rounding import exact_cuts
+from multiinterval.rounding import round_rational
 from tests.oracles import sample
 from tests.strategies import cut_tuples
 from tests.strategies import exact_cut_tuples

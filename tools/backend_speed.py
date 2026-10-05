@@ -17,15 +17,15 @@ from pathlib import Path
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
 
-from intervals import MultiInterval as M  # noqa: E402
-from intervals import OutwardMultiInterval as O  # noqa: E402
-from intervals import _gmpy2  # noqa: E402
-from intervals import backend  # noqa: E402
-from intervals import elementary  # noqa: E402
-from intervals import newton  # noqa: E402
-from intervals import ops  # noqa: E402
-from intervals.rounding import DOWN  # noqa: E402
-from intervals.rounding import UP  # noqa: E402
+from multiinterval import MultiInterval as M  # noqa: E402
+from multiinterval import OutwardMultiInterval as O  # noqa: E402
+from multiinterval import _gmpy2  # noqa: E402
+from multiinterval import backend  # noqa: E402
+from multiinterval import elementary  # noqa: E402
+from multiinterval import newton  # noqa: E402
+from multiinterval import ops  # noqa: E402
+from multiinterval.rounding import DOWN  # noqa: E402
+from multiinterval.rounding import UP  # noqa: E402
 
 
 def best(f, n):

@@ -1,7 +1,7 @@
 """
 reference oracles for the arithmetic tests
 
-independent of `intervals.applicator` and `intervals.ops` on purpose: everything here is derived from
+independent of `multiinterval.applicator` and `multiinterval.ops` on purpose: everything here is derived from
 the pointwise table (v2-plan.md "domain and semantics"), one pair of points at a time, so it can
 check the applicator's shape-then-attainment algorithm instead of restating it.
 
@@ -31,17 +31,17 @@ from typing import NamedTuple
 from typing import Optional
 from typing import Tuple
 
-from intervals.cuts import normalize_value
-from intervals.kernel import Cuts
-from intervals.kernel import contains_point
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
+from multiinterval.cuts import normalize_value
+from multiinterval.kernel import Cuts
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
 
 INF = math.inf
 OPS = ('add', 'sub', 'mul', 'div', 'reciprocal', 'neg', 'pos', 'abs', 'pow')
 BINARY = ('add', 'sub', 'mul', 'div')
-# mod is not in OPS: the M6 property tests iterate OPS over `intervals.ops`, mod has its own module
+# mod is not in OPS: the M6 property tests iterate OPS over `multiinterval.ops`, mod has its own module
 MOD_OPS = ('mod',)
 UNARY = ('reciprocal', 'neg', 'pos', 'abs')
 ONE: Cuts = normalize([piece(1, 1)])
@@ -457,7 +457,7 @@ def _witness_div(v, a: _Set, b: _Set):
 
 def _witness_mod(v, a: _Set, b: _Set):
     """
-    brute force, independent of intervals.modulo: the quotients k = floor(x / y) are enumerated, not
+    brute force, independent of multiinterval.modulo: the quotients k = floor(x / y) are enumerated, not
     solved for. x mod y == v with y > 0 iff 0 <= v < y and x = v + k * y for an integer k (mirrored for
     y < 0), so for each piece of B beyond v this looks for a k with x in A
     """

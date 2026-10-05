@@ -6,7 +6,7 @@ the defined pairs attain, +-inf ordinary points, every endpoint closed iff attai
 attainment and interior sharpness together pin a result to that set exactly; isotonicity, the union laws
 and the reciprocal round trip are the algebraic laws the plan promises.
 
-the ops are looked up on `intervals.ops` at call time, so a sabotage script can monkeypatch one and rerun
+the ops are looked up on `multiinterval.ops` at call time, so a sabotage script can monkeypatch one and rerun
 this file unchanged. every test here provokes the library's warnings on purpose (`[0] * [inf]`, empty
 operands); the warnings themselves are pinned by `pytest.warns` in test_applicator.py.
 """
@@ -20,22 +20,22 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import ops
-from intervals.applicator import apply_binary
-from intervals.applicator import apply_unary
-from intervals.cuts import Cut
-from intervals.cuts import Side
-from intervals.fmt import parse
-from intervals.kernel import EMPTY
-from intervals.kernel import REALS
-from intervals.kernel import contains_point
-from intervals.kernel import intersection
-from intervals.kernel import is_subset
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
-from intervals.kernel import union
-from intervals.multi_interval import MultiInterval
+from multiinterval import ops
+from multiinterval.applicator import apply_binary
+from multiinterval.applicator import apply_unary
+from multiinterval.cuts import Cut
+from multiinterval.cuts import Side
+from multiinterval.fmt import parse
+from multiinterval.kernel import EMPTY
+from multiinterval.kernel import REALS
+from multiinterval.kernel import contains_point
+from multiinterval.kernel import intersection
+from multiinterval.kernel import is_subset
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
+from multiinterval.kernel import union
+from multiinterval.multi_interval import MultiInterval
 from tests.oracles import BINARY
 from tests.oracles import OPS
 from tests.oracles import attained
@@ -47,8 +47,8 @@ from tests.strategies import probe_points
 INF = math.inf
 
 pytestmark = [
-    pytest.mark.filterwarnings('ignore::intervals.errors.IndeterminateResultWarning'),
-    pytest.mark.filterwarnings('ignore::intervals.errors.EmptySetPropagationWarning'),
+    pytest.mark.filterwarnings('ignore::multiinterval.errors.IndeterminateResultWarning'),
+    pytest.mark.filterwarnings('ignore::multiinterval.errors.EmptySetPropagationWarning'),
 ]
 
 

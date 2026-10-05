@@ -2,7 +2,7 @@
 ieee 1788's interval literals (1788-2015 §9.7), and the bare constructors `text_to_interval` and
 `nums_to_interval` (1788's `b-textToInterval`, `b-numsToInterval`; M13g, D16)
 
-this is 1788's text syntax, not the package's own: `MultiInterval.parse` (`intervals.fmt`) reads
+this is 1788's text syntax, not the package's own: `MultiInterval.parse` (`multiinterval.fmt`) reads
 `(1, 2]` and `{ [1, 2) , [3] }`, which 1788 cannot say. a 1788 literal is one of
 
     [l, u]  [x]  [l,]  [,u]  [,]  [ ]  [empty]  [entire]      the inf-sup forms
@@ -39,7 +39,7 @@ MultiInterval.parse('[-1, inf)')
 >>> text_to_interval('[2, 1]')
 Traceback (most recent call last):
     ...
-intervals.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]': the lower bound exceeds the upper
+multiinterval.errors.UndefinedOperationError: invalid 1788 interval literal '[2, 1]': the lower bound exceeds the upper
 """
 import math
 import re
@@ -47,10 +47,10 @@ from fractions import Fraction
 from typing import NamedTuple
 from typing import Optional
 
-from intervals.cuts import Value
-from intervals.cuts import normalize_value
-from intervals.errors import UndefinedOperationError
-from intervals.multi_interval import MultiInterval
+from multiinterval.cuts import Value
+from multiinterval.cuts import normalize_value
+from multiinterval.errors import UndefinedOperationError
+from multiinterval.multi_interval import MultiInterval
 
 INF = math.inf
 # 1788's decorations, best first; `ill` belongs to NaI, which the package does not have (D16)

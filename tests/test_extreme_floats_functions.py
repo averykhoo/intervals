@@ -3,7 +3,7 @@ the elementary functions at the edges of the float range, against arb
 
 `tests/test_extreme_floats.py` fuzzes the arithmetic on operands from the extremes of the float range;
 `tests/test_functions.py` checks the functions' set logic on operands in [-20, 20] against
-`intervals.elementary`, and `tests/test_oracle_flint.py` checks `elementary` against arb one point at a
+`multiinterval.elementary`, and `tests/test_oracle_flint.py` checks `elementary` against arb one point at a
 time. here every function of the class (the thirty of `functions.NAMES`, `log` to a base, `rootn`, and
 the two-argument `atan2`, `hypot` and `**`) gets multi-interval operands drawn from the pools of
 `tests/test_extreme_floats.py` (subnormals, 1e308 and the max float, `ldexp` across the exponent range,
@@ -46,16 +46,16 @@ from hypothesis import settings
 from hypothesis import strategies as st
 from hypothesis.control import currently_in_test_context
 
-from intervals import MultiInterval
-from intervals import OutwardMultiInterval
-from intervals import elementary
-from intervals.functions import NAMES
-from intervals.kernel import intersection
-from intervals.kernel import normalize
-from intervals.kernel import piece
-from intervals.kernel import pieces
-from intervals.rounding import DOWN
-from intervals.rounding import UP
+from multiinterval import MultiInterval
+from multiinterval import OutwardMultiInterval
+from multiinterval import elementary
+from multiinterval.functions import NAMES
+from multiinterval.kernel import intersection
+from multiinterval.kernel import normalize
+from multiinterval.kernel import piece
+from multiinterval.kernel import pieces
+from multiinterval.rounding import DOWN
+from multiinterval.rounding import UP
 from tests.oracles import _exact
 from tests.oracles import sample
 from tests.test_extreme_floats import MAX

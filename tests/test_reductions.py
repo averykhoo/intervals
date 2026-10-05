@@ -1,5 +1,5 @@
 """
-the reductions (intervals.reductions): a random differential against Fraction arithmetic
+the reductions (multiinterval.reductions): a random differential against Fraction arithmetic
 
 each result must be the exact value, computed here with Fraction, rounded once in the asked
 direction. "rounded" is checked from its definition on the result's neighbouring doubles
@@ -16,10 +16,10 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
-from intervals import dot
-from intervals import sum_
-from intervals import sum_abs
-from intervals import sum_sqr
+from multiinterval import dot
+from multiinterval import sum_
+from multiinterval import sum_abs
+from multiinterval import sum_sqr
 
 INF = math.inf
 NAN = math.nan

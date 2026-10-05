@@ -21,28 +21,28 @@ from typing import Iterator
 from typing import Set
 from typing import Tuple
 
-from intervals import fmt
-from intervals import functions
-from intervals import kernel
-from intervals import modulo
-from intervals import numeric
-from intervals import numpy_compat
-from intervals import ops
-from intervals import relations
-from intervals import rounding
-from intervals import steps
-from intervals.cuts import Value
-from intervals.cuts import above
-from intervals.cuts import as_end
-from intervals.cuts import as_start
-from intervals.cuts import below
-from intervals.cuts import flag
-from intervals.cuts import is_numpy_time
-from intervals.cuts import normalize_value
-from intervals.kernel import Cuts
-from intervals.kernel import Size
-from intervals.relations import Allen
-from intervals.relations import TruthSet
+from multiinterval import fmt
+from multiinterval import functions
+from multiinterval import kernel
+from multiinterval import modulo
+from multiinterval import numeric
+from multiinterval import numpy_compat
+from multiinterval import ops
+from multiinterval import relations
+from multiinterval import rounding
+from multiinterval import steps
+from multiinterval.cuts import Value
+from multiinterval.cuts import above
+from multiinterval.cuts import as_end
+from multiinterval.cuts import as_start
+from multiinterval.cuts import below
+from multiinterval.cuts import flag
+from multiinterval.cuts import is_numpy_time
+from multiinterval.cuts import normalize_value
+from multiinterval.kernel import Cuts
+from multiinterval.kernel import Size
+from multiinterval.relations import Allen
+from multiinterval.relations import TruthSet
 
 
 def _subclass_decides(method):
@@ -131,7 +131,7 @@ class MultiInterval:
 
     @classmethod
     def parse(cls, text: str) -> 'MultiInterval':
-        """see `intervals.fmt` for the grammar; strings are never coerced implicitly"""
+        """see `multiinterval.fmt` for the grammar; strings are never coerced implicitly"""
         return cls._wrap(fmt.parse(text))
 
     @classmethod
@@ -246,7 +246,7 @@ class MultiInterval:
         stop = math.inf if item.stop is None else item.stop
         return self._wrap(kernel.intersection(self._cuts, kernel.normalize([kernel.piece(start, stop)])))
 
-    # ARITHMETIC (the set of values attained; see intervals.ops)
+    # ARITHMETIC (the set of values attained; see multiinterval.ops)
 
     def _binary(self, other, op, reflected=False):
         other = self._coerce(other)
@@ -336,7 +336,7 @@ class MultiInterval:
 
     def __mod__(self, other):
         """
-        python's floor-mod over every pair (see intervals.modulo)
+        python's floor-mod over every pair (see multiinterval.modulo)
 
         >>> MultiInterval.parse('[3, 7]') % MultiInterval.parse('[-5, -2]')
         MultiInterval.parse('(-5, 0]')
@@ -462,7 +462,7 @@ class MultiInterval:
         `cancelMinus`). any two sets have one: `∅` when nothing fits, `[-inf, inf]` when `other` is
         empty. exact for exact operands; a float operand rounds it once, to nearest, or outward if
         either operand is an `OutwardMultiInterval` (an enclosure of `X`, as 1788 gives). derivation in
-        `intervals.ops.cancel_minus`
+        `multiinterval.ops.cancel_minus`
 
         >>> A, B = MultiInterval(0, 10), MultiInterval(1, 3)
         >>> X = A.cancel_minus(B)
@@ -487,7 +487,7 @@ class MultiInterval:
         """
         return self._wrap(ops.cancel_plus(self._cuts, self._coerce_or_raise(other)._cuts, outward=self._outward))
 
-    # ELEMENTARY FUNCTIONS (see intervals.functions)
+    # ELEMENTARY FUNCTIONS (see multiinterval.functions)
 
     def _function(self, name: str, base=None) -> 'MultiInterval':
         return self._wrap(functions.apply(name, self._cuts, outward=self._outward, base=base))
@@ -650,7 +650,7 @@ class MultiInterval:
         """
         return self._wrap(functions.atan2(self._cuts, self._coerce_or_raise(x)._cuts, outward=self._outward))
 
-    # POINTWISE COMPARISONS (a TruthSet; see intervals.relations)
+    # POINTWISE COMPARISONS (a TruthSet; see multiinterval.relations)
 
     def __lt__(self, other):
         other = self._coerce(other)
@@ -933,7 +933,7 @@ class MultiInterval:
             kernel.piece(lo - distance, hi + distance, lo_closed, hi_closed)
             for lo, lo_closed, hi, hi_closed in kernel.pieces(self._cuts)))
 
-    # NUMERIC FUNCTIONS (ieee 1788's mid, rad, wid, mag, mig, midRad; see intervals.numeric)
+    # NUMERIC FUNCTIONS (ieee 1788's mid, rad, wid, mag, mig, midRad; see multiinterval.numeric)
 
     def mid(self) -> Value:
         """
