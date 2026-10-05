@@ -1588,6 +1588,23 @@ imports only point downward.
 
 ## decision log
 
+### 2026-10-05 revision: M8's choices confirmed (Q21)
+
+the owner accepted the session's recommendation on each choice the time layer's build made beyond D30
+(`v2-implementation-plan.md` §2 M8, its done-record and review round), all as built, nothing changes:
+* (a) the sentinels are `NEG_INF`/`POS_INF`; (b) `td / td` and `td // td` a `MultiInterval`, `td % td` a
+  `TimeDeltaInterval` (python's `timedelta` types), `td // real` refused (`MultiInterval // n` floors to whole seconds,
+  python's `timedelta // n` to microseconds); (c) `repr` the constructor call, no time `parse`; (d) `tz=` for dates
+* (e) a float factor is its exact value (`td * 0.1` is exact and its read-out raises; python rounds to the
+  microsecond): the only inexact step would be a silent rounding; `Fraction(1, 10)` reads out
+* (f) bounds ordered on their readings by `MultiInterval`'s rule (`D(tue, mon)` empty, `D(wed, mon)` raises), one rule
+  over a "looks reversed" special case
+* (g) aware `dt - dt` and `dt + td` are elapsed time between instants, consistent with `==` and `<` (and with pandas'
+  aware `Timestamp`), not python's same-tzinfo wall clock
+* (h) `pd.Timedelta % A` and `divmod(pd.Timedelta, A)` sound but wider than exact, `TimeDeltaInterval(x) % A` the
+  documented workaround (no pandas hook defers it); (i) `degenerate_points` a tuple (a DST fold's two instants compare
+  equal)
+
 ### 2026-10-04 revision: strict flags; v1 deleted (Q22)
 
 the owner, on the v1 parity audit's two questions (`v2-implementation-plan.md` §4):

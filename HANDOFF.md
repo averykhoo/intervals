@@ -130,18 +130,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## open questions for the owner
 
-* **Q21 (M8, 2026-10-04): confirm what the build chose beyond D30** (plan §2 M8, its done-record and review round):
-  (a) the sentinels' names `NEG_INF`/`POS_INF`; (b) `td / td` and `td // td` a `MultiInterval`, `td % td` a
-  `TimeDeltaInterval`, `td // real` refused; (c) `repr` the constructor call (pieces joined by `|`), no time `parse`;
-  (d) `tz=` built for dates; (e) a float factor taken exactly (`td * 0.1` has no µs read-out; python rounds);
-  (f) bounds ordered on their readings by `MultiInterval`'s rule: `D(tue, mon)` is the empty `[Tue 00:00, Tue 00:00)`,
-  `D(noon, same date)` is noon through that day, `D(wed, mon)` raises; (g) aware `dt - dt` and `dt + td` are
-  elapsed time between instants, not python's wall-clock arithmetic (they differ across DST); (h) `pd.Timedelta % A`
-  and `divmod(pd.Timedelta, A)` are sound but wider than exact (pandas computes them itself; no hook defers it), the
-  workaround `TimeDeltaInterval(x) % A` documented; (i) `degenerate_points` a tuple, not a set (a DST fold's two
-  instants compare equal as datetimes)
-
-otherwise none open. Q22 was answered 2026-10-04 (`v2-plan.md` decision log, "strict flags; v1 deleted"). Q9-Q20 and the owner's-call rows were answered 2026-10-03 (the owner accepted every
+none open. Q21 was answered 2026-10-05 (the session's recommendations accepted, all as built; `v2-plan.md` decision log, "M8's choices confirmed"). Q22 was answered 2026-10-04 (`v2-plan.md` decision log, "strict flags; v1 deleted"). Q9-Q20 and the owner's-call rows were answered 2026-10-03 (the owner accepted every
 recommendation of `references/owner-questions-2026-10-03/`; `v2-plan.md` "2026-10-03 revision: owner
 answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answered 2026-09-26, D18
 2026-09-27 (`v2-plan.md`). what the answers left for later is the open-items row "later".
@@ -205,7 +194,7 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
   10000-branch cap) and sabotaged (9 breaks red). the session re-checked: the diff, tan 1e21 3.4 s -> 0.004 s with the same
   answer, sin/cos at 1e21 equal to master's, 1e300 and 10**400 under 1 s, the far pins red on a `git archive` of `913bd5a`
   (15 of 15 before a 500 s cap). fast-forwarded `master` to `8e709b3`; worktree, branch and `.scratch/trig-rev-far/` removed.
-  gate 27795 + 6509. Still owed: Q21 (walked through with the owner); the push (x10 prepush and `gate:gmpy2`); the CORE-MATH
+  gate 27795 + 6509. Q21 walked through with the owner, who took every recommendation (`v2-plan.md` decision log). Still owed: the push (x10 prepush and `gate:gmpy2`); the CORE-MATH
   full check is the owner's call (`elementary.py` changed: a cache of the inverse-trig enclosure)
 * **2026-10-04** Q22 and H4 (the owner: "A - yes just make it strict and refuse", "B - copy it into references",
   the tests fixed, "then we can complete the task about removing v1", then the full gate, push and babysit CI).

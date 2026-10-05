@@ -441,7 +441,8 @@ every new property test (flip one comparison, watch red, restore).
   `overlaps`/`adjoins` and `&`). added from v2: `before after adjoins overlaps contains within allen
   allen_matrix allen_relations weakly_less strictly_less eq_pointwise is_finite hull closed_hull interior
   complement ~ | & ^ sort_key`, hash, pickle, `from_seconds`
-* **choices among the defaults** (to confirm with the owner after, as D19-D24 were): the sentinels are
+* **choices among the defaults** (confirmed by the owner 2026-10-05 with the build's own choices below, Q21;
+  `v2-plan.md` decision log): the sentinels are
   `NEG_INF`/`POS_INF`; `td / td` and `td // td` a `MultiInterval`, `td % td` a `TimeDeltaInterval`, plus
   `divmod` and the reflected forms with a timedelta on the left; no time `parse`; `repr` is the constructor
   call (pieces joined by `|`, the sentinels by name, `from_seconds(MultiInterval.parse(...), tz=...)` for an
@@ -522,7 +523,7 @@ every new property test (flip one comparison, watch red, restore).
 * **gate** (2026-10-04, on the final code, `tools/gate.py`): `gate:itf` 27795 passed in 86 s; `gate:rest`
   6390 passed in 1005 s; 34185 items, both on code id `c:79507331df2c` (src `s:be2a99c3b8bc`). the time
   layer adds 200 test items and the README's time doctests (about 10 s)
-* **left**: `archive/v1/` and the tests reading it stay (H4); the defaults above to confirm with the owner;
+* **left**: `archive/v1/` and the tests reading it stay (H4; done 2026-10-04); the defaults above to confirm with the owner (done 2026-10-05, Q21);
   pandas past `to_pandas()` (an `IntervalIndex` of several pieces, `IntervalArray`) not built
 
 **review round (2026-10-04, branch `m8`).** three read-only reviews of the build (`fd79070`, rebased as
