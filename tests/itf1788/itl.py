@@ -55,7 +55,10 @@ _LIST = re.compile(r'\{([^{}]*)\}$')
 # one token: a quoted string, a list, an interval, `=`, or any other run of non-space characters
 _TOKEN = re.compile(r'"[^"]*"|\{[^{}]*\}|\[[^\]]*\](?:_[a-z]+)?|=|[^\s\[\]{}"=]+')
 _TESTCASE = re.compile(r'testcase\s+([\w.]+)\s*\{')  # atan2.itl has 'minimal.atan2_test'
-_COMMENT = re.compile(r'/\*.*?\*/|//[^\n]*', re.DOTALL)
+# a comment; a quoted string is matched first so that a `//` or `/*` inside one is not taken for a comment
+_COMMENT = re.compile(r'"[^"]*"|/\*.*?\*/|//[^\n]*', re.DOTALL)
+# a run of white space outside a quoted string; a quoted string is matched first so that it keeps its own
+_SPACE = re.compile(r'"[^"]*"|\s+')
 # a decoration on an interval literal; a quoted string is matched first so that it is left alone
 _DECORATED = re.compile(r'"[^"]*"|(\])_(?:trv|def|dac|com|ill)\b')
 
@@ -86,7 +89,7 @@ class Vector(NamedTuple):
     op: str
     args: Tuple[Literal, ...]
     expected: Literal  # a tuple for a two-value result
-    text: str  # the statement, whitespace collapsed; `strip_decorations` of it is the divergence table's key
+    text: str  # the statement, `collapse`d; `strip_decorations` of it is the divergence table's key
     signal: Optional[str] = None  # the name in a trailing `signal <Name>`; not checked yet
 
 
@@ -142,6 +145,16 @@ def strip_decorations(text: str) -> str:
     return _DECORATED.sub(lambda m: m.group(1) or m.group(), text)
 
 
+def collapse(statement: str) -> str:
+    """each run of white space outside a quoted string as one space, none at either end; a quoted string
+    keeps its exact characters (`"[ Empty  ]"` is the text upstream gives textToInterval, not `"[ Empty ]"`)
+
+    >>> collapse('  b-textToInterval\\n  "[  -1.0  , 1.0]_ill"   =   [nai] ')
+    'b-textToInterval "[  -1.0  , 1.0]_ill" = [nai]'
+    """
+    return _SPACE.sub(lambda m: m.group() if m.group().startswith('"') else ' ', statement).strip()
+
+
 def _tokens(text: str):
     """the statement's tokens; a character that no token covers raises, so nothing is skipped"""
     tokens, end = [], 0
@@ -156,7 +169,7 @@ def _tokens(text: str):
 
 
 def parse_statement(text: str, source: str = '', testcase: str = '') -> Vector:
-    """one statement, whitespace already collapsed"""
+    """one statement, already `collapse`d"""
     tokens = _tokens(text)
     if tokens.count('=') != 1 or tokens[0] == '=':
         raise ValueError(f'not one " = " in {text!r}')
@@ -200,13 +213,14 @@ def parse_file(path: Path, ops=None) -> Tuple[Tuple[Vector, ...], Counter]:
     """(the vectors of `ops`, of every op if `ops` is None; a count of every other op's statements)"""
     source = path.read_text(encoding='utf-8')
     # blank comments out without moving any newline, so offsets still give line numbers
-    source = _COMMENT.sub(lambda m: re.sub(r'[^\n]', ' ', m.group()), source)
+    source = _COMMENT.sub(lambda m: m.group() if m.group().startswith('"') else re.sub(r'[^\n]', ' ', m.group()),
+                          source)
     vectors, skipped = [], Counter()
     for name, offset, body in _testcases(source):
         for statement in body.split(';'):
             start = offset + len(statement) - len(statement.lstrip())
             offset += len(statement) + 1
-            text = ' '.join(statement.split())
+            text = collapse(statement)
             if not text:
                 continue
             op = text.split()[0]

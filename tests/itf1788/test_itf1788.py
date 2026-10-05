@@ -116,6 +116,7 @@ from multiinterval.errors import UndefinedOperationError
 from multiinterval.kernel import pieces
 from multiinterval.relations import Allen
 from tests.itf1788.itl import Interval
+from tests.itf1788.itl import Text
 from tests.itf1788.itl import Vector
 from tests.itf1788.itl import parse_file
 from tests.itf1788.itl import strip_decorations
@@ -298,8 +299,8 @@ _CANCEL = ('cancellation as a Minkowski difference: 1788 answers entire as "no a
 _CANCEL_EMPTY = ('cancellation as a Minkowski difference: with B = ∅ every X has B + X = ∅ ⊆ A, so the '
                  'largest is [-inf, inf]; 1788 answers ∅ when A is ∅ too (D13)')
 
-# (statement text, whitespace collapsed and decorations stripped) -> reason. as of 2026-09-26 every
-# listed row is a degenerate infinity of a function at the end of its domain, a touching pair that
+# (statement text, white space collapsed outside quoted strings and decorations stripped) -> reason.
+# as of 2026-09-26 every listed row is a degenerate infinity of a function at the end of its domain, a touching pair that
 # shares a point, or a cancellation where 1788 has no answer (or ∅ for ∅ and ∅); M13g adds, below,
 # the literals decided exactly (PossiblyUndefinedOperation) and bounded exactly (com). the
 # NaI and isNaI rows are generated once the vectors are loaded, and PLAIN_ONLY holds the rows on a
@@ -939,6 +940,34 @@ def test_parser_reads_every_statement(name):
     assert not skipped
     assert Counter(v.op for v in everything) == Counter(
         _STATEMENT_LINE.findall((HERE / name).read_text(encoding='utf-8')))
+
+
+def test_quoted_strings_keep_their_white_space(tmp_path):
+    """vectors-ext (a), 2026-10-05: a quoted string is the text constructor's argument character for
+    character. the parser collapsed white space inside one, so 40 textToInterval vectors of
+    `libieeep1788_class.itl` (`"[ Empty  ]"`, `"[-I  nf, 1.000 ]"`) ran on `"[ Empty ]"` and the like, a
+    weaker check than upstream's. white space outside a quoted string is still collapsed"""
+    lines = {name: (HERE / name).read_text(encoding='utf-8').splitlines() for name in FILES}
+    quoted = [v for v in VECTORS if any(isinstance(a, Text) for a in v.args)]
+    for v in quoted:  # each statement is on one line, the line of its source
+        name, line = v.source.rsplit(':', 1)
+        assert [a.value for a in v.args if isinstance(a, Text)] == re.findall(
+            r'"([^"]*)"', lines[name][int(line) - 1]), v.source
+    assert sum(v.args[0].value != ' '.join(v.args[0].value.split()) for v in quoted) == 40
+    (tmp_path / 'q.itl').write_text('testcase t {\n  b-textToInterval \t "[  1 ,\t2\n ]"\n  =  [1.0,  2.0] ;\n}\n',
+                                    encoding='utf-8')
+    (vector,), _ = parse_file(tmp_path / 'q.itl')
+    assert vector.args == (Text('[  1 ,\t2\n ]'),)
+    assert vector.text == 'b-textToInterval "[  1 ,\t2\n ]" = [1.0, 2.0]'
+
+
+def test_quoted_strings_keep_comment_marks(tmp_path):
+    """vectors-ext (a): a `//` or `/*` inside a quoted string is not a comment (none of the vendored
+    strings has one); a comment after the statement still is"""
+    (tmp_path / 'q.itl').write_text('testcase t {\n  b-textToInterval "[1, 2]//a /*b*/" = [nai]; // c\n}\n',
+                                    encoding='utf-8')
+    (vector,), _ = parse_file(tmp_path / 'q.itl')
+    assert vector.args == (Text('[1, 2]//a /*b*/'),) and vector.source == 'q.itl:2'
 
 
 def test_signals_are_checked():
