@@ -1352,6 +1352,210 @@ def test_trig_rev_sound_at_sampled_points(name, c, x, seed):
             assert trig_value_in(name, t, exact_c) is not False or trig_in_slack(t, exact), t
 
 
+# FAR ENDS (trig-rev-far): the hull's walk inward from a far end of x
+#
+# to nearest, every branch within half an ulp of x's end rounds onto that one double, which an open end
+# does not hold, and past the doubles onto ±inf, which a finite end never holds: the step-by-step walk
+# took ulp/(2 pi) branches (20870 at 1e21, 2**942 at 1e300) or 10**400/pi. `reverse._leap` leaps over
+# them; these pin that it lands where the step-by-step walk does (`_stepwise_hull`, the walk before the
+# fix) and that it stays fast where that walk could not finish
+
+from hypothesis import assume  # noqa: E402
+
+from intervals import reverse  # noqa: E402
+
+_PERIODIC = {'sin': reverse._SIN, 'cos': reverse._COS, 'tan': reverse._TAN}
+
+
+def _walk_from(fn, c, part, k, step, outward):
+    """the step-by-step walk of `_periodic_hull` before trig-rev-far: the first branch from k on that
+    meets the part, as that intersection"""
+    while True:
+        found = intersection(reverse.branch_preimage(c, fn.branch(k), outward), part)
+        if found:
+            return found
+        k += step
+
+
+def _stepwise_hull(fn, c, part, first, last, outward):
+    """`_periodic_hull` as it was before trig-rev-far: the reference the leap must equal"""
+    lo, lo_closed = (-INF, False) if first is None else next(pieces(_walk_from(fn, c, part, first, 1, outward)))[:2]
+    hi, hi_closed = (INF, False) if last is None else next(pieces(_walk_from(fn, c, part, last, -1, outward)[-2:]))[2:]
+    return one(lo, hi, lo_closed, hi_closed)
+
+
+def _typed(cuts):
+    """the cuts with each value's type: 1e300 and 10 ** 300 are different answers"""
+    return [(type(cut.value), cut.value, cut.side) for cut in cuts]
+
+
+def _hull_ends(fn, part):
+    """first and last as `_periodic_preimage` computes them"""
+    (lo, _, hi, _), = pieces(part)
+    first = None if lo == -INF else elementary.floor_over_pi(lo, fn.offset)[0] - 1
+    last = None if hi == INF else elementary.floor_over_pi(hi, fn.offset)[0] + 1
+    return first, last
+
+
+@st.composite
+def _far_parts(draw):
+    """a piece of x from 2**50 to 2**64 away from 0, at least 7000 wide: up to ~650 branches round onto
+    one double at its ends, few enough for the step-by-step walk; float or exact ends, mostly open"""
+    def end(sign):
+        value = sign * math.ldexp(draw(st.floats(1.0, 2.0, exclude_max=True)), draw(st.integers(50, 63)))
+        if draw(st.integers(0, 3)) == 0:
+            value = Fraction(value) + Fraction(draw(st.integers(-5, 5)), 3)  # exact, off the doubles
+        return value
+    a, width = end(draw(st.sampled_from([-1, 1]))), draw(st.floats(7000.0, 2.0 ** 64))
+    if isinstance(a, Fraction):
+        width = Fraction(width)
+    lo, hi = (a, a + width) if draw(st.booleans()) else (a - width, a)
+    closed = st.sampled_from([False, False, True])  # mostly open: a double the rounding lands on is not in x
+    return one(lo, hi, draw(closed), draw(closed))
+
+
+@st.composite
+def _trig_cs(draw, name):
+    """c ∩ f's image, not empty: one or two pieces, each end a float or an exact rational, either flag"""
+    bound = 50 if name == 'tan' else 1
+
+    def value():
+        v = draw(st.floats(-bound, bound))
+        return Fraction(v).limit_denominator(1000) if draw(st.integers(0, 3)) == 0 else v  # mostly floats: to nearest
+    parts = []
+    for _ in range(draw(st.integers(1, 2))):
+        a, b = sorted((value(), value()))
+        parts.append(one(a, b, draw(st.booleans()), draw(st.booleans())) if a < b else one(a, a))
+    c = intersection(union(*parts), _TRIG_IMAGE[name])
+    assume(c)
+    return c
+
+
+@settings(max_examples=100, deadline=None)
+@given(data=st.data(), name=trig_names, part=_far_parts(), outward=st.sampled_from([False, False, False, True]))
+@example(data=None, name='tan', part=one(-1e19, -1e19 + 10 ** 5, False, True), outward=False)
+@example(data=None, name='sin', part=one(1e19 - 10 ** 5, 1e19, True, False), outward=False)
+@example(data=None, name='cos', part=one(-1e19, -1e19 + 10 ** 5, False, True), outward=False)
+def test_trig_rev_hull_leaps_to_where_the_walk_stops(data, name, part, outward):
+    """`_periodic_hull` (the leap) equals the step-by-step walk, value, type and flag of each end, over
+    far pieces of x where up to hundreds of branches round onto one double, to nearest and outward"""
+    fn = _PERIODIC[name]
+    if data is None:  # the examples: float ends, to nearest, open at the far end: a window of ~330 branches
+        c = intersection(M.parse(_FAR_C[name]).cuts, fn.image)
+    else:
+        c = data.draw(_trig_cs(name))
+    first, last = _hull_ends(fn, part)
+    got = reverse._periodic_hull(fn, c, part, first, last, outward)
+    assert _typed(got) == _typed(_stepwise_hull(fn, c, part, first, last, outward))
+
+
+_FAR_C = {'tan': '[-40.0, 0.1]', 'sin': '[-0.5, 0.1]', 'cos': '[-0.5, 0.1]'}
+_NEAR = 7.582732456406029
+_OVERFLOW = Fraction(2 ** 1024 - 2 ** 970)  # past it, to nearest, a value rounds to ±inf
+_BRANCH_BUDGET = 10000  # branch preimages per call; the leap needed 4649 at 10**400 (2026-10-05)
+
+
+class _TooManyBranches(Exception):
+    pass
+
+
+def _bounded_branches(monkeypatch, limit):
+    """make `reverse.branch_preimage` raise past `limit` calls, so the old walk fails fast, not hangs"""
+    calls = [0]
+    real = reverse.branch_preimage
+
+    def counted(*args):
+        calls[0] += 1
+        if calls[0] > limit:
+            raise _TooManyBranches(calls[0])
+        return real(*args)
+    monkeypatch.setattr(reverse, 'branch_preimage', counted)
+    return calls
+
+
+def _class_ends(name, c, flint, pi):
+    """per parity class `(period, residue)`, the constants C of its branches' two exact ends `k pi + C`
+    (low, high) as arbs, for c one piece [v, w] inside the image (the branches: `reverse._SIN`, ...)"""
+    (v, _, w, _), = pieces(c)
+    v, w = _arb_of(v, flint), _arb_of(w, flint)
+    if name == 'tan':
+        return {(1, 0): (v.atan(), w.atan())}
+    if name == 'sin':  # k pi + asin, rising, for an even k; k pi - asin, falling, for an odd one
+        return {(2, 0): (v.asin(), w.asin()), (2, 1): (-w.asin(), -v.asin())}
+    # k pi + acos, falling, for an even k; (k + 1) pi - acos, rising, for an odd one
+    return {(2, 0): (w.acos(), v.acos()), (2, 1): (pi - v.acos(), pi - w.acos())}
+
+
+def _transition(name, c, threshold, low_walk, flint):
+    """from arb, the branch where a walk from a far end stops missing: walking up (low_walk), the least k
+    whose branch's high end exceeds `threshold`; walking down, the greatest whose low end is below it"""
+    bits = max(abs(threshold.numerator).bit_length() - threshold.denominator.bit_length(), 0)
+    old = flint.ctx.prec
+    flint.ctx.prec = bits + 200
+    try:
+        pi = flint.arb.pi()
+        t = _arb_of(threshold, flint)
+        ks = []
+        for (period, residue), (low, high) in _class_ends(name, c, flint, pi).items():
+            if low_walk:  # the least k = residue (mod period) with k pi + high > t
+                k = int(((t - high) / pi).floor().unique_fmpz()) + 1
+                k += (residue - k) % period
+            else:  # the greatest k = residue (mod period) with k pi + low < t
+                k = int(((t - low) / pi).ceil().unique_fmpz()) - 1
+                k -= (k - residue) % period
+            ks.append(k)
+        return min(ks) if low_walk else max(ks)
+    finally:
+        flint.ctx.prec = old
+
+
+@pytest.mark.parametrize('name', ['tan', 'sin', 'cos'])
+@pytest.mark.parametrize('far', [1e22, 1e300, 10 ** 400], ids=['1e22', '1e300', '10**400'])
+@pytest.mark.parametrize('low_walk', [True, False], ids=['low', 'high'])
+def test_trig_rev_far_end_of_x(monkeypatch, name, far, low_walk):
+    """a piece of x from near 0 out to `far`, open there, and a float c (to nearest): the step-by-step
+    walk passed ulp/(2 pi) branches (2**942 at 1e300), or 10**400/pi past the doubles; now a few thousand
+    at most, and the hull's far end is where that walk stops: at the branch where, by arb, the rounding
+    first reaches into x (checked against the library's own rounding there and at the two before), then
+    the step-by-step walk from there. the near end is the exact result's"""
+    flint = pytest.importorskip('flint')
+    fn = _PERIODIC[name]
+    c = intersection(M.parse(_FAR_C[name]).cuts, fn.image)
+    x = M(-far, -_NEAR, start_closed=False) if low_walk else M(_NEAR, far, end_closed=False)
+    _bounded_branches(monkeypatch, _BRANCH_BUDGET)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        try:
+            got = TRIG[name](M.parse(_FAR_C[name]), x)
+        except _TooManyBranches:
+            pytest.fail(f'more than {_BRANCH_BUDGET} branch preimages: the walk does not leap')
+    monkeypatch.undo()
+    assert [w.category for w in caught] == [HullWarning]
+    part = intersection(x.cuts, FINITE)
+    (part_lo, part_lo_closed, part_hi, part_hi_closed), = pieces(part)
+    end = part_lo if low_walk else part_hi
+    if isinstance(end, float):  # to nearest, a value rounds into x past the midpoint to the next double in
+        threshold = (Fraction(end) + Fraction(math.nextafter(end, INF if low_walk else -INF))) / 2
+    else:  # past the doubles: a value rounds into x once it rounds to a finite double
+        threshold = -_OVERFLOW if low_walk else _OVERFLOW
+    k = _transition(name, c, threshold, low_walk, flint)
+    step = 1 if low_walk else -1
+    ray = one(part_lo, INF, part_lo_closed, True) if low_walk else one(-INF, part_hi, True, part_hi_closed)
+
+    def meets_ray(j):
+        return bool(intersection(reverse.branch_preimage(c, fn.branch(j), False), ray))
+    assert meets_ray(k) and not meets_ray(k - step) and not meets_ray(k - 2 * step)
+    found = _walk_from(fn, c, part, k - 2 * step, step, False)
+    near = TRIG[name](M.parse(_FAR_C[name]), M(-30, -_NEAR) if low_walk else M(_NEAR, 30))
+    if low_walk:
+        lo, lo_closed, _, _ = next(pieces(found))
+        want = M.from_pieces([(lo, near.sup, lo_closed, near.sup_closed)])
+    else:
+        _, _, hi, hi_closed = list(pieces(found))[-1]
+        want = M.from_pieces([(near.inf, hi, near.inf_closed, hi_closed)])
+    assert _typed(got.cuts) == _typed(want.cuts), (got, want)
+
+
 # THE ROUNDING OF THE ENDS
 
 def test_rounded_inverse_trig_exact_case():

@@ -985,12 +985,26 @@ def rounded_inverse_trig(name: str, v, sign: int, k: int, direction: int) -> flo
             if sign * v < 0:
                 lo, hi = -hi, -lo
         else:
-            lo, hi = _enclose(name, Fraction(v), q)
+            lo, hi = _inverse_enclosure(name, Fraction(v), q)
             if sign < 0:
                 lo, hi = -hi, -lo
         k_lo, k_hi = _fractions(_scale(_pi(q), k), q)
         return lo + k_lo, hi + k_hi
     return _ziv(enclose, direction)
+
+
+def _inverse_enclosure(name: str, v: Fraction, q: int) -> Tuple[Fraction, Fraction]:
+    """
+    f(v) to at least precision q, computed at the next multiple of 64 bits and kept: the periodic
+    reverse ops round `k pi + f(v)` at one v for thousands of k, whose sizes move q (trig-rev-far). a
+    tighter enclosure rounds to the same double, the correctly rounded one
+    """
+    return _inverse_enclosure_at(name, v, (q + 63) // 64 * 64)
+
+
+@lru_cache(maxsize=64)
+def _inverse_enclosure_at(name: str, v: Fraction, p: int) -> Tuple[Fraction, Fraction]:
+    return _enclose(name, v, p)
 
 
 def compare(name: str, x, y) -> int:

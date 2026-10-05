@@ -512,17 +512,65 @@ def _periodic_hull(fn: _Periodic, c: Cuts, part: Cuts, first: Optional[int], las
     (`first`/`last` None): every branch holds a solution, so the preimage is unbounded where the piece
     is (never reaching ±inf, open there), and elsewhere its end is in one of the first branches met
     walking inward from the piece's end
+
+    the walk leaps over the branches whose rounded preimage misses the ray from the piece's end inward
+    (`_leap`, trig-rev-far): to nearest, every branch within half an ulp of the end rounds onto that one
+    double, which an open end does not hold (ulp/(2 pi) branches, 2**942 at 1e300), and past the doubles
+    onto ±inf, which a finite end never holds. it lands on the branch the step-by-step walk would reach
+    first, so the result is the same
     """
-    def walk(k: int, step: int) -> Cuts:
+    preimages = {}
+
+    def preimage(k: int) -> Cuts:
+        if k not in preimages:
+            preimages[k] = branch_preimage(c, fn.branch(k), outward)
+        return preimages[k]
+
+    def walk(k: int, step: int, ray: Cuts) -> Cuts:
+        k = _leap(lambda j: not kernel.intersection(preimage(j), ray), k, step)
         while True:
-            found = kernel.intersection(branch_preimage(c, fn.branch(k), outward), part)
+            found = kernel.intersection(preimage(k), part)
             if found:
                 return found
             k += step
 
-    lo, lo_closed = (-INF, False) if first is None else next(kernel.pieces(walk(first, 1)))[:2]
-    hi, hi_closed = (INF, False) if last is None else next(kernel.pieces(walk(last, -1)[-2:]))[2:]
+    (part_lo, part_lo_closed, part_hi, part_hi_closed), = kernel.pieces(part)
+    lo, lo_closed = (-INF, False) if first is None else next(kernel.pieces(
+        walk(first, 1, _one(part_lo, INF, part_lo_closed, True))))[:2]
+    hi, hi_closed = (INF, False) if last is None else next(kernel.pieces(
+        walk(last, -1, _one(-INF, part_hi, True, part_hi_closed))[-2:]))[2:]
     return _one(lo, hi, lo_closed, hi_closed)
+
+
+def _leap(misses: Callable[[int], bool], k: int, step: int) -> int:
+    """
+    the first branch from k on (in the direction `step`) that `misses` does not hold for, or one before
+    it: `misses(j)` says branch j's rounded preimage misses the ray from the piece's end inward, so it
+    cannot meet the piece, and the walk may start past every such j
+
+    found by a gallop then a bisection, on pairs: within one parity of j (every j for tan), each end of
+    a branch's rounded preimage is `round(j pi + C)`, one constant C and one rounding direction per end
+    (the branches: `_SIN`, `_COS`, `_TAN`), so it only moves inward as j does; and an end lying on the
+    ray's own end that is closed stays closed while it lies there (its flag is constant, or its piece
+    is squeezed onto that one double, and stays squeezed). so per parity `misses` holds up to some j and
+    never after it, and over all j so does "j and j + step both miss". the ray is closed at its
+    infinite end: past the doubles a branch rounds onto that infinity, which must not count as missing
+    """
+    def both(n: int) -> bool:
+        return misses(k + n * step) and misses(k + (n + 1) * step)
+
+    if not both(0):
+        return k
+    low, high = 0, 1  # both(low) holds, both(high) is to be tried
+    while both(high):
+        low, high = high, 2 * high
+    while high - low > 1:
+        middle = (low + high) // 2
+        if both(middle):
+            low = middle
+        else:
+            high = middle
+    return k + (low + 2) * step  # every branch up to low + 1 misses
 
 
 def sin_rev(c, x=_REALS) -> MultiInterval:

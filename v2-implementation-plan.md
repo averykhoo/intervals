@@ -4868,6 +4868,57 @@ docstring says how a gap time is read. the other zone properties compare instant
 checked to import the copy): the old oracle red on the example; the library reading an aware datetime with fold=1
 red on both tests; control green.
 
+### trig-rev-far: the periodic hull's walk from a far end of x (done 2026-10-05)
+
+HANDOFF's row 1 (M16e's soundness reviewer): `tan_rev([-40.0, 0.1], (-X, -7.582732456406029])` slow from X = 1e20
+and past 60 s at 1e300; `sin_rev`/`tan_rev` hung with an end at 1e300 or 10**400.
+* **measured** (2026-10-05, at `913bd5a`, branch preimages counted per call): tan 1e17 11 (0.002 s), 1e19 334
+  (0.04 s), 1e20 2617 (0.33 s), 1e21 20870 (2.7 s); sin and cos with `c = [-0.5, 0.1]` the same counts (20872 at
+  1e21, 7.7 s and 9.3 s). the cost per branch is flat (0.12 ms at k ~ 1e20; 0.75 ms tan, 2 ms sin at 1e300, 1.3 and
+  3.6 ms at 1e400): the count grows as ulp(X)/(2 pi), 20860 at 1e21. fast at 1e300 (6-8 branches): an exact c, a
+  closed far end, or sin/cos with `c = [-40.0, 0.1]` (its end -1 is exact). past 30 s: a float c with an exact end
+  past the doubles, `M(-10**400, -7)` open or closed, `M(-2**1030, -7)`
+* **cause**: `reverse.py::_periodic_hull` walked one branch at a time inward from the piece's end until a branch's
+  rounded preimage met the piece. to nearest (a float end of c in a `MultiInterval`), every branch within half an
+  ulp of the end rounds onto that one double, squeezed to the closed point, which an open end does not hold:
+  ulp(X)/(2 pi) branches, 2**942 at 1e300. past the doubles every branch rounds onto `[-inf]`, which a finite end
+  never holds: 10**400/pi. directional rounding (an exact c, an `OutwardMultiInterval`) has no such window. not
+  pi's precision, not `floor_over_pi`
+* **fix** (results identical): `_periodic_hull`'s walk starts where `reverse._leap` lands, a gallop then a bisection
+  on "branches j and j + step both miss the ray from the piece's end inward" (the ray closed at its infinite end).
+  per parity of j each end of a branch's rounded preimage is `round(j pi + C)` in one direction, so it only moves
+  inward with j, and a closed end on the ray's end stays closed (a constant flag, or a squeeze that persists): the
+  predicate is monotone, every branch before the landing misses, and the step walk from there reaches the branch
+  it reached before. branch preimages memoized per call. the first version left the ray open at +inf: past the
+  doubles a branch rounds onto `[inf]`, which "missed", and the gallop ran off to k ~ 2**3700 at 10**400.
+  `elementary.py::rounded_inverse_trig` keeps f(v)'s enclosure (`_inverse_enclosure`, computed at the next multiple
+  of 64 bits, `lru_cache(64)`): the thousands of k share one v; a tighter enclosure rounds to the same double.
+  after (whole call): tan 1e21 58 branches (0.008 s), 1e22 72, 1e300 3321 (0.32 s; 2.6 s before the cache), sin and
+  cos 1e300 3323 and 3320 (0.34 s), all three at `M(-10**400, -7.58, open)` and `M(7.58, 10**400, open)` 4649-4651
+  (0.56-0.62 s). the answers printed before and after agree at 1e17-1e21. `elementary` is a `BACKEND_FILE`: the
+  gmpy2 backend declines k != 0 and runs the same path (reverse, elementary, backend tests on gmpy2: 1282 passed)
+* **pins** (`tests/test_reverse.py`): `::test_trig_rev_hull_leaps_to_where_the_walk_stops` (hypothesis, 100: the
+  leap's hull equal, value, type and flag, to `_stepwise_hull`, the walk before the fix, on far pieces 2**50 to 2**64
+  out, up to ~650 branches per window, float and exact ends, to nearest and outward; three `@example`s at 1e19);
+  `::test_trig_rev_far_end_of_x` (18: tan, sin, cos x 1e22, 1e300, 10**400 x the low and the high end, open, a
+  float c): at most 10000 branch preimages (`reverse.branch_preimage` raises past it, so the old walk fails fast),
+  one `HullWarning`, and the far end where arb (`flint`) puts the first branch whose rounding reaches into x,
+  checked against the library's rounding there and at the two before, then the step walk from there. red on the
+  old code (`git archive 913bd5a`, the new test file, imports checked): 18 of 18 far cases, each
+  `_TooManyBranches: 10001` (the differential passes there, old against old)
+* **sabotage** (2026-10-05, one exact replacement at a time in the worktree, `__pycache__` cleared, restored with
+  `copy2`, checked with `filecmp`; leaps / far): control green / green; no leap red (far 18 of 18); the ray open at
+  its infinite end red (far 3, the 10**400 lows); landing one branch too far red / red (11); one branch per test,
+  not a pair red / red (18); the ray's flag inverted red / red (6); the high walk with the low ray green / red (9);
+  the gallop skipping untested red / red (1); the bisection keeping the wrong half red / red (8); the cache keyed
+  without v green / red (3; and the arb tests of `rounded_inverse_trig`). every break red. the cache's speed is a
+  constant factor, not pinned (the count is; a wall-clock budget is noise on this laptop)
+* **tests** (2026-10-05, the worktree): `tests/test_reverse.py` and the files around it (pow_rev, elementary,
+  oracle_flint, backend, the two modules' doctests) 1556 passed in 202 s; `tests/itf1788` 27795 passed in 81 s; the
+  rest (`--ignore=tests/itf1788`) 6509 passed in 734 s: 34304 in all, 19 of them new
+* left: the bounded path (fewer than `_BRANCH_LIMIT` branches) still lists up to 2008 branches at any k, about
+  0.1 ms each now with the cache
+
 ### run ledger: what has run on this code (done 2026-10-01)
 
 **why**: the owner, 2026-10-01: "i need some machinery to know whats run and not on the current code ...
