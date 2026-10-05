@@ -9,9 +9,13 @@ the open-items table: its record goes in the plan's milestone section, with a on
 session log below; nothing is listed as open and done at once), and list anything skipped as
 "Still owed:".
 
-## banner (2026-10-05)
+## banner (2026-10-06)
 
-* **renamed `multiinterval` (2026-10-05), not pushed**: `intervals` is another project's on PyPI; the package
+* **three open items done (2026-10-05/06), on `master`, not pushed**: vectors-ext (a) (`a3db14c`, the 40 quoted-string
+  vectors run as upstream), m14b-open's `parse_value` and `_float_samples` (`281922b`; it also found `[0x12.5]` read as
+  `[1, 2.5]`, now refused; two leftovers are Q23), and T1, the sabotage engine `tools/sabotage.py` (`076ad32`,
+  `bf1ec7c`). records in plan §2 (M13a, "M14-breadth", T1). the push needs the x10 prepush and `gate:gmpy2`
+* **renamed `multiinterval` (2026-10-05, `c6a4cca`), not pushed**: `intervals` is another project's on PyPI; the package
   directory, every import and `pip install` name is now `multiinterval`, the backend's variable `MULTIINTERVAL_BACKEND`
   (`v2-plan.md` decision log "the package is `multiinterval`"). the conda env, the repo folder and `references/` keep
   the old name. the push needs the x10 prepush and `gate:gmpy2` (every file moved)
@@ -124,17 +128,24 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
-| 1 | m14b-open | what M14-breadth found and left (2026-10-02): number-type quirks with no wrong value (a 0 end exact among float operands: `abs(M(-1.0, 1.0))` is `[0, 1.0]`; trunc's non-negative side ints; a one-point domain clip takes its low cut's type); `parse_value('+-5')` is 5, `'1 2'` is 12; `tests/test_extreme_floats.py::_float_samples` overflows on an exact piece wider than the doubles | ready, small (the 4300 digits done 2026-10-04: hex, D28; the quadratic parse done 2026-10-04, `6450502`) | plan §2 "M14-breadth" (left open) |
-| 2 | vectors-ext | test data beyond ITF1788 (survey 2026-09-29, `references/test-vector-sources.md`). the 1788 set is complete. decided 2026-10-02 with the owner: outputs computed by MPFR are not worth vendoring (our arb oracle already checks correct rounding); what adds depth is the CHOICE of inputs, so the source is CORE-MATH's worst cases (MIT; they carry blocks of Lefevre's data, whose own files state no licence, §3f), built 2026-10-02 as `tools/coremath.py` and `tests/test_coremath.py` (§3g-§3h; the testing skill). left: (a) `tests/itf1788/itl.py::parse_file` collapses whitespace inside quoted strings, so 40 textToInterval vectors (e.g. `"[ Empty  ]"`) run weaker than upstream; (b) closed 2026-10-03 (owner): glibc's rows are conformance inputs, not hard cases; pown has CORE-MATH's integral-exponent pow rows since 2026-10-04 (`tests/coremath/pown.tsv`); (c) cuinterval's `custom.itl` (26, MIT), probably covered by `test_domain_ends_and_limits` | (a) ready, small | `references/test-vector-sources.md`; plan §2 M13a (the vendoring) |
+| 1 | m14b-open | what M14-breadth found and left (2026-10-02): number-type quirks with no wrong value (a 0 end exact among float operands: `abs(M(-1.0, 1.0))` is `[0, 1.0]`; trunc's non-negative side ints; a one-point domain clip takes its low cut's type; all three still reproduce at `c6a4cca`, 2026-10-05) | ready, small (the 4300 digits done 2026-10-04: hex, D28; the quadratic parse done 2026-10-04, `6450502`; `parse_value` strict and `_float_samples` past the doubles done 2026-10-05, `281922b`, its two leftovers are Q23) | plan §2 "M14-breadth" (left open) |
+| 2 | vectors-ext | test data beyond ITF1788 (survey 2026-09-29, `references/test-vector-sources.md`). the 1788 set is complete. decided 2026-10-02 with the owner: outputs computed by MPFR are not worth vendoring (our arb oracle already checks correct rounding); what adds depth is the CHOICE of inputs, so the source is CORE-MATH's worst cases (MIT; they carry blocks of Lefevre's data, whose own files state no licence, §3f), built 2026-10-02 as `tools/coremath.py` and `tests/test_coremath.py` (§3g-§3h; the testing skill). left: (a) done 2026-10-05 (`a3db14c`: quoted strings keep their white space, the 40 vectors run as upstream states them; plan §2 M13a); (b) closed 2026-10-03 (owner): glibc's rows are conformance inputs, not hard cases; pown has CORE-MATH's integral-exponent pow rows since 2026-10-04 (`tests/coremath/pown.tsv`); (c) cuinterval's `custom.itl` (26, MIT), probably covered by `test_domain_ends_and_limits` | (c) only, low value | `references/test-vector-sources.md`; plan §2 M13a (the vendoring) |
 | 3 | pown-ziv | an exact corner of about 2M bits within about 2 ** -(its size) of a rounding breakpoint, past `EXACT_RESULT_LIMIT`, runs ziv past 120 s where the old code built the power in milliseconds (`O(3 + 2 ** -2100000) ** 2`, 2026-10-04); pow had the same at 60k-bit operands before D28 and has it at 2M bits now. follow-ups: a near-1 shortcut in `rounded_pow`, or the exact build when ziv passes a precision cap and the build is affordable | ready, not scheduled; extreme sizes only | plan §2 "owner-answers"; `references/owner-questions-2026-10-03/streams/pown.md` step 6 |
-| 4 | T1 | a reusable sabotage engine in `tools/sabotage.py`: M13's sub-tasks wrote the same ~30-line loop nine times (copy the file, apply one replacement that must match exactly once, clear `.hypothesis`, run pytest with a timeout for hangs, restore, `filecmp`, log a line), each with its own table of breaks. the break tables are per task and not worth keeping; the engine is. M16c found a hazard the engine must avoid: a same-size break restored within the same second as the broken write left python running the broken `.pyc`; clear `__pycache__` before and after each break, run with `PYTHONDONTWRITEBYTECODE=1`, restore with `copy2`, start with a control row on the intact code (H3's template `.scratch/h3/sabotage.py` has the hazard; M15's table was not re-checked for it). M16b found a second: two streams' harnesses had the same relative path `.scratch/sabotage.py`, and stopping one by matching `sabotage.py` in the command line killed the other mid-break, so its `finally` was skipped and its target was left sabotaged beside a `.orig` (2026-09-28). the engine takes a per-run name and is stopped only by the PID it recorded at launch, never by a command-line match. the pown-huge review found a third (2026-09-29): the sabotage lens broke files in the worktree the soundness lens was probing at the same time (`elementary.EXACT_POWER_LIMIT = 2000` seen by `git status` at 09:07, clean again by 09:25), so the soundness lens's first runs may have tested a sabotaged tree; it re-ran everything on a `git archive` snapshot of the committed branch. the engine breaks a private copy (a snapshot or its own worktree), never a tree another agent is reading | idea, not scheduled (from the `.scratch/m13` audit, 2026-09-27) | plan §2 intro (sabotage rule); plan §2 M16c ("the sabotage harness ran stale bytecode") |
-| 5 | evaluate-box | a pure speed change noted by M16e's design: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | plan §2 M16e; `v2-plan.md` "elementary and step functions" (the backend) |
-| 6 | later | left open by the owner's answers (2026-10-03), each "consider", optional or "if asked": `Root`/`RootBox` as frozen dataclasses if a third state appears; an `rtol` beside `tol`; outward fma, `%`, hypot, `cancel_minus` typed per corner (tighter); a to-nearest `MultiInterval.rounded()`; rootn run on cbrt's worst-case inputs; a numpy hook for the 1788 layer; an `AllenMatrix` class or a public `allen_pairs`; a strategies module after 2.0; Q20's optional pin | not scheduled | `references/owner-questions-2026-10-03/` |
-| 7 | H1 | release 2.0.0 (`pyproject.toml` is now `2.0.0.dev0`) | when everything is fully done (owner 2026-09-26); M16e's backend is opt-in and can ship in 2.0 as is (Q16(f)) | plan §2 M11; D5, D17 |
+| 4 | evaluate-box | a pure speed change noted by M16e's design: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | plan §2 M16e; `v2-plan.md` "elementary and step functions" (the backend) |
+| 5 | later | left open by the owner's answers (2026-10-03), each "consider", optional or "if asked": `Root`/`RootBox` as frozen dataclasses if a third state appears; an `rtol` beside `tol`; outward fma, `%`, hypot, `cancel_minus` typed per corner (tighter); a to-nearest `MultiInterval.rounded()`; rootn run on cbrt's worst-case inputs; a numpy hook for the 1788 layer; an `AllenMatrix` class or a public `allen_pairs`; a strategies module after 2.0; Q20's optional pin | not scheduled | `references/owner-questions-2026-10-03/` |
+| 6 | H1 | release 2.0.0 (`pyproject.toml` is now `2.0.0.dev0`) | when everything is fully done (owner 2026-09-26); M16e's backend is opt-in and can ship in 2.0 as is (Q16(f)) | plan §2 M11; D5, D17 |
 
 ## open questions for the owner
 
-none open. Q21 was answered 2026-10-05 (the session's recommendations accepted, all as built; `v2-plan.md` decision log, "M8's choices confirmed"). Q22 was answered 2026-10-04 (`v2-plan.md` decision log, "strict flags; v1 deleted"). Q9-Q20 and the owner's-call rows were answered 2026-10-03 (the owner accepted every
+* **Q23 (2026-10-05, from m14b-open's `parse_value` fix; behaviour unchanged until answered)**: (a) numbers side
+  by side with no white space: the tokenizer reads `[0.1.2]` as `[0.1, 0.2]`, `[-2-1]` as `[-2, -1]`, `{1-2}` as
+  `{-2, 1}`, `[1+2]` as `[1, 2]`. refuse (a number must be followed by white space or punctuation; the comment on
+  `tests/test_fmt.py::_SPACED` says "two bare numbers need one") or keep (`[0E0-0]` is a 2026-10-02 fuzz
+  `@example` whose test accepts either)? (b) non-ASCII digits: python's `\d`, `int` and `float` take them, so
+  `[١٢]` parses as `[12]`, in `parse` and `parse_value`. restrict to ASCII `[0-9]`, or keep? (plan §2
+  "M14-breadth", "parse_value strict")
+
+Q21 was answered 2026-10-05 (the session's recommendations accepted, all as built; `v2-plan.md` decision log, "M8's choices confirmed"). Q22 was answered 2026-10-04 (`v2-plan.md` decision log, "strict flags; v1 deleted"). Q9-Q20 and the owner's-call rows were answered 2026-10-03 (the owner accepted every
 recommendation of `references/owner-questions-2026-10-03/`; `v2-plan.md` "2026-10-03 revision: owner
 answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answered 2026-09-26, D18
 2026-09-27 (`v2-plan.md`). what the answers left for later is the open-items row "later".
@@ -164,7 +175,7 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
   differently (one box per connected unproved region) is not asked, Q12 has no item for it
 * sabotage rows red in their first run were not re-run after the closing tests were added (M16a:
   the four closing tests and the review's, which only add red paths); M15's table was not re-checked
-  for the stale-bytecode hazard M16c found (T1)
+  for the stale-bytecode hazard M16c found (plan §2 T1; `tools/sabotage.py` could re-run either now)
 * M16b: the layer's per-call
   `warnings.catch_warnings` is not thread-safe on python 3.11-3.13 (as `decorated.py::_quietly`);
   recorded, not addressed. the pass imports the adapter a second time as
@@ -191,6 +202,16 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
 
 
 ## session log (newest first)
+
+* **2026-10-05/06** open items by subagents (the owner: "do some of the open tasks, but get subagents to do them").
+  first the rename: the previous context's gate run went MOVED (README edited mid-run), re-run green (27795 + 6509)
+  and committed (`c6a4cca`). then three opus agents, one worktree each off `c6a4cca`: vectors-ext (a), m14b-open's
+  parse and sampling items, T1. the session re-ran a sabotage row of each: the first two held; T1's first commit
+  had its central guard unpinned (a surviving break not failing the run passed all 35 tests), sent back, pinned
+  with 17 more self-sabotage rows and a race in `stop` fixed (plan §2 T1). rebased and fast-forwarded: `a3db14c`,
+  `281922b`, `076ad32`, `bf1ec7c`; worktrees and branches removed. gate 27798 + 6609 (2026-10-06). new Q23 (two
+  parse leftovers). Still owed: the push (x10 prepush and `gate:gmpy2`; the owner's go); nothing here touched the scalar
+  evaluator, so the CORE-MATH full check stays the owner's call from trig-rev-far (`tools/coremath.py status`)
 
 * **2026-10-05** the name (the owner: "I need a good name for this library that isn't already on pypi", then
   `multiinterval`, one word, "do the rename in this repo now"). candidates checked against PyPI's JSON API (404 =

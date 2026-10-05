@@ -892,6 +892,12 @@ this repo's unchanged adapter (`tests/itf1788/test_itf1788.py::run`, `::run_outw
 * **4764 statements of 57 ops not implemented**, all assigned to a sub-task below
 
 **M13a vendoring and the adapter (done 2026-09-26).** no new op; lands the 1793 passing vectors
+(2026-10-05, `a3db14c`, HANDOFF row vectors-ext (a): the parser collapsed white space inside quoted strings too, so
+40 textToInterval vectors of `libieeep1788_class.itl`, e.g. `"[ Empty  ]"`, ran weaker than upstream; now
+`itl.py::collapse` keeps a quoted string exact and `_COMMENT` skips one. the other 9502 vectors parse identically,
+the census is byte-identical, 39 of the 40 match upstream and `"[ Nai  ]"` is the `_NAI` row (D16); pinned by
+`tests/itf1788/test_itf1788.py::test_quoted_strings_keep_their_white_space` and `::test_quoted_strings_keep_comment_marks`,
+each red on its break, the first re-run red by the session)
 * vendor per D15: all 19 files, unmodified, from the pinned commit into `tests/itf1788/`, replacing
   nehmeier's 7, with the fork's `LICENSE`, `NOTICE` and `COPYING.LESSER`. verify each file's git blob
   hash against the fork's tree at the pin (`git hash-object` against the GitHub trees API), as M9 did.
@@ -4673,6 +4679,26 @@ differences in tokens, values or exception types and messages. pinned by
 old `fmt.py` 2 of them failed (186.8 s and 229.9 s), the other six were never quadratic. gate on the branch:
 27795 + 6242 passed (2026-10-04)
 
+**parse_value strict, `_float_samples` past the doubles (2026-10-05, `281922b`)**: an opus agent in a worktree;
+the session re-probed and re-sabotaged. `fmt.parse_value` read any text (it deleted all white space and every
+leading sign, then called `int`/`float`, which also take `_`): it now must `fullmatch` one number of the grammar
+(`fmt.py::_VALUE`), white space around it, else ValueError. refused now, each read before: `+-5` (5), `--5`, `+ -5`,
+`1 2` (12), `1 2/3`, `1 . 5`, `1e 5`, `i n f`, `0x 1f`, `1/-3` (-1/3), `1_000` (1000); kept, as tested and
+documented: `- 5`, `1 / 2`, `- inf`, `1.`, `.5`, `0X1F`. the tokenizer already refused most of these inside
+`parse`, but one: the hex int's `(?!\.)` guard backtracked (`[0x12.5]` read as `[1, 2.5]`, `[1/0x35.5]` as `[1/3,
+5.5]`), now possessive (`0x[0-9a-f]++`), a ValueError. every text `repr`/`str`/`format_cuts` writes still parses;
+still linear (0.04 s at 200k characters, 10 shapes). the helper: `tests/test_extreme_floats.py::_float_samples`
+overflowed three ways on an end or a width past MAX, and `tests/oracles.py::_sample_piece` a fourth (`float()` of a
+sample past MAX beside a float end); fixed, and `tests/test_extreme_floats_functions.py::_samples`' workaround
+dropped. pins: `tests/test_fmt.py::test_parse_value_refuses_malformed_numbers` (28 shapes),
+`::test_parse_value_reads_one_number_or_raises` (a property: accepted exactly when the tokenizer reads one number,
+then the same value), 4 hex rows, `tests/test_extreme_floats.py::test_float_samples_past_the_doubles`. sabotage: the
+old `fmt.py` 33 red; no `fullmatch` guard 29 red (re-run by the session: 29); `+` hex digits 4 red; each old
+helper line red (8, 6, 1 of 9; the oracle 2). the three number-type quirks of HANDOFF row m14b-open still reproduce
+at `c6a4cca`, unchanged. two questions left for the owner (HANDOFF Q23): numbers side by side with no space
+(`[0.1.2]` is `[0.1, 0.2]`, `[-2-1]` is `[-2, -1]`, `{1-2}` is `{-2, 1}`); non-ASCII digits (python's `\d`, `int`
+and `float` take them: `[١٢]` is `[12]`)
+
 ### fuzz-steps-isotone: outward isotonicity across number types (done 2026-10-03)
 
 **found** by a local x50 fuzz run (2026-10-03, replayed by the session): `tests/test_steps.py::test_isotone[round]`
@@ -4960,6 +4986,33 @@ round had "backend kept" green, and that was a bug in the tool, not a gap in the
 read the log's header, which echoes the command, so a command whose text held "3 passed in 0.1s" was
 recorded PASSED. fixed (only the run's own output is parsed) and pinned
 (`::test_the_command_line_is_not_the_verdict`).
+
+### T1: a sabotage engine, `tools/sabotage.py` (done 2026-10-05)
+
+the loop M13's sub-tasks wrote nine times, once, with the three hazards of HANDOFF's old row T1 designed out. an
+opus agent built it in a worktree; the session re-checked it and sent it back once.
+* **what it does**: `tools/sabotage.py run TABLE --name NAME [--ref REV | --worktree] [--timeout S]` breaks a
+  private copy only (`git archive` of a ref, HEAD by default, or the working tree's tracked and untracked files)
+  under `.scratch/sabotage/<name>/tree`, never a tree another agent reads (hazard 3). a TOML or JSON table: a
+  default `select` and `timeout`, and `[[break]]` rows of `id`, `target`, `old` (exactly once, overlaps counted,
+  else NOMATCH/AMBIGUOUS), `new`, and optionally `select`, `timeout`, `expect = "green"` (a placebo). a control
+  on the intact copy first and a closing control after every break; `__pycache__` and `.hypothesis` cleared
+  around each break, `PYTHONDONTWRITEBYTECODE=1`, restore by `copy2` verified byte for byte (hazard 1). an import
+  guard plugin in every pytest run flags a module loaded from outside the copy (LEAK; the vacuous-copy trap of
+  2026-10-04). verdicts RED, TIMEOUT (the process tree killed), ERROR (a weak catch), GREEN, NOMATCH, AMBIGUOUS,
+  LEAK, one TSV line each as it finishes; exit 1 when a break survived or a row did not test what it says, 2 when
+  the run proves nothing. `stop NAME` kills only the PID recorded at launch (its creation time checked against
+  reuse), the engine before its child (hazard 2). usage in the testing skill.
+* **evidence**: `tests/test_sabotage_tool.py`, 52 tests on toy repos in `tmp_path`, 31-37 s here, also green on
+  linux (a throwaway container). the engine sabotaged on itself (its own `--worktree` run): S1-S30 in the test
+  file's docstring, every break red, the placebo green. the session's own break (a surviving break not failing
+  the run) passed all 35 tests of the first commit: `test_mixed_verdicts`' exit 1 came from its NOMATCH and
+  AMBIGUOUS rows. sent back: each exit-1 cause is now pinned alone, an audit found two more masked guards (a
+  control that ran nothing; `stop`'s name check) and a race in `stop` (it killed the child first, so the engine
+  wrote a false RED and exited 0 before its own kill landed), fixed (S14-S30); the session's break red on
+  `test_a_survivor_alone_exits_1`.
+* **left**: the `finally` in `Run.pytest` that kills the child when the wait itself is interrupted is untested;
+  the linux kill paths ran but were not sabotaged; on macOS `stop` trusts the PID alone (no creation time)
 
 ## 3. order and parallelism
 

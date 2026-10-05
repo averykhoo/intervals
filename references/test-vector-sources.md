@@ -6,6 +6,8 @@ was not. the session checked the claims about this tree first-hand: both errata 
 (`libieeep1788_num.itl:168`, `mpfi.itl:603`) and `tests/itf1788/itl.py::parse_file` collapses whitespace
 inside quoted strings. one correction: §2b calls that collapse harmless "(text constructors not run)"; they do
 run (M13g), so the 40 whitespace vectors are live and weaker than upstream (`HANDOFF.md` row vectors-ext).
+fixed 2026-10-05 (`a3db14c`): `parse_file` keeps a quoted string's exact characters (`itl.py::collapse`), so the 40
+run as upstream states them; the survey's text below is kept as written.
 
 ---
 
