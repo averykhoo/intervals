@@ -127,10 +127,10 @@ goes and never push.
 
 ## sabotage: a check that cannot fail proves nothing
 
-* for a pin or a new check, break what it guards and watch it go red. two ways:
-  * edit the source: copy it aside, replace one exact string that must match once, clear
-    `__pycache__`, run with `PYTHONDONTWRITEBYTECODE=1`, restore with `cp`, confirm with `cmp`. a
-    same-size break restored within the same second can leave python running the broken `.pyc`
+* for a pin or a new check, break what it guards and watch it go red. three ways:
+  * edit the source: `tools/sabotage.py` (below). do not hand-roll the loop: a same-size break restored
+    within the same second left python running the broken `.pyc` (M16c), and a hand loop in the live
+    tree breaks files another agent is reading
   * in process: replace the function with a no-op (`module.fn = lambda ...: ...`) and call the test's
     inner function on each example, `test.hypothesis.inner_test(*args)`, then restore it
   * against an old commit: `git archive <rev> intervals | tar -x -C .scratch/<name>`, the test file
@@ -143,6 +143,43 @@ goes and never push.
   result non-empty (the trig D26 example); a per-piece check was needed
 * never stop another process by name or command line: two sessions' harnesses have shared a name. stop
   the PID you started
+
+### tools/sabotage.py: a break table on a private copy
+
+    $PY tools/sabotage.py run TABLE --name NAME              # breaks a `git archive HEAD` copy
+    $PY tools/sabotage.py run TABLE --name NAME --ref REV    # another commit
+    $PY tools/sabotage.py run TABLE --name NAME --worktree   # uncommitted work (tracked + untracked, not ignored)
+    $PY tools/sabotage.py run TABLE --name NAME --dry-run    # each row's match count, no pytest
+    $PY tools/sabotage.py stop NAME                          # kills that run's recorded PID tree, removes its copy
+
+the table is TOML (or `.json`); keep it in `.scratch/`, it is per task:
+
+    select = ["tests/test_fmt.py"]        # pytest args: node ids, files, "-k", "expr"
+    timeout = 600                          # seconds per pytest run
+    [[break]]
+    id = "fmt-swap-bracket"
+    target = "multiinterval/fmt.py"
+    old = '''{"]" if hi_closed else ")"}'''   # must occur exactly once (overlaps counted)
+    new = '''{")" if hi_closed else "]"}'''
+    # optional: select = [...], timeout = 60, expect = "green" (a placebo the selection must not see)
+
+it snapshots into `.scratch/sabotage/<name>/tree`, never the live tree; runs the selection on the intact
+copy first (control) and last (closing control); per row writes the break, clears `__pycache__` and
+`.hypothesis`, runs `pytest -x` with `PYTHONDONTWRITEBYTECODE=1`, restores with `copy2` and checks the
+bytes. a guard plugin in every run fails it if a module came from outside the copy. one line per row in
+`<name>/verdicts.tsv` as it finishes, pytest's output in `<name>/logs/<id>.log`:
+
+* RED caught. TIMEOUT caught (hung; its process tree killed). ERROR caught weakly: a collection or
+  import error, a crash; it proves nothing about the check
+* GREEN survived: exit 1 (unless `expect = "green"`)
+* NOMATCH / AMBIGUOUS: `old` found 0 / 2+ times; the row did not run: exit 1. LEAK: imported from
+  outside the copy: exit 1
+* exit 2: the run proves nothing (control or closing control red, a restore that did not verify, a
+  live run of that name, a bad table)
+
+`--name` is yours: it refuses to start while that name's PID is alive, and `stop` checks the PID's
+creation time, so a reused PID is never killed. `tests/test_sabotage_tool.py` pins the engine (toy
+repos, ~25 s); its docstring holds the engine's own sabotage table, run through the engine itself
 
 ## the exhaustive harnesses (CI's `exhaustive` jobs, not the gate)
 
