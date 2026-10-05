@@ -626,7 +626,10 @@ def _sample_piece(pc, rng):
             p = Fraction(rng.randrange(-10 ** 6, 10 ** 6), 1000)
     p = normalize_value(p)
     if _finite_float(lo) or _finite_float(hi):
-        as_float = float(p)
+        try:
+            as_float = float(p)
+        except OverflowError:  # a point past the doubles stays exact (m14b-open, 2026-10-05)
+            return p
         if _in_piece(as_float, *pc):
             return normalize_value(as_float)
     return p

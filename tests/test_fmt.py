@@ -15,7 +15,8 @@ the package's own text form: `multiinterval.fmt` (`format_cuts`, `parse`, `parse
   design's one zero (v2-plan:
   `-0.0` becomes `0.0`) and an integral Fraction read as an int
 * `parse_value` reads back `format_value` of every number bit for bit (`-0.0` included: the parser's tokens
-  are raw, the Cut constructor normalizes) and every other spelling of the number with its type
+  are raw, the Cut constructor normalizes) and every other spelling of the number with its type; it reads a
+  text iff the tokenizer reads it as one number (m14b-open, 2026-10-05: it read `'+-5'` as 5 and `'1 2'` as 12)
 * any text, random or a mutated valid output, either parses to a valid cut tuple whose own format is
   canonical, or raises ValueError, never anything else (texts of at most a few hundred characters)
 * the tables: v1's parser comments and the separators v2 adds
@@ -42,6 +43,7 @@ from multiinterval import MultiInterval
 from multiinterval import OutwardMultiInterval
 from multiinterval.cuts import Cut
 from multiinterval.cuts import Side
+from multiinterval.fmt import _tokenize
 from multiinterval.fmt import format_cuts
 from multiinterval.fmt import format_value
 from multiinterval.fmt import parse
@@ -131,10 +133,27 @@ def test_parse_errors(text):
 @pytest.mark.parametrize('text, value', [
     ('3', 3), ('-3', -3), ('3.0', 3.0), ('1e-05', 1e-05), ('1E+16', 1e16), ('.5', 0.5),
     ('1/3', Fraction(1, 3)), ('-1/3', Fraction(-1, 3)), ('- inf', -inf), ('Infinity', inf),
+    ('- 5', -5), (' + 5\n', 5), ('1 / 0x3', Fraction(1, 3)), ('- 0x1f', -31), ('1.', 1.0),
 ])
 def test_parse_value(text, value):
     parsed = parse_value(text)
     assert parsed == value and type(parsed) is type(value)
+
+
+# MALFORMED NUMBERS (m14b-open, 2026-10-05): `parse_value` deleted all white space and every leading sign, then
+# handed the rest to python's int/float/Fraction, so it read text no token of the grammar is: `'+-5'` was 5, `'1 2'`
+# 12, `'1/-3'` -1/3, `'1_000'` 1000. the grammar allows white space after the one sign and around `/`, nowhere else
+
+@pytest.mark.parametrize('text', [
+    '+-5', '-+5', '--5', '++5', '+ -5', '- -5',  # one sign at most
+    '1 2', '1 . 5', '1. 5', '1 .5', '1e 5', '1 e5', '1e+ 5', '1 2/3', '1/2 3',  # white space inside the digits
+    'i n f', 'in f', '-in finity', '0 x1f', '0x 1f', '0x1 f', '0x1f / 0x 3',
+    '1/-3', '1/+3', '-1/-3',  # no sign after `/`
+    '1_000', '1_0.5', '1e1_0',  # python's digit separators are not the grammar's
+])
+def test_parse_value_refuses_malformed_numbers(text):
+    with pytest.raises(ValueError, match='not a number'):
+        parse_value(text)
 
 
 # EXTREME VALUES
@@ -416,7 +435,9 @@ def test_parse_hex(text, value):
     assert parsed == value and type(parsed) is type(value)
 
 
-@pytest.mark.parametrize('text', ['0x', '[0x1.8p1]', '[0x1.5e3]', '[1/0x3.5]', '0x1g', '[0x 1]'])
+# `[0x12.5]` was `[1, 2.5]` and `[1/0x35.5]` `[1/3, 5.5]`: the hex digits gave one back to dodge `(?!\.)` (2026-10-05)
+@pytest.mark.parametrize('text', ['0x', '[0x1.8p1]', '[0x1.5e3]', '[1/0x3.5]', '0x1g', '[0x 1]',
+                                  '[0x12.5]', '[1/0x35.5]', '{0X1F2.5}', '[-0x10.5]'])
 def test_hex_floats_and_bad_hex_are_refused(text):
     """a hex float is not read, and never as `0x1` then `.8` (the grammar takes two bare numbers as a piece)"""
     with pytest.raises(ValueError):
@@ -465,3 +486,46 @@ def test_any_text_parses_or_raises_value_error(text):
     canonical = format_cuts(cuts)
     assert typed(parse(canonical)) == typed(cuts)
     assert format_cuts(parse(canonical)) == canonical
+
+
+# PARSE_VALUE IS ONE TOKEN (m14b-open, 2026-10-05)
+
+def _one_number(text):
+    """the token, when the tokenizer reads `text` as one number and nothing else; else None"""
+    try:
+        tokens = _tokenize(text)
+    except ValueError:
+        return None
+    return tokens[0][1] if len(tokens) == 1 and tokens[0][0] == 'num' else None
+
+
+@st.composite
+def mangled_numbers(draw):
+    """a spelled number with a sign, white space, `.`, `_`, `e`, `x`, `/` or a digit put in or taken out"""
+    text = draw(spelled_number(draw(st.one_of(pool_values, st.integers(), st.fractions(), st.floats(allow_nan=False)))))
+    for _ in range(draw(st.integers(1, 2))):
+        i = draw(st.integers(0, len(text)))
+        char = draw(st.sampled_from(' +-._exX/09'))
+        text = draw(st.sampled_from([text[:i] + char + text[i:], text[:i] + text[i + 1:]]))
+    return text
+
+
+@settings(max_examples=300, deadline=None)
+@given(st.one_of(st.text(_GRAMMAR, max_size=20), mangled_numbers()))
+@example('+-5')
+@example('1 2')
+@example('1/-3')
+@example('1_000')
+@example('0x 1f')
+def test_parse_value_reads_one_number_or_raises(text):
+    """`parse_value` reads a text iff the tokenizer reads it as one number, and then as `parse` does"""
+    token = _one_number(text)
+    try:
+        value = parse_value(text)
+    except ValueError:
+        if token is not None:  # a number token parse_value refuses (`1.5/2`, `1` * 4301): parse refuses it too
+            with pytest.raises(ValueError):
+                parse(text)
+        return
+    assert token is not None, f'{text!r} is not one number of the grammar, read as {value!r}'
+    assert typed(parse(text)) == typed(mi(value))

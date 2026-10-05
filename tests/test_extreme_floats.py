@@ -101,7 +101,12 @@ def _cuts(rng, floats_only):
 
 
 def _float_samples(cuts, rng):
-    """closed ends, floats one to three ulps inside each end, one spread point per piece, oracle samples"""
+    """
+    closed ends, floats one to three ulps inside each end, one spread point per piece, oracle samples.
+    an exact end past the doubles (an int or Fraction beyond +-MAX) is stepped from +-MAX, so the floats
+    inside it are the largest ones the piece holds (none if the whole piece lies past the doubles); it
+    raised OverflowError converting such an end, or a piece wider than MAX, to float (m14b-open, 2026-10-05)
+    """
     out = []
     for lo, lc, hi, hc in pieces(cuts):
         if lc or lo == hi:
@@ -109,18 +114,46 @@ def _float_samples(cuts, rng):
         if hc:
             out.append(hi)
         for end, other in ((lo, hi), (hi, lo)):
-            if math.isfinite(end) and end != other:
-                x = end
+            if not _inf(end) and end != other:
+                x = min(max(end, -MAX), MAX)
+                toward = other if _inf(other) or -MAX <= other <= MAX else (INF if other > 0 else -INF)
                 for _ in range(rng.randrange(1, 4)):
-                    x = math.nextafter(x, other)
+                    x = math.nextafter(x, toward)
                 if (lo < x < hi) or (x == lo and lc) or (x == hi and hc):
                     out.append(x)
         flo, fhi = max(lo, -MAX), min(hi, MAX)
         if flo < fhi:
-            x = flo + (fhi - flo) * rng.random() if math.isfinite(fhi - flo) else rng.uniform(flo / 2, fhi / 2)
+            x = flo + (fhi - flo) * rng.random() if fhi - flo <= MAX else rng.uniform(flo / 2, fhi / 2)
             if lo < x < hi:
                 out.append(x)
     return out + sample(cuts, 6, rng)
+
+
+_PAST = 10 ** 400  # an exact end past the doubles
+_NEAR_MAX = math.nextafter(math.nextafter(math.nextafter(MAX, 0), 0), 0)  # three ulps inside
+
+
+# every one of these raised OverflowError in `_float_samples` (m14b-open, 2026-10-05); `near` is which of +-MAX
+# the floats inside an end must come within three ulps of
+@pytest.mark.parametrize('cuts, near', [
+    (normalize([piece(0, _PAST)]), {MAX}),
+    (normalize([piece(-_PAST, _PAST, False, False)]), {MAX, -MAX}),
+    (normalize([piece(Fraction(-_PAST, 3), 5)]), {-MAX}),
+    (normalize([piece(1.0, _PAST, True, False)]), {MAX}),
+    (normalize([piece(MAX, _PAST)]), {MAX}),
+    (normalize([piece(-int(MAX), int(MAX))]), {MAX, -MAX}),  # ends inside, the width past MAX
+    (normalize([piece(_PAST, 10 * _PAST)]), set()),  # wholly past the doubles: no float inside
+    (normalize([piece(-INF, -_PAST)]), set()),
+    (normalize([piece(_PAST, _PAST)]), set()),
+], ids=['zero-past', 'past-past', 'fraction-past', 'float-past', 'max-past', 'wide', 'beyond', 'inf-beyond', 'point'])
+def test_float_samples_past_the_doubles(cuts, near):
+    for seed in range(20):
+        samples = _float_samples(cuts, random.Random(seed))
+        assert all(contains_point(cuts, x) for x in samples), (seed, samples)
+        closed = {end for lo, lc, hi, hc in pieces(cuts) for end, c in ((lo, lc), (hi, hc)) if c}
+        assert closed <= set(samples)  # the closed ends, exact
+        floats = [x for x in samples if type(x) is float and math.isfinite(x)]
+        assert {m for m in (MAX, -MAX) if any(abs(x) >= _NEAR_MAX and x * m > 0 for x in floats)} == near, (seed, floats)
 
 
 class Hooks:

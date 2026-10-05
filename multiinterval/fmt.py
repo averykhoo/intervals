@@ -10,7 +10,9 @@ grammar (v1's, made strict -- anything left over is a ValueError):
     {1, 2, 3}                   a set of points
 
 numbers are ints, floats (`2.0`, `1e-05`), fractions (`1/3`) or `inf`/`-inf` (also `∞`). an int, and
-each part of a fraction, may also be hex (`0x1f`, `-0x1f/0x3`, `1/0x10`).
+each part of a fraction, may also be hex (`0x1f`, `-0x1f/0x3`, `1/0x10`). white space may follow the
+one sign (`- 5`) and surround `/` (`1 / 3`), nowhere else inside a number: `+-5`, `1/-3`, `1_000`, `0x 1f`
+and `1e 5` are ValueErrors, and `1 2` is two numbers (to `parse_value`, a ValueError; m14b-open, 2026-10-05).
 `format` prints ints and fractions exactly and floats by `repr`, so `parse(format(x)) == x`. an int part
 python will not write in decimal (more than `sys.get_int_max_str_digits()` digits, 4300 by default:
 python's guard against slow conversions) is written in hex, which python converts in linear time and
@@ -31,14 +33,18 @@ from multiinterval.kernel import normalize
 from multiinterval.kernel import pairs
 from multiinterval.kernel import piece
 
-# a hex int is never followed by `.`: `0x1.8p1` is a hex float, which is not read (and not `0x1` then `.8`)
-_INT = r'(?:0x[0-9a-f]+(?!\.)|\d+)'
+# a hex int is never followed by `.`: `0x1.8p1` is a hex float, which is not read (and not `0x1` then `.8`).
+# its digits are possessive (`++`): with `+` the refused `0x12.5` backtracked to `0x1`, whose next character
+# is `2`, and read as `0x1` then `2.5` (m14b-open, 2026-10-05)
+_INT = r'(?:0x[0-9a-f]++(?!\.)|\d+)'
 # every white-space run is possessive (`\s*+`): what follows each one (`/`, a digit, `.`, `0x`, inf, ∞, a
 # bracket) never begins with white space, so giving spaces back can never make a match, and a run that no
 # token follows (`' ' * 30000 + 'x'`) is refused in linear time, not quadratic (m14b-open, 2026-10-04)
-_NUMBER = (r'[+-]?\s*+(?:inf(?:inity)?|∞|0x[0-9a-f]+(?!\.)(?:\s*+/\s*+' + _INT + r')?'
+_NUMBER = (r'[+-]?\s*+(?:inf(?:inity)?|∞|0x[0-9a-f]++(?!\.)(?:\s*+/\s*+' + _INT + r')?'
            r'|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*+/\s*+' + _INT + r')?)')
 _TOKEN = re.compile(fr'\s*+(?:(?P<num>{_NUMBER})|(?P<punct>[\[\](){{}},;|∪]))\s*+', flags=re.IGNORECASE)
+# `parse_value`'s whole text: one number of the grammar, white space around it
+_VALUE = re.compile(fr'\s*+{_NUMBER}\s*+', flags=re.IGNORECASE)
 _SEPARATORS = {',', ';', '|', '∪'}
 
 
@@ -92,6 +98,17 @@ def format_cuts(cuts: Cuts) -> str:
 # PARSE
 
 def parse_value(text: str) -> Value:
+    """
+    one number of the grammar (the module docstring), white space around it; anything else is a ValueError.
+    it read any text before (m14b-open, 2026-10-05): it deleted all white space and every leading sign, so
+    `'+-5'` was 5 and `'1 2'` was 12
+
+    >>> parse_value(' - 5'), parse_value('1 / 0x3')
+    (-5, Fraction(1, 3))
+    """
+    if _VALUE.fullmatch(text) is None:
+        shown = text if len(text) <= 40 else f'{text[:20]}...{text[-10:]}'
+        raise ValueError(f'cannot parse {shown!r}: not a number')
     text = ''.join(text.split())
     sign = -1 if text.startswith('-') else 1
     body = text.lstrip('+-').lower()

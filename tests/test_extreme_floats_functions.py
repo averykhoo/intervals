@@ -57,7 +57,6 @@ from multiinterval.kernel import pieces
 from multiinterval.rounding import DOWN
 from multiinterval.rounding import UP
 from tests.oracles import _exact
-from tests.oracles import sample
 from tests.test_extreme_floats import MAX
 from tests.test_extreme_floats import _float_samples
 from tests.test_extreme_floats import _value
@@ -319,15 +318,12 @@ def _operand(rng, edges, max_pieces=3):
 
 
 def _samples(cuts, rng) -> list:
-    """`_float_samples` piece by piece: on an exact piece wider than the float range (`[-Fraction(MAX),
-    Fraction(MAX)]`) its spread point overflows, and `oracles.sample`'s exact points stand in for it"""
+    """`_float_samples` piece by piece. it raised OverflowError on an exact piece wider than the float range
+    (`[-Fraction(MAX), Fraction(MAX)]`), and `oracles.sample`'s exact points stood in for it here; it samples
+    such a piece since m14b-open (2026-10-05), floats near +-MAX included"""
     out = []
     for p in pieces(cuts):
-        one = normalize([piece(p[0], p[2], p[1], p[3])])
-        try:
-            out += _float_samples(one, rng)
-        except OverflowError:
-            out += [end for end, closed in ((p[0], p[1]), (p[2], p[3])) if closed] + sample(one, 6, rng)
+        out += _float_samples(normalize([piece(p[0], p[2], p[1], p[3])]), rng)
     return out
 
 
