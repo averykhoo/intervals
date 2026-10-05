@@ -140,7 +140,9 @@ goes and never push.
 * check each example on its own: hypothesis stops at the first failing explicit example, so one red
   run says nothing about the others
 * watch for vacuous checks: a "not empty" assertion passed under sabotage when other pieces kept the
-  result non-empty (the trig D26 example); a per-piece check was needed
+  result non-empty (the trig D26 example); a per-piece check was needed. the same for an outcome with
+  several causes: an exit 1 over a table with a survivor AND an unapplied row pinned neither (T1,
+  2026-10-05); give each cause a run where it is alone
 * never stop another process by name or command line: two sessions' harnesses have shared a name. stop
   the PID you started
 
@@ -179,7 +181,7 @@ bytes. a guard plugin in every run fails it if a module came from outside the co
 
 `--name` is yours: it refuses to start while that name's PID is alive, and `stop` checks the PID's
 creation time, so a reused PID is never killed. `tests/test_sabotage_tool.py` pins the engine (toy
-repos, ~25 s); its docstring holds the engine's own sabotage table, run through the engine itself
+repos, ~45 s); its docstring holds the engine's own sabotage table, run through the engine itself
 
 ## the exhaustive harnesses (CI's `exhaustive` jobs, not the gate)
 

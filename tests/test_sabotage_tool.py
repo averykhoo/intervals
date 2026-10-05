@@ -1,13 +1,16 @@
 """
 the sabotage engine (tools/sabotage.py), on toy repos in tmp_path: a package `toypkg` whose `core.py` has
 CRLF line ends, and a toy test file. one run of a mixed table pins the verdicts (RED, GREEN, a placebo,
-NOMATCH, AMBIGUOUS with overlapping matches, a multi-line CRLF break, a collection error as ERROR) and
-the byte-exact restore; the others pin the hazards the engine exists for: a red control aborts, a hung
+NOMATCH, AMBIGUOUS with overlapping matches, a multi-line CRLF break, a collection or fixture error as
+ERROR) and the byte-exact restore. it has several reasons to exit 1, so it pins none: one-row tables
+hold each reason alone (a survivor, NOMATCH, AMBIGUOUS, a leaking break, a placebo gone red). the others
+pin the hazards the engine exists for: a red control aborts (and one that ran nothing, or whose import
+guard never reported), a hung
 child is killed with its tree and the target still restored, the copy imports itself (a broken working
 tree does not reach a HEAD snapshot; a module reached from the live repo is a LEAK), a stale `.pyc`
 cannot stand in for the broken source, a failed restore aborts, and a run is stopped only by the PID
 it recorded. every pytest child is real; the toy suite runs with plugin autoload off, so each child
-costs about a second (35 passed in 24 s, 2026-10-05)
+costs about a second (52 passed in 36.5 s, 2026-10-06)
 
 sabotaged 2026-10-05 with the engine itself (`tools/sabotage.py run <table> --worktree`, this file as the
 selection; control and closing control 35 passed): each guard broken alone, each RED, first red test shown
@@ -25,8 +28,41 @@ selection; control and closing control 35 passed): each guard broken alone, each
     S11 skip the closing control                   test_mixed_verdicts[control-closing-PASSED]
     S12 stop goes on without a pid file            test_stop_refuses_a_name_with_no_pid_file
 
-and a placebo (a comment in main()) came out GREEN. the `clear_caches` after each restore is not in the
-table: the next row's clear and the one before the closing control cover it by design
+and a placebo (a comment in main()) came out GREEN.
+
+round 2 (2026-10-05/06): the session found `elif verdict == 'GREEN' and False` (a survivor that does not
+fail the run) green against all 35 tests: the mixed table's exit 1 had other causes. every guard that
+feeds the exit code or writes a verdict was then broken alone (35 rows, S1-S13 again RED/placebo GREEN):
+
+    S14 a survivor does not fail the run          test_a_survivor_alone_exits_1
+    S15 NOMATCH does not fail the run             test_an_unapplied_row_alone_exits_1[...NOMATCH]
+    S16 AMBIGUOUS does not fail the run           test_an_unapplied_row_alone_exits_1[...AMBIGUOUS]
+    S17 LEAK does not fail the run                test_a_leaking_break_alone_exits_1
+    S18 a placebo gone red does not fail the run  test_a_placebo_that_goes_red_alone_exits_1
+    S19 the summary always exits 0                test_the_mixed_table_exits_1
+    S20 a break's leak is not a verdict           test_a_leaking_break_alone_exits_1
+    S21 errors without a failure read as RED      test_mixed_verdicts[fixture-error-ERROR]
+    S22 a control with nothing passed accepted    test_a_control_that_runs_nothing_aborts
+    S23 a control with no guard report accepted   test_a_control_without_the_guard_report_aborts
+    S24 the run's --name unchecked                test_a_bad_run_name_is_refused[../escape]
+    S25 stop's name unchecked                     test_stop_never_follows_a_name_outside_its_directory
+    S26 unknown row keys accepted                 test_a_bad_row_refuses_the_table[...unknown keys]
+    S27 a zero timeout accepted                   test_a_bad_row_refuses_the_table[...timeout]
+    S28 --worktree copies .scratch/sabotage/      test_a_worktree_copy_never_holds_the_run
+    S29 .hypothesis/ kept between runs            test_a_stale_hypothesis_database_is_cleared
+    S30 stop kills the child before the engine    test_stop_kills_the_run_by_its_pid_and_nothing_else
+
+S14-S21 and S23-S29 were green before this round's tests (no test produced their outcome alone, or
+none at all). S22 first survived the new test too: a module-level skip collects nothing, pytest exits
+5, and the rc check refused the control first; the skip is now inside the test. S25 was masked by
+stop's no-pid-file refusal. S30 is a bug the M4 row found, now fixed: stop killed the child first, the
+engine saw it die, recorded a false RED and ran on to exit 0 (5 of 5 red with the old order).
+
+masked by design, each backed by another guard; placebo rows that came out GREEN: a control's
+`not failed` and `not errors` (exit 0 implies both), its `not timeout` (a killed child exits non-zero),
+`filecmp.clear_cache` (the read_bytes compare backs it), the clear after each restore (the next clear
+backs it), the pristine-drift Abort (unreachable after a verified restore). untested: the `finally` in
+Run.pytest that kills the child when the wait itself is interrupted
 """
 import importlib.util
 import json
@@ -67,6 +103,10 @@ CORE = '\r\n'.join([
     "    return 'never called'",
     '',
     '',
+    'def setup_value():',
+    "    return 'ready'",
+    '',
+    '',
     'def hang():',
     "    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])",
     "    with open(os.environ['TOY_GRANDCHILD'], 'w') as f:",
@@ -79,6 +119,8 @@ TOY_TEST = b'''import importlib.util
 import os
 import py_compile
 import sys
+
+import pytest
 
 import toypkg.core as core
 
@@ -99,6 +141,23 @@ def test_label():
 
 def test_no_bytecode_is_written():
     assert sys.dont_write_bytecode
+
+
+@pytest.fixture
+def value():
+    return core.setup_value()
+
+
+def test_fixture(value):
+    assert value == 'ready'
+
+
+def test_no_database_from_an_earlier_run():
+    if os.environ.get('TOY_HYPOTHESIS_DB'):  # each run leaves a mark in .hypothesis/ and must not find one
+        seen = os.path.join('.hypothesis', 'seen')
+        assert not os.path.exists(seen)
+        os.makedirs('.hypothesis', exist_ok=True)
+        open(seen, 'w').close()
 '''
 
 FILES = {
@@ -227,6 +286,12 @@ id = "collection-error"
 target = "toypkg/core.py"
 old = "def double(x):"
 new = "def double(x)"
+
+[[break]]
+id = "fixture-error"
+target = "toypkg/core.py"
+old = "return 'ready'"
+new = "raise OSError"
 '''
 
 
@@ -246,16 +311,71 @@ def mixed(tmp_path_factory):
 @pytest.mark.parametrize('row, verdict', [
     ('control', 'PASSED'), ('caught', 'RED'), ('survives', 'GREEN'), ('placebo', 'GREEN'),
     ('multiline-crlf', 'RED'), ('nomatch', 'NOMATCH'), ('no-such-file', 'NOMATCH'), ('ambiguous', 'AMBIGUOUS'),
-    ('overlapping', 'AMBIGUOUS'), ('collection-error', 'ERROR'), ('control-closing', 'PASSED'),
+    ('overlapping', 'AMBIGUOUS'), ('collection-error', 'ERROR'), ('fixture-error', 'ERROR'),
+    ('control-closing', 'PASSED'),
 ])
 def test_mixed_verdicts(mixed, row, verdict):
     assert mixed[2][row][0] == verdict
 
 
-def test_a_survivor_exits_1(mixed):
-    """GREEN, NOMATCH and AMBIGUOUS each fail the run; the placebo's GREEN does not"""
+def test_the_mixed_table_exits_1(mixed):
+    """the mixed run has several reasons to exit 1, so it pins none of them: the tables below hold each
+    reason alone (the session found `elif verdict == 'GREEN' and False` green against this test alone)"""
     assert mixed[1] == 1
     assert 'placebo, as expected' in mixed[2]['placebo'][1]
+
+
+def _alone(tmp_path, capsys, row, name, **top):
+    """run a one-row table on a fresh toy repo: (exit, {row: (verdict, note)}, stdout)"""
+    repo = make_repo(tmp_path)
+    rc = sabotage.main(['--repo', str(repo), 'run', str(write_table(tmp_path, [row], **top)), '--name', name])
+    return rc, verdicts(repo, name), capsys.readouterr().out
+
+
+def test_a_survivor_alone_exits_1(tmp_path, capsys):
+    rc, got, out = _alone(tmp_path, capsys, {'id': 'survives', 'target': 'toypkg/core.py',
+                                             'old': "'never called'", 'new': "'not called!!'"}, 'green')
+    assert got['survives'][0] == 'GREEN' and got['control-closing'][0] == 'PASSED'
+    assert rc == 1 and 'survives SURVIVED' in out
+
+
+@pytest.mark.parametrize('old, verdict', [('return 3 * x', 'NOMATCH'), ('return', 'AMBIGUOUS')])
+def test_an_unapplied_row_alone_exits_1(tmp_path, capsys, old, verdict):
+    rc, got, out = _alone(tmp_path, capsys, {'id': 'row', 'target': 'toypkg/core.py', 'old': old,
+                                             'new': 'yield'}, 'unapplied')
+    assert got['row'][0] == verdict and got['control-closing'][0] == 'PASSED'
+    assert rc == 1 and f'row {verdict}' in out
+
+
+def test_a_leaking_break_alone_exits_1(tmp_path, capsys, monkeypatch):
+    """the break makes the copy's test import a module only the live checkout has (through PYTHONPATH):
+    the selection passes, and the row is LEAK, not GREEN; the controls, which import nothing live, pass"""
+    repo = make_repo(tmp_path)
+    (repo / 'toyextra.py').write_bytes(b'OK = True\n')  # untracked: not in the HEAD snapshot
+    monkeypatch.setenv('PYTHONPATH', str(repo))
+    table = write_table(tmp_path, [{'id': 'leaks', 'target': 'tests/test_toy.py', 'old': 'import toypkg.core as core\n',
+                                    'new': 'import toypkg.core as core\nimport toyextra\n'}])
+    rc = sabotage.main(['--repo', str(repo), 'run', str(table), '--name', 'leakrow'])
+    got, out = verdicts(repo, 'leakrow'), capsys.readouterr().out
+    assert got['control'][0] == 'PASSED' and got['control-closing'][0] == 'PASSED'
+    assert got['leaks'][0] == 'LEAK' and 'toyextra' in got['leaks'][1]
+    assert rc == 1 and 'leaks LEAK' in out
+
+
+def test_a_placebo_that_goes_red_alone_exits_1(tmp_path, capsys):
+    rc, got, out = _alone(tmp_path, capsys, {'id': 'placebo', 'target': 'toypkg/core.py', 'old': 'return 2 * x',
+                                             'new': 'return 2 - x', 'expect': 'green'}, 'placebo')
+    assert got['placebo'][0] == 'RED' and 'PLACEBO NOT GREEN' in got['placebo'][1]
+    assert rc == 1 and 'placebo placebo came out RED' in out
+
+
+def test_a_stale_hypothesis_database_is_cleared(tmp_path, capsys, monkeypatch):
+    """each toy run leaves a mark in .hypothesis/ and fails if it finds one: a placebo stays GREEN only
+    if the engine clears the copy's database before the break"""
+    monkeypatch.setenv('TOY_HYPOTHESIS_DB', '1')
+    rc, got, out = _alone(tmp_path, capsys, {'id': 'placebo', 'target': 'toypkg/core.py', 'old': '# a comment',
+                                             'new': '# a remark!', 'expect': 'green'}, 'hypo')
+    assert got['placebo'][0] == 'GREEN' and got['control-closing'][0] == 'PASSED' and rc == 0
 
 
 def test_the_copy_is_restored_byte_for_byte(mixed):
@@ -286,6 +406,8 @@ def test_all_caught_exits_0_and_removes_the_copy(tmp_path):
     ({'id': 'a', 'target': 'toypkg/core.py', 'old': 'x', 'new': 'y', 'expect': 'maybe'}, 'expect'),
     ({'id': 'a', 'target': 'toypkg/core.py', 'old': '', 'new': 'y'}, 'empty'),
     ({'id': 'a', 'target': 'toypkg/core.py', 'new': 'y'}, '`old`'),
+    ({'id': 'a', 'target': 'toypkg/core.py', 'old': 'x', 'new': 'y', 'selct': ['t']}, 'unknown keys'),  # a typo
+    ({'id': 'a', 'target': 'toypkg/core.py', 'old': 'x', 'new': 'y', 'timeout': 0}, 'timeout'),
 ])
 def test_a_bad_row_refuses_the_table(tmp_path, row, message):
     with pytest.raises(sabotage.TableError, match=message):
@@ -304,6 +426,28 @@ def test_occurrences_counts_overlaps():
     assert sabotage.occurrences(b'aaa', b'aa') == 2 and b'aaa'.count(b'aa') == 1
 
 
+@pytest.mark.parametrize('name', ['../escape', 'a/b', '.hidden', ''])
+def test_a_bad_run_name_is_refused(tmp_path, name):
+    """the name is a directory under .scratch/sabotage/: a run or a stop never reaches outside it"""
+    repo = make_repo(tmp_path)
+    table = write_table(tmp_path, [{'id': 'caught', 'target': 'toypkg/core.py', 'old': 'return 2 * x',
+                                    'new': 'return 2 - x'}])
+    assert sabotage.main(['--repo', str(repo), 'run', str(table), '--name', name]) == 2
+    assert sabotage.main(['--repo', str(repo), 'stop', name]) == 2
+    assert not (repo / '.scratch').exists()
+
+
+def test_a_worktree_copy_never_holds_the_run(tmp_path):
+    """with .scratch/ not ignored, --worktree must still not copy .scratch/sabotage/ into the copy"""
+    repo = make_repo(tmp_path, {'.gitignore': b''})
+    table = write_table(tmp_path, [{'id': 'caught', 'target': 'toypkg/core.py', 'old': 'return 2 * x',
+                                    'new': 'return 2 - x'}])
+    assert sabotage.main(['--repo', str(repo), 'run', str(table), '--name', 'wt', '--worktree', '--dry-run',
+                          '--keep-tree']) == 0
+    tree = repo / '.scratch/sabotage/wt/tree'
+    assert (tree / 'toypkg/core.py').is_file() and not (tree / '.scratch').exists()
+
+
 # ---- the hazards
 
 def test_a_red_control_aborts(tmp_path, capsys):
@@ -313,6 +457,27 @@ def test_a_red_control_aborts(tmp_path, capsys):
     assert sabotage.main(['--repo', str(repo), 'run', str(table), '--name', 'red']) == 2
     assert verdicts(repo, 'red') == {'control': ('FAILED', '')}  # no break ran
     assert 'ABORTED' in capsys.readouterr().err
+
+
+def test_a_control_that_runs_nothing_aborts(tmp_path):
+    """exit 0 with every test skipped is not a control: every break would come out GREEN for nothing. the
+    skip is at run time: a module-level skip collects nothing, pytest exits 5, and the rc check alone
+    refuses it, which masked the `passed > 0` check (S22, 2026-10-05)"""
+    repo = make_repo(tmp_path, {'tests/test_skip.py': b"import pytest\n\n\ndef test_skipped():\n    pytest.skip('all')\n"})
+    table = write_table(tmp_path, [{'id': 'caught', 'target': 'toypkg/core.py', 'old': 'return 2 * x',
+                                    'new': 'return 2 - x'}], select=['tests/test_skip.py'])
+    assert sabotage.main(['--repo', str(repo), 'run', str(table), '--name', 'skipped']) == 2
+    assert verdicts(repo, 'skipped') == {'control': ('FAILED', '')}
+
+
+def test_a_control_without_the_guard_report_aborts(tmp_path, monkeypatch):
+    """a guard that loads but never reports must not read as 'no leak'"""
+    repo = make_repo(tmp_path)
+    monkeypatch.setattr(sabotage, 'GUARD_SOURCE', 'def pytest_sessionfinish(session, exitstatus):\n    pass\n')
+    table = write_table(tmp_path, [{'id': 'caught', 'target': 'toypkg/core.py', 'old': 'return 2 * x',
+                                    'new': 'return 2 - x'}])
+    assert sabotage.main(['--repo', str(repo), 'run', str(table), '--name', 'noguard']) == 2
+    assert verdicts(repo, 'noguard') == {'control': ('FAILED', 'the import guard did not report')}
 
 
 def test_a_timeout_kills_the_tree_and_restores(tmp_path, monkeypatch):
@@ -409,6 +574,23 @@ def test_stop_refuses_a_reused_pid(tmp_path):
         other.wait()
 
 
+def test_stop_never_follows_a_name_outside_its_directory(tmp_path):
+    """a live pid file at .scratch/escape/pid (as `../escape` would reach) is not a run of ours: left alive.
+    the no-pid-file refusal alone would not show this (it masked the name check)"""
+    other = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+    try:
+        outside = tmp_path / '.scratch/escape'
+        outside.mkdir(parents=True)
+        sabotage.write_pid(outside / 'pid', other.pid)
+        (tmp_path / '.scratch/sabotage').mkdir()
+        assert sabotage.main(['--repo', str(tmp_path), 'stop', '../escape']) == 2
+        time.sleep(0.5)
+        assert other.poll() is None and (outside / 'pid').exists()
+    finally:
+        other.kill()
+        other.wait()
+
+
 def test_stop_clears_a_dead_runs_pid_file(tmp_path):
     gone = subprocess.Popen([sys.executable, '-c', 'pass'])
     token = sabotage.process_token(gone.pid)
@@ -457,6 +639,9 @@ def test_stop_kills_the_run_by_its_pid_and_nothing_else(tmp_path):
         child = sabotage.read_pid(run / 'child')[0]
         assert sabotage.main(['--repo', str(repo), 'stop', 'victim']) == 0
         assert engine.wait(timeout=15) != 0
+        # the row got no verdict: an engine outliving its child would record the stop as a RED (it did,
+        # when stop killed the child first: the M4 row, 2026-10-05)
+        assert 'hangs' not in verdicts(repo, 'victim')
         assert wait_gone(child) and wait_gone(grandchild)
         assert not (run / 'tree').exists() and not (run / 'pid').exists()
         assert decoy.poll() is None

@@ -656,13 +656,16 @@ def stop(name, repo=REPO):
         return 2
     applied = (run.dir / 'applied').read_text(encoding='utf-8').strip() if (run.dir / 'applied').exists() else ''
     child = read_pid(run.dir / 'child')
-    if child and process_token(child[0]) == child[1]:
-        kill_tree(child[0])
-        _wait_gone(*child)
+    # the engine first: killed second, it saw its child die, recorded a false RED, restored and ran on
+    # (found 2026-10-05, the M4 row of the engine's own sabotage run). then the child's tree, which on
+    # posix is its own session and outlives the engine
     kill_tree(pid)
     if not _wait_gone(pid, token):
         print(f'sabotage: pid {pid} survived the kill', file=sys.stderr)
         return 2
+    if child and process_token(child[0]) == child[1]:
+        kill_tree(child[0])
+        _wait_gone(*child)
     _rmtree(run.tree)
     pidfile.unlink(missing_ok=True)
     (run.dir / 'child').unlink(missing_ok=True)
