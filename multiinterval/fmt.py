@@ -12,6 +12,10 @@ grammar (v1's, made strict -- anything left over is a ValueError):
 two items need a separator between them, and the two numbers of a piece a `,` or `;`. white space only pads
 (around a separator, a bracket, a brace or `/`) and separates nothing, since it may sit inside a fraction
 (`1 / 3`): `[1 2]`, `{1 2}`, `1 2`, `{[1, 2] [3]}` and `[1, 2)[3, 4)` are ValueErrors (owner, Q23, 2026-10-06).
+a separator stands between two items, or two numbers, and nowhere else: a leading, trailing or doubled one is a
+ValueError, padded or not and in any mix (`{,1}`, `{1,}`, `[1, 2],`, `[1,]`, `(1,)`, `{1,,2}`, `{1 | , 2}`,
+`[1,;2]`, `{[], }`; owner, Q24, 2026-10-06). the empty forms stay: the empty text, `{}`, `[]`, `()`, and empty
+pieces among a set's items (`{[], [1]}`).
 
 a number is what python reads (owner, Q23, 2026-10-06): an int as `int` reads it (`5`, `-5`, `007`, `1_000`), a
 float as `float` does (`2.0`, `1.`, `.5`, `1e-05`, `1_0.5e1_0`, `inf` and `infinity` in any case, but not nan),
@@ -66,6 +70,7 @@ _UNENDED = re.compile(fr'\s*+{_BODY}')
 # `parse_value`'s whole text: one number of the grammar, white space around it
 _VALUE = re.compile(fr'\s*+(?P<number>{_NUMBER})\s*+')
 _SEPARATORS = {',', ';', '|', '∪'}
+_PIECE_SEPARATORS = (('punct', ','), ('punct', ';'))
 
 
 # FORMAT
@@ -203,30 +208,33 @@ class _Parser:
         if braced:
             self.take()
         found, items = [], 0  # an empty piece is an item that adds nothing to found
-        separated = True  # a separator since the last item (Q23: white space alone is none)
+        separator = None  # the separator read since the last item (Q23: white space alone is none)
         while True:
             kind, value = self.peek()
             if kind is None:
                 if braced:
                     raise self.error('missing "}"')
-                break
-            if braced and value == '}':
+            elif braced and value == '}':
                 self.take()
                 if self.pos != len(self.tokens):
                     raise self.error('text after "}"')
-                break
-            if kind == 'punct' and value in _SEPARATORS:
+            elif kind == 'punct' and value in _SEPARATORS:  # one between two items, nowhere else (Q24)
                 if not items:
                     raise self.error(f'{value!r} before the first item')
-                self.take()
-                separated = True
+                if separator is not None:
+                    raise self.error(f'two separators in a row, {separator!r} then {value!r}')
+                separator = self.take()[1]
                 continue
-            if not separated:
-                raise self.error(f'two items need ",", ";", "|" or "∪" between them, before {value!r}')
-            found.extend(self.item())
-            items += 1
-            separated = False
-        return normalize(found)
+            else:
+                if items and separator is None:
+                    raise self.error(f'two items need ",", ";", "|" or "∪" between them, before {value!r}')
+                found.extend(self.item())
+                items += 1
+                separator = None
+                continue
+            if separator is not None:  # the end: `{1,}` and `[1],` (Q24)
+                raise self.error(f'{separator!r} after the last item')
+            return normalize(found)
 
     def item(self):
         kind, value = self.take()
@@ -237,10 +245,16 @@ class _Parser:
             raise self.error(f'unexpected {value!r}')
         lo_closed = value == '['
         numbers = []
+        if self.peek() in _PIECE_SEPARATORS:  # `[,1]`
+            raise self.error(f'{self.peek()[1]!r} before the first number')
         while self.peek()[0] == 'num':
             numbers.append(parse_value(self.take()[1]))
-            if self.peek() in (('punct', ','), ('punct', ';')):
-                self.take()
+            if self.peek() in _PIECE_SEPARATORS:  # one between two numbers, nowhere else (Q24)
+                separator = self.take()[1]
+                if self.peek() in _PIECE_SEPARATORS:  # `[1,,2]`
+                    raise self.error(f'two separators in a row, {separator!r} then {self.peek()[1]!r}')
+                if self.peek()[0] != 'num':  # `[1,]`
+                    raise self.error(f'{separator!r} after the last number')
             elif self.peek()[0] == 'num':  # Q23: white space alone is no separator
                 raise self.error(f'two numbers need "," or ";" between them, before {self.peek()[1]!r}')
         kind, close = self.take()

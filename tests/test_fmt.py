@@ -434,9 +434,14 @@ _LONG = 100_000
     ('[1' + ' ' * _LONG + '2]', ValueError),  # white space alone between two numbers
     ('[1]' + ' ' * _LONG + '[2]', ValueError),  # and between two items
     ('[' + '1' * _LONG + ' ' * _LONG + '/x]', ValueError),  # a numerator, white space, `/`, then no denominator
+    # Q24 (2026-10-06): many separators, each between two items; then one after the last, or two in a row at the end
+    ('{' + '[1, 2) , ' * _LONG + '[3]}', mi((1, 2, True, False), 3)),
+    ('{' + '1 | ' * _LONG + '}', ValueError),
+    ('{' + '1 ; ' * _LONG + ', 2}', ValueError),
 ], ids=['then-junk', 'then-sign-junk', 'in-piece-then-junk', 'trailing', 'leading', 'between', 'after-sign', 'around-slash',
         'underscores', 'underscores-doubled', 'digits-then-number', 'digits-then-dot', 'hex-underscores', 'space-in-piece',
-        'space-between-items', 'digits-slash-nothing'])
+        'space-between-items', 'digits-slash-nothing', 'many-separators', 'many-separators-trailing',
+        'many-separators-doubled'])
 def test_white_space_runs_parse_in_linear_time(text, outcome):
     started = time.perf_counter()
     if isinstance(outcome, type):
@@ -657,6 +662,86 @@ def test_white_space_alone_separates_nothing(text):
 ])
 def test_explicit_separators_stay(text, cuts):
     """what stays (green before Q23 too): the explicit separators, and white space as padding around them"""
+    assert parse(text) == cuts
+
+
+# Q24 (owner, 2026-10-06): a separator stands between two items, or two numbers of a piece, and nowhere else. a
+# trailing one (`[1,]` and `{1,}` were `[1]`) and a doubled one (`{1,,2}` was `{ [1] , [2] }`) are refused, as a
+# leading one was. every separator, in a piece (`,` `;`) and between items (`,` `;` `|` `∪`), padded and not
+_ITEM_SEPARATORS = [',', ';', '|', '∪']
+_NUMBER_SEPARATORS = [',', ';']
+_PAD = ['', ' ', ' \t\n ']
+
+
+def _trailing():
+    rows = []
+    for pad in _PAD:
+        for s in _ITEM_SEPARATORS:
+            rows += [f'1{pad}{s}{pad}', f'[1, 2]{pad}{s}', f'{{1{pad}{s}{pad}}}', f'{{{pad}[1, 2){pad}{s}{pad}}}',
+                     f'{{[]{pad}{s}{pad}}}', f'[]{pad}{s}', f'{{1, 2{pad}{s}{pad}}}', f'{{(){pad}{s}}}']
+        for s in _NUMBER_SEPARATORS:
+            rows += [f'[1{pad}{s}{pad}]', f'(1{pad}{s}{pad})', f'[1, 2{pad}{s}{pad}]', f'{{[1{pad}{s}{pad}], 2}}',
+                     f'[1{pad}{s}{pad}] | [3]']
+    return rows
+
+
+def _doubled():
+    rows = []
+    for pad in _PAD:
+        for a in _ITEM_SEPARATORS:
+            for b in _ITEM_SEPARATORS:
+                rows += [f'1{pad}{a}{pad}{b}{pad}2', f'{{1{pad}{a}{pad}{b}{pad}2}}', f'{{[]{pad}{a}{b}{pad}[]}}',
+                         f'[1, 2){pad}{a}{pad}{b}{pad}[3]']
+        for a in _NUMBER_SEPARATORS:
+            for b in _NUMBER_SEPARATORS:
+                rows += [f'[1{pad}{a}{pad}{b}{pad}2]', f'{{(1{a}{pad}{b}2), 3}}']
+    return rows
+
+
+@pytest.mark.parametrize('text', _trailing())
+def test_a_trailing_separator_is_refused(text):
+    """red before Q24 on every row: each was read as if the separator were not there"""
+    with pytest.raises(ValueError, match='after the last (item|number)'):
+        parse(text)
+
+
+@pytest.mark.parametrize('text', _doubled())
+def test_a_doubled_separator_is_refused(text):
+    """red before Q24 on every row: between items each was read as one separator; in a piece (`[1,,2]`) it was
+    refused before too, as a missing `]`, and the message is matched"""
+    with pytest.raises(ValueError, match='two separators in a row'):
+        parse(text)
+
+
+@pytest.mark.parametrize('text', [
+    f'{s}1' for s in _ITEM_SEPARATORS] + [f'{{ {s} 1}}' for s in _ITEM_SEPARATORS] + [f'{{{s}}}' for s in _ITEM_SEPARATORS] + [
+    '{ , }', '{,}', ',', ', ,', '{, [1]}', '| [1, 2]',
+])
+def test_a_leading_separator_stays_refused(text):
+    """green before Q24 too: a leading separator between items was refused already"""
+    with pytest.raises(ValueError, match='before the first item'):
+        parse(text)
+
+
+@pytest.mark.parametrize('text', [f'[{s}1]' for s in _NUMBER_SEPARATORS] + [
+    '[,]', '[;]', '(,)', '( , 2)', '[ ; 1, 2]', '{[,1]}', '{1, (;2)}',
+])
+def test_a_leading_separator_in_a_piece_is_refused(text):
+    """refused before Q24 too, as a missing `]`; the message is new"""
+    with pytest.raises(ValueError, match='before the first number'):
+        parse(text)
+
+
+@pytest.mark.parametrize('text, cuts', [
+    ('', EMPTY), ('{}', EMPTY), ('{ }', EMPTY), ('[]', EMPTY), ('[ ]', EMPTY), ('()', EMPTY), ('( )', EMPTY),
+    ('(1)', EMPTY), ('(1, 1)', EMPTY), ('[1, 1)', EMPTY), ('{[],[]}', EMPTY), ('{ [] , () }', EMPTY),
+    ('{[], [1]}', mi(1)), ('[] , [1]', mi(1)), ('{() ∪ (), [2]}', mi(2)), ('{(1), [2]}', mi(2)), ('{[1, 1), 2}', mi(2)),
+    ('5', mi(5)), ('[1]', mi(1)), ('{1}', mi(1)), ('{ [1] }', mi(1)), ('[1, 2)', mi((1, 2, True, False))),
+    ('{ (1; 2] }', mi((1, 2, False, True))), (' -inf ', mi(-inf)), ('{1 / 3}', mi(Fraction(1, 3))),
+])
+def test_empty_forms_and_one_item_still_read(text, cuts):
+    """what stays (green before Q24 too): the empty forms, empty pieces among a set's items, and a single item. items
+    with nothing between them stay refused: test_white_space_alone_separates_nothing (`[1,2)[3,4)`, `5[1, 2]`)"""
     assert parse(text) == cuts
 
 

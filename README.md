@@ -308,7 +308,9 @@ Interval(float('-inf'), float('inf'))
   on a decimal literal. a number in that text is one python's `int`, `float` or `Fraction` reads, in
   ASCII digits (`-5`, `1_000`, `.5`, `1e-05`, `1 / 3`, `inf`; also `∞` and hex), and two items need
   `,` `;` `|` or `∪` between them: white space only pads, so `[1 2]`, `- 5` and `[0.1.2]` are
-  `ValueError`s (`multiinterval.fmt` has the grammar)
+  `ValueError`s. a separator stands only between two items or two numbers, so a trailing or
+  doubled one is a `ValueError` too (`[1,]`, `{1,}`, `{1,,2}`), while `{}` and `[]` are the empty
+  set (`multiinterval.fmt` has the grammar)
 * **1788's signals** (M13g): `UndefinedOperation` raises `UndefinedOperationError`, a `ValueError`,
   so a 1788 constructor or `DecoratedInterval` given invalid input stops, as `MI(2, 1)` does; hence
   there is no NaI. `PossiblyUndefinedOperation` would be `PossiblyUndefinedOperationWarning`, an
