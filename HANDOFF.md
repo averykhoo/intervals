@@ -11,6 +11,13 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## banner (2026-10-06)
 
+* **everything pushed, CI and fuzz green (2026-10-06)**: `origin/master` at `1330182` (`48631f5..1330182`: the rename,
+  vectors-ext (a), m14b-open's parse items, T1, Q23, Q24; the owner's go). prepush green: x10 27798 in 65 s + 7143 in
+  7430 s (under load), `gate:gmpy2` 34941 in 2106 s. CI run 37415051391 green (the gate 34941 passed, 288 s on python
+  3.13; all jobs) and fuzz run 37415051379 green (`34941 passed in 2783.50s`, x10); checked by the session on GitHub.
+  the "not pushed" in the bullets below is history. next: parallel fuzz (a research agent's report pending in
+  `.scratch/fuzz-speed/`)
+
 * **three open items done (2026-10-05/06), on `master`, not pushed**: vectors-ext (a) (`a3db14c`, the 40 quoted-string
   vectors run as upstream), m14b-open's `parse_value` and `_float_samples` (`281922b`; it also found `[0x12.5]` read as
   `[1, 2.5]`, now refused; its two leftovers were Q23, answered and built 2026-10-06 at `8edc643`: a number is what
