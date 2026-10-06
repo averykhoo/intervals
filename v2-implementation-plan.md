@@ -4632,7 +4632,7 @@ rounding" after D26; a randomized local run drew `pow_rev1([-2.86e-115, 0.0], (-
 in 6559 s; the prepush refused the push) found four more, each fixed and pinned red-on-old:
 
 * **library**: a point whose two cuts differ in type (`[1.0, 1]`, a float and an int end) formatted as `[1.0]`,
-  so `repr` lost a type and the round trip failed (`parse('[0E0-0]')`; an outward `(2.0, 2)` through `repr`).
+  so `repr` lost a type and the round trip failed (`parse('[0E0-0]')`, a ValueError since Q23, 2026-10-06; an outward `(2.0, 2)` through `repr`).
   `fmt.format_piece` writes such a point with both numbers. pins: `@example`s of
   `tests/test_fmt.py::test_any_text_parses_or_raises_value_error` and
   `tests/test_outward.py::test_pickle_copy_and_repr_round_trip`
@@ -4698,6 +4698,22 @@ helper line red (8, 6, 1 of 9; the oracle 2). the three number-type quirks of HA
 at `c6a4cca`, unchanged. two questions left for the owner (HANDOFF Q23): numbers side by side with no space
 (`[0.1.2]` is `[0.1, 0.2]`, `[-2-1]` is `[-2, -1]`, `{1-2}` is `{-2, 1}`); non-ASCII digits (python's `\d`, `int`
 and `float` take them: `[١٢]` is `[12]`)
+
+**Q23 built (2026-10-06, `8edc643`)**: the owner's answer (`v2-plan.md` decision log "a number is what python
+reads"). an opus agent in a worktree; the session re-probed old against new and broke the end-of-number lookahead
+itself (red). `fmt.py` rebuilt from ASCII pieces (`_DIGITS`, `_HEX`, `_INT`, `_FLOAT`, `_INFINITY`, `_BODY`), every
+repetition possessive, no `re.IGNORECASE` or `\d` (under IGNORECASE `ı` and `İ` matched `i`); `_NUMBER` must be
+followed by white space, punctuation or the end. now refused: `[0.1.2]`, `[-2-1]`, `{1-2}`, `[1+2]`, `[0E0-0]`,
+`[1inf]`, `[-0x1e-5]`, `[١٢]`, `[１]`, `- 5`, `- inf`, `[1 2]`, `{1 2}`, `1 2`, `{[1, 2] [3, 4]}`, and items with
+nothing between them (`[1,2)[3,4)`, v1's form: the agent's choice, consistent with white space being padding only);
+now read: `1_000`, `1_0.5`, `1e1_0`, `1_000/3`, `0x1_f`, `0x_1f` (decimals as `int(s)`, so `007` stays; hex as
+`int(s, 0)`); kept: `1 / 3`, `,` `;` inside a piece, `,` `;` `|` `∪` between items, `∞`. the type comes from the
+shape (`1.5` a float, not `Fraction('1.5')`); a zero denominator stays ValueError; the 4300-digit limit counts
+digits, not `_`; white space is python's `\s`, so `\xa0` pads. evidence: on the old `fmt.py` 100 of the new and
+flipped tests red; 0 disagreements with python's readers in 400k decimal and 156k hex random texts; linear (0.021 s
+at 200k characters); `tools/sabotage.py` on the branch: 12 breaks red, the placebo green. every string literal of
+the tree (4239 the old parser read) checked: nothing outside `tests/test_fmt.py` relied on the old separation.
+left (HANDOFF Q24): a trailing or doubled separator is still read (`[1,]` is `[1]`, `{1,,2}` is `{1, 2}`)
 
 ### fuzz-steps-isotone: outward isotonicity across number types (done 2026-10-03)
 

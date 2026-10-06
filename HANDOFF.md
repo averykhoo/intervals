@@ -13,7 +13,8 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 * **three open items done (2026-10-05/06), on `master`, not pushed**: vectors-ext (a) (`a3db14c`, the 40 quoted-string
   vectors run as upstream), m14b-open's `parse_value` and `_float_samples` (`281922b`; it also found `[0x12.5]` read as
-  `[1, 2.5]`, now refused; two leftovers are Q23), and T1, the sabotage engine `tools/sabotage.py` (`076ad32`,
+  `[1, 2.5]`, now refused; its two leftovers were Q23, answered and built 2026-10-06 at `8edc643`: a number is what
+  python reads, ASCII digits, an attached sign, `_` read, explicit separators; Q24 is what that left), and T1, the sabotage engine `tools/sabotage.py` (`076ad32`,
   `bf1ec7c`). records in plan §2 (M13a, "M14-breadth", T1). the push needs the x10 prepush and `gate:gmpy2`
 * **renamed `multiinterval` (2026-10-05, `c6a4cca`), not pushed**: `intervals` is another project's on PyPI; the package
   directory, every import and `pip install` name is now `multiinterval`, the backend's variable `MULTIINTERVAL_BACKEND`
@@ -137,9 +138,12 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## open questions for the owner
 
-none open. Q23 was answered 2026-10-06 (a number is what python reads, split from the next by a separator, ASCII
-digits; `v2-plan.md` decision log "a number is what python reads"); its build is in the worktree
-`../intervals-q23` (branch `q23`), not merged yet.
+* **Q24 (2026-10-06, left by Q23's build; behaviour unchanged until answered)**: a trailing or doubled separator
+  is still read: `[1,]` is `[1]`, `{1,}` is `[1]`, `{1,,2}` is `{ [1] , [2] }`. refuse both (recommended: the same
+  strictness as Q23, nothing the library writes uses either), or keep? also: items with nothing between them
+  (`[1,2)[3,4)`, v1's form) are now refused, the build's reading of "white space alone separates nothing"; keep that?
+
+Q23 was answered 2026-10-06 and built (`8edc643`; `v2-plan.md` decision log "a number is what python reads").
 
 Q21 was answered 2026-10-05 (the session's recommendations accepted, all as built; `v2-plan.md` decision log, "M8's choices confirmed"). Q22 was answered 2026-10-04 (`v2-plan.md` decision log, "strict flags; v1 deleted"). Q9-Q20 and the owner's-call rows were answered 2026-10-03 (the owner accepted every
 recommendation of `references/owner-questions-2026-10-03/`; `v2-plan.md` "2026-10-03 revision: owner
@@ -198,6 +202,14 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
 
 
 ## session log (newest first)
+
+* **2026-10-06** Q23 (the owner: refuse numbers with no separator and non-ASCII digits, "each number should be
+  something python can parse, split by a character that's not a valid part of the number"; hex only if needed, it
+  is, D28; then, asked: refuse `- 5`, keep `1 / 3`, accept `_` as python does, keep `∞`; then "should we require
+  commas or semicolons as separators": yes). recorded in `v2-plan.md`'s decision log (`f49bafd`); an opus agent
+  built it in `../intervals-q23` (plan §2 "M14-breadth", "Q23 built"); the session re-probed old against new and
+  re-sabotaged; fast-forwarded to `8edc643`, worktree and branch removed. gate 27798 + 6746 (2026-10-06; a first gate:rest died at 71% with no row). new Q24. Still owed: the push (x10
+  prepush and `gate:gmpy2`; the owner's go)
 
 * **2026-10-05/06** open items by subagents (the owner: "do some of the open tasks, but get subagents to do them").
   first the rename: the previous context's gate run went MOVED (README edited mid-run), re-run green (27795 + 6509)
