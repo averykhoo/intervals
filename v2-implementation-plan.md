@@ -4715,6 +4715,19 @@ at 200k characters); `tools/sabotage.py` on the branch: 12 breaks red, the place
 the tree (4239 the old parser read) checked: nothing outside `tests/test_fmt.py` relied on the old separation.
 left (HANDOFF Q24): a trailing or doubled separator is still read (`[1,]` is `[1]`, `{1,,2}` is `{1, 2}`)
 
+**Q24 built (2026-10-06, `086b3a6`)**: the owner's answer (`v2-plan.md` decision log "separators exactly between
+items"). an opus agent in a worktree; the session re-probed and broke the trailing-item check itself (97 red).
+`fmt.py::_Parser.parse` keeps the separator read since the last item: a second is `two separators in a row`, one
+left at `}` or the end is `',' after the last item`; `_Parser.item` the same inside a piece (`_PIECE_SEPARATORS`).
+now refused: `[1,]`, `[1,2,]`, `(1,)` (was the empty `(1)`), `{1,}`, `1,`, `{[], }`, `{1,,2}`, `{1 | , 2}`,
+`[1] ∪ ∪ [2]`; clearer messages for the already refused `[,1]`, `[1,,2]`. kept: `{}`, `[]`, `()`, `{[], [1]}`, a
+leading separator refused. pins: `tests/test_fmt.py::test_a_trailing_separator_is_refused` (126 rows),
+`::test_a_doubled_separator_is_refused` (216), `::test_a_leading_separator_stays_refused`,
+`::test_a_leading_separator_in_a_piece_is_refused`, `::test_empty_forms_and_one_item_still_read`; on the old `fmt.py`
+every trailing and doubled row red (353 of 397; the rest pin what stayed); linear at 100k separators (0.6-1.1 s).
+`tools/sabotage.py`: 6 breaks red, the placebo green. every string literal of the tree: 1 of 946 the old parser read
+changed, `'[-1,]'` in `tests/test_literals.py`, a 1788 literal `fmt.parse` never sees
+
 ### fuzz-steps-isotone: outward isotonicity across number types (done 2026-10-03)
 
 **found** by a local x50 fuzz run (2026-10-03, replayed by the session): `tests/test_steps.py::test_isotone[round]`

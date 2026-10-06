@@ -14,7 +14,8 @@ session log below; nothing is listed as open and done at once), and list anythin
 * **three open items done (2026-10-05/06), on `master`, not pushed**: vectors-ext (a) (`a3db14c`, the 40 quoted-string
   vectors run as upstream), m14b-open's `parse_value` and `_float_samples` (`281922b`; it also found `[0x12.5]` read as
   `[1, 2.5]`, now refused; its two leftovers were Q23, answered and built 2026-10-06 at `8edc643`: a number is what
-  python reads, ASCII digits, an attached sign, `_` read, explicit separators; Q24 is what that left), and T1, the sabotage engine `tools/sabotage.py` (`076ad32`,
+  python reads, ASCII digits, an attached sign, `_` read, explicit separators; then Q24 at `086b3a6`: no trailing or
+  doubled separator), and T1, the sabotage engine `tools/sabotage.py` (`076ad32`,
   `bf1ec7c`). records in plan §2 (M13a, "M14-breadth", T1). the push needs the x10 prepush and `gate:gmpy2`
 * **renamed `multiinterval` (2026-10-05, `c6a4cca`), not pushed**: `intervals` is another project's on PyPI; the package
   directory, every import and `pip install` name is now `multiinterval`, the backend's variable `MULTIINTERVAL_BACKEND`
@@ -139,8 +140,7 @@ session log below; nothing is listed as open and done at once), and list anythin
 ## open questions for the owner
 
 none open. Q24 was answered 2026-10-06 (trailing and doubled separators refused; juxtaposed items stay refused;
-`v2-plan.md` decision log "separators exactly between items"); its build is in `../intervals-q24` (branch `q24`),
-not merged yet. Q23 was answered 2026-10-06 and built (`8edc643`; `v2-plan.md` decision log "a number is what python reads").
+`v2-plan.md` decision log "separators exactly between items") and built (`086b3a6`). Q23 was answered 2026-10-06 and built (`8edc643`; `v2-plan.md` decision log "a number is what python reads").
 
 Q21 was answered 2026-10-05 (the session's recommendations accepted, all as built; `v2-plan.md` decision log, "M8's choices confirmed"). Q22 was answered 2026-10-04 (`v2-plan.md` decision log, "strict flags; v1 deleted"). Q9-Q20 and the owner's-call rows were answered 2026-10-03 (the owner accepted every
 recommendation of `references/owner-questions-2026-10-03/`; `v2-plan.md` "2026-10-03 revision: owner
@@ -199,6 +199,12 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
 
 
 ## session log (newest first)
+
+* **2026-10-06** Q24 (the owner: refuse trailing and doubled separators, "okay yes refuse both"; asked whether to
+  drop the refusal of juxtaposed items, took the session's recommendation to keep it). recorded (`8c92770`); an opus
+  agent built it in `../intervals-q24` (plan §2 "Q24 built"); the session re-probed and re-sabotaged;
+  fast-forwarded to `086b3a6`, worktree and branch removed. gate 27798 + 7143 (2026-10-06). Still owed: the push (x10 prepush and
+  `gate:gmpy2`; the owner's go)
 
 * **2026-10-06** Q23 (the owner: refuse numbers with no separator and non-ASCII digits, "each number should be
   something python can parse, split by a character that's not a valid part of the number"; hex only if needed, it
