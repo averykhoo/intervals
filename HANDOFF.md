@@ -138,12 +138,9 @@ session log below; nothing is listed as open and done at once), and list anythin
 
 ## open questions for the owner
 
-* **Q24 (2026-10-06, left by Q23's build; behaviour unchanged until answered)**: a trailing or doubled separator
-  is still read: `[1,]` is `[1]`, `{1,}` is `[1]`, `{1,,2}` is `{ [1] , [2] }`. refuse both (recommended: the same
-  strictness as Q23, nothing the library writes uses either), or keep? also: items with nothing between them
-  (`[1,2)[3,4)`, v1's form) are now refused, the build's reading of "white space alone separates nothing"; keep that?
-
-Q23 was answered 2026-10-06 and built (`8edc643`; `v2-plan.md` decision log "a number is what python reads").
+none open. Q24 was answered 2026-10-06 (trailing and doubled separators refused; juxtaposed items stay refused;
+`v2-plan.md` decision log "separators exactly between items"); its build is in `../intervals-q24` (branch `q24`),
+not merged yet. Q23 was answered 2026-10-06 and built (`8edc643`; `v2-plan.md` decision log "a number is what python reads").
 
 Q21 was answered 2026-10-05 (the session's recommendations accepted, all as built; `v2-plan.md` decision log, "M8's choices confirmed"). Q22 was answered 2026-10-04 (`v2-plan.md` decision log, "strict flags; v1 deleted"). Q9-Q20 and the owner's-call rows were answered 2026-10-03 (the owner accepted every
 recommendation of `references/owner-questions-2026-10-03/`; `v2-plan.md` "2026-10-03 revision: owner

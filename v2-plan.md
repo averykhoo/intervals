@@ -1589,6 +1589,16 @@ imports only point downward. the distribution and the import package are both `m
 
 ## decision log
 
+### 2026-10-06 revision: separators exactly between items (Q24)
+
+the owner, 2026-10-06, answering Q24: a trailing or a doubled separator is refused ("okay yes refuse both"):
+`[1,]`, `{1,}`, `{1,,2}` were read as if it were not there; a leading one was already refused. and items with
+nothing between them (`[1,2)[3,4)`, v1's form, refused by Q23's build) stay refused, on the session's
+recommendation: brackets cannot be part of a number, so the form is unambiguous, but allowing it makes a second
+rule ("a separator between numbers, but brackets may touch") and lets white space alone part two pieces again
+(`[1,2) [3,4)`), while nothing writes it and v1 is deleted. the rule is one sentence: two items always have
+exactly one of `,` `;` `|` `∪` between them (`,` or `;` between a piece's two numbers)
+
 ### 2026-10-06 revision: a number is what python reads (Q23)
 
 the owner, 2026-10-06, answering Q23: "each number should be something python can parse, split by a character
