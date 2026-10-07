@@ -109,6 +109,7 @@ Repo https://gitlab.inria.fr/mpfi/mpfi (GitLab 28417), active: "Version 1.5.5" c
 - Effort: small parser (hex-float/decimal -> Fraction, filter prec==53, drop NaN rows), plus op mapping. Value: modest - mostly exp10, hypot, mixed-scalar ops.
 
 ## 2f. Others checked 2026-09-29
+- python libraries on pypi (pyintval, decoint, and the rest): `python-1788-libraries-2026-10-07.md`.
 - JInterval (https://github.com/jinterval/jinterval, BSD-2-Clause, last push 2018-08-10): 887-entry tree, 15 Java test files, no data/vector files (.itl/.dat/.txt other than surefire reports). Cited with ITF1788 in Revol/Benet/Ferranti/Zhilin, arXiv 2205.11837 (2022), which links no new vector set on its abstract page. SKIP.
 - kv (C++, Kashiwagi; http://verifiedby.me/kv/index-e.html): kv-0.4.62 (2026-08-01), MIT. Only test programs (e.g. test/test-rounding.cc); no 1788 vector data mentioned. SKIP.
 - C-XSC: latest 2.5.4 (2014-02-28), LGPL; c-xsc.itl was converted from 2.5.4 (Octave itl.mat.license says so) -> nothing newer. SKIP.
