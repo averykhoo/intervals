@@ -156,6 +156,17 @@ answers"; D27-D29) and built 2026-10-04 (plan §2 "owner-answers"). Q1-Q8 answer
 
 ## still owed
 
+* doc-framework fixes owed (cross-repo context-framework audit, 2026-10-07; recorded from
+  outside this repo, not a session here; owner's instruction: deal with these):
+  * the banner (`## banner (2026-10-06)`, ~124 lines) has become a second session log. cut
+    it to the current state; history already lives in the session log
+  * this file is ~62 KB, with 38 session-log entries and no rule for moving them out. move
+    older entries to `docs/session-log.md`, and write the rotation rule into the preamble
+  * **owner question:** decisions live in three places: `v2-plan.md::decision log`,
+    `v2-implementation-plan.md::0. decisions` (D1-D30) and answers recorded here. pick one
+    home (e.g. `docs/decisions.md` continuing the D-ids, or plan §0) and make the others
+    point to it. ask, don't choose
+
 * fuzz gaps a census left (2026-10-03; the rest of its shortlist is built): no @given test for `DecoratedInterval.log(base)` (random base), the decorated reflected ops and divmod (examples only), the slow decorated functions (pow, hypot, trig) on float operands, exact-operand equality of the outward and nearest classes for about 25 more functions, `Builder` (low value)
 * the run ledger (2026-10-01) knows local runs only: a push whose src is unchanged since `origin/master`
   trusts that master's fuzz run was green on CI (every push is watched to the end), it does not check.
