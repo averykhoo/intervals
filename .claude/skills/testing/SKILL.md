@@ -209,6 +209,19 @@ or prepush: at the end of a session that changed the scalar evaluator, ask the o
 it (`CLAUDE.md`; 2547 s at 4 jobs, 2026-10-02). it appends its verdict to `references/coremath-runs.tsv`;
 commit that row. the files live in `.scratch/coremath-cache/` (kept; `fetch` restores it).
 
+## pyintval cross-check: tools/pyintval_check.py (manual, local only)
+
+    $PY -m pip install pyintval==0.3.0       # once; not in any extra (owner, 2026-10-07: local only)
+    $PY tools/pyintval_check.py [--n 2000] [--seed S] [--only sin,pow] [--flavour bare|decorated|both]
+
+the `ieee1788` layer against pyintval, an independent C++ 1788 library, on random binary64 operands: 74
+ops, the 54 with a set result also decorated. pyintval is loose by design and departs from 1788 in places,
+so the tool's own referee (MPFR at the box's points, exact cancel and empty mulRev, 1788's decoration
+where decidable) settles a difference before calling it a lead; its docstring has the classes. about 90 s
+per seed at the default n (2026-10-07). exit 0 is no lead. not in CI or prepush; run it after a change to
+the layer or what it calls. what it found, the sabotage that shows it can go red, and the lead family decided by hand (a non-empty
+`mulRevTen`): `references/python-1788-libraries-2026-10-07.md`.
+
 ## other tools
 
 * `$PY tools/itf1788_census.py`: the itf1788 counts quoted in the docs (vectors, ops, divergence keys
