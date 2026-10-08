@@ -6,6 +6,14 @@ mean `docs/archive/v2/`; decisions they mention are in `docs/decisions.md`.
 
 ## entries (newest first)
 
+* **2026-10-05** trig-rev-far (the owner: "get a subagent to do that"). an opus agent in the worktree `../intervals-trig-rev-far`
+  measured (branch count, not cost per branch: ~ulp(X)/(2 pi) branches round onto x's open end to nearest, onto ±inf past the
+  doubles), fixed with identical results, pinned (a differential hypothesis test against the old walk; 18 far cases under a
+  10000-branch cap) and sabotaged (9 breaks red). the session re-checked: the diff, tan 1e21 3.4 s -> 0.004 s with the same
+  answer, sin/cos at 1e21 equal to master's, 1e300 and 10**400 under 1 s, the far pins red on a `git archive` of `913bd5a`
+  (15 of 15 before a 500 s cap). fast-forwarded `master` to `8e709b3`; worktree, branch and `.scratch/trig-rev-far/` removed.
+  gate 27795 + 6509. Q21 walked through with the owner, who took every recommendation (`v2-plan.md` decision log). Still owed: the push (x10 prepush and `gate:gmpy2`); the CORE-MATH
+  full check is the owner's call (`elementary.py` changed: a cache of the inverse-trig enclosure)
 * **2026-10-04** Q22 and H4 (the owner: "A - yes just make it strict and refuse", "B - copy it into references",
   the tests fixed, "then we can complete the task about removing v1", then the full gate, push and babysit CI).
   strict flags (`cuts.flag`) and pins for the audit's unrecorded time differences, 10 sabotage breaks all red (plan

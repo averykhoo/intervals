@@ -5,7 +5,7 @@ superseded. nothing else in the repo records a decision; `HANDOFF.md`, the code 
 (`docs/archive/v2/`) point here.
 
 * **a new decision** is an entry at the top of "the log", headed `### YYYY-MM-DD: Dnn, <title>` with the next
-  D-id (**D35 is next**): who decided (the owner, or a build's default awaiting the owner), what, why, and the
+  D-id (**D36 is next**): who decided (the owner, or a build's default awaiting the owner), what, why, and the
   ids or entries it supersedes. an earlier entry it changes gets a one-line `> **superseded YYYY-MM-DD**`
   marker and is otherwise left as it was.
 * **owner questions** (Q1-Q27 asked so far; the next is Q28) are asked in `HANDOFF.md`; the answer is recorded here and `HANDOFF.md`
@@ -67,7 +67,38 @@ vendoring.
 
 ## the log (newest first; D31 on written here, the rest from `v2-plan.md`'s decision log)
 
+### 2026-10-08: D35, an extremum known exactly is an exact end (Q27 (b), (c) and csc/sec)
+
+the owner, 2026-10-08, answering part of Q27: "trig functions can return exact ±1 when they include it yes"; "okay
+to b and c and record the principle too". the rest of Q27 (a) (D33's other three bullets) is still open.
+
+* **the principle**, the owner's words: "when we take the range of a function and the input domain selects a region
+  that is certain to have a min or max at an exact value, we can set that exact value as the endpoint". D32's rule
+  (a), "the constants a function reaches", said as a range rule. it holds for the library's own functions, whose
+  extrema are known in closed form: sin's, cos's, csc's and sec's ±1, abs's and `x ** 2`'s 0, cosh's 1. it does not
+  generalize to an expression, which is evaluated one operation at a time (the owner: "i don't think we can fully
+  generalize this across arbitrary functions"). probed 2026-10-08:
+  * `x ** 2` on `[-1, 1]` is `[0, 1]`: the 0 is the function's minimum, attained at x = 0 inside the operand.
+    `x * x` on the same set is `[-1, 1]`: mul sees two independent operands, never the minimum
+  * `x * (1 - x)` on `[0, 1]` is `[0, 1]`, though its range is `[0, 1/4]`, the maximum exact at x = 1/2. reaching
+    it would take a range solver and critical points that happen to be rational; not planned
+* **"certain" is D32's no ulp contamination**: the extremum's point is proved inside the operand on exact values,
+  and the value there is exact by definition, so no rounded step reaches it. this answers the owner's worry ("there
+  could have been a missing/additional ulp of error in the unfortunate direction"): a double just short of the
+  point gives the float, as D32's pins (`sin(O(0.0, h))` is `[0.0, 1.0)` for `h` the double below pi/2; past it
+  `[0.0, 1]`). a float operand is taken as exactly its double: `1.5707963267948966` is not pi/2
+* **csc's and sec's ±1** (D33's first bullet) confirmed, as built
+* **(c) an operand end at the extremum is certain too**: `x ** 2` and cosh at an operand end `0.0` give the exact 0
+  and 1, as `abs(x) ** 2` and `cosh(abs(x))` do (the session's recommendation). `M(0.0, 1.0) ** 2` becomes
+  `[0, 1.0]` (today `[0.0, 1.0]`), `M(0.0, 1.0).cosh()` `[1, 1.5430806348152437]` (today `[1.0, ...]`); row
+  x2-cosh-zero builds it. not against D32's "an end that is a float operand's own value is a float": the 0 is the
+  function's constant, reached, not the operand's value carried
+* **(b) D34 confirmed, as built**: the fuzz and gate:gmpy2 phases on `GATE_WORKERS` (default 8), the gate's own
+  phases serial, CI unchanged
+
 ### 2026-10-08: D34, the fuzz and gate:gmpy2 phases run on pytest-xdist (fuzz-xdist; a build's defaults, awaiting the owner)
+
+> **confirmed 2026-10-08 by the owner, as built** (Q27 (b), D35)
 
 the build of HANDOFF's row fuzz-xdist (`docs/records.md`), on the 2026-10-06 study (`references/fuzz-speed-2026-10-06/`).
 asked as Q27 (b).
@@ -86,6 +117,8 @@ asked as Q27 (b).
   bounds unchanged
 
 ### 2026-10-08: D33, m14b-open's build defaults beside D32 (awaiting the owner)
+
+> **csc's and sec's ±1 confirmed 2026-10-08 by the owner** (Q27 (a), D35); the other three bullets still await the owner
 
 the build of D32 (`docs/records.md` "m14b-open") met four choices D32 did not spell out; each is the session's
 default, asked as Q27 (a).
