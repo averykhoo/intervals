@@ -18,7 +18,7 @@ a task the owner assigns overrides the ranking. at the end of a session:
 ## banner (2026-10-08)
 
 * **v2 is built**, and m14b-open (D32's number types) with it (2026-10-08). what is left before 2.0.0 is row H1,
-  question Q25, the rest of Q27 (a) and row x2-cosh-zero (D35)
+  question Q25 and rows x2-cosh-zero and from-cuts-reason (D35, Q27's answer)
 * **pushed: `origin/master` at `478654a`** (2026-10-08, m14b-open and fuzz-xdist with it): CI run 37754291429 and
   fuzz run 37754291528 both green, seen to the end. `master` is ahead only by this handoff's prose
 * **gate** green on this code: 27798 + 7182 passed (2026-10-08, `tools/gate.py status`). the fuzz and gate:gmpy2
@@ -31,11 +31,12 @@ a task the owner assigns overrides the ranking. at the end of a session:
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
 | 1 | x2-cosh-zero | `x ** 2` and cosh at an operand end `0.0` give the exact 0 and 1, as `abs(x) ** 2` and `cosh(abs(x))` do since m14b-open (`M(0.0, 1.0) ** 2` is `[0.0, 1.0]`, `abs(M(0.0, 1.0)) ** 2` `[0, 1.0]`; cosh `[1.0, ...]` against `[1, ...]`; probed 2026-10-08) | ready (Q27 (c) yes, D35); not scheduled | `docs/records.md` "m14b-open", "left" |
-| 2 | vectors-ext | (c) only: cuinterval's `custom.itl` (26 vectors, MIT), probably covered by `test_domain_ends_and_limits`. (a) done 2026-10-05, (b) closed 2026-10-03 | low value | `references/test-vector-sources.md` |
-| 3 | pown-ziv | an exact corner of about 2M bits within about 2 ** -(its size) of a rounding breakpoint, past `EXACT_RESULT_LIMIT`, runs ziv past 120 s where the old code built the power in milliseconds (`O(3 + 2 ** -2100000) ** 2`, 2026-10-04); pow the same at 2M bits. follow-ups: a near-1 shortcut in `rounded_pow`, or the exact build when ziv passes a precision cap and the build is affordable | ready, not scheduled; extreme sizes only | `docs/archive/v2/v2-implementation-plan.md` §2 "owner-answers"; `references/owner-questions-2026-10-03/streams/pown.md` step 6 |
-| 4 | evaluate-box | a pure speed change: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | `docs/archive/v2/v2-implementation-plan.md` §2 M16e |
-| 5 | later | not in v2.0, each "consider", optional or "if asked". from the owner's answers (2026-10-03): `Root`/`RootBox` as frozen dataclasses if a third state appears; an `rtol` beside `tol`; outward fma, `%`, hypot, `cancel_minus` typed per corner (tighter); a to-nearest `MultiInterval.rounded()`; rootn on cbrt's worst-case inputs; a numpy hook for the 1788 layer; an `AllenMatrix` class or a public `allen_pairs`; a strategies module after 2.0; Q20's optional pin. from the design's "later": a direction tag on a degenerate zero piece (if a solver needs `1/(1/[inf]) == [inf]`); an interval array type (the array API); the backend's non-dyadic part (an mpfr ziv loop for the points it declines, until a workload measures them); allen's composition table for the cut reading; vector-mode autodiff (if a measured solve is too slow); 1788's recommended ops not in the layer (`exp2m1`, `exp10m1`, `log2p1`, `log10p1`, `compoundm1`, `rsqrt`, the `*Pi` functions, text and interchange conversions, inf-sup types but binary64). from M8: pandas past `to_pandas()` (an `IntervalIndex` of several pieces, `IntervalArray`) | not scheduled | `references/owner-questions-2026-10-03/`; `docs/archive/v2/v2-plan.md` "later (not in v2.0)"; `docs/archive/v2/v2-implementation-plan.md` §2 M8 |
-| 6 | H1 | release 2.0.0 (`pyproject.toml` is `2.0.0.dev0`, no tag). before it: Q25 (licence and package metadata: no LICENSE, no `license`/`readme`/`authors`/`urls`/classifiers in `pyproject.toml`; no publish workflow, no changelog), the rest of Q27 (a) (three of D33's defaults), row x2-cosh-zero, release notes (from the v1 -> v2 surface map, `docs/archive/v2/v2-implementation-plan.md` §4), the CORE-MATH full check again if the scalar evaluator changes (clean at `7dd2c0d`), claiming `multiinterval` on PyPI (the first upload) | waiting on Q25 and Q27 (a) (owner, 2026-09-26: release "when everything is fully done") | `docs/decisions.md` D5, D17, H1 in "owner answers to the open questions" (2026-09-26) |
+| 2 | from-cuts-reason | `MultiInterval.from_cuts` refuses a point of an exact and a float cut of the same number (`(below(2.0), above(2))`) with `not a normalized cut tuple: (...)`; the message is to say why, e.g. "a point is one value: its ends are 2.0 and 2; write [2] or [2.0]" (the owner, Q27; a sabotage check that the message reaches the user) | ready (D35); not scheduled | `docs/decisions.md` D35, D33; `kernel.is_valid` |
+| 3 | vectors-ext | (c) only: cuinterval's `custom.itl` (26 vectors, MIT), probably covered by `test_domain_ends_and_limits`. (a) done 2026-10-05, (b) closed 2026-10-03 | low value | `references/test-vector-sources.md` |
+| 4 | pown-ziv | an exact corner of about 2M bits within about 2 ** -(its size) of a rounding breakpoint, past `EXACT_RESULT_LIMIT`, runs ziv past 120 s where the old code built the power in milliseconds (`O(3 + 2 ** -2100000) ** 2`, 2026-10-04); pow the same at 2M bits. follow-ups: a near-1 shortcut in `rounded_pow`, or the exact build when ziv passes a precision cap and the build is affordable | ready, not scheduled; extreme sizes only | `docs/archive/v2/v2-implementation-plan.md` §2 "owner-answers"; `references/owner-questions-2026-10-03/streams/pown.md` step 6 |
+| 5 | evaluate-box | a pure speed change: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | `docs/archive/v2/v2-implementation-plan.md` §2 M16e |
+| 6 | later | not in v2.0, each "consider", optional or "if asked". from the owner's answers (2026-10-03): `Root`/`RootBox` as frozen dataclasses if a third state appears; an `rtol` beside `tol`; outward fma, `%`, hypot, `cancel_minus` typed per corner (tighter); a to-nearest `MultiInterval.rounded()`; rootn on cbrt's worst-case inputs; a numpy hook for the 1788 layer; an `AllenMatrix` class or a public `allen_pairs`; a strategies module after 2.0; Q20's optional pin. from the design's "later": a direction tag on a degenerate zero piece (if a solver needs `1/(1/[inf]) == [inf]`); an interval array type (the array API); the backend's non-dyadic part (an mpfr ziv loop for the points it declines, until a workload measures them); allen's composition table for the cut reading; vector-mode autodiff (if a measured solve is too slow); 1788's recommended ops not in the layer (`exp2m1`, `exp10m1`, `log2p1`, `log10p1`, `compoundm1`, `rsqrt`, the `*Pi` functions, text and interchange conversions, inf-sup types but binary64). from M8: pandas past `to_pandas()` (an `IntervalIndex` of several pieces, `IntervalArray`) | not scheduled | `references/owner-questions-2026-10-03/`; `docs/archive/v2/v2-plan.md` "later (not in v2.0)"; `docs/archive/v2/v2-implementation-plan.md` §2 M8 |
+| 7 | H1 | release 2.0.0 (`pyproject.toml` is `2.0.0.dev0`, no tag). before it: Q25 (licence and package metadata: no LICENSE, no `license`/`readme`/`authors`/`urls`/classifiers in `pyproject.toml`; no publish workflow, no changelog), rows x2-cosh-zero and from-cuts-reason, release notes (from the v1 -> v2 surface map, `docs/archive/v2/v2-implementation-plan.md` §4), the CORE-MATH full check again if the scalar evaluator changes (clean at `7dd2c0d`), claiming `multiinterval` on PyPI (the first upload) | waiting on Q25 (owner, 2026-09-26: release "when everything is fully done") | `docs/decisions.md` D5, D17, H1 in "owner answers to the open questions" (2026-09-26) |
 
 ## open questions for the owner
 
@@ -44,22 +45,8 @@ a task the owner assigns overrides the ranking. at the end of a session:
   is no publish workflow and no changelog. which licence (the vendored itf1788 files are Apache 2.0, LGPL-2.1+ or
   all-permissive per file, test-only; CORE-MATH's rows are MIT), and should a publish workflow (a tag push
   uploading to PyPI) and a changelog come with it?
-* **Q27** (2026-10-08; (b), (c) and csc/sec answered, D35): the rest of (a), three of D33's defaults, each
-  discussed with the owner 2026-10-08 and not yet confirmed or changed. the session's recommendations:
-  (1) `round(A, ndigits > 0)` on a float piece stays floats, as python's `round(2.675, 2)` is `2.67`; Fractions
-  only from an exact piece (`round(M(Fraction(1, 9), Fraction(1, 7)), 2)` is `{[11/100], [3/25], [13/100],
-  [7/50]}`); the owner asked whether Fractions from a float would be unexpected: yes, the float `0.12` is not
-  12/100, the trade python makes. (2) the library's own clips (asin's and acos's domain `[-1, 1]`, the splits at
-  0, modulo's parts) keep the type of an end the operand has, and only an end the clip adds is exact
-  (`kernel.restrict`): `[-1.0, 2.0]` clipped is `[-1.0, 1]`, so `asin([1.0])` is computed from the float given,
-  `[1.5707963267948966]`. (3) a point whose two ends are one exact and one float of the same number is the exact
-  point: `M(1.0, 1)` is `[1]`, `M(0.0, 0)` `[0]`, `M(1, 2) & M(2.0, 3.0)` `[2]` (`[1.0, 2]` is an interval, not
-  this case). the owner asked whether to take the float instead: no, the set lies within `{2}`, so its value is
-  known exactly. only `MultiInterval.from_cuts` (cuts already normalized) refuses the mixed form, with `not a
-  normalized cut tuple: (...)`; the owner: the reason should be in the message, e.g. "a point is one value: its
-  ends are 2.0 and 2; write [2] or [2.0]"
 
-every other question (Q1-Q24, Q26) is answered: `docs/decisions.md`.
+every other question (Q1-Q24, Q26, Q27) is answered: `docs/decisions.md`.
 
 ## still owed
 
@@ -119,9 +106,10 @@ every other question (Q1-Q24, Q26) is answered: `docs/decisions.md`.
 * **2026-10-08** Q27 walked through with the owner ("whats q27", then each part). answered: (b) D34 as built,
   (c) yes, csc's and sec's ±1, and the principle under them, recorded as D35 ("when ... the input domain selects
   a region that is certain to have a min or max at an exact value, we can set that exact value as the endpoint";
-  not for arbitrary expressions; examples `x ** 2` against `x * x`, and `x * (1 - x)` on `[0, 1]`, probed). still
-  open: the rest of Q27 (a), rewritten with what was discussed. row x2-cosh-zero now ready. docs only, no code
-  changed. Still owed: the push of this prose (the owner's go)
+  not for arbitrary expressions; examples `x ** 2` against `x * x`, and `x * (1 - x)` on `[0, 1]`, probed). then
+  the rest of (a), D33's other three defaults, explained and taken as recommended ("yes okay with all 3"): Q27
+  closed. row x2-cosh-zero ready; new row from-cuts-reason. docs only, no code changed. Still owed: the push of
+  this prose (the owner's go)
 * **2026-10-08** m14b-open and fuzz-xdist (the owner: "do 2 then 1"). m14b-open: D32 built (`91a241f`): the
   kernel's tie rule, abs's identity pin, sin's/cos's (and csc's/sec's) attained ±1 exact, the step functions' ints;
   the pins found what D32 left: abs at an operand end `0.0` (the identity makes it exact), the domain clip, which

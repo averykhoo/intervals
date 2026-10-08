@@ -67,10 +67,11 @@ vendoring.
 
 ## the log (newest first; D31 on written here, the rest from `v2-plan.md`'s decision log)
 
-### 2026-10-08: D35, an extremum known exactly is an exact end (Q27 (b), (c) and csc/sec)
+### 2026-10-08: D35, an extremum known exactly is an exact end; Q27 answered
 
-the owner, 2026-10-08, answering part of Q27: "trig functions can return exact ±1 when they include it yes"; "okay
-to b and c and record the principle too". the rest of Q27 (a) (D33's other three bullets) is still open.
+the owner, 2026-10-08, answering Q27: "trig functions can return exact ±1 when they include it yes"; "okay to b
+and c and record the principle too"; then, on the rest of (a) as recommended (the last bullet), "yes okay with
+all 3".
 
 * **the principle**, the owner's words: "when we take the range of a function and the input domain selects a region
   that is certain to have a min or max at an exact value, we can set that exact value as the endpoint". D32's rule
@@ -95,6 +96,20 @@ to b and c and record the principle too". the rest of Q27 (a) (D33's other three
   function's constant, reached, not the operand's value carried
 * **(b) D34 confirmed, as built**: the fuzz and gate:gmpy2 phases on `GATE_WORKERS` (default 8), the gate's own
   phases serial, CI unchanged
+* **the rest of (a), D33's other three bullets, confirmed as built**, after the owner's questions:
+  * `round(A, ndigits > 0)` on a float piece stays floats, as python's `round(2.675, 2)` is `2.67`; Fractions only
+    from an exact piece (`round(M(Fraction(1, 9), Fraction(1, 7)), 2)` is `{[11/100], [3/25], [13/100], [7/50]}`).
+    the owner asked whether Fractions from a float would be unexpected: they would; the float `0.12` is not
+    12/100, the trade python makes
+  * the library's own clips (`kernel.restrict`: asin's and acos's domain `[-1, 1]`, the splits at 0, modulo's
+    parts) keep the type of an end the operand has; only an end the clip adds is exact: `[-1.0, 2.0]` clipped is
+    `[-1.0, 1]`, and `asin([1.0])` is `[1.5707963267948966]`, from the float given
+  * a point whose two ends are one exact and one float of the same number is the exact point: `M(1.0, 1)` is
+    `[1]`, `M(0.0, 0)` `[0]`, `M(1, 2) & M(2.0, 3.0)` `[2]` (probed 2026-10-08). the owner asked whether to take
+    the float instead: no, the set lies within `{2}`, so its value is known exactly. `MultiInterval.from_cuts`
+    (cuts already normalized) still refuses the mixed form, and its message is to say why (the owner: "the reason
+    should probably also go in the error message"; row from-cuts-reason): today `not a normalized cut tuple:
+    (...)`
 
 ### 2026-10-08: D34, the fuzz and gate:gmpy2 phases run on pytest-xdist (fuzz-xdist; a build's defaults, awaiting the owner)
 
@@ -118,7 +133,7 @@ asked as Q27 (b).
 
 ### 2026-10-08: D33, m14b-open's build defaults beside D32 (awaiting the owner)
 
-> **csc's and sec's ±1 confirmed 2026-10-08 by the owner** (Q27 (a), D35); the other three bullets still await the owner
+> **confirmed 2026-10-08 by the owner, as built** (Q27 (a), D35); `from_cuts`'s message to say why (row from-cuts-reason)
 
 the build of D32 (`docs/records.md` "m14b-open") met four choices D32 did not spell out; each is the session's
 default, asked as Q27 (a).
