@@ -25,8 +25,8 @@ a task the owner assigns overrides the ranking. at the end of a session:
   the push needs only the owner's go
 * **gate** green on this code: 27798 + 7182 passed (2026-10-08, `tools/gate.py status`). the fuzz and gate:gmpy2
   phases now run on 8 pytest-xdist workers (D34): prepush about 30 min, was about 100
-* the CORE-MATH full check last ran 2026-10-02 at `3044197`; 6 scalar-evaluator commits since (`kernel.py` among
-  them, 2026-10-08). the owner's call, worth running before 2.0
+* the CORE-MATH full check is clean at `7dd2c0d` (2026-10-08: 17959805 inputs, 3 directions, 0 mismatches,
+  2930 s at 4 jobs; `references/coremath-runs.tsv`)
 
 ## open items (ranked)
 
@@ -122,7 +122,8 @@ every other question (Q1-Q24, Q26) is answered: `docs/decisions.md`.
   (`662e5f1`): the fuzz and gate:gmpy2 phases on 8 pytest-xdist workers, the timing tests on CPU time, 5 breaks
   red; prepush green on `662e5f1` in about 30 min (fuzz 28 s + 1547 s, gmpy2 206 s). records in `docs/records.md`,
   build defaults D33, D34, asked as Q27; new row x2-cosh-zero. gate 27798 + 7182 (2026-10-08). Still owed: the
-  push (the owner's go); the CORE-MATH full check (`kernel.py` changed; the owner's call)
+  push (the owner's go). then, on the owner's go: the CORE-MATH full check clean at `7dd2c0d` (17959805 inputs,
+  0 mismatches, 2930 s), and the push
 * **2026-10-08** housekeeping and the v2 archive (the owner: "v2 is more or less done (it is right? help me check
   that) so we should archive the prd / plans", one decisions log, not in HANDOFF, "get all the housekeeping
   done"). a read-only opus audit checked every milestone's record and spot-checked a symbol of each: v2 built,

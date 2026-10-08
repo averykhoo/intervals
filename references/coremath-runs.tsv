@@ -2,3 +2,4 @@
 # CORE-MATH commit, which functions, inputs, mismatches, calls over 1 s, seconds, jobs
 # when	ours	scalar files	core-math	functions	inputs	mismatches	slow	seconds	jobs
 2026-10-02 22:58	3044197	clean	284b3b0e1980	all	17077691	0	0	2547	4
+2026-10-08 16:16	7dd2c0d	clean	284b3b0e1980	all	17959805	0	0	2930	4
