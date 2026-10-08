@@ -94,11 +94,11 @@ tower, `/` as D3), its tie rule and its reasons stand; three of its bullets are 
 * **ties as D31**: `abs(M(-1, 1.0))` and `abs(M(-1.0, 1))` are both `[0, 1]` (were `[0, 1]` and `[0, 1.0]`)
 * **what m14b-open builds**: sin's and cos's extrema exact; the step functions' ints; the tie rule. abs and the
   acos clip are unchanged
-* **the test for exact, confirmed by the owner** (2026-10-08: "only choose the exact type if we know for sure it
+* **no ulp contamination: the test for exact**, the owner's rule and phrase (2026-10-08: "only choose the exact type if we know for sure it
   has no ulp contamination, and the endpoint is the exact value. we could end up at 1.0 by many paths and not all
-  guarantee that 1 is at the endpoint"): an end is exact only when its value is proved to be that exact number
-  and attained there, decided on exact values as attainment already is; a value that merely rounds to it stays a
-  float. pins for the build, probed 2026-10-08 (`h = 1.5707963267948966`, the double nearest pi/2, below it):
+  guarantee that 1 is at the endpoint"): an end is exact only when it has **no ulp contamination**: its value is
+  proved to be that exact number and attained there, decided on exact values as attainment already is. a value
+  that merely rounds to it, or that any rounded step reached, is contaminated and stays a float. pins for the build, probed 2026-10-08 (`h = 1.5707963267948966`, the double nearest pi/2, below it):
   `sin(O(0.0, h))` is `[0.0, 1.0)` (pi/2 outside the piece, the max below 1) and stays a float, `[0.0, 1.0]` to
   nearest; `sin(O(0.0, nextafter(h, 2)))` and `sin(O(0.0, 2.0))` hold pi/2, today `[0.0, 1.0]`, and become
   `[0.0, 1]` in both classes
