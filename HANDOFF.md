@@ -19,10 +19,8 @@ a task the owner assigns overrides the ranking. at the end of a session:
 
 * **v2 is built**, and m14b-open (D32's number types) with it (2026-10-08). what is left before 2.0.0 is row H1,
   question Q25 and the build defaults asked as Q27
-* **pushed: `origin/master` at `1330182`**, CI and fuzz green (2026-10-06). `master` is ahead by `a0a8939`..HEAD,
-  not pushed: the 1788 survey, `tools/pyintval_check.py`, the fuzz-speed study, the archive, m14b-open
-  (`91a241f`), fuzz-xdist (`662e5f1`). **prepush is green on `662e5f1`** (x10 fuzz and gate:gmpy2, 2026-10-08):
-  the push needs only the owner's go
+* **pushed: `origin/master` at `478654a`** (2026-10-08, m14b-open and fuzz-xdist with it): CI run 37754291429 and
+  fuzz run 37754291528 both green, seen to the end. `master` is ahead only by this handoff's prose
 * **gate** green on this code: 27798 + 7182 passed (2026-10-08, `tools/gate.py status`). the fuzz and gate:gmpy2
   phases now run on 8 pytest-xdist workers (D34): prepush about 30 min, was about 100
 * the CORE-MATH full check is clean at `7dd2c0d` (2026-10-08: 17959805 inputs, 3 directions, 0 mismatches,
@@ -37,7 +35,7 @@ a task the owner assigns overrides the ranking. at the end of a session:
 | 3 | pown-ziv | an exact corner of about 2M bits within about 2 ** -(its size) of a rounding breakpoint, past `EXACT_RESULT_LIMIT`, runs ziv past 120 s where the old code built the power in milliseconds (`O(3 + 2 ** -2100000) ** 2`, 2026-10-04); pow the same at 2M bits. follow-ups: a near-1 shortcut in `rounded_pow`, or the exact build when ziv passes a precision cap and the build is affordable | ready, not scheduled; extreme sizes only | `docs/archive/v2/v2-implementation-plan.md` §2 "owner-answers"; `references/owner-questions-2026-10-03/streams/pown.md` step 6 |
 | 4 | evaluate-box | a pure speed change: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | `docs/archive/v2/v2-implementation-plan.md` §2 M16e |
 | 5 | later | not in v2.0, each "consider", optional or "if asked". from the owner's answers (2026-10-03): `Root`/`RootBox` as frozen dataclasses if a third state appears; an `rtol` beside `tol`; outward fma, `%`, hypot, `cancel_minus` typed per corner (tighter); a to-nearest `MultiInterval.rounded()`; rootn on cbrt's worst-case inputs; a numpy hook for the 1788 layer; an `AllenMatrix` class or a public `allen_pairs`; a strategies module after 2.0; Q20's optional pin. from the design's "later": a direction tag on a degenerate zero piece (if a solver needs `1/(1/[inf]) == [inf]`); an interval array type (the array API); the backend's non-dyadic part (an mpfr ziv loop for the points it declines, until a workload measures them); allen's composition table for the cut reading; vector-mode autodiff (if a measured solve is too slow); 1788's recommended ops not in the layer (`exp2m1`, `exp10m1`, `log2p1`, `log10p1`, `compoundm1`, `rsqrt`, the `*Pi` functions, text and interchange conversions, inf-sup types but binary64). from M8: pandas past `to_pandas()` (an `IntervalIndex` of several pieces, `IntervalArray`) | not scheduled | `references/owner-questions-2026-10-03/`; `docs/archive/v2/v2-plan.md` "later (not in v2.0)"; `docs/archive/v2/v2-implementation-plan.md` §2 M8 |
-| 6 | H1 | release 2.0.0 (`pyproject.toml` is `2.0.0.dev0`, no tag). before it: Q25 (licence and package metadata: no LICENSE, no `license`/`readme`/`authors`/`urls`/classifiers in `pyproject.toml`; no publish workflow, no changelog), Q27 (the build defaults of D33, D34), release notes (from the v1 -> v2 surface map, `docs/archive/v2/v2-implementation-plan.md` §4), the CORE-MATH full check, claiming `multiinterval` on PyPI (the first upload) | waiting on Q25 and Q27 (owner, 2026-09-26: release "when everything is fully done") | `docs/decisions.md` D5, D17, H1 in "owner answers to the open questions" (2026-09-26) |
+| 6 | H1 | release 2.0.0 (`pyproject.toml` is `2.0.0.dev0`, no tag). before it: Q25 (licence and package metadata: no LICENSE, no `license`/`readme`/`authors`/`urls`/classifiers in `pyproject.toml`; no publish workflow, no changelog), Q27 (the build defaults of D33, D34), release notes (from the v1 -> v2 surface map, `docs/archive/v2/v2-implementation-plan.md` §4), the CORE-MATH full check again if the scalar evaluator changes (clean at `7dd2c0d`), claiming `multiinterval` on PyPI (the first upload) | waiting on Q25 and Q27 (owner, 2026-09-26: release "when everything is fully done") | `docs/decisions.md` D5, D17, H1 in "owner answers to the open questions" (2026-09-26) |
 
 ## open questions for the owner
 
@@ -123,7 +121,8 @@ every other question (Q1-Q24, Q26) is answered: `docs/decisions.md`.
   red; prepush green on `662e5f1` in about 30 min (fuzz 28 s + 1547 s, gmpy2 206 s). records in `docs/records.md`,
   build defaults D33, D34, asked as Q27; new row x2-cosh-zero. gate 27798 + 7182 (2026-10-08). Still owed: the
   push (the owner's go). then, on the owner's go: the CORE-MATH full check clean at `7dd2c0d` (17959805 inputs,
-  0 mismatches, 2930 s), and the push
+  0 mismatches, 2930 s), and the push `1330182..478654a`: CI 37754291429 and fuzz 37754291528 green (a haiku
+  babysitter; conclusions re-read from the API by the session)
 * **2026-10-08** housekeeping and the v2 archive (the owner: "v2 is more or less done (it is right? help me check
   that) so we should archive the prd / plans", one decisions log, not in HANDOFF, "get all the housekeeping
   done"). a read-only opus audit checked every milestone's record and spot-checked a symbol of each: v2 built,
