@@ -16,7 +16,7 @@ repo root. timings are from this shared laptop under load, 2026-09-30.
 | session start, before a commit or push | `$PY tools/gate.py status` | under a second |
 | while editing | the touched test file(s): `$PY -m pytest -q tests/test_x.py` | seconds to minutes |
 | before a commit | the gate, in two recorded calls (below) | ~1 min + ~10-14 min |
-| before a push | `bash tools/prepush.sh`, in the background | ~83 min; docs only: seconds; + ~10-15 min if a backend file changed |
+| before a push | `bash tools/prepush.sh`, in the background | ~26 min on 8 workers (83 serial); docs only: seconds; + the gmpy2 phase if a backend file changed |
 | after a push | a babysitter agent on `bash tools/ci_watch.sh <sha>` | ci ~12 min, fuzz ~30-56 min |
 | CI only | the exhaustive harnesses (below) | 20 s to 12 min each on CI |
 
@@ -88,7 +88,8 @@ PyPI wheel's MPFR). forced, `import multiinterval` raises without gmpy2, so the 
 pure path (one test file alone can: a failed package import leaves leaf modules importable; the CI
 job asserts `backend.name()` first). it is keyed by src like the fuzz, never covers the gate (a commit
 needs the pure path), and a push needs it only when `tools/gate.py::BACKEND_FILES` (`backend`,
-`_gmpy2`, `elementary`, `ops`) changed since the base. about 10-15 min: in the background. there is no
+`_gmpy2`, `elementary`, `ops`) changed since the base. 206 s on 8 workers (2026-10-08; 10-15 min serial): in the
+background. there is no
 gmpy2 fuzz job.
 the ids do not see `.hypothesis/` or the installed packages (recorded in each row, not matched).
 `tests/test_gate_ledger.py` pins all of it; its sabotage table (13 breaks, each red) is in

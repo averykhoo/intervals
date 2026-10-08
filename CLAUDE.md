@@ -28,11 +28,12 @@ nobody reads CI email. a push is only done by a session that stays to see its ru
 
 1. **before**: `tools/prepush.sh` on the committed tree (background it). it runs what the ledger says
    is missing: the fuzz job of `.github/workflows/fuzz.yml` run locally (`HYPOTHESIS_PROFILE=fuzz`,
-   x10, every test, so it covers the gate; 27795 in 53 s + 5611 in 4899 s, about 83 min on this
-   laptop, 2026-09-29 at `97d9824`) unless a green x10 run on this source is already recorded; the
+   x10, every test, so it covers the gate; on `GATE_WORKERS` pytest-xdist processes, default 8 (D34):
+   27798 in 28 s + 7182 in 1547 s, about 26 min on this laptop, 2026-10-08 at `662e5f1`; serial it was
+   about 83 min) unless a green x10 run on this source is already recorded; the
    READMEs' doctests if only a README changed; nothing if only markdown or `references/` changed
    since `origin/master` (owner, 2026-09-30: docs skip the fuzz); and the whole suite on the forced
-   gmpy2 backend (`gate:gmpy2`, about 13 min, 2026-10-04) when a file of `tools/gate.py::BACKEND_FILES`
+   gmpy2 backend (`gate:gmpy2`, 206 s on 8 workers, 2026-10-08) when a file of `tools/gate.py::BACKEND_FILES`
    changed since the base (owner, 2026-10-03: Q16(e); CI's `gate-gmpy2` job runs it on every push).
    push only if it exits 0 (its last step is `tools/gate.py status --require push`).
 2. **push** `master` (pushing still needs the owner's go).

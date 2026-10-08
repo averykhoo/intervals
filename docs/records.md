@@ -7,6 +7,37 @@ successor of `docs/archive/v2/v2-implementation-plan.md` §2, which holds every 
 an open item's spec is its row in `HANDOFF.md`; when it is done its record goes here, its decisions in
 `docs/decisions.md`, and a one-line entry in `HANDOFF.md`'s session log.
 
+## fuzz-xdist: the fuzz and gate:gmpy2 phases on pytest-xdist (D34), built 2026-10-08
+
+the 2026-10-06 study's plan (`references/fuzz-speed-2026-10-06/`), built as D34 records.
+
+**what changed**: `tools/gate.py::pytest_command` adds `-n K --dist worksteal` for the fuzz phases and
+`gate:gmpy2`, K from `GATE_WORKERS` (default 8; 0 or 1 serial; anything but a whole number a ValueError), after
+`phase_spec`'s arguments, which stay the selection CI runs; the row's facts record `workers=K` and pytest-xdist's
+version. without pytest-xdist the phase runs serially and prints why. `pytest-xdist>=3.2` joined `[test]` and the
+`intervals` env (3.8.0, execnet 2.1.2; nothing else moved). the four timing assertions
+(`tests/test_elementary.py::test_rational_log_of_large_operands_is_fast`,
+`tests/test_fmt.py::test_white_space_runs_parse_in_linear_time`,
+`tests/test_literals.py::test_invalid_text_is_refused_in_linear_time`,
+`tests/test_modulo.py::test_attainment_is_constant_time`) measure `time.process_time()`. `tools/prepush.sh`'s
+comments, the testing skill, CLAUDE.md's push step.
+
+**pins**: `tests/test_gate_ledger.py::test_the_long_phases_run_on_workers` (the exact command per phase, the
+selection unchanged, the gate's phases and docs serial, the variable's readings and refusals, the serial
+fallback), `::test_the_worker_count_is_recorded`. sabotage (5 breaks, all RED, controls green): no xdist
+arguments, every phase parallel, the count unrecorded, no serial fallback, `GATE_WORKERS=1` running xdist. the
+CPU-time swap: `modulo.mod` and `text_to_interval` made to burn 0.2 s of CPU, each timing test red, then green
+restored.
+
+**measured** (2026-10-08, `tools/prepush.sh` at `662e5f1`, s:f716c7d59271, 8 workers, other sessions' load not
+measured): fuzz-x10:itf 27798 passed in 28 s, fuzz-x10:rest 7182 passed in 1547 s: 26 min for the fuzz, against
+53 s + 4899 s serial on 2026-09-29 and 4450-7495 s for the rest phase in the study's ledger rows. gate:gmpy2 34980
+passed in 206 s, against 754-2106 s serial. prepush exited 0; each row's facts say `workers=8 pytest-xdist=3.8.0`.
+
+**left**: CI's fuzz job (fuzz.yml, 4 vCPUs) still runs serially: `-n 4` there is a CI change, not made; `gate:rest`
+(about 15 min) could run on workers too, but the gate is CLAUDE.md's plain pytest, so it stays serial unless the
+owner says otherwise (Q27 (b)).
+
 ## m14b-open: number types, precision first (D31, D32), built 2026-10-08
 
 the owner's D32 (precision first: what is known exactly is exact) built as its "what m14b-open builds" bullet says,

@@ -6,6 +6,19 @@ mean `docs/archive/v2/`; decisions they mention are in `docs/decisions.md`.
 
 ## entries (newest first)
 
+* **2026-10-04** Q22 and H4 (the owner: "A - yes just make it strict and refuse", "B - copy it into references",
+  the tests fixed, "then we can complete the task about removing v1", then the full gate, push and babysit CI).
+  strict flags (`cuts.flag`) and pins for the audit's unrecorded time differences, 10 sabotage breaks all red (plan
+  §2 "q22-h4"); `references/v1-readme.md`; `archive/v1/` deleted, with its differentials in `tests/test_kernel.py`
+  and `tests/test_modulo.py` (the second missing from H4's list) and the `pythonpath` entry. gate 27795 + 6489;
+  prepush green (x10: 27795 in 63 s + 6489 in 5344 s); pushed `5888c6e..a984e26`; the babysitter (haiku): CI run
+  37213772220 green, fuzz run 37213772177 red on a test oracle (a DST gap; plan §2 "fuzz-dst-gap"), reproduced by
+  the session, fixed and pinned, sabotaged red. gate 27795 + 6490; prepush green; pushed `a984e26..48631f5`; CI run
+  37223604634 and fuzz run 37223604624 both green (34285 passed). the first babysitter's "reproduced locally" rested
+  on a script importing a name that does not exist (`from multiinterval import Interval`); the session reproduced the
+  case itself. Still owed: Q21; the CORE-MATH full check is the owner's call (`cuts.py` and `kernel.py` changed: the
+  flag check in constructors only)
+
 * **2026-10-04** the v1 parity audit (the owner: "send out a bunch of agents to read and run code, to verify that
   everything in v1 is possible in v2"). one workflow, 44 agents: ten auditors, one per slice of `archive/v1/`, ran v1
   and v2 side by side (839,971 cases, compared as sets); two skeptics per claimed gap (reproduce; records); a coverage
