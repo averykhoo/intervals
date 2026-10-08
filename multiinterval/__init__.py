@@ -1,4 +1,4 @@
-"""multi-intervals over the affine extended reals; see v2-plan.md for the design"""
+"""multi-intervals over the affine extended reals; the design is docs/archive/v2/v2-plan.md in the repository"""
 import math as _math
 
 from multiinterval.cuts import Cut

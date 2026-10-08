@@ -1,7 +1,9 @@
 # multiinterval: working rules
 
 the durable contract. what is true now (open items, questions, the session log) is in `HANDOFF.md`;
-read it in full at session start. the design is `v2-plan.md`, the milestones `v2-implementation-plan.md`.
+read it in full at session start. decisions: `docs/decisions.md`, the one decisions log (never HANDOFF).
+records of finished work: `docs/records.md`. the v2 plans (design, milestones, every record up to v2) are
+archived, read-only, in `docs/archive/v2/`.
 
 ## what has run on this code: `tools/gate.py status`
 

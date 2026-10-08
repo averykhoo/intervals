@@ -45,7 +45,7 @@ it prints `ok` for all 22 files (python 3.9 or later; the GitHub API needs no to
 ## how they are used
 
 `test_itf1788.py` runs every vector through the conformance adapter described in its docstring (and
-in `v2-plan.md`, "ieee 1788"); `itl.py` is the parser, which reads every statement of every file.
+in `docs/archive/v2/v2-plan.md`, "ieee 1788"); `itl.py` is the parser, which reads every statement of every file.
 since M13 (2026-09-27) every statement runs: 9542 vectors of 111 ops, `SKIPPED` empty, pinned by
 `test_itf1788.py::test_nothing_is_skipped`.
 

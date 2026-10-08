@@ -339,10 +339,10 @@ Interval(float('-inf'), float('inf'))
 ## departures from ieee 1788
 
 where the library answers otherwise than 1788, on purpose, and where each choice is recorded: `D` rows
-are `v2-implementation-plan.md` §0, headings are `v2-plan.md`'s, `Q` items are open questions in
-`HANDOFF.md`. 1788's own answers are in `multiinterval.ieee1788`, the thin layer. the itf1788 adapter
+and headings are `docs/decisions.md`'s, `Q` items the owner's questions, answered there (`v2-plan.md`'s
+headings are in `docs/archive/v2/`). 1788's own answers are in `multiinterval.ieee1788`, the thin layer. the itf1788 adapter
 (`tests/itf1788/test_itf1788.py`) names the rows each departure produces; most produce none, since the
-adapter compares closed hulls in binary64 (`v2-plan.md` "ieee 1788"). surveyed 2026-09-30.
+adapter compares closed hulls in binary64 (`docs/archive/v2/v2-plan.md` "ieee 1788"). surveyed 2026-09-30.
 
 | | 1788 | this library | recorded |
 |---|---|---|---|
@@ -390,11 +390,12 @@ Allen relations and matrices, `TruthSet` comparisons.
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)
-* `v2-plan.md` — the design. its "current design" section is normative: where it and the code
-  disagree, one of them is a bug
-* `v2-implementation-plan.md` — milestones (each one's spec and, once built, its record), decisions
-  D1–D26
-* `HANDOFF.md` — what is open now: ranked items, questions for the owner, a session log
+* `docs/decisions.md` — every decision, D1–D30 and a dated log
+* `docs/records.md` — what was built after v2, each item's evidence
+* `docs/archive/v2/` — the v2 plans, read-only: the design (`v2-plan.md`, its "current design" the fullest
+  statement of the semantics as built) and the milestones with their records (`v2-implementation-plan.md`)
+* `HANDOFF.md` — what is open now: ranked items, questions for the owner, a session log (older entries in
+  `docs/session-log.md`)
 * `references/` — papers and the modulo derivations; `v1-readme.md` is the previous implementation's
   README, kept for its notes. v1 itself was deleted on 2026-10-04 once v2 did everything it did
   (`references/v1-parity-2026-10-04/`); git history has it (`git show 22e16f8:archive/v1/multi_interval.py`)

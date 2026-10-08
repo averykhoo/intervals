@@ -35,6 +35,10 @@ the gate also collects `README.md` and `tests/itf1788/README.md` as doctests and
 docstrings (`pyproject.toml`), so a prose edit to a README can break it. 33710 items (2026-10-02 at `233fdd4`, CI and local).
 the library's warnings are errors inside the suite: a test that provokes one says so with
 `pytest.warns` or a `filterwarnings` mark.
+the local gate is randomized (hypothesis's `default` profile); CI's gate jobs run its built-in `ci` profile,
+derandomized (the same examples every run), so a CI gate run finds nothing new: only the fuzz job tries new
+inputs on CI (`tests/conftest.py`, `ci.yml`). the two draw different examples, so either can go red where the
+other was green (2026-09-27: CI's fixed examples found an oracle gap the local gate missed, `d7e46c2`).
 
 ## the fuzz profile
 
@@ -81,7 +85,7 @@ needs the pure path), and a push needs it only when `tools/gate.py::BACKEND_FILE
 gmpy2 fuzz job.
 the ids do not see `.hypothesis/` or the installed packages (recorded in each row, not matched).
 `tests/test_gate_ledger.py` pins all of it; its sabotage table (13 breaks, each red) is in
-`v2-implementation-plan.md` §2 "run ledger".
+`docs/archive/v2/v2-implementation-plan.md` §2 "run ledger".
 
 ## before a push: tools/prepush.sh
 
@@ -122,8 +126,8 @@ goes and never push.
    not a finding: check that its fix would make the failing assertion pass.
 3. **pin**: keep the `@example` on the test that found it, then show it red on the old code and green
    with the fix (sabotage, below). a decision about semantics is the owner's (fuzz-rev-inf became D26).
-4. **record**: a subsection in `v2-implementation-plan.md` §2 like "fuzz-symmetry",
-   "fuzz-floordiv-overflow", "fuzz-rev-inf" (found, diagnosis, fix and pins), and `HANDOFF.md`.
+4. **record**: a section in `docs/records.md` (found, diagnosis, fix and pins; v2's are in
+   `docs/archive/v2/v2-implementation-plan.md` §2, e.g. "fuzz-symmetry", "fuzz-rev-inf"), and `HANDOFF.md`.
 
 ## sabotage: a check that cannot fail proves nothing
 
@@ -133,7 +137,7 @@ goes and never push.
     tree breaks files another agent is reading
   * in process: replace the function with a no-op (`module.fn = lambda ...: ...`) and call the test's
     inner function on each example, `test.hypothesis.inner_test(*args)`, then restore it
-  * against an old commit: `git archive <rev> intervals | tar -x -C .scratch/<name>`, the test file
+  * against an old commit: `git archive <rev> multiinterval | tar -x -C .scratch/<name>` (`intervals` for a rev before `c6a4cca`), the test file
     beside it, and an empty `pytest.ini` there, run with `-c pytest.ini`. without it pytest finds the
     repo's `pyproject.toml`, whose `pythonpath = ["."]` imports the live package, and the old code is
     never run: the check passes vacuously (2026-10-04; print `multiinterval.__file__` from a conftest)
