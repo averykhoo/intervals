@@ -1,5 +1,6 @@
 import math
 import random
+from fractions import Fraction
 
 import pytest
 from hypothesis import example
@@ -23,6 +24,7 @@ from multiinterval.kernel import normalize
 from multiinterval.kernel import overlap_count
 from multiinterval.kernel import piece
 from multiinterval.kernel import pieces
+from multiinterval.kernel import restrict
 from multiinterval.kernel import size
 from multiinterval.kernel import symmetric_difference
 from multiinterval.kernel import union
@@ -227,3 +229,71 @@ def test_size_is_additive_on_disjoint_sets(a, b):
 def test_size_is_lex_ordered():
     assert size(mi((0, inf, True, False))) > size(mi((0, 10 ** 9)))
     assert size(mi((0, 1))) > size(mi((0, 1, True, False))) > size(mi((0, 1, False, False)))
+
+
+# A TIE GOES TO THE EXACT TYPE (D32)
+
+# each number in an exact and a float form, so equal cuts of different types are common
+tie_values = st.sampled_from([-inf, -2, -2.0, -1, -1.0, 0, 0.0, Fraction(1, 2), 0.5, 1, 1.0, 3, 3.0, inf])
+tie_cut_tuples = cut_tuples(values=tie_values)
+
+
+def types(cuts):
+    return [type(cut.value) for cut in cuts]
+
+
+def exact_where_tied(result, *operands) -> bool:
+    """no cut of `result` is a float where an operand has an equal exact cut, and no point mixes the two"""
+    exact = [cut for cuts in operands for cut in cuts if type(cut.value) is not float]
+    return (all(type(cut.value) is not float or cut not in exact for cut in result)
+            and all(type(lo) is type(hi) for lo, _, hi, _ in pieces(result) if lo == hi))
+
+
+@given(tie_cut_tuples, tie_cut_tuples)
+@example(mi((-1, 1.0)), mi((-1.0, 1)))
+@example(mi((0.0, 1)), mi((0, inf)))
+@example(mi((1, 2, True, False), (2.0, 3, False, True)), EMPTY)
+def test_a_tie_goes_to_the_exact_cut(a, b):
+    """
+    the owner, D32 (2026-10-08): where union, intersection or normalization meets two cuts of equal value and
+    different type, the exact one is kept. `M(-1, 1.0) | M(-1.0, 1)` was `[-1, 1.0]` and swapped `[-1.0, 1]`: the
+    order decided. so every result is the same set in the same types whatever the operands' order, a cut equal to
+    an exact cut of an operand is exact, and a point is never one exact and one float cut
+    """
+    for op in (union, intersection, symmetric_difference):
+        result = op(a, b)
+        assert result == op(b, a) and types(result) == types(op(b, a))
+        assert exact_where_tied(result, a, b), (op.__name__, result)
+    assert exact_where_tied(difference(a, b), a, b)
+    assert exact_where_tied(complement(a), a)
+
+
+@given(tie_cut_tuples, tie_cut_tuples)
+@example(mi((-1.0, 2.0)), mi((-1, 1)))
+@example(mi((-1.0000000000000002, -1.0)), mi((-1, 1)))
+def test_restrict_keeps_the_operands_own_cuts(a, region):
+    """
+    `restrict`, the library's clip of an operand to a region: the set `a ∩ region`, each cut `a` has in `a`'s
+    type, a cut only the region has in the region's, and a point of two types exact (D32: an end the user gave
+    stays theirs, `acos([-1.0])` is the float `[3.141592653589793]`; a clip point is the region's, exact)
+    """
+    result = restrict(a, region)
+    assert result == intersection(a, region) and is_valid(result)
+    own = {cut: type(cut.value) for cut in a}  # Cut(1.0, s) == Cut(1, s), and they hash alike
+    points = {cut for lo, hi in zip(result[::2], result[1::2]) if lo.value == hi.value for cut in (lo, hi)}
+    for cut in result:
+        if cut in own and cut not in points:  # a point of two types is exact, whoever's cuts made it
+            assert type(cut.value) is own[cut], (a, region, result)
+
+
+@pytest.mark.parametrize('pieces_, expected', [
+    ([(-1, 1.0), (-1.0, 1)], (below(-1), above(1))),
+    ([(-1.0, 1), (-1, 1.0)], (below(-1), above(1))),
+    ([(0.0, 0)], (below(0), above(0))),  # one number: the exact point
+    ([(0.0, 1), (0, 0)], (below(0), above(1))),
+    ([(1, 2.0, True, False), (2, 3)], (below(1), above(3))),  # tiling: the cut goes, nothing to type
+    ([(1, 2, True, False), (2.0, 3, False, True)], (below(1), below(2), above(2.0), above(3))),  # different cuts
+])
+def test_normalize_tie_table(pieces_, expected):
+    result = normalize(piece(*p) for p in pieces_)
+    assert result == expected and types(result) == types(expected)

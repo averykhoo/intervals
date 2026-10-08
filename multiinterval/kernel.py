@@ -55,17 +55,65 @@ def checked_piece(lo, hi, lo_closed: bool = True, hi_closed: bool = True) -> Pai
 
 
 def normalize(pairs: Iterable[Pair]) -> Cuts:
-    """sort, drop empty pieces, merge pieces that overlap or tile exactly"""
+    """
+    sort, drop empty pieces, merge pieces that overlap or tile exactly
+
+    a tie goes to the exact type (D32): where two pieces end at equal cuts, one an exact value and one a float
+    of the same number, the exact cut is kept, whichever came first; and a point whose two cuts are one
+    exact and one float is the exact point
+
+    >>> normalize([piece(-1, 1.0), piece(-1.0, 1)]) == normalize([piece(-1.0, 1), piece(-1, 1.0)])
+    True
+    >>> normalize([piece(-1.0, 1), piece(-1, 1.0)])
+    (Cut(-1, BELOW), Cut(1, ABOVE))
+    >>> normalize([piece(0.0, 0)])
+    (Cut(0, BELOW), Cut(0, ABOVE))
+    """
+    # the hot path of every operation: a cut's value is read as `cut[0]`, and a type is compared before a value
+    # (a tie costs about 1.2x the plain sweep's time, measured 2026-10-08)
     out = []
     for start, end in sorted(pairs):
         if start >= end:
             continue
         if out and start <= out[-1]:
-            if end > out[-1]:
+            last = out[-1]
+            if end > last:
                 out[-1] = end
+            elif type(last[0]) is float and type(end[0]) is not float and end == last:
+                out[-1] = end
+                _exact_point(out)
+            first = out[-2]
+            if type(first[0]) is float and type(start[0]) is not float and start == first:
+                out[-2] = start
+                _exact_point(out)
         else:
             out.append(start)
             out.append(end)
+            if type(start[0]) is not type(end[0]) and start[0] == end[0]:
+                _exact_point(out)
+    return tuple(out)
+
+
+def _tie(kept: Cut, other: Cut) -> Cut:
+    """of two equal cuts, the exact one (D32); `kept` if both are exact or both floats"""
+    return other if type(kept[0]) is float and type(other[0]) is not float else kept
+
+
+def _exact_point(out: list) -> None:
+    """the last piece of `out`, if a point of an exact and a float cut, made the exact point (D32)"""
+    start, end = out[-2], out[-1]
+    if start[0] == end[0] and (type(start[0]) is float) != (type(end[0]) is float):
+        value = end[0] if type(start[0]) is float else start[0]
+        out[-2], out[-1] = below(value), above(value)
+
+
+def _exact_points(out: list) -> Cuts:
+    """the cut list as a tuple, each point piece of an exact and a float cut made the exact point (D32)"""
+    for i in range(0, len(out), 2):
+        start, end = out[i], out[i + 1]
+        if type(start[0]) is not type(end[0]) and start[0] == end[0]:
+            value = end[0] if type(start[0]) is float else start[0]
+            out[i], out[i + 1] = below(value), above(value)
     return tuple(out)
 
 
@@ -82,11 +130,19 @@ def pieces(cuts: Cuts) -> Iterator[Tuple[Value, bool, Value, bool]]:
 
 
 def is_valid(cuts) -> bool:
-    """the representation invariant: a tuple of Cuts, even length, strictly increasing"""
+    """
+    the representation invariant: a tuple of Cuts, even length, strictly increasing, and no point whose
+    two cuts are one exact and one float value of the same number (`normalize` makes it the exact point, D32)
+
+    >>> is_valid((below(2.0), above(2))), is_valid((below(2.0), above(3)))
+    (False, True)
+    """
     return (isinstance(cuts, tuple)
             and len(cuts) % 2 == 0
             and all(isinstance(cut, Cut) for cut in cuts)
-            and all(a < b for a, b in zip(cuts, cuts[1:])))
+            and all(a < b for a, b in zip(cuts, cuts[1:]))
+            and all((type(lo.value) is float) == (type(hi.value) is float)
+                    for lo, hi in pairs(cuts) if lo.value == hi.value))
 
 
 class Builder:
@@ -117,19 +173,25 @@ class Builder:
 
 # SET ALGEBRA
 
-def sweep(cut_tuples: Iterable[Cuts], keep: Callable[[int], bool]) -> Cuts:
+def sweep(cut_tuples: Iterable[Cuts], keep: Callable[[int], bool], first_wins: bool = False) -> Cuts:
     """
     the points covered by a number of the operands for which `keep(number)` is true
 
     every operand must be normalized, so each covers a point at most once. between two consecutive
     distinct cuts there is always at least one point (even between `(v, BELOW)` and `(v, ABOVE)`:
-    the point v), so the depth after each group of equal cuts is the depth of a real region
+    the point v), so the depth after each group of equal cuts is the depth of a real region. of a group
+    of equal cuts, an exact one is kept over a float of the same number (D32), or with `first_wins` the
+    first operand's (`restrict`)
+
+    >>> intersection(normalize([piece(0.0, 1)]), normalize([piece(0, math.inf)]))
+    (Cut(0, BELOW), Cut(1, ABOVE))
     """
     events = []
-    for cuts in cut_tuples:
+    for i, cuts in enumerate(cut_tuples):
+        mine = first_wins and i == 0
         for start, end in pairs(cuts):
-            events.append((start, 1))
-            events.append((end, -1))
+            events.append((start, 1, mine))
+            events.append((end, -1, mine))
     events.sort()
 
     out = []
@@ -138,7 +200,15 @@ def sweep(cut_tuples: Iterable[Cuts], keep: Callable[[int], bool]) -> Cuts:
     if inside:
         out.append(REALS[0])
     for cut, group in groupby(events, key=lambda event: event[0]):
-        depth += sum(delta for _, delta in group)
+        own = None
+        for other, delta, mine in group:
+            depth += delta
+            if mine:
+                own = other
+            elif type(cut[0]) is float and type(other[0]) is not float:  # `_tie`, inline: once per event
+                cut = other
+        if own is not None:
+            cut = own
         if keep(depth) != inside:
             inside = not inside
             out.append(cut)
@@ -163,6 +233,23 @@ def intersection(first: Cuts, *others: Cuts) -> Cuts:
     return sweep((first, *others), lambda depth: depth == n)
 
 
+def restrict(a: Cuts, region: Cuts) -> Cuts:
+    """
+    `a ∩ region` where a cut `a` already has keeps its type: the library's clip of an operand to a domain or a
+    part of the line (a constant of exact cuts). the clip point a region adds is the region's, exact, and a
+    point of an exact and a float cut is exact, as in `intersection` (D32: `acos` clips
+    `[-1.0000000000000002, -1.0]` to the exact point -1); an end the operand has stays its own (`[-1.0]` stays
+    the float point, so `acos` of it is `[3.141592653589793]` to nearest)
+
+    >>> unit = normalize([piece(-1, 1)])
+    >>> restrict(normalize([piece(-1.0, 2.0)]), unit), intersection(normalize([piece(-1.0, 2.0)]), unit)
+    ((Cut(-1.0, BELOW), Cut(1, ABOVE)), (Cut(-1, BELOW), Cut(1, ABOVE)))
+    >>> restrict(normalize([piece(-1.0000000000000002, -1.0)]), unit)
+    (Cut(-1, BELOW), Cut(-1, ABOVE))
+    """
+    return sweep((a, region), lambda depth: depth == 2, first_wins=True)
+
+
 def symmetric_difference(*cut_tuples: Cuts) -> Cuts:
     """points covered by an odd number of operands"""
     return sweep(cut_tuples, lambda depth: depth % 2 == 1)
@@ -174,7 +261,7 @@ def complement(cuts: Cuts) -> Cuts:
     and vice versa. pairs that come out empty (`start >= end`) drop out
     """
     shifted = (REALS[0], *cuts, REALS[1])
-    return tuple(cut for start, end in pairs(shifted) if start < end for cut in (start, end))
+    return _exact_points([cut for start, end in pairs(shifted) if start < end for cut in (start, end)])
 
 
 def difference(minuend: Cuts, *subtrahends: Cuts) -> Cuts:

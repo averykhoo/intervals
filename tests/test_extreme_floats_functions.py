@@ -50,7 +50,7 @@ from multiinterval import MultiInterval
 from multiinterval import OutwardMultiInterval
 from multiinterval import elementary
 from multiinterval.functions import NAMES
-from multiinterval.kernel import intersection
+from multiinterval.kernel import restrict
 from multiinterval.kernel import normalize
 from multiinterval.kernel import piece
 from multiinterval.kernel import pieces
@@ -471,7 +471,7 @@ def test_every_value_is_in_the_result(case, rng):
     a = _operand(rng, EDGES.get(name, UNIT_EDGES))
     floats, exacts = _kinds(a)
     outward, nearest = _apply(OutwardMultiInterval, name, base, a), _apply(MultiInterval, name, base, a)
-    for x in _samples(intersection(a, _domain(name, base)), rng):
+    for x in _samples(restrict(a, _domain(name, base)), rng):
         where = f'{name}{"" if base is None else f"[{base!r}]"} of {_show(a)} at {x!r}'
 
         def run():
@@ -509,11 +509,14 @@ def test_ends_are_sharp_where_monotone(case, rng):
 
 
 # what the fuzz found (2026-10-02), each an oracle bug fixed above: to nearest csch's two sides meet at 0.0,
-# and a domain's end clipped onto a float end is a point with an exact cut and a float one
+# and a domain's end clipped onto a float end is a point with an exact cut and a float one (since D32, 2026-10-08,
+# the exact point: `normalize` makes it so)
 @pytest.mark.parametrize('name, a', [
     ('csch', normalize([piece(-1e154, 1e154)])),
     ('asin', normalize([piece(1.0, INF)])),
     ('acos', normalize([piece(-1.0000000000000002, -1.0)])),
+    ('asin', normalize([piece(0.9999999999999999, 1.0)])),  # the gate, 2026-10-08: the oracle clipped by intersection
+    ('acos', normalize([piece(-1.0, -0.9999999999999999)])),
 ])
 def test_ends_are_sharp_where_the_fuzz_looked(name, a):
     _check_sharp(name, None, a)
@@ -521,7 +524,10 @@ def test_ends_are_sharp_where_the_fuzz_looked(name, a):
 
 def _check_sharp(name, base, a):
     results =[(_apply(cls, name, base, a), cls is MultiInterval) for cls in (OutwardMultiInterval, MultiInterval)]
-    parts = list(pieces(intersection(a, _domain(name, base))))
+    # clipped as the library clips (`kernel.restrict`): an end the operand has keeps its type, so asin of
+    # [0.9999999999999999, 1.0] ends at asin(1.0) to nearest, not at the exact pi/2 an `intersection` would ask for
+    # (its tie with the domain's exact 1 makes the end exact: D32's tie rule, for set operations; 2026-10-08)
+    parts = list(pieces(restrict(a, _domain(name, base))))
     where = f'{name}{"" if base is None else f"[{base!r}]"} of {_show(a)}'
     if not parts or (parts[0][0] == parts[0][2] == 0 and _pole(name, base)):
         got = [_show(r.cuts) for r, _ in results]
@@ -576,11 +582,6 @@ def _check_sharp(name, base, a):
         low, high = ends if lo == hi or _rising(name, base, lo, hi, quadrant) else ends[::-1]
         s_low, s_high = _sign_of(name, base, low[0], low[2]), _sign_of(name, base, high[0], high[2])
         for result, nearest in results:
-            if nearest and lo == hi and _finite_float(lo) != _finite_float(hi):
-                # a domain's end clipped onto a float end (asin of [1.0, inf]) is a point with a float cut and an
-                # exact one; to nearest either cut's rule is a fair reading of it
-                _note('to nearest, a point with a float cut and an exact cut')
-                continue
             ps = list(pieces(result.cuts))
             assert len(ps) == 1, f'{where}: {ps}, not one piece'
             r_lo, r_lo_closed, r_hi, r_hi_closed = ps[0]
@@ -609,7 +610,7 @@ def test_two_argument_values_are_in_the_result(name, rng):
             x, y = cls.from_cuts(a), cls.from_cuts(b)
             results.append(x ** y if name == 'pow' else getattr(x, name)(y))
     outward, nearest = results
-    first = intersection(a, _FROM_ZERO) if name == 'pow' else a
+    first = restrict(a, _FROM_ZERO) if name == 'pow' else a
     for v in _pair_samples(first, rng):
         for u in _pair_samples(b, rng):
             where = f'{name} of {_show(a)} and {_show(b)} at ({v!r}, {u!r})'

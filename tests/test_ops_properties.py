@@ -36,6 +36,7 @@ from multiinterval.kernel import piece
 from multiinterval.kernel import pieces
 from multiinterval.kernel import union
 from multiinterval.multi_interval import MultiInterval
+from multiinterval.multi_interval import OutwardMultiInterval
 from tests.oracles import BINARY
 from tests.oracles import OPS
 from tests.oracles import attained
@@ -375,6 +376,30 @@ def test_neg_and_pos_keep_each_cuts_type(a):
     assert ops.neg(a) == mirrored and types(ops.neg(a)) == types(mirrored)
     assert ops.neg(ops.neg(a)) == a and types(ops.neg(ops.neg(a))) == types(a)
     assert ops.pos(a) == a and types(ops.pos(a)) == types(a)
+
+
+# each number in an exact and a float form, so the ties D32 decides are common
+_TIED = st.sampled_from([-INF, -2, -2.0, -1, -1.0, 0, 0.0, Fraction(1, 2), 0.5, 1, 1.0, 2, 2.0, INF])
+
+
+@pytest.mark.parametrize('cls', [MultiInterval, OutwardMultiInterval])
+@settings(max_examples=200, deadline=None)
+@given(a=st.one_of(cut_tuples(values=_TIED), cut_tuples()))
+@example(a=parse('[-1, 1.0]'))
+@example(a=parse('[-1.0, 1]'))
+@example(a=parse('[0.0, 1]'))
+@example(a=parse('[0.0]'))
+@example(a=parse('[-2.0, 0.0]'))
+@example(a=parse('(-1.0, 1.0)'))
+def test_abs_is_the_union_with_the_negation_on_the_half_line(cls, a):
+    """
+    the owner, D32 (2026-10-08): abs is `(X | -X) & [0, inf]`, an exact identity of sets whose 0 is the cut of the
+    exact constant `[0, inf]` (set operations select cuts and never round). its definition and a pin, types
+    included, in both classes: `abs(M(-1.0, 1))` was `[0, 1.0]` (the kernel's tie by position), and `abs(M(0.0, 1))`
+    `[0.0, 1]` (abs's 0 from a float zero, which the identity gives as the constant 0)
+    """
+    x = cls.from_cuts(a)
+    assert repr(abs(x)) == repr((x | -x) & cls(0, INF))
 
 
 # SHARPNESS: on exact operands the result is exactly the attained set

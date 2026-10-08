@@ -455,7 +455,21 @@ def _exactly(desc: OpDescriptor, a: Cuts, fn) -> Cuts:
 
 
 def absolute(a: Cuts) -> Cuts:
-    return apply_unary(ABS, a)
+    """
+    abs is `(X | -X) & [0, inf]` (D32, the owner's definition; pinned, types included, by
+    `tests/test_ops_properties.py::test_abs_is_the_union_with_the_negation_on_the_half_line`). the applicator
+    gives that set; the intersection, which changes no point of it, gives its attained 0 the type of the exact
+    constant `[0, inf]`, as the kernel's tie rule does: `abs(M(0.0, 1))` is `[0, 1]`, `abs` of `(-inf, 0.0)`
+    `(0.0, inf)` (an open 0 is not reached, so it stays the operand's)
+
+    >>> from multiinterval.fmt import format_cuts, parse
+    >>> format_cuts(absolute(parse('[-2.0, 0.0]'))), format_cuts(absolute(parse('(-1.0, 0.0)')))
+    ('[0, 2.0]', '(0.0, 1.0)')
+    """
+    return kernel.intersection(apply_unary(ABS, a), _HALF_LINE)
+
+
+_HALF_LINE = kernel.normalize([kernel.piece(0, math.inf)])
 
 
 def reciprocal(a: Cuts, outward: bool = False) -> Cuts:

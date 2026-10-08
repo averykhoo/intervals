@@ -111,8 +111,8 @@ def mod(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     if not a or not b:
         warn(EmptySetPropagationWarning, 'mod: an operand is empty, so the result is empty')
         return kernel.EMPTY
-    dividend = kernel.intersection(a, _FINITE)
-    divisor = kernel.intersection(b, _NONZERO)
+    dividend = kernel.restrict(a, _FINITE)
+    divisor = kernel.restrict(b, _NONZERO)
     if dividend != a:
         warn(DomainClippedWarning, 'mod: ±inf mod y has no value, so the dividend\'s infinite points were dropped')
     if divisor != b:

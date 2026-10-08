@@ -14,8 +14,8 @@ inverses, roots, and the two-argument atan2, pow and hypot
 * **shape**: each function is monotone on each piece once split where its direction changes (cosh
   and sech at 0); a monotone continuous function maps a piece to the piece between its ends' images,
   each end closed iff the piece's end is. sin, cos, csc and sec also attain their extrema (±1) inside
-  a piece, and tan, cot, csc and sec map a piece holding a pole to both sides of it with both
-  infinities attained, as `1/x` does at a zero inside a piece. coth, csch and an odd negative root
+  a piece, an exact ±1 from a float piece too (D32: attained, so no rounding touched it), and tan,
+  cot, csc and sec map a piece holding a pole to both sides of it with both infinities attained, as `1/x` does at a zero inside a piece. coth, csch and an odd negative root
   have a pole at 0 with a side each way, as do cot and csc: a piece ending at 0 takes the one-sided
   limit there (closed iff the piece holds 0, as `1/[0, 1]` = `[1, inf]`), and the point 0 alone has
   no value (`IndeterminateResultWarning`, as `1/[0]`)
@@ -157,7 +157,7 @@ def apply(name: str, a: Cuts, outward: bool = False, base=None) -> Cuts:
         warn(EmptySetPropagationWarning, f'{name}: the operand is empty, so the result is empty')
         return kernel.EMPTY
     where = domain(name, base)
-    inside = kernel.intersection(a, where)
+    inside = kernel.restrict(a, where)  # an end the operand has keeps its type; a clip point is exact (D32)
     if inside != a:
         warn(DomainClippedWarning, f'{name}: points outside its domain {fmt.format_cuts(where)} were dropped')
     fn = _Function(name, outward, base)
@@ -256,9 +256,6 @@ class _Function:
         hi, hi_closed = self.end(*high_end, UP)
         return _settled(lo, lo_closed, hi, hi_closed)
 
-    def as_float(self, p: Piece) -> bool:
-        return is_float(p[0]) or is_float(p[2])
-
     # MONOTONE FUNCTIONS
 
     def increasing(self, p: Piece) -> bool:
@@ -311,7 +308,7 @@ class _Function:
         unbounded = is_infinite(lo) or is_infinite(hi)
         if self.name == 'tan':
             return self.tan(p, unbounded)
-        one = self.typed(1, p)
+        one = 1  # an extremum inside the piece: attained, at an irrational point, so exactly ±1 (D32)
         if unbounded:
             return [(-one, True, one, True)]
         # the extrema: sin at pi/2 + k pi, cos at k pi; a maximum for even k
@@ -372,8 +369,8 @@ class _Function:
                 self.poles_hit = True
                 return []
             return [self.point(lo)]
-        one = self.typed(1, p)
-        whole = [(-INF, True, INF, True)] if self.name == 'cot' else [(-INF, True, -one, True), (one, True, INF, True)]
+        one = 1  # as in `periodic`: an extremum is used only where it is inside the piece, so exact (D32)
+        whole =[(-INF, True, INF, True)] if self.name == 'cot' else [(-INF, True, -one, True), (one, True, INF, True)]
         if is_infinite(lo) or is_infinite(hi):
             return whole
         first, last = _inside_k(lo, hi, pole_offset)
@@ -426,9 +423,6 @@ class _Function:
             return _settled(lo, lo_closed, v, v_closed)
         hi, hi_closed = self.end(*x_end, UP)
         return _settled(v, v_closed, hi, hi_closed)
-
-    def typed(self, v: int, p: Piece):
-        return float(v) if self.as_float(p) else v
 
 
 def _inside_k(lo, hi, offset: Fraction) -> Tuple[int, int]:
@@ -506,7 +500,7 @@ def _cuts(p: Piece) -> Cuts:
 
 def _sign_parts(cuts: Cuts) -> List[Piece]:
     """each piece cut into its negative part, [0] and its positive part (the parts open at 0)"""
-    return [q for part in (_NEGATIVE, _ZERO, _POSITIVE) for q in kernel.pieces(kernel.intersection(cuts, part))]
+    return [q for part in (_NEGATIVE, _ZERO, _POSITIVE) for q in kernel.pieces(kernel.restrict(cuts, part))]
 
 
 def _side(p: Piece) -> int:
@@ -662,7 +656,7 @@ def pow_(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
     if not a or not b:
         warn(EmptySetPropagationWarning, 'pow: an operand is empty, so the result is empty')
         return kernel.EMPTY
-    inside = kernel.intersection(a, _NON_NEGATIVE)
+    inside = kernel.restrict(a, _NON_NEGATIVE)
     clipped = inside != a
     as_float = has_finite_float(a) or has_finite_float(b)
     out, indeterminate, too_long = [], [], []
@@ -694,7 +688,7 @@ def pow_(a: Cuts, b: Cuts, outward: bool = False) -> Cuts:
 
 def _tagged_parts(p: Piece, parts) -> List[Tuple[object, Piece]]:
     """the piece cut into its parts, each with the part's tag"""
-    return [(tag, q) for tag, part in parts for q in kernel.pieces(kernel.intersection(_cuts(p), part))]
+    return [(tag, q) for tag, part in parts for q in kernel.pieces(kernel.restrict(_cuts(p), part))]
 
 
 def _power_box(px: Piece, py: Piece, sx, sy: int, as_float: bool, outward: bool, too_long: Optional[list] = None):

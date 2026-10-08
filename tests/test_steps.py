@@ -7,9 +7,9 @@ iff the operand meets the preimage of n. on single points the functions must agr
 `math.ceil`, `math.trunc`, `round` and, for round_ties_away, the decimal module's ROUND_HALF_UP.
 
 float and mixed operands, from subnormals to the largest double with ±inf, in both classes: a listed
-result is the preimages' set with each value of a float piece made a double (to nearest, or outward
-the open gap between the doubles around it, from `int / int` and `nextafter`, not the package's
-rounding); `round(A, ndigits)` against the decimal module's exact grid value; past the cap (or for
+result is the preimages' set, its integers exact (D32, 2026-10-08), and each value of a finer grid on a float
+piece made a double (to nearest, or outward the open gap between the doubles around it, from `int / int` and
+`nextafter`, not the package's rounding);`round(A, ndigits)` against the decimal module's exact grid value; past the cap (or for
 a piece reaching ±inf) the warning and exactly the documented hull, from the least value attained to
 the greatest; sign never hulls. and the laws of a pointwise image where nothing is hulled:
 isotone, distributing over unions, idempotent. two library bugs they found are fixed and pinned
@@ -117,8 +117,13 @@ def show(cuts) -> str:
     ('sign', '(-inf, 0)', '[-1]'),
     ('sign', '[0]', '[0]'),
     ('sign', '[-inf]', '[-1]'),
-    ('sign', '[-2.5, 3.0]', '{ [-1.0] , [0.0] , [1.0] }'),
-    ('ceil', '[2.5, 4.0]', '{ [3.0] , [4.0] }'),
+    # the integers are exact on a float piece too (D32; were `[-1.0]`, `[3.0]` ...)
+    ('sign', '[-2.5, 3.0]', '{ [-1] , [0] , [1] }'),
+    ('ceil', '[2.5, 4.0]', '{ [3] , [4] }'),
+    ('trunc', '[-2.5, 3]', '{ [-2] , [-1] , [0] , [1] , [2] , [3] }'),
+    ('round', '[0.25, 0.75]', '{ [0] , [1] }'),
+    ('ceil', '[-0.5, -0.25]', '[0]'),
+    ('round', '{ [0.125, 0.135] , [2.0] }', '{ [0] , [2] }'),
 ])
 def test_examples(name, a, expected):
     assert show(steps.step(name, parse(a))) == expected
@@ -130,6 +135,8 @@ def test_examples(name, a, expected):
     ('trunc', '[-inf, inf]', '[-inf, inf]'),
     ('round', '[0, 5000]', '[0, 5000]'),
     ('round_ties_away', '(-inf, 0]', '(-inf, 0]'),
+    ('ceil', '[0.5, 2000.0)', '[1, 2000]'),  # a float piece's hull has exact ends too (D32)
+    ('round', f'[-0.5, {1e300!r}]', f'[0, {int(1e300)}]'),
 ])
 def test_hulls_with_a_warning(name, a, expected):
     with pytest.warns(HullWarning):
@@ -198,15 +205,21 @@ def _half_away(x) -> int:
     return int((Decimal(q.numerator) / Decimal(q.denominator)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
+def same(a, b) -> bool:
+    """the same set in the same number types (`==` compares values: `[3] == [3.0]`)"""
+    return repr(a) == repr(b)
+
+
 @given(x=_points())
 def test_points_agree_with_python(x):
-    typed = float if isinstance(x, float) else int
+    """an int, as python's `math.ceil(2.5)` is, from a float point too (D32; was the float `[3.0]`)"""
     a = MultiInterval(x)
-    assert a.ceil() == MultiInterval(typed(math.ceil(x)))
-    assert a.trunc() == MultiInterval(typed(math.trunc(x)))
-    assert a.round() == MultiInterval(typed(round(x)))
-    assert a.round_ties_away() == MultiInterval(typed(_half_away(x)))
-    assert a.sign() == MultiInterval(typed((x > 0) - (x < 0)))
+    assert same(a.ceil(), MultiInterval(math.ceil(x)))
+    assert same(a.trunc(), MultiInterval(math.trunc(x)))
+    assert same(a.round(), MultiInterval(round(x)))
+    assert same(a.round_ties_away(), MultiInterval(_half_away(x)))
+    assert same(a.sign(), MultiInterval((x > 0) - (x < 0)))
+    assert same(a.floor(), MultiInterval(math.floor(x)))
     assert math.floor(a) == a.floor() and math.ceil(a) == a.ceil()
     assert math.trunc(a) == a.trunc() and round(a) == a.round() and round(a, 1) == a.round(1)
 
@@ -238,14 +251,20 @@ def test_sound_and_sharp(name, a, rng):
 
 @pytest.mark.parametrize('name', NAMES)
 @settings(max_examples=50, deadline=None)
-@given(a=cut_tuples(max_pieces=3))
-def test_float_pieces_give_floats(name, a):
+@given(a=cut_tuples(max_pieces=3), ndigits=st.none() | st.integers(-3, 0) | st.integers(1, 3), outward=st.booleans())
+def test_the_integers_are_exact(name, a, ndigits, outward):
+    """
+    the owner, D32 (2026-10-08): the integers a step function lists are exact, on a float piece too, as python's
+    `math.floor` gives an int (`floor(M(-2.5, 3.0))` was all floats, `trunc(M(-2.5, 3))` mixed). only a finer grid's
+    values (`round(A, ndigits)`, `ndigits > 0`) are floats on a float piece: 0.12 is no double
+    """
+    nd = ndigits if name in DIGITS else None
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        result = steps.step(name, a)
-    float_input = any(isinstance(c.value, float) and math.isfinite(c.value) for c in a)
-    if not float_input:
-        assert not any(isinstance(c.value, float) and math.isfinite(c.value) for c in result)
+        result = steps.step(name, a, nd, outward)
+    finite_floats = [c.value for c in result if _finite_float(c.value)]
+    if nd is None or nd <= 0 or not any(_finite_float(c.value) for c in a):
+        assert not finite_floats, (name, show(a), nd, show(result))
 
 
 # THE CLASS
@@ -340,16 +359,22 @@ def _grid_preimage(name: str, n: int, unit: Fraction):
     return normalize([piece(lo * unit, hi * unit, lo_closed, hi_closed)])
 
 
+def _rounds(lo, hi, unit: Fraction) -> bool:
+    """a piece's grid values are made doubles: a finer grid than the integers' (ndigits > 0) on a piece with a finite
+    float end. the integers are exact, a float piece's too (D32)"""
+    return unit.denominator != 1 and (_finite_float(lo) or _finite_float(hi))
+
+
 def _image(name: str, a, ndigits=None, outward=False):
     """
-    f(a) listed from the preimages, as the class must give it: a piece with a finite float end has its values made
+    f(a) listed from the preimages, as the class must give it: a piece whose values round (`_rounds`) has them made
     doubles (`_enclosure`); `(cuts, whether some such value is not a double)`, or None where f(a) must be a hull (a
     piece reaching ±inf, or wider than the cap)
     """
     unit = _unit(ndigits)
     out, enclosed = [], False
     for lo, lo_closed, hi, hi_closed in pieces(a):
-        as_float = _finite_float(lo) or _finite_float(hi)
+        as_float = _rounds(lo, hi, unit)
         exact = _exact_cuts(normalize([piece(lo, hi, lo_closed, hi_closed)]))
         if name == 'sign':
             window = (-1, 0, 1)
@@ -431,15 +456,15 @@ def _ndigits(data, name: str, lo=-3, hi=3):
 @given(x=st.one_of(st.floats(allow_nan=False), st.sampled_from(FLOAT_BASES)))
 def test_every_double_agrees_with_python(x):
     """the whole double range, subnormals to ±inf, both classes: python's math.ceil, math.trunc and round, and the
-    decimal module's ROUND_HALF_UP; `f(±inf)` = ±inf, sign's ±1"""
+    decimal module's ROUND_HALF_UP, as ints (D32); `f(±inf)` = ±inf, sign's ±1"""
     for cls in CLASSES:
         a = cls(x)
         for name in STEPS:
             v = _at(name, x)
-            assert getattr(a, name)() == cls(float(v)), (cls.__name__, name, x)
+            assert same(getattr(a, name)(), cls(v)), (cls.__name__, name, x)
         if math.isfinite(x):
-            assert a.ceil() == cls(float(math.ceil(x))) and a.trunc() == cls(float(math.trunc(x)))
-            assert a.round() == cls(float(round(x)))
+            assert same(a.ceil(), cls(math.ceil(x))) and same(a.trunc(), cls(math.trunc(x)))
+            assert same(a.round(), cls(round(x)))
 
 
 @settings(max_examples=150, deadline=None)
@@ -450,16 +475,18 @@ def test_every_double_agrees_with_python(x):
 def test_round_to_digits_against_decimal(x, ndigits):
     """
     one point to ndigits against the decimal module's exact grid value g (ROUND_HALF_EVEN, ROUND_HALF_UP): an exact x
-    gives g, and Fraction's round agrees; a double gives, in MultiInterval, the double nearest g, as python's
-    `round(x, ndigits)` does (whose OverflowError is the point ±inf), and in OutwardMultiInterval g if it is a double,
-    else the open gap between the doubles around it
+    gives g, and Fraction's round agrees; a double gives g, exactly, where it is an integer (ndigits <= 0: D32, an
+    integer is exact; python's `round(x, ndigits)` gives the double nearest it, or OverflowError), and for
+    ndigits > 0, in MultiInterval, the double nearest g, as python's `round(x, ndigits)` does, and in
+    OutwardMultiInterval g if it is a double, else the open gap between the doubles around it
     """
     for name, rounding in (('round', ROUND_HALF_EVEN), ('round_ties_away', ROUND_HALF_UP)):
         g = _decimal_round(Fraction(x), ndigits, rounding)
         for cls in CLASSES:
             got = getattr(cls(x), name)(ndigits).cuts
-            want = normalize([_enclosure(g, cls is OutwardMultiInterval) if isinstance(x, float) else piece(g, g)])
-            assert got == want, (name, cls.__name__, x, ndigits, g, show(got))
+            rounds = isinstance(x, float) and ndigits > 0
+            want = normalize([_enclosure(g, cls is OutwardMultiInterval) if rounds else piece(g, g)])
+            assert got == want and repr(got) == repr(want), (name, cls.__name__, x, ndigits, g, show(got))
         if name == 'round' and isinstance(x, float):
             try:
                 assert round(x, ndigits) == _nearest(g)
@@ -542,7 +569,7 @@ def test_hull_past_the_cap(name, data):
     assume(name != 'trunc' or lo >= 0 or hi < 0 or hi == 0 and not hi_closed)
     first, last = _first_and_last(name, a, unit)
     must_hull = first == -INF or last == INF or last - first + 1 > CAP
-    as_float = _finite_float(lo) or _finite_float(hi)
+    as_float = _rounds(lo, hi, unit)
     for cls in CLASSES:
         outward = cls is OutwardMultiInterval
         result, hulled = _call(cls, name, a, ndigits)
@@ -556,18 +583,21 @@ def test_hull_past_the_cap(name, data):
         else:  # a connected piece attains every grid value from its first to its last
             want = normalize(_enclosure(n * unit, outward) if as_float else piece(n * unit, n * unit)
                              for n in range(first, last + 1))
-        assert result == want, (cls.__name__, show(a), show(result), show(want))
+        assert result == want and repr(result) == repr(want), (cls.__name__, show(a), show(result), show(want))
 
 
 
 def test_outward_lists_what_no_double_holds():
-    """past 2 ** 53 a float piece meets integers that are not doubles: outward, floor, ceil and trunc enclose
-    each in the open gap around it, as round does; they rounded it to nearest, so `ceil` of [2 ** 53, 2 ** 53 + 2]
-    missed 2 ** 53 + 1 (M14-breadth, 2026-10-02)"""
-    a = OutwardMultiInterval(2.0 ** 53, 2.0 ** 53 + 2)
-    for f in (a.floor, a.ceil, a.trunc, a.round):
-        assert f() == a, f
-    assert (-a).trunc() == -a
+    """past 2 ** 53 a float piece meets integers that are not doubles: outward, floor, ceil and trunc rounded
+    2 ** 53 + 1 to nearest, so `ceil` of [2 ** 53, 2 ** 53 + 2] missed it (M14-breadth, 2026-10-02), then enclosed
+    it in the open gap around it, as round did; since D32 (2026-10-08) each is the exact int, in both classes"""
+    want = {2 ** 53, 2 ** 53 + 1, 2 ** 53 + 2}
+    for cls in CLASSES:
+        a = cls(2.0 ** 53, 2.0 ** 53 + 2)
+        for f in (a.floor, a.ceil, a.trunc, a.round, a.round_ties_away):
+            got = [lo for lo, _, _, _ in pieces(f().cuts)]
+            assert len(f().cuts) == 6 and set(got) == want and all(type(v) is int for v in got), (cls, f)
+        assert same((-a).trunc(), -a.trunc())
 
 
 @pytest.mark.parametrize('name, text', [('ceil', '{ [0, 1/2] , [7/10, 999] }'), ('trunc', '[-1, 1997/2)'),

@@ -458,7 +458,7 @@ def test_attainment_is_constant_time():
     ('[inf]', '[inf]'),
     ('[-inf]', '[-inf]'),
     ('{ [5/2] , [3] }', '{ [2] , [3] }'),
-    ('[2.5, 4.0)', '{ [2.0] , [3.0] }'),
+    ('[2.5, 4.0)', '{ [2] , [3] }'),  # ints from a float piece too (D32)
 ])
 def test_floor(a, expected):
     assert format_cuts(modulo.floor(parse(a))) == expected

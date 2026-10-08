@@ -224,17 +224,68 @@ def test_unknown_function():
     ('exp10', '[-1.0]', '[0.1]', '(0.09999999999999999, 0.1)'),
     ('log2', '[0.125, 8.0]', '[-3.0, 3.0]', '[-3.0, 3.0]'),
     ('exp', '[0.0, 1.0]', '[1.0, 2.718281828459045]', '[1.0, 2.7182818284590455)'),
-    ('sin', '[0.0, 4.0]', '[-0.7568024953079282, 1.0]', '(-0.7568024953079283, 1.0]'),
+    ('sin', '[0.0, 4.0]', '[-0.7568024953079282, 1]', '(-0.7568024953079283, 1]'),  # the attained 1: D32
     ('exp', '[1000.0]', '[inf]', '(1.7976931348623157e+308, inf)'),
     ('exp', '[-1000.0]', '[0.0]', '(0.0, 5e-324)'),
     ('tanh', '[30.0]', '[1.0]', '(0.9999999999999999, 1.0)'),
     ('cbrt', '[8.0]', '[2.0]', '[2.0]'),
     ('expm1', '[1e-20]', '[1e-20]', '(1e-20, 1.0000000000000001e-20)'),
     ('coth', '[0.0, 1.0]', '[1.3130352854993312, inf]', '(1.3130352854993312, inf]'),
-    ('csc', '[-3.0, 0.0]', '[-inf, -1.0]', '[-inf, -1.0]'),
+    ('csc', '[-3.0, 0.0]', '[-inf, -1]', '[-inf, -1]'),
     ('sech', '[1000.0]', '[0.0]', '(0.0, 5e-324)'),
 ])
 def test_float_modes(name, a, nearest, outward):
+    assert f(name, a) == nearest
+    assert f(name, a, outward=True) == outward
+
+
+_H = 1.5707963267948966  # the double nearest pi/2, below it
+
+
+@pytest.mark.parametrize('name, a, nearest, outward', [
+    # pi/2 outside the piece: the max is sin(h), below 1, rounded: a float either way
+    ('sin', f'[0.0, {_H!r}]', '[0.0, 1.0]', '[0.0, 1.0)'),
+    # pi/2 inside: the max is 1, attained, no ulp contamination
+    ('sin', f'[0.0, {math.nextafter(_H, 2)!r}]', '[0.0, 1]', '[0.0, 1]'),
+    ('sin', '[0.0, 2.0]', '[0.0, 1]', '[0.0, 1]'),
+    ('cos', '[-1.0, 1.0]', '[0.5403023058681398, 1]', '(0.5403023058681397, 1]'),
+    ('cos', '[3.0, 4.0]', '[-1, -0.6536436208636119]', '[-1, -0.6536436208636118)'),
+    ('sin', '[1.0, 1e300]', '[-1, 1]', '[-1, 1]'),
+    ('cos', '[-inf, 0.0]', '[-1, 1]', '[-1, 1]'),
+    # the reciprocals' extrema, as sin's and cos's
+    ('sec', '[-1.0, 1.0]', '[1, 1.8508157176809257]', '[1, 1.8508157176809257)'),
+    ('csc', '[1.0, 2.0]', '[1, 1.1883951057781212]', '[1, 1.1883951057781212)'),
+])
+def test_an_attained_extremum_is_exact(name, a, nearest, outward):
+    """
+    the owner, D32 (2026-10-08): the constants a function reaches are exact, and an end is exact only when it has no
+    ulp contamination: proved to be that number and attained there. sin's and cos's ±1 inside a piece are (the
+    piece holds the critical point, decided exactly, `elementary.floor_over_pi`); were `[0.0, 1.0]` from a float
+    piece. a value that merely rounds to 1 stays a float
+    """
+    assert f(name, a) == nearest
+    assert f(name, a, outward=True) == outward
+
+
+@pytest.mark.parametrize('name, a, nearest, outward', [
+    # the domain clips at -1: a clip point, exact, so acos runs on the exact -1 and stays open around pi
+    ('acos', '[-1.0000000000000002, -1.0]', '(3.141592653589793, 3.1415926535897936)',
+     '(3.141592653589793, 3.1415926535897936)'),
+    # the user's float point: no clip, acos(-1.0) rounded
+    ('acos', '[-1.0]', '[3.141592653589793]', '(3.141592653589793, 3.1415926535897936)'),
+    ('asin', '[1.0]', '[1.5707963267948966]', '(1.5707963267948966, 1.5707963267948968)'),
+    # an end the operand has stays its own when another piece is clipped
+    ('asin', '{ [1.0] , [3.0] }', '[1.5707963267948966]', '(1.5707963267948966, 1.5707963267948968)'),
+    ('asin', '[-1.0, 2.0]', '[-1.5707963267948966, 1.5707963267948968)', '(-1.5707963267948968, 1.5707963267948968)'),
+])
+def test_a_domain_clip_is_exact_and_an_operands_end_its_own(name, a, nearest, outward):
+    """
+    the owner, D32 (2026-10-08): the clip point of `[-1.0000000000000002, -1.0]` against acos's domain is the operand's
+    -1.0 and the domain's -1, a tie, so exact, and the result stays open around pi; `acos([-1.0])` is
+    `[3.141592653589793]` to nearest, where the user gave the float point. the clip is `kernel.restrict`, which keeps
+    an operand's own cut on a tie (`kernel.intersection` would make every such end exact: `asin([1.0])` was the open
+    one-ulp piece around pi/2 in the first build of D32, caught by tests/test_oracle_flint.py)
+    """
     assert f(name, a) == nearest
     assert f(name, a, outward=True) == outward
 
@@ -473,7 +524,7 @@ def test_a_float_near_a_pole_of_tan():
 def test_huge_arguments():
     """a wide piece is recognised from two floor computations, whatever its width; a narrow one far out
     is reduced exactly (1e22 lies about 1.02 short of a multiple of 2 pi, so cos rises through its maximum)"""
-    assert f('sin', '[1, 1e300]') == '[-1.0, 1.0]'
+    assert f('sin', '[1, 1e300]') == '[-1, 1]'  # the extrema, attained: exact (D32)
     assert f('cos', f'[{10 ** 22}, {10 ** 22 + 3}]') == '(-0.3977161208638285, 1]'
 
 

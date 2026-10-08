@@ -49,8 +49,8 @@ Size(rays=0, length=2, points=0)
 >>> print(sin_rev(MI(0), MI(-1, 7)))  # the t in [-1, 7] with sin t = 0: 0 exact, pi and 2 pi enclosed
 { [0] , (3.141592653589793, 3.1415926535897936) , (6.283185307179586, 6.283185307179587) }
 >>> import math
->>> print(math.floor(MI(-1.5, 1.5)))
-{ [-2.0] , [-1.0] , [0.0] , [1.0] }
+>>> print(math.floor(MI(-1.5, 1.5)))  # the integers it attains, exact, as python's math.floor gives ints
+{ [-2] , [-1] , [0] , [1] }
 >>> from multiinterval import OutwardMultiInterval as OMI
 >>> print(OMI(0.1) + 0.2)            # outward rounding: the exact sum is strictly between
 (0.3, 0.30000000000000004)
@@ -98,7 +98,11 @@ Interval(float('-inf'), float('inf'))
 * **values**: int and Fraction are exact and never rounded, but for a power too long to build (past
   2**22 bits, about 1.26M digits: pown, pow, `exp2`, `exp10`), which becomes a float like an
   irrational value, with a `PowerLimitWarning` (ignored by default; make it an error to forbid it);
-  float endpoints go through a rounding hook (identity by default). `-inf` and `inf` are ordinary points, so `[1, inf]` and `[1, inf)` are
+  float endpoints go through a rounding hook (identity by default). each end keeps its own type: a value
+  computed from a float is a float, but what is known exactly stays exact, from float operands too: the
+  constants a function reaches (`abs(MI(-1.0, 1.0))` is `[0, 1.0]`, `MI(-1.0, 1.0).cos()`
+  `[0.5403023058681398, 1]`) and the integers a step function lists; an end reached by an exact and a float
+  value of one number is exact. `-inf` and `inf` are ordinary points, so `[1, inf]` and `[1, inf)` are
   different sets, and `[inf]` is a legal degenerate interval
 * **set algebra**: `| & ^ ~`, `difference()`, `issubset()`, `in`, slicing `x[a:b]` (restricts to
   `[a, b]`), `hull`, `interior` (every end opened), `expand()`, `size` (rays, length, isolated

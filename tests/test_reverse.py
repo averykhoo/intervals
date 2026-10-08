@@ -1273,7 +1273,8 @@ def test_trig_rev_union_and_x(name, c, d, x):
 
 @settings(deadline=None)
 @given(name=trig_names, c=cut_tuples(), x=cut_tuples())
-@example(name='sin', c=(Cut(0, Side.BELOW), Cut(0.0, Side.ABOVE)), x=one(-INF, -2, False, False))  # a mixed point
+@example(name='sin', c=(Cut(0, Side.BELOW), Cut(0.5, Side.ABOVE)), x=one(-INF, -2, False, False))  # ends of two types
+# (it was the mixed point `[0, 0.0]`, which since D32 is no representation: `normalize` makes it `[0]`)
 def test_trig_rev_symmetry(name, c, x):
     """sin and tan are odd, cos is even: `rev(-c, -x) = -rev(c, x)` and `cos_rev(c, -x) = -cos_rev(c, x)`,
     hulls and float operands included (a branch's mirror is a branch, and rounding is symmetric). the

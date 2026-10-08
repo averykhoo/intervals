@@ -15,9 +15,13 @@ start to the one just inside its end:
 
 and trunc is floor above 0 and ceil below it. up to `ENUMERATION_CAP` values are listed; past that,
 or for a piece reaching ±inf, their hull is returned with a `HullWarning`. `f(±inf)` = ±inf (sign:
-±1). a float end keeps its type, as python's float `floor` does not (`floor([2.5])` = `[2.0]`).
+±1). the values are ints on a float piece too, as python's `math.floor(2.5)` is 2 (D32: an integer the
+function lists is exact); only `round(A, ndigits)` with `ndigits > 0` on a float piece gives floats, its
+grid values (0.12) being no doubles, as python's `round(2.675, 2)` is a float.
 
 >>> from multiinterval.fmt import format_cuts, parse
+>>> format_cuts(floor(parse('[-1.5, 1.0]')))
+'{ [-2] , [-1] , [0] , [1] }'
 >>> format_cuts(ceil(parse('(1, 3]')))
 '{ [2] , [3] }'
 >>> format_cuts(round_(parse('[1/2, 5/2]')))  # ties to even: 1/2 -> 0, 5/2 -> 2
@@ -117,7 +121,9 @@ def step(name: str, a: Cuts, ndigits: Optional[int] = None, outward: bool = Fals
     # `[0, 1/2]` and `[7/10, 2]`, or trunc's 0 on each side of its split) is counted once (M14-breadth)
     out, count, hulled, listed = [], 0, False, None
     for rule, (lo, lo_closed, hi, hi_closed) in tagged:
-        as_float = is_float(lo) or is_float(hi)
+        # an integer is exact on a float piece too, as python's `math.floor` (D32); a finer grid's value (0.12)
+        # is no double, so a float piece rounds it, as python's `round(x, 2)`
+        as_float = unit.denominator != 1 and (is_float(lo) or is_float(hi))
         if name != 'sign':  # f(±inf) = ±inf, and a piece reaching ±inf holds unboundedly many values
             for end, closed in ((lo, lo_closed), (hi, hi_closed)):
                 if is_infinite(end) and closed:

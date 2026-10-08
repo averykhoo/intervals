@@ -368,10 +368,14 @@ def number_types(x):
 
 @settings(max_examples=60, deadline=None)
 @given(a=any_operands)
-@example(a=(Cut(2.0, Side.BELOW), Cut(2, Side.ABOVE)))  # a point whose cuts differ in type: repr wrote [2.0] (fuzz x10)
+@example(a=(Cut(2.0, Side.BELOW), Cut(3, Side.ABOVE)))  # a piece whose ends differ in type
 def test_pickle_copy_and_repr_round_trip(a):
     """the same class, set and number type at every end (a float end read back as an int would stop
-    rounding, an int one read back as a float would start)"""
+    rounding, an int one read back as a float would start). a point whose cuts differ in type (`[2.0, 2]`,
+    whose repr once wrote `[2.0]`: fuzz x10) is no longer a set's representation: `normalize` makes it the
+    exact point and `from_cuts` refuses it (D32, 2026-10-08)"""
+    with pytest.raises(ValueError):
+        O.from_cuts((Cut(2.0, Side.BELOW), Cut(2, Side.ABOVE)))
     x = O.from_cuts(a)
     for back in (pickle.loads(pickle.dumps(x)), copy.copy(x), copy.deepcopy(x),
                  eval(repr(x), {'OutwardMultiInterval': O})):
