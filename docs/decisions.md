@@ -5,7 +5,7 @@ superseded. nothing else in the repo records a decision; `HANDOFF.md`, the code 
 (`docs/archive/v2/`) point here.
 
 * **a new decision** is an entry at the top of "the log", headed `### YYYY-MM-DD: Dnn, <title>` with the next
-  D-id (**D34 is next**): who decided (the owner, or a build's default awaiting the owner), what, why, and the
+  D-id (**D35 is next**): who decided (the owner, or a build's default awaiting the owner), what, why, and the
   ids or entries it supersedes. an earlier entry it changes gets a one-line `> **superseded YYYY-MM-DD**`
   marker and is otherwise left as it was.
 * **owner questions** (Q1-Q27 asked so far; the next is Q28) are asked in `HANDOFF.md`; the answer is recorded here and `HANDOFF.md`
@@ -66,6 +66,24 @@ vendoring.
 
 
 ## the log (newest first; D31 on written here, the rest from `v2-plan.md`'s decision log)
+
+### 2026-10-08: D34, the fuzz and gate:gmpy2 phases run on pytest-xdist (fuzz-xdist; a build's defaults, awaiting the owner)
+
+the build of HANDOFF's row fuzz-xdist (`docs/records.md`), on the 2026-10-06 study (`references/fuzz-speed-2026-10-06/`).
+asked as Q27 (b).
+
+* **which phases**: the fuzz phases and `gate:gmpy2`; the gate's own (`gate:itf`, `gate:rest`) and `docs` stay serial,
+  as CLAUDE.md's gate is plain pytest. xdist splits tests between processes, never one test's examples, so a
+  fuzz-x10 verdict means what it did serially, and the ledger keys nothing new
+* **how many**: `GATE_WORKERS`, default 8 (the study's fastest, on this laptop's 2 P-cores + 8 E-cores); 0 or 1
+  serial; the count is recorded in the row's facts (`workers=K`), never matched. without pytest-xdist a phase runs
+  serially and says so, rather than failing on `-n`
+* **where**: `tools/gate.py::pytest_command` adds `-n K --dist worksteal` after `phase_spec`'s arguments, which stay
+  the selection (what ci.yml's gmpy2 job runs, pinned by `tests/test_gate_ledger.py::test_ci_runs_the_gmpy2_phase`).
+  pytest-xdist joins `[test]`; CI installs it and does not use it (fuzz.yml and ci.yml unchanged)
+* **the wall-clock tests** (four, one failed under load at `-n 4` in the study) measure CPU time
+  (`time.process_time()`), the cost they guard (linear, not quadratic), which other processes do not inflate; their
+  bounds unchanged
 
 ### 2026-10-08: D33, m14b-open's build defaults beside D32 (awaiting the owner)
 

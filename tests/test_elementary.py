@@ -550,9 +550,9 @@ def test_rational_log_of_large_operands_is_fast():
         (Fraction(3 ** 2000, 2 ** 6200), Fraction(3 ** 8, 2 ** 248), None),  # the numerators agree, not the dens
         (3 ** 2000, Fraction(3 ** 8, 2), None),
     ]:
-        start = time.perf_counter()
+        start = time.process_time()  # CPU time: the cost, not the laptop's load (xdist, other sessions)
         assert exact('log', Fraction(x), base) == value
-        assert time.perf_counter() - start < 5, (x, base)
+        assert time.process_time() - start < 5, (x, base)
 
 
 def test_exact_values_round_like_any_other():

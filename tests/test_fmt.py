@@ -443,13 +443,14 @@ _LONG = 100_000
         'space-between-items', 'digits-slash-nothing', 'many-separators', 'many-separators-trailing',
         'many-separators-doubled'])
 def test_white_space_runs_parse_in_linear_time(text, outcome):
-    started = time.perf_counter()
+    started = time.process_time()  # CPU time: the cost, not the laptop's load (R1 of the fuzz-speed study, 2026-10-06:
+    # 10.22 s of wall clock under -n 4, 3.48 s alone)
     if isinstance(outcome, type):
         with pytest.raises(outcome):
             parse(text)
     else:
         assert parse(text) == outcome
-    assert time.perf_counter() - started < 10, 'a white-space, digit or `_` run is read more than once'
+    assert time.process_time() - started < 10, 'a white-space, digit or `_` run is read more than once'
 
 
 @pytest.mark.parametrize('text, value', [

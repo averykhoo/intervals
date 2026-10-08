@@ -442,9 +442,9 @@ def test_empty_operand():
 def test_attainment_is_constant_time():
     """the design notes measured 173 ms for `[1e6, 1e6+1] % [1, 1.5]` with the k loop"""
     import time
-    start = time.perf_counter()
+    start = time.process_time()  # CPU time: the cost, not the laptop's load (xdist, other sessions)
     result = modulo.mod(parse('[1000000000000, 1000000000001]'), parse('[1, 3/2]'))
-    assert time.perf_counter() - start < 0.05
+    assert time.process_time() - start < 0.05
     assert format_cuts(result) == '[0, 3/2)'
 
 

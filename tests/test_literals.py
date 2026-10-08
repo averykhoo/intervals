@@ -347,11 +347,11 @@ LONG_INVALID = [
 
 
 def test_invalid_text_is_refused_in_linear_time():
-    start = time.perf_counter()
+    start = time.process_time()  # CPU time: the cost, not the laptop's load (xdist, other sessions)
     for text in LONG_INVALID:
         with pytest.raises(UndefinedOperationError):
             text_to_interval(text)
-    assert time.perf_counter() - start < 1.0
+    assert time.process_time() - start < 1.0
 
 
 @pytest.mark.parametrize('text, lo, hi, decoration', [

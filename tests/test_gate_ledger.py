@@ -196,6 +196,42 @@ def test_phase_names_are_closed():
             gate.phase_spec(bad)
 
 
+def test_the_long_phases_run_on_workers(monkeypatch):
+    """
+    fuzz-xdist (2026-10-08): the fuzz phases and gate:gmpy2 run on GATE_WORKERS pytest-xdist processes (default
+    DEFAULT_WORKERS), the selection unchanged (`phase_spec`'s, what CI runs); the gate's own phases and docs stay
+    serial. xdist splits tests between processes, never one test's examples, so the verdict means the same
+    """
+    monkeypatch.delenv(gate.WORKERS_VAR, raising=False)
+    base = [sys.executable, '-m', 'pytest', '-q', '-p', 'no:cacheprovider']
+    for phase in ('fuzz-x10:itf', 'fuzz-x10:rest', 'fuzz-x1:rest', 'gate:gmpy2'):
+        command, n = gate.pytest_command(phase)
+        assert n == gate.DEFAULT_WORKERS > 1, phase
+        assert command == base + gate.phase_spec(phase)[0] + ['-n', str(n), '--dist', 'worksteal'], phase
+    for phase in ('gate:itf', 'gate:rest', 'docs'):
+        assert gate.pytest_command(phase) == (base + gate.phase_spec(phase)[0], 0), phase
+    for raw, want in (('4', 4), (' 3 ', 3), ('1', 0), ('0', 0), ('', gate.DEFAULT_WORKERS)):
+        assert gate.workers('fuzz-x10:rest', {gate.WORKERS_VAR: raw}) == want, raw
+        assert gate.workers('gate:rest', {gate.WORKERS_VAR: raw}) == 0, raw
+    for bad in ('-2', 'four', '2.5', 'auto'):
+        with pytest.raises(ValueError):
+            gate.workers('gate:gmpy2', {gate.WORKERS_VAR: bad})
+    # without pytest-xdist the phase runs serially and says so, rather than failing on an unknown `-n`
+    real = gate.importlib.util.find_spec
+    monkeypatch.setattr(gate.importlib.util, 'find_spec', lambda name, *a: None if name == 'xdist' else real(name, *a))
+    assert gate.pytest_command('fuzz-x10:rest') == (base + gate.phase_spec('fuzz-x10:rest')[0], 0)
+
+
+def test_the_worker_count_is_recorded(repo, monkeypatch):
+    """the row's facts name the processes a run used (recorded, never matched, as the package versions)"""
+    monkeypatch.setattr(gate, 'pytest_command', lambda phase, repo: (_fake(0), 5))
+    assert gate.run_phase('fuzz-x10:rest', repo) == 0
+    row = gate.read_ledger(gate.runs_dir(repo) / gate.LEDGER)[-1]
+    assert row['status'] == 'PASSED' and 'workers=5' in row['facts'].split(), row
+    assert gate.run_phase('gate:itf', repo, command=_fake(0)) == 0  # a given command: no count to record
+    assert not any(f.startswith('workers=') for f in gate.read_ledger(gate.runs_dir(repo) / gate.LEDGER)[-1]['facts'].split())
+
+
 def test_the_docs_phase_runs_the_collected_readmes(repo):
     assert gate.collected_readmes(repo) == ['README.md', 'tests/README.md']
 

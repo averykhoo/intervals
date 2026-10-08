@@ -21,7 +21,10 @@ test = ["pytest", "hypothesis", "python-flint>=0.9", "gmpy2>=2.3,<3",
         "numpy",
         # pandas for the same reason: tests/test_time_pandas.py never skips (the time layer's Timestamp and
         # Timedelta readings and pd.Interval round trips, M8). the library imports it only for to_pandas()
-        "pandas"]
+        "pandas",
+        # tools/gate.py runs the fuzz and gate:gmpy2 phases on GATE_WORKERS processes (fuzz-xdist, 2026-10-08);
+        # 3.2 brought `--dist worksteal`
+        "pytest-xdist>=3.2"]
 
 [tool.setuptools]
 packages = ["multiinterval"]

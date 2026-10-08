@@ -6,6 +6,7 @@
     $PY tools/gate.py run fuzz-x10:itf      # the fuzz profile at x10, as fuzz.yml (prepush runs these)
     $PY tools/gate.py run fuzz-x10:rest
     $PY tools/gate.py run gate:gmpy2        # the whole suite with MULTIINTERVAL_BACKEND=gmpy2 forced, as ci.yml's job
+    GATE_WORKERS=4 $PY tools/gate.py run fuzz-x10:rest   # the fuzz and gmpy2 phases on 4 processes (default 8; 0 serial)
     $PY tools/gate.py status                # what is green on the code in front of you
     $PY tools/gate.py status --require commit   # exit 1 unless the gate is green on this code
     $PY tools/gate.py status --require push     # exit 1 unless a push needs nothing more
@@ -59,6 +60,7 @@ an un-ignored ledger sits inside its own hash and every row is born stale.
 """
 import argparse
 import hashlib
+import importlib.util
 import os
 import re
 import subprocess
@@ -84,6 +86,13 @@ GMPY2 = 'gate:gmpy2'
 # the modules that pick a double through the backend (the dispatch sites and the backend itself);
 # tests/test_gate_ledger.py::test_the_backend_files_are_the_modules_naming_it keeps the list whole
 BACKEND_FILES = ('multiinterval/_gmpy2.py', 'multiinterval/backend.py', 'multiinterval/elementary.py', 'multiinterval/ops.py')
+# the phases run on several processes (fuzz-xdist, 2026-10-08): the fuzz phases and gate:gmpy2, the long ones.
+# pytest-xdist splits the tests between processes, never one test's examples, so a fuzz-x10 phase still runs every
+# test at x10 and its verdict means what a serial one did (references/fuzz-speed-2026-10-06/: the same 34941
+# passed in 21 min at -n 8 against 75-125 min serial). GATE_WORKERS sets the count, 0 or 1 serial; the count is
+# recorded in the row's facts, never matched. the gate's own phases stay serial: CLAUDE.md's gate is plain pytest
+WORKERS_VAR = 'GATE_WORKERS'
+DEFAULT_WORKERS = 8
 COUNT_RE = re.compile(r'(\d+) (passed|failed|errors?|skipped|xfailed|xpassed|deselected)\b')
 SUMMARY_RE = re.compile(r'\b\d+ (?:passed|failed|errors?|skipped|xfailed|xpassed|deselected)\b.* in [\d.]+s')
 
@@ -201,6 +210,32 @@ def phase_spec(phase, repo=REPO):
     return collected_readmes(repo), pure
 
 
+def workers(phase, environ=None):
+    """the pytest-xdist processes a phase runs on: GATE_WORKERS (default DEFAULT_WORKERS) for a fuzz phase and
+    gate:gmpy2, 0 (serial, no xdist) for the rest and for a count below 2; a count that is no int >= 0 is a
+    ValueError, never a guess"""
+    if not (_fuzz(phase) or phase == GMPY2):
+        return 0
+    raw = (os.environ if environ is None else environ).get(WORKERS_VAR, '').strip()
+    if not raw:
+        return DEFAULT_WORKERS
+    if not raw.isdigit():
+        raise ValueError(f'{WORKERS_VAR} must be a whole number of processes, got {raw!r}')
+    return int(raw) if int(raw) > 1 else 0
+
+
+def pytest_command(phase, repo=REPO, environ=None):
+    """(the pytest command a phase runs, its worker count): `phase_spec`'s arguments, and `-n K --dist worksteal`
+    where `workers` gives K > 1. without pytest-xdist installed the phase runs serially (K = 0), and says so"""
+    args, _ = phase_spec(phase, repo)
+    n = workers(phase, environ)
+    if n and importlib.util.find_spec('xdist') is None:
+        print(f'gate: pytest-xdist is not installed, so {phase} runs serially (pip install -e ".[test]")')
+        n = 0
+    extra = ['-n', str(n), '--dist', 'worksteal'] if n else []
+    return [sys.executable, '-m', 'pytest', '-q', '-p', 'no:cacheprovider', *args, *extra], n
+
+
 def collected_readmes(repo=REPO):
     """the README.md files under pyproject's testpaths: what pytest runs as doctests"""
     config = tomllib.loads((Path(repo) / 'pyproject.toml').read_text(encoding='utf-8'))
@@ -226,7 +261,7 @@ def _counts(text):
 
 def _versions():
     out = [f'py={sys.version.split()[0]}']
-    for name in ('hypothesis', 'pytest', 'numpy', 'gmpy2'):
+    for name in ('hypothesis', 'pytest', 'pytest-xdist', 'numpy', 'gmpy2'):
         try:
             out.append(f'{name}={metadata.version(name)}')
         except metadata.PackageNotFoundError:
@@ -251,8 +286,9 @@ def run_phase(phase, repo=REPO, command=None):
             env.pop(key, None)
         else:
             env[key] = value
+    n_workers = None
     if command is None:
-        command = [sys.executable, '-m', 'pytest', '-q', '-p', 'no:cacheprovider', *args]
+        command, n_workers = pytest_command(phase, repo)
     try:
         ids = tree_ids(repo)
     except TreeIdError as exc:
@@ -292,6 +328,8 @@ def run_phase(phase, repo=REPO, command=None):
             if moved and ids['code'] != UNKNOWN:
                 status = 'MOVED'  # the code changed under the run: it certifies neither tree
             facts = [f'rc={rc}'] + [f'{k}={v}' for k, v in (counts or {}).items()] + [f'head={label}'] + _versions()
+            if n_workers is not None:
+                facts.append(f'workers={n_workers}')
             append_row(out / LEDGER, {'started': now.strftime('%Y-%m-%dT%H:%M:%S%z'), 'dur_s': elapsed,
                                       'phase': phase, 'status': status, 'code': ids['code'],
                                       'src': ids['src'], 'facts': ' '.join(facts), 'log': log.name})

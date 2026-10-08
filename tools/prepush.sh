@@ -4,12 +4,13 @@
 #
 #   src changed since origin/master, no green fuzz at x10 on this src: the fuzz job of
 #     .github/workflows/fuzz.yml, run here (HYPOTHESIS_PROFILE=fuzz, x10) in two calls as the gate is
-#     (fuzz-x10:itf, fuzz-x10:rest). every test runs, so it covers the gate. about 83 min here
+#     (fuzz-x10:itf, fuzz-x10:rest). every test runs, so it covers the gate. on GATE_WORKERS pytest-xdist
+#     processes (tools/gate.py, default 8): about 21 min at 8, 83 min serial (2026-10-06, the fuzz-speed study)
 #   only a README.md changed since that (or since origin/master): its doctests (the docs phase), seconds
 #   only markdown or references/ changed (owner, 2026-09-30), or everything already green: nothing
 #   and, besides any of those, if a backend file (tools/gate.py BACKEND_FILES) changed since origin/master
 #     and no gate:gmpy2 run is green on this src: the whole suite with MULTIINTERVAL_BACKEND=gmpy2, as
-#     ci.yml's gmpy2 job (owner, Q16(e), 2026-10-03). about 10-15 min here
+#     ci.yml's gmpy2 job (owner, Q16(e), 2026-10-03), on GATE_WORKERS processes too. about 10-15 min serial
 #
 # a fuzz run made before `git commit`, or by an earlier prepush on the same code, still counts: the
 # ledger keys a verdict by the content, not the commit. `$PY tools/gate.py status` shows the same
@@ -21,6 +22,7 @@
 #   FUZZ_MULTIPLIER=20 tools/prepush.sh   # above CI's x10 counts for a push; below it does not
 #   PYTHON=/path/to/python tools/prepush.sh
 #   PREPUSH_BASE=<ref> ...           # compare with <ref> instead of origin/master
+#   GATE_WORKERS=4 tools/prepush.sh  # fewer processes on a busy laptop (0: serial)
 #
 # it refuses uncommitted changes (untracked files too) outside markdown and references/: the run
 # must be of the commit that gets pushed.

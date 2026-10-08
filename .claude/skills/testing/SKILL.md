@@ -65,6 +65,13 @@ README edit stales only the doctests (`$PY tools/gate.py run docs`, seconds). ph
 `gate:rest`, `docs`, `fuzz-x<N>:itf`, `fuzz-x<N>:rest` (only N >= 10, fuzz.yml's, clears a push),
 `gate:gmpy2` (below).
 
+the fuzz phases and `gate:gmpy2` run on `GATE_WORKERS` pytest-xdist processes (default 8; 0 or 1 serial;
+`GATE_WORKERS=4` on a busy laptop), recorded as `workers=K` in the row's facts (D34, fuzz-xdist 2026-10-08).
+xdist splits tests between processes, never one test's examples, so the verdict means what a serial run's did.
+the gate's own phases stay serial. pytest-xdist is in `[test]`; without it a phase runs serially and says so.
+a timing assertion in a test measures `time.process_time()`, the cost, never the wall clock, which other
+processes inflate (one failed under `-n 4` in the 2026-10-06 study)
+
     $PY tools/gate.py status                   # each phase on this code, the commit and push verdicts
     $PY tools/gate.py status --require commit  # exit 1 unless the gate is green on this code
     $PY tools/gate.py status --require push    # exit 1 unless a push needs nothing more
