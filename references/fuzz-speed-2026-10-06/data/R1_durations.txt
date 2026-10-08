@@ -1,0 +1,61 @@
+items with a duration line: 2911, functions: 711, total 21326.2 s
+  top  1 items:   1018.6 s =   4.8%
+  top 10 items:   6034.9 s =  28.3%
+  top 50 items:   9797.0 s =  45.9%
+  top  1 functions:   1018.6 s =   4.8%
+  top 10 functions:   6203.3 s =  29.1%
+  top 50 functions:  13061.6 s =  61.2%
+
+top 25 items:
+   1018.62  tests/test_reverse.py::test_mul_rev_the_largest_set
+    775.76  tests/test_minmax_fma.py::test_fma_is_mul_then_add_on_exact_sets
+    736.29  tests/test_reverse.py::test_mul_rev_isotone_and_distributive
+    609.82  tests/test_minmax_fma.py::test_fma_with_floats_rounds_the_exact_result_once
+    596.73  tests/test_relations.py::test_set_relations
+    549.08  tests/test_solve.py::test_every_zero_is_enclosed
+    504.77  tests/test_relations.py::test_allen_semantics
+    477.50  tests/test_relations.py::test_before_is_certainly_less
+    453.36  tests/test_time_interval.py::test_arithmetic_is_the_numeric_one
+    312.92  tests/test_reverse.py::test_exactly_the_points_with_f_in_c
+    202.56  tests/test_time_interval.py::test_relations_and_comparisons_are_the_numeric_ones
+    200.90  tests/test_solver.py::test_every_zero_is_enclosed
+    157.02  tests/test_solve.py::test_every_zero_is_enclosed_on_a_budget
+    153.99  tests/test_time_interval.py::test_aware_datetime_round_trips
+    145.67  tests/test_time_interval.py::test_aware_readings_are_zone_invariant
+    134.06  tests/test_oracles.py::test_every_sampled_binary_value_is_attained
+    131.92  tests/test_orders.py::test_orders_sound_at_sampled_points
+    129.87  tests/test_relations.py::test_comparisons_match_oracle[eq_pointwise-eq]
+    122.77  tests/test_reverse.py::test_mul_rev_is_exactly_the_points_that_fit
+    119.18  tests/test_orders.py::test_orders_match_1788_definitions
+    112.65  tests/test_fmt.py::test_spellings
+     98.60  tests/test_pown_huge.py::test_identity_with_the_exact_construction
+     95.65  tests/test_functions.py::test_atan2_sound_on_exact_sets
+     94.48  tests/test_minmax_fma.py::test_minimum_on_probe_points
+     93.67  tests/test_fmt.py::test_any_text_parses_or_raises_value_error
+
+top 25 functions (sum over params):
+   1018.62  tests/test_reverse.py::test_mul_rev_the_largest_set  (1 items)
+    775.76  tests/test_minmax_fma.py::test_fma_is_mul_then_add_on_exact_sets  (1 items)
+    736.29  tests/test_reverse.py::test_mul_rev_isotone_and_distributive  (1 items)
+    609.82  tests/test_minmax_fma.py::test_fma_with_floats_rounds_the_exact_result_once  (1 items)
+    596.73  tests/test_relations.py::test_set_relations  (1 items)
+    549.08  tests/test_solve.py::test_every_zero_is_enclosed  (1 items)
+    504.77  tests/test_relations.py::test_allen_semantics  (1 items)
+    481.34  tests/test_functions.py::test_sound_on_exact_sets  (30 items)
+    477.50  tests/test_relations.py::test_before_is_certainly_less  (1 items)
+    453.36  tests/test_time_interval.py::test_arithmetic_is_the_numeric_one  (1 items)
+    351.39  tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers  (162 items)
+    312.92  tests/test_reverse.py::test_exactly_the_points_with_f_in_c  (1 items)
+    299.26  tests/test_outward.py::test_outward_holds_the_exact_result_tightly  (17 items)
+    260.68  tests/test_functions.py::test_distributes_over_union  (30 items)
+    253.66  tests/test_functions.py::test_isotone  (30 items)
+    253.48  tests/test_functions.py::test_ends_are_sharp_on_exact_sets  (30 items)
+    253.31  tests/test_steps.py::test_sound_and_sharp  (6 items)
+    246.62  tests/test_relations.py::test_comparisons_match_oracle  (5 items)
+    239.04  tests/test_autodiff.py::test_op_encloses_value_and_derivative  (42 items)
+    223.03  tests/test_functions.py::test_outward_sound_on_floats  (30 items)
+    206.88  tests/test_applicator.py::test_number_types_follow_the_operands  (15 items)
+    202.56  tests/test_time_interval.py::test_relations_and_comparisons_are_the_numeric_ones  (1 items)
+    200.90  tests/test_solver.py::test_every_zero_is_enclosed  (1 items)
+    186.83  tests/test_propagation.py::test_each_unary_op  (40 items)
+    169.83  tests/test_oracle_flint.py::test_point_against_arb  (30 items)

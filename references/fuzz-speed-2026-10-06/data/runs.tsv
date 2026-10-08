@@ -1,0 +1,20 @@
+2026-10-06 12:00:49 START R1_x10_n4 workers=4 HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10 --hypothesis-show-statistics :: load: 13208:.\hawker_bot_v2.py | 23780:tools/gate.py run fuzz-x10:rest | 22448:-m pytest -q -p no:cacheprovider --ignore=tests/itf1788 | 23308:.scratch/count/fit_k.py 8 .scratch/base22/full/scene_00100 . | 34884:.scratch/count/fit_k.py 8 .scratch/base22/full/scene_00101 . | 32508:.scratch/count/fit_k.py 8 .scratch/base22/full/scene_00102 . | 14440:-m pytest @.gate-runs/tile-args-conf-4of5.txt -q | 7512:scripts/synth_scenes.py --n 12 --seed 200 --mics 5 5 --speak  cpu%=9  
+2026-10-06 13:31:30 END R1_x10_n4 rc=1 wall=5439s :: 1 failed, 34940 passed in 5434.87s (1:30:34) :: load: 13208:.\hawker_bot_v2.py | 18948:.scratch/count/fit_k.py 8 .scratch/count/held/scene_00200 .s | 17876:.scratch/count/fit_k.py 8 .scratch/count/held/scene_00201 .s | 27720:.scratch/count/fit_k.py 8 .scratch/count/held/scene_00202 .s | 25840:.scratch/count/eval_module.py .scratch/count/eval_held9.json  cpu%=39  
+2026-10-06 13:43:18 START S_x10_n0 workers=0 HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10 tests/test_relations.py tests/test_minmax_fma.py tests/test_orders.py :: load: 13208:.\hawker_bot_v2.py  cpu%=23  
+2026-10-06 13:51:16 END S_x10_n0 rc=0 wall=477s :: 180 passed in 475.43s (0:07:55) :: load: 13208:.\hawker_bot_v2.py | 7800:-m pytest -q  cpu%=30  
+2026-10-06 13:51:18 START S_x10_n2 workers=2 HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10 tests/test_relations.py tests/test_minmax_fma.py tests/test_orders.py :: load: 13208:.\hawker_bot_v2.py | 7800:-m pytest -q  cpu%=20  
+2026-10-06 13:55:14 END S_x10_n2 rc=0 wall=234s :: 180 passed in 233.66s (0:03:53) :: load: 13208:.\hawker_bot_v2.py  cpu%=19  
+2026-10-06 13:55:16 START S_x10_n4 workers=4 HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10 tests/test_relations.py tests/test_minmax_fma.py tests/test_orders.py :: load: 13208:.\hawker_bot_v2.py  cpu%=20  
+2026-10-06 13:57:35 END S_x10_n4 rc=0 wall=137s :: 180 passed in 136.31s (0:02:16) :: load: 13208:.\hawker_bot_v2.py  cpu%=26  
+2026-10-06 13:57:37 START S_x10_n8 workers=8 HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10 tests/test_relations.py tests/test_minmax_fma.py tests/test_orders.py :: load: 13208:.\hawker_bot_v2.py  cpu%=18  
+2026-10-06 13:59:22 END S_x10_n8 rc=0 wall=103s :: 180 passed in 102.11s (0:01:42) :: load: 13208:.\hawker_bot_v2.py  cpu%=15  
+SCALE_DONE
+2026-10-06 13:59:53 START R3_x10_n8 workers=8 HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10 --hypothesis-show-statistics :: load: 13208:.\hawker_bot_v2.py  cpu%=8  
+2026-10-06 14:20:52 END R3_x10_n8 rc=0 wall=1257s :: 34941 passed in 1255.18s (0:20:55) :: load: 13208:.\hawker_bot_v2.py  cpu%=1  
+2026-10-06 14:21:33 START R4_x1_n8 workers=8  --hypothesis-show-statistics :: load: 13208:.\hawker_bot_v2.py  cpu%=23  
+2026-10-06 14:24:30 END R4_x1_n8 rc=0 wall=175s :: 34941 passed in 172.41s (0:02:52) :: load: 13208:.\hawker_bot_v2.py  cpu%=14  
+2026-10-06 14:24:45 START R5_gmpy2_n4 workers=4 MULTIINTERVAL_BACKEND=gmpy2  :: load: 13208:.\hawker_bot_v2.py  cpu%=4  
+2026-10-06 14:28:39 END R5_gmpy2_n4 rc=0 wall=232s :: 34941 passed in 229.70s (0:03:49) :: load: 13208:.\hawker_bot_v2.py  cpu%=0  
+2026-10-06 14:28:54 Q3 start :: load: 0  
+2026-10-06 14:39:12 START R6_x10_n4 workers=4 HYPOTHESIS_PROFILE=fuzz FUZZ_MULTIPLIER=10  :: load: 13208:.\hawker_bot_v2.py  cpu%=6  
+2026-10-07 13:41:13 END R6_x10_n4 rc=0 wall=82919s :: 34941 passed in 82923.24s (23:02:03) :: load: 30824:.\hawker_bot_v2.py  cpu%=19  

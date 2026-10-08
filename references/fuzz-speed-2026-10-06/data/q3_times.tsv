@@ -1,0 +1,17 @@
+# 2026-10-06 14:28:56 start, conc=5, tests: tests/test_solve.py::test_every_zero_is_enclosed tests/test_solver.py::test_every_zero_is_enclosed tests/test_solve.py::test_every_zero_is_enclosed_on_a_budget
+A_x10	mult=10	rc=0	313357 ms	3 passed, 1 warning in 312.60s (0:05:12)
+ARM A (1 x x10, serial)	wall 313471 ms
+B_x1_3	mult=1	rc=0	49144 ms	3 passed, 1 warning in 48.22s
+B_x1_5	mult=1	rc=0	49556 ms	3 passed, 1 warning in 48.64s
+B_x1_2	mult=1	rc=0	60753 ms	3 passed, 1 warning in 59.79s
+B_x1_1	mult=1	rc=0	63445 ms	3 passed, 1 warning in 62.49s (0:01:02)
+B_x1_4	mult=1	rc=0	75978 ms	3 passed, 1 warning in 75.07s (0:01:15)
+B_x1_7	mult=1	rc=0	54904 ms	3 passed, 1 warning in 54.14s
+B_x1_8	mult=1	rc=0	61043 ms	3 passed, 1 warning in 60.29s (0:01:00)
+B_x1_10	mult=1	rc=0	57872 ms	3 passed, 1 warning in 57.12s
+B_x1_9	mult=1	rc=0	73562 ms	3 passed, 1 warning in 72.82s (0:01:12)
+B_x1_6	mult=1	rc=0	88242 ms	3 passed, 1 warning in 87.43s (0:01:27)
+ARM B (10 x x1, 5 at once)	wall 152006 ms
+C_xdist_x10	mult=10	rc=0	100707 ms	3 passed, 4 warnings in 100.03s (0:01:40)
+ARM C (xdist -n 3 at x10)	wall 100840 ms
+# 2026-10-06 14:38:22 end

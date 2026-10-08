@@ -1,0 +1,61 @@
+items with a duration line: 1915, functions: 491, total 786.7 s
+  top  1 items:     48.0 s =   6.1%
+  top 10 items:    121.5 s =  15.4%
+  top 50 items:    241.4 s =  30.7%
+  top  1 functions:     48.0 s =   6.1%
+  top 10 functions:    172.2 s =  21.9%
+  top 50 functions:    392.3 s =  49.9%
+
+top 25 items:
+     47.99  tests/test_solve.py::test_every_zero_is_enclosed
+     15.53  tests/test_solve.py::test_every_zero_is_enclosed_on_a_budget
+     12.84  tests/test_reverse.py::test_trig_rev_hull_past_the_cap
+      8.76  tests/test_sabotage_tool.py::test_a_timeout_kills_the_tree_and_restores
+      7.31  tests/test_coremath.py::test_the_sample_is_correctly_rounded[atan]
+      6.75  tests/test_modulo.py::test_prototype_fuzz
+      6.17  tests/test_pown_huge.py::test_identity_with_the_exact_construction
+      5.97  tests/test_reverse.py::test_mul_rev_is_exactly_the_points_that_fit
+      5.30  tests/test_fmt.py::test_spellings
+      4.89  tests/test_reverse.py::test_mul_rev_isotone_and_distributive
+      4.54  tests/test_orders.py::test_orders_sound_at_sampled_points
+      4.29  tests/test_solver.py::test_simple_irrational_zeros_are_proved_unique
+      4.09  tests/test_fmt.py::test_any_text_parses_or_raises_value_error
+      3.92  tests/test_functions.py::test_atan2_sound_on_exact_sets
+      3.84  tests/test_reverse.py::test_trig_rev_exactly_the_points_with_f_in_c
+      3.77  tests/test_orders.py::test_interior_laws
+      3.72  tests/test_sabotage_tool.py::test_mixed_verdicts[control-PASSED]
+      3.70  tests/test_pow_rev.py::test_pow_rev_sound_at_sampled_points
+      3.55  tests/test_gate_ledger.py::test_the_plan_end_to_end
+      3.53  tests/test_pow_rev.py::test_pow_rev_isotone_and_distributive
+      3.48  tests/test_fmt.py::test_white_space_runs_parse_in_linear_time[many-separators]
+      3.37  tests/test_oracles.py::test_general_exact_operands
+      3.21  tests/test_pown_huge.py::test_one_limit_for_pown_pow_exp2_exp10
+      3.17  tests/test_modulo.py::test_sound
+      3.14  tests/test_sabotage_tool.py::test_a_head_snapshot_does_not_see_the_working_tree
+
+top 25 functions (sum over params):
+     47.99  tests/test_solve.py::test_every_zero_is_enclosed  (1 items)
+     19.39  tests/test_coremath.py::test_the_sample_is_correctly_rounded  (25 items)
+     17.11  tests/test_functions.py::test_sound_on_exact_sets  (30 items)
+     15.53  tests/test_solve.py::test_every_zero_is_enclosed_on_a_budget  (1 items)
+     14.67  tests/test_reverse.py::test_trig_rev_far_end_of_x  (18 items)
+     12.84  tests/test_reverse.py::test_trig_rev_hull_past_the_cap  (1 items)
+     12.02  tests/test_functions.py::test_distributes_over_union  (30 items)
+     11.78  tests/test_outward.py::test_outward_holds_the_exact_result_tightly  (17 items)
+     10.88  tests/test_functions.py::test_isotone  (30 items)
+      9.99  tests/test_functions.py::test_outward_sound_on_floats  (30 items)
+      9.88  tests/test_functions.py::test_ends_are_sharp_on_exact_sets  (30 items)
+      9.51  tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers  (162 items)
+      8.96  tests/test_autodiff.py::test_op_encloses_value_and_derivative  (42 items)
+      8.76  tests/test_sabotage_tool.py::test_a_timeout_kills_the_tree_and_restores  (1 items)
+      8.54  tests/test_steps.py::test_sound_and_sharp  (6 items)
+      8.02  tests/test_applicator.py::test_number_types_follow_the_operands  (15 items)
+      7.98  tests/test_functions.py::test_nearest_holds_the_nearest_value_of_every_float  (30 items)
+      7.74  tests/test_fmt.py::test_white_space_runs_parse_in_linear_time  (6 items)
+      7.41  tests/test_extreme_floats_functions.py::test_every_value_is_in_the_result  (32 items)
+      6.75  tests/test_modulo.py::test_prototype_fuzz  (1 items)
+      6.32  tests/test_backend.py::test_set_level_matches_unary  (42 items)
+      6.17  tests/test_pown_huge.py::test_identity_with_the_exact_construction  (1 items)
+      5.97  tests/test_reverse.py::test_mul_rev_is_exactly_the_points_that_fit  (1 items)
+      5.64  tests/test_outward.py::test_exact_operands_give_the_same_set  (17 items)
+      5.59  tests/test_extreme_floats.py::test_outward_class_sound_on_extreme_floats  (14 items)

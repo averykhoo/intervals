@@ -1,0 +1,2 @@
+test_minmax_fma rc=0 98s
+test_relations rc=0 151s

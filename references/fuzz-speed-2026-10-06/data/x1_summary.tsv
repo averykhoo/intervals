@@ -1,0 +1,48 @@
+tests/itf1788	0	76.6	27798 passed in 74.19s (0:01:14)
+tests/test_applicator.py	0	27.6	177 passed in 26.31s
+tests/test_autodiff.py	0	16.3	201 passed in 15.24s
+tests/test_backend.py	0	24.4	738 passed in 23.49s
+tests/test_cancel.py	0	13.8	43 passed in 12.68s
+tests/test_coremath.py	0	20.7	51 passed in 19.69s
+tests/test_cuts.py	0	1.6	24 passed in 0.87s
+tests/test_decorated.py	0	8.1	40 passed in 6.85s
+tests/test_elementary.py	0	6.4	409 passed in 4.97s
+tests/test_errors.py	0	1.3	5 passed in 0.34s
+tests/test_extreme_floats.py	0	23.5	53 passed in 22.56s
+tests/test_extreme_floats_functions.py	0	15.4	70 passed in 14.53s
+tests/test_fmt.py	0	33.4	649 passed in 32.32s
+tests/test_functions.py	0	95.1	451 passed in 94.07s (0:01:34)
+tests/test_fuzz_profile.py	0	2.0	3 passed in 1.26s
+tests/test_gate_ledger.py	0	17.5	48 passed in 16.79s
+tests/test_gradient.py	0	1.7	16 passed in 0.99s
+tests/test_ieee1788_layer.py	0	13.2	294 passed in 12.44s
+tests/test_kernel.py	0	11.1	38 passed in 10.32s
+tests/test_literals.py	0	2.4	130 passed in 1.50s
+tests/test_minmax_fma.py	0	10.8	23 passed in 9.91s
+tests/test_modulo.py	0	27.1	1002 passed in 26.08s
+tests/test_multi_interval.py	0	6.3	61 passed in 5.41s
+tests/test_numeric.py	0	8.4	26 passed in 7.59s
+tests/test_numpy_compat.py	0	23.2	290 passed in 22.47s
+tests/test_ops_examples.py	0	1.1	401 passed in 0.40s
+tests/test_ops_properties.py	0	30.9	94 passed in 30.12s
+tests/test_oracle_flint.py	0	8.0	200 passed in 7.31s
+tests/test_oracles.py	0	14.3	122 passed in 13.62s
+tests/test_orders.py	0	22.3	57 passed in 21.34s
+tests/test_outward.py	0	28.7	101 passed in 27.49s
+tests/test_pow_rev.py	0	20.4	54 passed in 19.58s
+tests/test_pown_huge.py	0	13.1	88 passed in 12.26s
+tests/test_propagation.py	0	15.7	238 passed in 15.02s
+tests/test_reductions.py	0	6.6	20 passed in 5.88s
+tests/test_relations.py	0	14.5	100 passed in 13.79s
+tests/test_reverse.py	0	83.5	135 passed in 82.61s (0:01:22)
+tests/test_sabotage_tool.py	0	41.6	52 passed in 40.65s
+tests/test_solve.py	0	79.8	54 passed in 78.73s (0:01:18)
+tests/test_solver.py	0	12.8	26 passed in 12.04s
+tests/test_steps.py	0	27.1	138 passed in 26.25s
+tests/test_time_interval.py	0	3.6	241 passed in 2.81s
+tests/test_time_pandas.py	0	1.7	52 passed in 0.88s
+multiinterval	0	2.0	124 passed in 1.46s
+README.md	0	1.0	1 passed in 0.60s
+tests/oracles.py	0	1.2	3 passed in 0.04s
+tests/strategies.py	5	0.9	no tests ran in 0.02s
+done

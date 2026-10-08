@@ -1,0 +1,51 @@
+items with a duration line: 2058, functions: 588, total 9801.0 s
+  top  1 items:    209.0 s =   2.1%
+  top 10 items:   1103.9 s =  11.3%
+  top 50 items:   2797.6 s =  28.5%
+  top  1 functions:    280.6 s =   2.9%
+  top 10 functions:   1937.1 s =  19.8%
+  top 50 functions:   5140.4 s =  52.4%
+
+top 20 items:
+    208.96  tests/test_solve.py::test_every_zero_is_enclosed
+    191.19  tests/test_solver.py::test_every_zero_is_enclosed
+    120.43  tests/test_solve.py::test_every_zero_is_enclosed_on_a_budget
+    105.37  tests/test_pown_huge.py::test_identity_with_the_exact_construction
+     91.47  tests/test_reverse.py::test_mul_rev_isotone_and_distributive
+     80.51  tests/test_solver.py::test_simple_irrational_zeros_are_proved_unique
+     78.43  tests/test_minmax_fma.py::test_minimum_on_probe_points
+     76.74  tests/test_orders.py::test_interior_laws
+     76.14  tests/test_pow_rev.py::test_pow_rev_sound_at_sampled_points
+     74.64  tests/test_oracles.py::test_every_sampled_binary_value_is_attained
+     70.02  tests/test_reverse.py::test_mul_rev_the_largest_set
+     68.13  tests/test_reverse.py::test_mul_rev_is_exactly_the_points_that_fit
+     62.33  tests/test_solver.py::test_every_zero_is_enclosed_on_a_budget
+     58.42  tests/test_orders.py::test_orders_sound_at_sampled_points
+     57.52  tests/test_pow_rev.py::test_pow_rev2_is_exactly_the_points_that_fit
+     53.97  tests/test_fmt.py::test_spellings
+     51.15  tests/test_pow_rev.py::test_pow_rev_isotone_and_distributive
+     51.15  tests/test_pow_rev.py::test_pow_rev1_the_largest_set
+     49.52  tests/test_functions.py::test_atan2_sound_on_exact_sets
+     48.34  tests/test_orders.py::test_orders_match_1788_definitions
+
+top 20 functions (sum over params):
+    280.61  tests/test_functions.py::test_sound_on_exact_sets  (30 items)
+    233.07  tests/test_numpy_compat.py::test_numpy_scalar_operators_are_python_numbers  (162 items)
+    208.96  tests/test_solve.py::test_every_zero_is_enclosed  (1 items)
+    191.19  tests/test_solver.py::test_every_zero_is_enclosed  (1 items)
+    186.42  tests/test_steps.py::test_sound_and_sharp  (6 items)
+    179.98  tests/test_functions.py::test_distributes_over_union  (30 items)
+    176.93  tests/test_outward.py::test_outward_holds_the_exact_result_tightly  (17 items)
+    166.71  tests/test_functions.py::test_ends_are_sharp_on_exact_sets  (30 items)
+    160.49  tests/test_functions.py::test_isotone  (30 items)
+    152.78  tests/test_functions.py::test_outward_sound_on_floats  (30 items)
+    134.81  tests/test_propagation.py::test_each_unary_op  (40 items)
+    131.57  tests/test_extreme_floats_functions.py::test_every_value_is_in_the_result  (32 items)
+    125.55  tests/test_autodiff.py::test_op_encloses_value_and_derivative  (42 items)
+    120.43  tests/test_solve.py::test_every_zero_is_enclosed_on_a_budget  (1 items)
+    112.92  tests/test_relations.py::test_comparisons_match_oracle  (5 items)
+    107.79  tests/test_functions.py::test_nearest_holds_the_nearest_value_of_every_float  (30 items)
+    105.37  tests/test_pown_huge.py::test_identity_with_the_exact_construction  (1 items)
+    102.15  tests/test_applicator.py::test_number_types_follow_the_operands  (15 items)
+     97.09  tests/test_ops_properties.py::test_interior_sharpness  (9 items)
+     94.61  tests/test_oracle_flint.py::test_point_against_arb  (30 items)

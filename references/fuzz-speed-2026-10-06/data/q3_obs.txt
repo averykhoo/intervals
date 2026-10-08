@@ -1,0 +1,18 @@
+[A] tests/test_solve.py::test_every_zero_is_enclosed: runs=1 cases=129 status={'passed': 106, 'gave_up': 23}
+    how={'explicit example': 6, 'during generate phase': 123}
+    generated=123 distinct_generated=100 passed_generated=100 distinct_passed_generated=99 distinct_all=106 inputs_in_more_than_one_run=0
+[A] tests/test_solve.py::test_every_zero_is_enclosed_on_a_budget: runs=1 cases=491 status={'passed': 401, 'gave_up': 90}
+    how={'explicit example': 1, 'during generate phase': 490}
+    generated=490 distinct_generated=398 passed_generated=400 distinct_passed_generated=397 distinct_all=399 inputs_in_more_than_one_run=0
+[A] tests/test_solver.py::test_every_zero_is_enclosed: runs=1 cases=526 status={'passed': 404, 'gave_up': 122}
+    how={'explicit example': 4, 'during generate phase': 522}
+    generated=522 distinct_generated=392 passed_generated=400 distinct_passed_generated=391 distinct_all=395 inputs_in_more_than_one_run=0
+[B] tests/test_solve.py::test_every_zero_is_enclosed: runs=10 cases=222 status={'passed': 160, 'gave_up': 62}
+    how={'explicit example': 60, 'during generate phase': 162}
+    generated=162 distinct_generated=101 passed_generated=100 distinct_passed_generated=100 distinct_all=107 inputs_in_more_than_one_run=1
+[B] tests/test_solve.py::test_every_zero_is_enclosed_on_a_budget: runs=10 cases=571 status={'passed': 410, 'gave_up': 161}
+    how={'explicit example': 10, 'during generate phase': 561}
+    generated=561 distinct_generated=395 passed_generated=400 distinct_passed_generated=394 distinct_all=396 inputs_in_more_than_one_run=1
+[B] tests/test_solver.py::test_every_zero_is_enclosed: runs=10 cases=619 status={'passed': 440, 'gave_up': 179}
+    how={'explicit example': 40, 'during generate phase': 579}
+    generated=579 distinct_generated=350 passed_generated=400 distinct_passed_generated=349 distinct_all=353 inputs_in_more_than_one_run=15
