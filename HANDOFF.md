@@ -17,8 +17,9 @@ a task the owner assigns overrides the ranking. at the end of a session:
 
 ## banner (2026-10-08)
 
-* **v2 is built**, and m14b-open (D32's number types) with it (2026-10-08). what is left before 2.0.0 is row H1,
-  question Q25 and rows x2-cosh-zero and from-cuts-reason (D35, Q27's answer)
+* **v2 is built**, and m14b-open (D32's number types) with it (2026-10-08). what is left before 2.0.0 is row H1
+  and rows x2-cosh-zero, from-cuts-reason (D35) and release-meta (D36: MIT, a publish workflow, a changelog). no
+  question is open
 * **pushed: `origin/master` at `478654a`** (2026-10-08, m14b-open and fuzz-xdist with it): CI run 37754291429 and
   fuzz run 37754291528 both green, seen to the end. `master` is ahead only by this handoff's prose
 * **gate** green on this code: 27798 + 7182 passed (2026-10-08, `tools/gate.py status`). the fuzz and gate:gmpy2
@@ -32,21 +33,16 @@ a task the owner assigns overrides the ranking. at the end of a session:
 |---|---|---|---|---|
 | 1 | x2-cosh-zero | `x ** 2` and cosh at an operand end `0.0` give the exact 0 and 1, as `abs(x) ** 2` and `cosh(abs(x))` do since m14b-open (`M(0.0, 1.0) ** 2` is `[0.0, 1.0]`, `abs(M(0.0, 1.0)) ** 2` `[0, 1.0]`; cosh `[1.0, ...]` against `[1, ...]`; probed 2026-10-08) | ready (Q27 (c) yes, D35); not scheduled | `docs/records.md` "m14b-open", "left" |
 | 2 | from-cuts-reason | `MultiInterval.from_cuts` refuses a point of an exact and a float cut of the same number (`(below(2.0), above(2))`) with `not a normalized cut tuple: (...)`; the message is to say why, e.g. "a point is one value: its ends are 2.0 and 2; write [2] or [2.0]" (the owner, Q27; a sabotage check that the message reaches the user) | ready (D35); not scheduled | `docs/decisions.md` D35, D33; `kernel.is_valid` |
-| 3 | vectors-ext | (c) only: cuinterval's `custom.itl` (26 vectors, MIT), probably covered by `test_domain_ends_and_limits`. (a) done 2026-10-05, (b) closed 2026-10-03 | low value | `references/test-vector-sources.md` |
-| 4 | pown-ziv | an exact corner of about 2M bits within about 2 ** -(its size) of a rounding breakpoint, past `EXACT_RESULT_LIMIT`, runs ziv past 120 s where the old code built the power in milliseconds (`O(3 + 2 ** -2100000) ** 2`, 2026-10-04); pow the same at 2M bits. follow-ups: a near-1 shortcut in `rounded_pow`, or the exact build when ziv passes a precision cap and the build is affordable | ready, not scheduled; extreme sizes only | `docs/archive/v2/v2-implementation-plan.md` §2 "owner-answers"; `references/owner-questions-2026-10-03/streams/pown.md` step 6 |
-| 5 | evaluate-box | a pure speed change: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | `docs/archive/v2/v2-implementation-plan.md` §2 M16e |
-| 6 | later | not in v2.0, each "consider", optional or "if asked". from the owner's answers (2026-10-03): `Root`/`RootBox` as frozen dataclasses if a third state appears; an `rtol` beside `tol`; outward fma, `%`, hypot, `cancel_minus` typed per corner (tighter); a to-nearest `MultiInterval.rounded()`; rootn on cbrt's worst-case inputs; a numpy hook for the 1788 layer; an `AllenMatrix` class or a public `allen_pairs`; a strategies module after 2.0; Q20's optional pin. from the design's "later": a direction tag on a degenerate zero piece (if a solver needs `1/(1/[inf]) == [inf]`); an interval array type (the array API); the backend's non-dyadic part (an mpfr ziv loop for the points it declines, until a workload measures them); allen's composition table for the cut reading; vector-mode autodiff (if a measured solve is too slow); 1788's recommended ops not in the layer (`exp2m1`, `exp10m1`, `log2p1`, `log10p1`, `compoundm1`, `rsqrt`, the `*Pi` functions, text and interchange conversions, inf-sup types but binary64). from M8: pandas past `to_pandas()` (an `IntervalIndex` of several pieces, `IntervalArray`) | not scheduled | `references/owner-questions-2026-10-03/`; `docs/archive/v2/v2-plan.md` "later (not in v2.0)"; `docs/archive/v2/v2-implementation-plan.md` §2 M8 |
-| 7 | H1 | release 2.0.0 (`pyproject.toml` is `2.0.0.dev0`, no tag). before it: Q25 (licence and package metadata: no LICENSE, no `license`/`readme`/`authors`/`urls`/classifiers in `pyproject.toml`; no publish workflow, no changelog), rows x2-cosh-zero and from-cuts-reason, release notes (from the v1 -> v2 surface map, `docs/archive/v2/v2-implementation-plan.md` §4), the CORE-MATH full check again if the scalar evaluator changes (clean at `7dd2c0d`), claiming `multiinterval` on PyPI (the first upload) | waiting on Q25 (owner, 2026-09-26: release "when everything is fully done") | `docs/decisions.md` D5, D17, H1 in "owner answers to the open questions" (2026-09-26) |
+| 3 | release-meta | D36 built: `LICENSE` (MIT, Avery Khoo), `pyproject.toml`'s `license`/`license-files`, `readme`, `authors`, `urls`, classifiers; a tag-push publish workflow by PyPI trusted publishing; `CHANGELOG.md` from 2.0.0, its first entry the release notes (from the v1 -> v2 surface map). the owner registers the pending publisher on pypi.org before the first tag | ready (D36); not scheduled | `docs/decisions.md` D36 |
+| 4 | vectors-ext | (c) only: cuinterval's `custom.itl` (26 vectors, MIT), probably covered by `test_domain_ends_and_limits`. (a) done 2026-10-05, (b) closed 2026-10-03 | low value | `references/test-vector-sources.md` |
+| 5 | pown-ziv | an exact corner of about 2M bits within about 2 ** -(its size) of a rounding breakpoint, past `EXACT_RESULT_LIMIT`, runs ziv past 120 s where the old code built the power in milliseconds (`O(3 + 2 ** -2100000) ** 2`, 2026-10-04); pow the same at 2M bits. follow-ups: a near-1 shortcut in `rounded_pow`, or the exact build when ziv passes a precision cap and the build is affordable | ready, not scheduled; extreme sizes only | `docs/archive/v2/v2-implementation-plan.md` §2 "owner-answers"; `references/owner-questions-2026-10-03/streams/pown.md` step 6 |
+| 6 | evaluate-box | a pure speed change: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | `docs/archive/v2/v2-implementation-plan.md` §2 M16e |
+| 7 | later | not in v2.0, each "consider", optional or "if asked". from the owner's answers (2026-10-03): `Root`/`RootBox` as frozen dataclasses if a third state appears; an `rtol` beside `tol`; outward fma, `%`, hypot, `cancel_minus` typed per corner (tighter); a to-nearest `MultiInterval.rounded()`; rootn on cbrt's worst-case inputs; a numpy hook for the 1788 layer; an `AllenMatrix` class or a public `allen_pairs`; a strategies module after 2.0; Q20's optional pin. from the design's "later": a direction tag on a degenerate zero piece (if a solver needs `1/(1/[inf]) == [inf]`); an interval array type (the array API); the backend's non-dyadic part (an mpfr ziv loop for the points it declines, until a workload measures them); allen's composition table for the cut reading; vector-mode autodiff (if a measured solve is too slow); 1788's recommended ops not in the layer (`exp2m1`, `exp10m1`, `log2p1`, `log10p1`, `compoundm1`, `rsqrt`, the `*Pi` functions, text and interchange conversions, inf-sup types but binary64). from M8: pandas past `to_pandas()` (an `IntervalIndex` of several pieces, `IntervalArray`) | not scheduled | `references/owner-questions-2026-10-03/`; `docs/archive/v2/v2-plan.md` "later (not in v2.0)"; `docs/archive/v2/v2-implementation-plan.md` §2 M8 |
+| 8 | H1 | release 2.0.0 (`pyproject.toml` is `2.0.0.dev0`, no tag). before it: rows x2-cosh-zero, from-cuts-reason and release-meta (the licence, metadata, publish workflow and changelog with the release notes, D36), the CORE-MATH full check again if the scalar evaluator changes (clean at `7dd2c0d`), claiming `multiinterval` on PyPI (the first upload, by the publish workflow) | waiting on those rows (owner, 2026-09-26: release "when everything is fully done") | `docs/decisions.md` D5, D17, D36, H1 in "owner answers to the open questions" (2026-09-26) |
 
 ## open questions for the owner
 
-* **Q25** (2026-10-08, raised by the audit): the licence and package metadata for 2.0.0. the repo has no licence
-  of its own (D15 noted it); `pyproject.toml` has no `license`, `readme`, `authors`, `urls` or classifiers; there
-  is no publish workflow and no changelog. which licence (the vendored itf1788 files are Apache 2.0, LGPL-2.1+ or
-  all-permissive per file, test-only; CORE-MATH's rows are MIT), and should a publish workflow (a tag push
-  uploading to PyPI) and a changelog come with it?
-
-every other question (Q1-Q24, Q26, Q27) is answered: `docs/decisions.md`.
+none. every question (Q1-Q27) is answered: `docs/decisions.md`.
 
 ## still owed
 
@@ -102,6 +98,11 @@ every other question (Q1-Q24, Q26, Q27) is answered: `docs/decisions.md`.
   (`O(0.5, 1.0) ** 1074` past a 60 s timeout; review SAB-3). recorded, not guarded
 
 ## session log (newest first; older entries in `docs/session-log.md`)
+
+* **2026-10-08** Q25 walked through with the owner ("what's open? and what's q25", then what a patent grant is).
+  answered as D36: MIT ("okay mit"), with a tag-push publish workflow and a changelog taken as recommended ("idm
+  anything"). new row release-meta; no question open. docs only, no code changed. Still owed: the push of this
+  prose and the Q27 entries (the owner's go)
 
 * **2026-10-08** Q27 walked through with the owner ("whats q27", then each part). answered: (b) D34 as built,
   (c) yes, csc's and sec's ±1, and the principle under them, recorded as D35 ("when ... the input domain selects
@@ -168,12 +169,3 @@ every other question (Q1-Q24, Q26, Q27) is answered: `docs/decisions.md`.
   `281922b`, `076ad32`, `bf1ec7c`; worktrees and branches removed. gate 27798 + 6609 (2026-10-06). new Q23 (two
   parse leftovers). Still owed: the push (x10 prepush and `gate:gmpy2`; the owner's go); nothing here touched the scalar
   evaluator, so the CORE-MATH full check stays the owner's call from trig-rev-far (`tools/coremath.py status`)
-
-* **2026-10-05** the name (the owner: "I need a good name for this library that isn't already on pypi", then
-  `multiinterval`, one word, "do the rename in this repo now"). candidates checked against PyPI's JSON API (404 =
-  no project): `multiinterval`, `multi-interval`, `atoll`, `attained`, `realsets` free; `intervalset`, `dedekind`,
-  `archipelago`, `enclosure` taken. `git mv intervals multiinterval` and a scripted byte-level pass (CRLF kept)
-  over every tracked file but `references/`: imports, `intervals.x` and `intervals/x` pointers, quoted names,
-  `INTERVALS_*` variables; then by hand the bare `intervals` identifiers in four tests, `tools/coremath.py`'s import
-  walker paths and the directory mentions in the docs. the ledger's `ALGO` id kept (a new one would orphan every row).
-  Still owed: the push (x10 prepush and `gate:gmpy2`); claiming the name on PyPI (the first upload)

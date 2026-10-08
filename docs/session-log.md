@@ -6,6 +6,15 @@ mean `docs/archive/v2/`; decisions they mention are in `docs/decisions.md`.
 
 ## entries (newest first)
 
+* **2026-10-05** the name (the owner: "I need a good name for this library that isn't already on pypi", then
+  `multiinterval`, one word, "do the rename in this repo now"). candidates checked against PyPI's JSON API (404 =
+  no project): `multiinterval`, `multi-interval`, `atoll`, `attained`, `realsets` free; `intervalset`, `dedekind`,
+  `archipelago`, `enclosure` taken. `git mv intervals multiinterval` and a scripted byte-level pass (CRLF kept)
+  over every tracked file but `references/`: imports, `intervals.x` and `intervals/x` pointers, quoted names,
+  `INTERVALS_*` variables; then by hand the bare `intervals` identifiers in four tests, `tools/coremath.py`'s import
+  walker paths and the directory mentions in the docs. the ledger's `ALGO` id kept (a new one would orphan every row).
+  Still owed: the push (x10 prepush and `gate:gmpy2`); claiming the name on PyPI (the first upload)
+
 * **2026-10-05** trig-rev-far (the owner: "get a subagent to do that"). an opus agent in the worktree `../intervals-trig-rev-far`
   measured (branch count, not cost per branch: ~ulp(X)/(2 pi) branches round onto x's open end to nearest, onto ±inf past the
   doubles), fixed with identical results, pinned (a differential hypothesis test against the old walk; 18 far cases under a

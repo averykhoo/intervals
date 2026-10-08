@@ -5,7 +5,7 @@ superseded. nothing else in the repo records a decision; `HANDOFF.md`, the code 
 (`docs/archive/v2/`) point here.
 
 * **a new decision** is an entry at the top of "the log", headed `### YYYY-MM-DD: Dnn, <title>` with the next
-  D-id (**D36 is next**): who decided (the owner, or a build's default awaiting the owner), what, why, and the
+  D-id (**D37 is next**): who decided (the owner, or a build's default awaiting the owner), what, why, and the
   ids or entries it supersedes. an earlier entry it changes gets a one-line `> **superseded YYYY-MM-DD**`
   marker and is otherwise left as it was.
 * **owner questions** (Q1-Q27 asked so far; the next is Q28) are asked in `HANDOFF.md`; the answer is recorded here and `HANDOFF.md`
@@ -66,6 +66,25 @@ vendoring.
 
 
 ## the log (newest first; D31 on written here, the rest from `v2-plan.md`'s decision log)
+
+### 2026-10-08: D36, MIT licence, a publish workflow and a changelog for 2.0.0; Q25 answered
+
+the owner, 2026-10-08, answering Q25: asked what a patent grant is, then "what would you suggest, idm anything",
+then, on the session's recommendation (MIT, plus a publish workflow and a changelog), "okay mit".
+
+* **the licence is MIT**, for the library (`multiinterval/`, the wheel), copyright Avery Khoo. a `LICENSE` file at the
+  root and `license = "MIT"` (with `license-files`) in `pyproject.toml`. why, over Apache 2.0: a sole author holding
+  no patents gives Apache 2.0's patent grant nothing to cover; MIT is a few lines, asks only that the notice be kept,
+  and is compatible with GPLv2 projects, which Apache 2.0 is not; the libraries beside it are BSD (mpmath, numpy)
+  and the vendored CORE-MATH rows already MIT. the vendored test data keeps its own licences (D15): it is not in the
+  wheel, so nothing changes there
+* **the metadata `pyproject.toml` lacks**, filled with it: `readme`, `authors`, `urls`, classifiers
+* **a publish workflow** (the session's recommendation, taken with "idm anything"): a tag push `v*` builds the sdist
+  and wheel and uploads them to PyPI by trusted publishing (OIDC, no stored token). the owner registers the pending
+  publisher on pypi.org before the first tag; the tag push is babysat through the upload, as every push is
+* **a changelog** (likewise): `CHANGELOG.md`, starting at 2.0.0; its first entry, written from the v1 -> v2 surface
+  map (`docs/archive/v2/v2-implementation-plan.md` §4), is the release notes row H1 asks for
+* not built: row release-meta (`HANDOFF.md`) builds it, before H1
 
 ### 2026-10-08: D35, an extremum known exactly is an exact end; Q27 answered
 
