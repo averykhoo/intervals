@@ -47,8 +47,12 @@ a task the owner assigns overrides the ranking. at the end of a session:
   is no publish workflow and no changelog. which licence (the vendored itf1788 files are Apache 2.0, LGPL-2.1+ or
   all-permissive per file, test-only; CORE-MATH's rows are MIT), and should a publish workflow (a tag push
   uploading to PyPI) and a changelog come with it?
-* **Q26** (2026-10-08): fix m14b-open (row 2) before 2.0.0? it changes the number type of some ends (no value
-  changes), so after 2.0 it is a behaviour change of a released version
+* **Q26** (2026-10-08): fix m14b-open (row 2) before 2.0.0? it changes the number type of some ends, and in
+  the nearest class one result's set: `M(-1.0000000000000002, -1.0).acos()` is `(3.141592653589793,
+  3.1415926535897936)` where `M(-1.0).acos()` is `[3.141592653589793]` (the domain clip leaves the point
+  `[-1, -1.0]`, evaluated at its exact int cut). `abs(M(-1.0, 1.0))` `[0, 1.0]` and `trunc(M(-2.5, 3))`
+  `{[-2.0], [-1.0], [0.0], [1], [2], [3]}` (`floor` gives all floats) are `==` to their all-float forms
+  (probed 2026-10-08). after 2.0 any of it is a behaviour change of a released version
 
 every earlier question (Q1-Q24) is answered: `docs/decisions.md`.
 
