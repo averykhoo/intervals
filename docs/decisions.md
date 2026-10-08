@@ -5,7 +5,7 @@ superseded. nothing else in the repo records a decision; `HANDOFF.md`, the code 
 (`docs/archive/v2/`) point here.
 
 * **a new decision** is an entry at the top of "the log", headed `### YYYY-MM-DD: Dnn, <title>` with the next
-  D-id (**D32 is next**): who decided (the owner, or a build's default awaiting the owner), what, why, and the
+  D-id (**D33 is next**): who decided (the owner, or a build's default awaiting the owner), what, why, and the
   ids or entries it supersedes. an earlier entry it changes gets a one-line `> **superseded YYYY-MM-DD**`
   marker and is otherwise left as it was.
 * **owner questions** (Q1-Q26 asked so far; the next is Q27) are asked in `HANDOFF.md`; the answer is recorded here and `HANDOFF.md`
@@ -67,6 +67,34 @@ vendoring.
 
 ## the log (newest first; D31 on written here, the rest from `v2-plan.md`'s decision log)
 
+### 2026-10-08: D32, precision first: what is known exactly is exact (revises D31)
+
+the owner, 2026-10-08, the same day as D31: "abs can produce an exact end from abs [-1.0, 1.0] since 0 is
+included, let's prioritize precision where it's possible"; then, asked, the step functions give ints and the acos
+clip stays exact (both the session's recommendations). D31's first bullet (types from the operands, python's
+tower, `/` as D3), its tie rule and its reasons stand; three of its bullets are superseded (marked there).
+
+* **exact where the value is known exactly, not only carried**: two kinds of result value are exact (an `int` or
+  a `Fraction`) whatever the operands' types. (a) the **constants a function reaches**: its interior extrema
+  and its domain ends. abs's and `x ** 2`'s 0 and cosh's 1 already are (`abs(M(-1.0, 1.0))` is `[0, 1.0]`,
+  `cosh(M(-1.0, 1.0))` `[1, 1.5430806348152437]`, unchanged); sin's and cos's ±1 become so
+  (`cos(M(-1.0, 1.0))` was `[0.5403023058681398, 1.0]`, `sin(M(0.0, 2.0))` `[0.0, 1.0]`: their 1 becomes `1`).
+  (b) the **integers the step functions list**: `floor`, `ceil`, `trunc`, `round` and the rest of
+  `multiinterval.steps` give ints on a float piece, as python's `math.floor` does (`floor(M(-2.5, 3.0))` was
+  `{[-3.0], [-2.0], ..., [3.0]}`, becomes `{[-3], [-2], ..., [3]}`)
+* **everything else computed from a float operand stays a float** (D29, D31), even when its value happens to be
+  exact: `M(1.0) + 1` is `[2.0]`, an end that is a float operand's own value (`abs`'s `1.0` from `-1.0`) is a
+  float. the line is what the value depends on: a float operand's value carried through arithmetic or a
+  continuous function is float; an integer by definition or a constant of the function is exact
+* **a domain clip is exact**: the clip point of `M(-1.0000000000000002, -1.0)` against acos's domain is both the
+  operand's `-1.0` and the domain's `-1`, a tie, so exact `-1` (D31's tie rule), and
+  `M(-1.0000000000000002, -1.0).acos()` stays `(3.141592653589793, 3.1415926535897936)`, which contains pi,
+  as today. it differs from `M(-1.0).acos()`, `[3.141592653589793]` to nearest, where the user gave the float
+  point
+* **ties as D31**: `abs(M(-1, 1.0))` and `abs(M(-1.0, 1))` are both `[0, 1]` (were `[0, 1]` and `[0, 1.0]`)
+* **what m14b-open builds**: sin's and cos's extrema exact; the step functions' ints; the tie rule. abs and the
+  acos clip are unchanged
+
 ### 2026-10-08: D31, a result's number type says where its value came from (Q26)
 
 the owner, 2026-10-08, answering Q26 and the question under it: prefer one type per result ("all float, all
@@ -84,14 +112,17 @@ m14b-open found (`HANDOFF.md` row m14b-open; the fix is built before 2.0.0).
   `abs(M(-1.0, 1.0))` is `[0.0, 1.0]` (was `[0, 1.0]`). `0.0` has no rounding error; the type records the grid,
   so `0.0 + 1/3` rounds where `0 + 1/3` does not (the owner: "whether a float can ever produce an int ... 0.0
   is right")
+  > **superseded 2026-10-08 by D32**: a constant the function reaches (abs's 0) is exact
 * **the step functions are per piece, all of them**: `trunc(M(-2.5, 3))` is all floats, as `floor` is (was
   `{[-2.0], [-1.0], [0.0], [1], [2], [3]}`)
+  > **superseded 2026-10-08 by D32**: the step functions give ints
 * **a domain constant contributes no type**: a clip at a domain end takes the operand's value there.
   `M(-1.0000000000000002, -1.0).acos()` clips to the point `[-1.0]` and is `[3.141592653589793]` in the nearest
   class, as `M(-1.0).acos()` (was the open `(3.141592653589793, 3.1415926535897936)`: the clip left `[-1, -1.0]`
   and acos ran on its exact cut). the outward class is unchanged (open around pi either way)
+  > **superseded 2026-10-08 by D32**: the clip is exact, the result stays open around pi
 * **a tie goes to the exact type**: an end reached by an exact and a float value of the same number is exact,
-  so `abs(M(-1, 1.0))` and `abs(M(-1.0, 1))` are both `[0.0, 1]` (were `[0, 1]` and `[0, 1.0]`: the order of the
+  so `abs(M(-1, 1.0))` and `abs(M(-1.0, 1))` are both `[0.0, 1]` (`[0, 1]` under D32) (were `[0, 1]` and `[0, 1.0]`: the order of the
   operand's ends decided). ends from different values keep their own types: `abs(M(-1, 2.0))` and
   `abs(M(-2.0, 1))` are `[0.0, 2.0]`, `abs(M(-1.0, 2))` is `[0.0, 2]` (the owner: "this is fine and I guess it
   makes sense")
