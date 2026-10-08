@@ -5,10 +5,10 @@ superseded. nothing else in the repo records a decision; `HANDOFF.md`, the code 
 (`docs/archive/v2/`) point here.
 
 * **a new decision** is an entry at the top of "the log", headed `### YYYY-MM-DD: Dnn, <title>` with the next
-  D-id (**D31 is next**): who decided (the owner, or a build's default awaiting the owner), what, why, and the
+  D-id (**D32 is next**): who decided (the owner, or a build's default awaiting the owner), what, why, and the
   ids or entries it supersedes. an earlier entry it changes gets a one-line `> **superseded YYYY-MM-DD**`
   marker and is otherwise left as it was.
-* **owner questions** (Q1-Q24 so far; the next is Q25) are asked in `HANDOFF.md`; the answer is recorded here and `HANDOFF.md`
+* **owner questions** (Q1-Q26 asked so far; the next is Q27) are asked in `HANDOFF.md`; the answer is recorded here and `HANDOFF.md`
   keeps no copy of it. their wordings are in `HANDOFF.md`'s git history (Q9-Q20 also in
   `references/owner-questions-2026-10-03/README.md`). not to be confused with the modulo quadrants "Q1"-"Q4"
   of D5 and M7a/M7b, which are not questions.
@@ -65,7 +65,44 @@ process-global and overridden by `pytest -W` / `simplefilter`; itf1788 licence c
 vendoring.
 
 
-## the log (newest first; from `v2-plan.md`'s decision log)
+## the log (newest first; D31 on written here, the rest from `v2-plan.md`'s decision log)
+
+### 2026-10-08: D31, a result's number type says where its value came from (Q26)
+
+the owner, 2026-10-08, answering Q26 and the question under it: prefer one type per result ("all float, all
+int, all frac") or the most precise type ("int over frac over float")? neither: the session's recommendation,
+accepted ("okay with everything, record it"). it states the rule D3 and D29 already follow and fixes the cases
+m14b-open found (`HANDOFF.md` row m14b-open; the fix is built before 2.0.0).
+
+* **types come only from the operands.** `int` and `Fraction` mean exact, never rounded; `float` means on the
+  double grid, so the next operation on it rounds. per end (D29), python's numeric tower: exact op exact stays
+  exact, a float operand makes a float; `/` of exact operands is an `int` when integral, else a `Fraction`,
+  never a float (D3, unchanged). a float is never upgraded to exact (`0.1` is not
+  `3602879701896397/36028797018963968`) and an exact value is never silently made a float
+* **a value inside a piece takes the piece's type**: a result end that is no operand's end (abs's 0, `x ** 2`'s
+  0) is a float if the piece has a finite float end, as the step functions already decide per piece. so
+  `abs(M(-1.0, 1.0))` is `[0.0, 1.0]` (was `[0, 1.0]`). `0.0` has no rounding error; the type records the grid,
+  so `0.0 + 1/3` rounds where `0 + 1/3` does not (the owner: "whether a float can ever produce an int ... 0.0
+  is right")
+* **the step functions are per piece, all of them**: `trunc(M(-2.5, 3))` is all floats, as `floor` is (was
+  `{[-2.0], [-1.0], [0.0], [1], [2], [3]}`)
+* **a domain constant contributes no type**: a clip at a domain end takes the operand's value there.
+  `M(-1.0000000000000002, -1.0).acos()` clips to the point `[-1.0]` and is `[3.141592653589793]` in the nearest
+  class, as `M(-1.0).acos()` (was the open `(3.141592653589793, 3.1415926535897936)`: the clip left `[-1, -1.0]`
+  and acos ran on its exact cut). the outward class is unchanged (open around pi either way)
+* **a tie goes to the exact type**: an end reached by an exact and a float value of the same number is exact,
+  so `abs(M(-1, 1.0))` and `abs(M(-1.0, 1))` are both `[0.0, 1]` (were `[0, 1]` and `[0, 1.0]`: the order of the
+  operand's ends decided). ends from different values keep their own types: `abs(M(-1, 2.0))` and
+  `abs(M(-2.0, 1))` are `[0.0, 2.0]`, `abs(M(-1.0, 2))` is `[0.0, 2]` (the owner: "this is fine and I guess it
+  makes sense")
+* **why not one type per result**: it rounds free exact information away (`O([1.0, 2]) + Fraction(1, 3)` is
+  `(1.3333333333333333, 7/3]`; all-float would open and widen the exact end, and every later step inherits it),
+  and it is not inclusion-isotone either (Q19's report). **why not the most precise type**: only among exact
+  types (an integral `Fraction` is an `int`, D3); a float made exact claims a precision nobody had
+* **Fractions in results**: correct and visible rather than silently rounded; a user who wants floats gives one
+  float operand (`M(1.0) / 3`). the README should say so where `/` is introduced, and the to-nearest
+  `MultiInterval.rounded()` (row "later") would make the way back one call. long exact iterations grow their
+  denominators: the docs should point heavy numerical work at floats
 
 
 ### 2026-10-06 revision: separators exactly between items (Q24)

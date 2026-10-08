@@ -19,7 +19,7 @@ a task the owner assigns overrides the ranking. at the end of a session:
 
 * **v2 is built** (a read-only audit, 2026-10-08: M1-M16 and every named item after them done, each record
   checked and a code symbol of each spot-checked). its plans are archived in `docs/archive/v2/`, its decisions
-  in `docs/decisions.md`. what is left before 2.0.0 is row H1 and questions Q25-Q26
+  in `docs/decisions.md`. what is left before 2.0.0 is row H1, row m14b-open (D31) and question Q25
 * **pushed: `origin/master` at `1330182`**, CI and fuzz green (2026-10-06). `master` is ahead by `a0a8939`..HEAD,
   not pushed: the 1788 survey, `tools/pyintval_check.py` (src), the fuzz-speed study, this archive. the push
   needs the x10 prepush (src changed) and the owner's go
@@ -33,12 +33,12 @@ a task the owner assigns overrides the ranking. at the end of a session:
 | # | id | what | status / blocker | spec |
 |---|---|---|---|---|
 | 1 | fuzz-xdist | run the x10 fuzz (and `gate:gmpy2`) under pytest-xdist: 21 min at `-n 8` against 75-125 min serial, the same 34941 passed (2026-10-06). needs `phase_spec` to pass `-n K --dist worksteal`, `workers=K` recorded per row, `tests/test_gate_ledger.py`'s argument pins, pytest-xdist in `[test]` and the env, and a look at the four wall-clock tests (one failed under load at `-n 4`) | ready; the study is done, the build is not | `references/fuzz-speed-2026-10-06/README.md` |
-| 2 | m14b-open | what M14-breadth found and left (2026-10-02): number-type quirks with no wrong value (a 0 end exact among float operands: `abs(M(-1.0, 1.0))` is `[0, 1.0]`, still so 2026-10-08; trunc's non-negative side ints; a one-point domain clip takes its low cut's type) | ready, small; it changes result types, so cheaper before 2.0 (Q26) | `docs/archive/v2/v2-implementation-plan.md` §2 "M14-breadth" (left open) |
+| 2 | m14b-open | what M14-breadth found and left (2026-10-02): number-type quirks, now decided by D31 (2026-10-08): abs's and `x ** 2`'s 0 inside a float piece is `0.0` (`abs(M(-1.0, 1.0))` is `[0, 1.0]`); `trunc` per piece as `floor` (`trunc(M(-2.5, 3))` mixes ints in); a domain clip takes the operand's value, not the domain constant's type (`M(-1.0000000000000002, -1.0).acos()` open in the nearest class, `M(-1.0).acos()` a point); an exact/float tie at an end is exact (`abs(M(-1, 1.0))` `[0, 1]` but `abs(M(-1.0, 1))` `[0, 1.0]`). all probed 2026-10-08 | ready, small; before 2.0.0 (Q26) | `docs/decisions.md` D31; `docs/archive/v2/v2-implementation-plan.md` §2 "M14-breadth" (left open) |
 | 3 | vectors-ext | (c) only: cuinterval's `custom.itl` (26 vectors, MIT), probably covered by `test_domain_ends_and_limits`. (a) done 2026-10-05, (b) closed 2026-10-03 | low value | `references/test-vector-sources.md` |
 | 4 | pown-ziv | an exact corner of about 2M bits within about 2 ** -(its size) of a rounding breakpoint, past `EXACT_RESULT_LIMIT`, runs ziv past 120 s where the old code built the power in milliseconds (`O(3 + 2 ** -2100000) ** 2`, 2026-10-04); pow the same at 2M bits. follow-ups: a near-1 shortcut in `rounded_pow`, or the exact build when ziv passes a precision cap and the build is affordable | ready, not scheduled; extreme sizes only | `docs/archive/v2/v2-implementation-plan.md` §2 "owner-answers"; `references/owner-questions-2026-10-03/streams/pown.md` step 6 |
 | 5 | evaluate-box | a pure speed change: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | `docs/archive/v2/v2-implementation-plan.md` §2 M16e |
 | 6 | later | not in v2.0, each "consider", optional or "if asked". from the owner's answers (2026-10-03): `Root`/`RootBox` as frozen dataclasses if a third state appears; an `rtol` beside `tol`; outward fma, `%`, hypot, `cancel_minus` typed per corner (tighter); a to-nearest `MultiInterval.rounded()`; rootn on cbrt's worst-case inputs; a numpy hook for the 1788 layer; an `AllenMatrix` class or a public `allen_pairs`; a strategies module after 2.0; Q20's optional pin. from the design's "later": a direction tag on a degenerate zero piece (if a solver needs `1/(1/[inf]) == [inf]`); an interval array type (the array API); the backend's non-dyadic part (an mpfr ziv loop for the points it declines, until a workload measures them); allen's composition table for the cut reading; vector-mode autodiff (if a measured solve is too slow); 1788's recommended ops not in the layer (`exp2m1`, `exp10m1`, `log2p1`, `log10p1`, `compoundm1`, `rsqrt`, the `*Pi` functions, text and interchange conversions, inf-sup types but binary64). from M8: pandas past `to_pandas()` (an `IntervalIndex` of several pieces, `IntervalArray`) | not scheduled | `references/owner-questions-2026-10-03/`; `docs/archive/v2/v2-plan.md` "later (not in v2.0)"; `docs/archive/v2/v2-implementation-plan.md` §2 M8 |
-| 7 | H1 | release 2.0.0 (`pyproject.toml` is `2.0.0.dev0`, no tag). before it: Q25 (licence and package metadata: no LICENSE, no `license`/`readme`/`authors`/`urls`/classifiers in `pyproject.toml`; no publish workflow, no changelog), Q26 (m14b-open first?), release notes (from the v1 -> v2 surface map, `docs/archive/v2/v2-implementation-plan.md` §4), the CORE-MATH full check, claiming `multiinterval` on PyPI (the first upload) | waiting on Q25, Q26 (owner, 2026-09-26: release "when everything is fully done") | `docs/decisions.md` D5, D17, H1 in "owner answers to the open questions" (2026-09-26) |
+| 7 | H1 | release 2.0.0 (`pyproject.toml` is `2.0.0.dev0`, no tag). before it: Q25 (licence and package metadata: no LICENSE, no `license`/`readme`/`authors`/`urls`/classifiers in `pyproject.toml`; no publish workflow, no changelog), m14b-open (row 2, D31), release notes (from the v1 -> v2 surface map, `docs/archive/v2/v2-implementation-plan.md` §4), the CORE-MATH full check, claiming `multiinterval` on PyPI (the first upload) | waiting on Q25 and row 2 (owner, 2026-09-26: release "when everything is fully done") | `docs/decisions.md` D5, D17, H1 in "owner answers to the open questions" (2026-09-26) |
 
 ## open questions for the owner
 
@@ -47,14 +47,8 @@ a task the owner assigns overrides the ranking. at the end of a session:
   is no publish workflow and no changelog. which licence (the vendored itf1788 files are Apache 2.0, LGPL-2.1+ or
   all-permissive per file, test-only; CORE-MATH's rows are MIT), and should a publish workflow (a tag push
   uploading to PyPI) and a changelog come with it?
-* **Q26** (2026-10-08): fix m14b-open (row 2) before 2.0.0? it changes the number type of some ends, and in
-  the nearest class one result's set: `M(-1.0000000000000002, -1.0).acos()` is `(3.141592653589793,
-  3.1415926535897936)` where `M(-1.0).acos()` is `[3.141592653589793]` (the domain clip leaves the point
-  `[-1, -1.0]`, evaluated at its exact int cut). `abs(M(-1.0, 1.0))` `[0, 1.0]` and `trunc(M(-2.5, 3))`
-  `{[-2.0], [-1.0], [0.0], [1], [2], [3]}` (`floor` gives all floats) are `==` to their all-float forms
-  (probed 2026-10-08). after 2.0 any of it is a behaviour change of a released version
 
-every earlier question (Q1-Q24) is answered: `docs/decisions.md`.
+every other question (Q1-Q24, Q26) is answered: `docs/decisions.md`.
 
 ## still owed
 
@@ -121,7 +115,8 @@ every earlier question (Q1-Q24) is answered: `docs/decisions.md`.
   `push`, `fuzz-speed` and two killed runs' ledger logs to the Recycle Bin; seven orphaned `tail -f` from
   2026-09-26..10-04 stopped by PID (cwd checked); the banner cut to the current state and the session log
   rotated (older entries and the retired banner in `docs/session-log.md`). new row fuzz-xdist (first: the old banner's "next"), row H1 gained what 2.0 needs;
-  new Q25, Q26. gate 27798 + 7143 (2026-10-08). Still owed: the push (x10 prepush; the owner's go); the CORE-MATH full check (the
+  new Q25, Q26; Q26 answered the same day (D31: a result's number type says where its value came from; the
+  m14b-open fix built before 2.0). gate 27798 + 7143 (2026-10-08). Still owed: the push (x10 prepush; the owner's go); the CORE-MATH full check (the
   owner's call)
 * **2026-10-07** (no entry by its session; written 2026-10-08 from the commits) the 1788 libraries on PyPI
   (`a0a8939`, `references/python-1788-libraries-2026-10-07.md`), the context-framework audit's doc fixes recorded
