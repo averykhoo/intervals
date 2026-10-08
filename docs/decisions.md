@@ -92,8 +92,21 @@ tower, `/` as D3), its tie rule and its reasons stand; three of its bullets are 
   as today. it differs from `M(-1.0).acos()`, `[3.141592653589793]` to nearest, where the user gave the float
   point
 * **ties as D31**: `abs(M(-1, 1.0))` and `abs(M(-1.0, 1))` are both `[0, 1]` (were `[0, 1]` and `[0, 1.0]`)
-* **what m14b-open builds**: sin's and cos's extrema exact; the step functions' ints; the tie rule. abs and the
-  acos clip are unchanged
+* **abs is `(X ∪ -X) ∩ [0, inf]`** (the owner, 2026-10-08: "reframe abs as x + -x then intersected with [0, inf]
+  which preserves 0 without any fancy rules"; "+" read as the union, which the owner accepted: the arithmetic sum
+  is `[0, 2]` for `[-1, 1]`). an exact identity of sets, and its exact 0 is the cut of the exact constant
+  `[0, inf]`: set operations select cuts and never round. it is abs's **definition and a pin, not its
+  implementation**: `ops.py::ABS` stays (the shared machinery carries 1788's decorations and `Dual`'s derivative),
+  and a property test asserts `repr(abs(X)) == repr((X | -X) & C(0, inf))` in both classes, types included.
+  `x ** 2` (as `abs(x) ** 2`) and cosh (as `cosh(abs(x))`) get their exact 0 and 1 the same way. sin's and cos's
+  ±1 have no such identity (reached at irrational points): they need the no-ulp-contamination test above.
+  probed 2026-10-08: the identity equals today's abs in both classes on 8 shapes but the two ties
+* **the tie rule lives in the kernel, not in each function**: `∪` decides a tie by position today
+  (`M(-1, 1.0) | M(-1.0, 1)` is `[-1, 1.0]`, swapped `[-1.0, 1]`, 2026-10-08). where `∪`, `∩` or normalization
+  meets two cuts of equal value and different type, the exact one is kept; abs, every set operation and
+  whatever is built on them follow
+* **what m14b-open builds**: the kernel's tie rule; abs's identity pin; sin's and cos's extrema exact; the step
+  functions' ints. abs's own code and the acos clip are unchanged
 * **no ulp contamination: the test for exact**, the owner's rule and phrase (2026-10-08: "only choose the exact type if we know for sure it
   has no ulp contamination, and the endpoint is the exact value. we could end up at 1.0 by many paths and not all
   guarantee that 1 is at the endpoint"): an end is exact only when it has **no ulp contamination**: its value is
