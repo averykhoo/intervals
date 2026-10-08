@@ -386,8 +386,11 @@ def status() -> int:
     last = full[-1]
     print(f'last full check: {last[0]} at {last[1]} ({last[2]}), CORE-MATH {last[3]}: {last[5]} inputs, '
           f'{last[6]} mismatches, {last[8]} s')
-    log = _git('log', '--oneline', f'{last[1]}..HEAD', '--', *files)
-    stat = _git('diff', '--shortstat', last[1], '--', *files)
+    # the package was `intervals/` before 2026-10-05 (`c6a4cca`): a pathspec of the new names alone hides
+    # every earlier commit to these files, and a diff without rename detection counts them as new
+    names = [*files, *(f.replace('multiinterval/', 'intervals/', 1) for f in files)]
+    log = _git('log', '--oneline', f'{last[1]}..HEAD', '--', *names)
+    stat = _git('diff', '-M', '--shortstat', last[1], '--', *names)
     print(f'the scalar evaluator ({", ".join(Path(f).stem for f in files)}): '
           f'{len(log.splitlines())} commits since, {stat or "no change"}')
     return 0
