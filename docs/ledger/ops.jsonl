@@ -1,0 +1,4 @@
+{"at": "2026-11-02T16:16:17+08:00", "session": "2026-11-02a", "actor": "claude-code/claude-opus-5-5", "op": "session.start", "id": "2026-11-02a", "path": "docs/ledger/session-log.md", "fields": ["kind"], "mechanical": false}
+{"at": "2026-11-02T16:16:18+08:00", "session": "2026-11-02a", "actor": "claude-code/claude-opus-5-5", "op": "doc.archive", "id": "HANDOFF.md", "path": "HANDOFF.md", "fields": ["moved"], "mechanical": false}
+{"at": "2026-11-02T16:16:18+08:00", "session": "2026-11-02a", "actor": "claude-code/claude-opus-5-5", "op": "doc.archive", "id": "HANDOFF.md", "path": "docs/archive/HANDOFF.md", "fields": ["archived"], "mechanical": false}
+{"at": "2026-11-02T16:16:18+08:00", "session": "2026-11-02a", "actor": "claude-code/claude-opus-5-5", "op": "doc.archive", "id": "HANDOFF.md", "path": "docs/archive/README.md", "fields": ["redirect"], "mechanical": false}

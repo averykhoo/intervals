@@ -1,171 +1,54 @@
-# handoff
+# Orientation note
 
-what is true now: the banner, ranked open items, open questions for the owner, what is still owed, and the
-newest session-log entries. volatile by design. elsewhere: every decision in `docs/decisions.md` (the one
-decisions log; never here), records of finished work in `docs/records.md`, the v2 plans (design, milestones,
-every record up to v2) archived in `docs/archive/v2/`, older session-log entries in `docs/session-log.md`.
-a task the owner assigns overrides the ranking. at the end of a session:
+LIVING. What is true now, the next session's first steps, and facts not derivable from the code
+(FRAMEWORK §5.1). The board is `context-engine task list`; this note keeps no copy of it.
 
-* add a session-log entry (newest first) and refresh the banner. the banner is the current state only, a few
-  bullets, never history: what happened goes in the session log
-* edit rows in place and sweep closed ids: a finished item leaves the table, its record goes in
-  `docs/records.md`, a one-line entry in the session log; nothing is listed as open and done at once
-* an answered question leaves "open questions": the answer goes in `docs/decisions.md`, not here
-* **rotate the session log**: keep the newest 8 entries here; move the older ones, unchanged, to the top of
-  `docs/session-log.md`'s list
-* list anything skipped as "Still owed:"
+The banner is written at the first clean close by `context-engine banner set --seen none`,
+which puts a `## Banner (<session key>)` section before this note's first section. Do not
+write that heading by hand.
 
-## banner (2026-10-08)
+## Next session
 
-* **v2 is built**, and m14b-open (D32's number types) with it (2026-10-08). what is left before 2.0.0 is row H1
-  and rows x2-cosh-zero, from-cuts-reason (D35) and release-meta (D36: MIT, a publish workflow, a changelog). no
-  question is open
-* **pushed: `origin/master` at `478654a`** (2026-10-08, m14b-open and fuzz-xdist with it): CI run 37754291429 and
-  fuzz run 37754291528 both green, seen to the end. `master` is ahead only by this handoff's prose
-* **gate** green on this code: 27798 + 7182 passed (2026-10-08, `tools/gate.py status`). the fuzz and gate:gmpy2
-  phases now run on 8 pytest-xdist workers (D34): prepush about 30 min, was about 100
-* the CORE-MATH full check is clean at `7dd2c0d` (2026-10-08: 17959805 inputs, 3 directions, 0 mismatches,
-  2930 s at 4 jobs; `references/coremath-runs.tsv`)
+- Take NOW from `context-engine task list`; a task the owner assigns overrides the ranking. The old board
+  rows keep their names: `context-engine task show x2-cosh-zero` resolves the alias (so do `H1` and `T1`).
+- Rules for gate, commit, push and CORE-MATH are `CLAUDE.md`'s. Before a commit, `tools/gate.py status
+  --require commit`; before a push, `tools/prepush.sh` and a CI watcher after it.
 
-## open items (ranked)
+## Pushed state (read 2026-11-02; `git log origin/master..master` regenerates it)
 
-| # | id | what | status / blocker | spec |
-|---|---|---|---|---|
-| 1 | x2-cosh-zero | `x ** 2` and cosh at an operand end `0.0` give the exact 0 and 1, as `abs(x) ** 2` and `cosh(abs(x))` do since m14b-open (`M(0.0, 1.0) ** 2` is `[0.0, 1.0]`, `abs(M(0.0, 1.0)) ** 2` `[0, 1.0]`; cosh `[1.0, ...]` against `[1, ...]`; probed 2026-10-08) | ready (Q27 (c) yes, D35); not scheduled | `docs/records.md` "m14b-open", "left" |
-| 2 | from-cuts-reason | `MultiInterval.from_cuts` refuses a point of an exact and a float cut of the same number (`(below(2.0), above(2))`) with `not a normalized cut tuple: (...)`; the message is to say why, e.g. "a point is one value: its ends are 2.0 and 2; write [2] or [2.0]" (the owner, Q27; a sabotage check that the message reaches the user) | ready (D35); not scheduled | `docs/decisions.md` D35, D33; `kernel.is_valid` |
-| 3 | release-meta | D36 built: `LICENSE` (MIT, Avery Khoo), `pyproject.toml`'s `license`/`license-files`, `readme`, `authors`, `urls`, classifiers; a tag-push publish workflow by PyPI trusted publishing; `CHANGELOG.md` from 2.0.0, its first entry the release notes (from the v1 -> v2 surface map). the owner registers the pending publisher on pypi.org before the first tag | ready (D36); not scheduled | `docs/decisions.md` D36 |
-| 4 | vectors-ext | (c) only: cuinterval's `custom.itl` (26 vectors, MIT), probably covered by `test_domain_ends_and_limits`. (a) done 2026-10-05, (b) closed 2026-10-03 | low value | `references/test-vector-sources.md` |
-| 5 | pown-ziv | an exact corner of about 2M bits within about 2 ** -(its size) of a rounding breakpoint, past `EXACT_RESULT_LIMIT`, runs ziv past 120 s where the old code built the power in milliseconds (`O(3 + 2 ** -2100000) ** 2`, 2026-10-04); pow the same at 2M bits. follow-ups: a near-1 shortcut in `rounded_pow`, or the exact build when ziv passes a precision cap and the build is affordable | ready, not scheduled; extreme sizes only | `docs/archive/v2/v2-implementation-plan.md` §2 "owner-answers"; `references/owner-questions-2026-10-03/streams/pown.md` step 6 |
-| 6 | evaluate-box | a pure speed change: `applicator.evaluate_box` evaluates a float corner's exact value three times under `OUTWARD`; passing `fn`'s value into the hook would cut it to one, maybe worth as much for arithmetic as the backend, with no dependency | idea, not scheduled (M16e, 2026-09-28) | `docs/archive/v2/v2-implementation-plan.md` §2 M16e |
-| 7 | later | not in v2.0, each "consider", optional or "if asked". from the owner's answers (2026-10-03): `Root`/`RootBox` as frozen dataclasses if a third state appears; an `rtol` beside `tol`; outward fma, `%`, hypot, `cancel_minus` typed per corner (tighter); a to-nearest `MultiInterval.rounded()`; rootn on cbrt's worst-case inputs; a numpy hook for the 1788 layer; an `AllenMatrix` class or a public `allen_pairs`; a strategies module after 2.0; Q20's optional pin. from the design's "later": a direction tag on a degenerate zero piece (if a solver needs `1/(1/[inf]) == [inf]`); an interval array type (the array API); the backend's non-dyadic part (an mpfr ziv loop for the points it declines, until a workload measures them); allen's composition table for the cut reading; vector-mode autodiff (if a measured solve is too slow); 1788's recommended ops not in the layer (`exp2m1`, `exp10m1`, `log2p1`, `log10p1`, `compoundm1`, `rsqrt`, the `*Pi` functions, text and interchange conversions, inf-sup types but binary64). from M8: pandas past `to_pandas()` (an `IntervalIndex` of several pieces, `IntervalArray`) | not scheduled | `references/owner-questions-2026-10-03/`; `docs/archive/v2/v2-plan.md` "later (not in v2.0)"; `docs/archive/v2/v2-implementation-plan.md` §2 M8 |
-| 8 | H1 | release 2.0.0 (`pyproject.toml` is `2.0.0.dev0`, no tag). before it: rows x2-cosh-zero, from-cuts-reason and release-meta (the licence, metadata, publish workflow and changelog with the release notes, D36), the CORE-MATH full check again if the scalar evaluator changes (clean at `7dd2c0d`), claiming `multiinterval` on PyPI (the first upload, by the publish workflow) | waiting on those rows (owner, 2026-09-26: release "when everything is fully done") | `docs/decisions.md` D5, D17, D36, H1 in "owner answers to the open questions" (2026-09-26) |
+- `origin/master` is `478654a` (pushed 2026-10-08 with m14b-open and fuzz-xdist): CI run 37754291429 and fuzz
+  run 37754291528 were both green, seen to the end.
+- Local `master` is four docs-only commits ahead of it (`4d04fe3`, `acdd9c3`, `64b9dcc`, `fa4cf12`: the handoff
+  prose, D35, D36 and the Q27 entries). Pushing them is the owner's go. The engine adoption sits on branch
+  `ce-cutover` on top of `fa4cf12`; none of it is pushed or merged.
 
-## open questions for the owner
+## Verified figures (dated; re-measure rather than difference)
 
-none. every question (Q1-Q27) is answered: `docs/decisions.md`.
+- Gate on the code of 2026-10-08: 27798 + 7182 passed (`tools/gate.py status` says what is green now). The fuzz
+  and gate:gmpy2 phases run on 8 pytest-xdist workers (D34); prepush takes about 30 min.
+- CORE-MATH full check clean at `7dd2c0d` (2026-10-08): 17959805 inputs, 3 directions, 0 mismatches, 2930 s at
+  4 jobs; the rows are in `references/coremath-runs.tsv`. Run it again only if the scalar evaluator changes.
 
-## still owed
+## Release 2.0.0 (board item H1, which waits on x2-cosh-zero, from-cuts-reason and release-meta)
 
-* m14b-open (2026-10-08): `reverse.py`'s intersections with the library's constants (`_NONZERO`, `_REAL_LINE`, the
-  branch images) stay `kernel.intersection`, not `restrict`; their tests are green either way, and their `x` is
-  the user's set, so a tie there goes to the exact cut. not surveyed case by case
-* fuzz gaps a census left (2026-10-03; the rest of its shortlist is built): no @given test for `DecoratedInterval.log(base)` (random base), the decorated reflected ops and divmod (examples only), the slow decorated functions (pow, hypot, trig) on float operands, exact-operand equality of the outward and nearest classes for about 25 more functions, `Builder` (low value)
-* the run ledger (2026-10-01) knows local runs only: a push whose src is unchanged since `origin/master`
-  trusts that master's fuzz run was green on CI (every push is watched to the end), it does not check.
-  count floors (zanzibar's `MIN_TESTS_ALL`) are recorded in each row, not enforced: a gate that
-  collected fewer tests would still read green
-* the M12 taylor loops' error bounds are argued in docstrings, not pinned: removing them keeps every
-  test green (archive plan §2 M12 "evidence", sabotage bullet). recorded, not scheduled
-* M13d's extra working bits near 0 for expm1 and log1p (`elementary.py::_tiny_bits`) are a speed
-  measure only: removing them keeps every test green, since ziv then doubles the precision itself
-  (archive plan §2 M13d sabotage). recorded, not scheduled
-* M16's tests: the long double cases (`tests/test_numpy_compat.py::test_longdouble_is_exact`, the `longdouble`
-  rows of test 2) discriminate only where `np.finfo(np.longdouble).nmant > 52` (CI's linux, never this laptop).
-  the local env is python 3.13, so a 3.12-only hole would reach CI unseen (as the 3.11 `Fraction ** interval`
-  one did, D25)
-* M16a: a constructed n = 3 system with two zeros costs more than 120 s, so n = 3 is covered by one
-  constructed zero and the sphere only, with no random n = 3 test; whether a faster jacobian
-  (Q12(a)) or a tighter form of `F` would change that is not measured. the natural path to a split
-  of a box already proved unique was not found (pinned by a monkeypatched `_krawczyk` only). a
-  continuum costs up to 2n + 1 output boxes per box of width `tol` (review F3); whether to output it
-  differently (one box per connected unproved region) was never asked. `newton`'s own `width <=
-  piece.wid() / 2` is left as M15 wrote it (archive plan §2 M16a)
-* M16d/M16e: the critique's r = `2.0 ** 60` is pinned with u = -1 only, because `O(u) ** 2 ** 60` did not finish
-  for u in {2, 1e300}; since D28 it answers at once (2026-10-08), so the pin can take those u now
-* sabotage rows red in their first run were not re-run after the closing tests were added (M16a:
-  the four closing tests and the review's, which only add red paths); M15's table was not re-checked
-  for the stale-bytecode hazard M16c found (`tools/sabotage.py` could re-run either now)
-* T1 (`tools/sabotage.py`): the `finally` in `Run.pytest` that kills the child when the wait itself is
-  interrupted is untested; the linux kill paths ran but were not sabotaged; on macOS `stop` trusts the PID
-  alone (no creation time)
-* M16b: the layer's per-call `warnings.catch_warnings` is not thread-safe on python 3.11-3.13 (as
-  `decorated.py::_quietly`); recorded, not addressed. the pass imports the adapter a second time as
-  `tests.itf1788.test_itf1788` (the vectors parsed twice, 7.5 s cold, 2026-09-27); accepted
-* M16c: the other relations over cut tuples in `relations.py` (`before`, `adjoins`, ...) also read
-  normalized operands and do not assert it; only `allen_relations`, whose wrong answer would be
-  silent and partial, does. the methods are unaffected
-* M16e: the whole suite under `MULTIINTERVAL_BACKEND=gmpy2` runs in CI's `gate-gmpy2` job since 2026-10-04
-  (Q16(e)) and locally as `gate:gmpy2` when a backend file changed. the backend is verified only with gmpy2 2.3.1 / MPFR
-  4.2.2 on windows (python 3.13); CI's linux jobs run `tests/test_backend.py` with the PyPI wheel, no
-  other MPFR build has been run. free-threaded builds untested (the three contexts are shared module
-  objects; `backend._use` is a global). the speed numbers were taken beside four other streams' runs:
-  a quiet-machine re-measure (`tools/backend_speed.py`) is owed before any number goes into the
-  README. gmpy2 3: `auto` and `[test]` stop below it; when it ships, run the differential against it
-  before `backend.CEILING` and the `[test]` pin move together
-  (`tests/test_backend.py::test_the_test_extra_installs_what_auto_takes` keeps them equal)
-* pown-huge: `ops._check_marker_premises` refuses at import an `EXACT_POWER_LIMIT` below the
-  marker proof's floor (36550 bits), but a limit lowered at run time, after import, still stalls
-  (`O(0.5, 1.0) ** 1074` past a 60 s timeout; review SAB-3). recorded, not guarded
+- `pyproject.toml` is `2.0.0.dev0`; no tag yet. Owner, 2026-09-26: release "when everything is fully done".
+- release-meta builds D36: `LICENSE` (MIT), the `pyproject.toml` metadata, a tag-push publish workflow by PyPI
+  trusted publishing, and `CHANGELOG.md` from 2.0.0 (its first entry the release notes, from the v1 -> v2
+  surface map).
+- The owner registers the pending publisher on pypi.org before the first tag. The first upload, by the publish
+  workflow, is what claims `multiinterval` on PyPI.
+- The CORE-MATH full check again if the scalar evaluator changed since `7dd2c0d`.
 
-## session log (newest first; older entries in `docs/session-log.md`)
+## Where things live
 
-* **2026-10-08** Q25 walked through with the owner ("what's open? and what's q25", then what a patent grant is).
-  answered as D36: MIT ("okay mit"), with a tag-push publish workflow and a changelog taken as recommended ("idm
-  anything"). new row release-meta; no question open. docs only, no code changed. Still owed: the push of this
-  prose and the Q27 entries (the owner's go)
-
-* **2026-10-08** Q27 walked through with the owner ("whats q27", then each part). answered: (b) D34 as built,
-  (c) yes, csc's and sec's ±1, and the principle under them, recorded as D35 ("when ... the input domain selects
-  a region that is certain to have a min or max at an exact value, we can set that exact value as the endpoint";
-  not for arbitrary expressions; examples `x ** 2` against `x * x`, and `x * (1 - x)` on `[0, 1]`, probed). then
-  the rest of (a), D33's other three defaults, explained and taken as recommended ("yes okay with all 3"): Q27
-  closed. row x2-cosh-zero ready; new row from-cuts-reason. docs only, no code changed. Still owed: the push of
-  this prose (the owner's go)
-* **2026-10-08** m14b-open and fuzz-xdist (the owner: "do 2 then 1"). m14b-open: D32 built (`91a241f`): the
-  kernel's tie rule, abs's identity pin, sin's/cos's (and csc's/sec's) attained ±1 exact, the step functions' ints;
-  the pins found what D32 left: abs at an operand end `0.0` (the identity makes it exact), the domain clip, which
-  the tie rule made exact against D32's own `acos([-1.0])` (`kernel.restrict` for the library's clips; caught by
-  the arb oracle, then a sharpness oracle in the gate), `is_valid` refusing a mixed point; the first kernel cost
-  `normalize` 1.65x, rewritten to about 1.2x, level on whole operations. 14 sabotage breaks red. fuzz-xdist
-  (`662e5f1`): the fuzz and gate:gmpy2 phases on 8 pytest-xdist workers, the timing tests on CPU time, 5 breaks
-  red; prepush green on `662e5f1` in about 30 min (fuzz 28 s + 1547 s, gmpy2 206 s). records in `docs/records.md`,
-  build defaults D33, D34, asked as Q27; new row x2-cosh-zero. gate 27798 + 7182 (2026-10-08). Still owed: the
-  push (the owner's go). then, on the owner's go: the CORE-MATH full check clean at `7dd2c0d` (17959805 inputs,
-  0 mismatches, 2930 s), and the push `1330182..478654a`: CI 37754291429 and fuzz 37754291528 green (a haiku
-  babysitter; conclusions re-read from the API by the session)
-* **2026-10-08** housekeeping and the v2 archive (the owner: "v2 is more or less done (it is right? help me check
-  that) so we should archive the prd / plans", one decisions log, not in HANDOFF, "get all the housekeeping
-  done"). a read-only opus audit checked every milestone's record and spot-checked a symbol of each: v2 built,
-  H1 open, nothing marked done unmet (its stale lines listed in `docs/archive/v2/README.md`). the plans moved to
-  `docs/archive/v2/`; their decision sections (the D table, `v2-plan.md`'s log) moved verbatim to
-  `docs/decisions.md`, with Q5's and Q6's superseded markers; records of new work go to `docs/records.md`;
-  what was live only in the plans moved here (row "later", "still owed"); pointers in `CLAUDE.md`, README,
-  the testing skill (plus the CI `ci`-profile rule, and `git archive <rev> multiinterval`), the package
-  docstring. `tools/coremath.py status` fixed to see commits before the rename (said 1, is 5). housekeeping:
-  the 2026-10-06 fuzz-speed study kept as `references/fuzz-speed-2026-10-06/` (`96a784c`); `.scratch/ci`,
-  `push`, `fuzz-speed` and two killed runs' ledger logs to the Recycle Bin; seven orphaned `tail -f` from
-  2026-09-26..10-04 stopped by PID (cwd checked); the banner cut to the current state and the session log
-  rotated (older entries and the retired banner in `docs/session-log.md`). new row fuzz-xdist (first: the old banner's "next"), row H1 gained what 2.0 needs;
-  new Q25, Q26; Q26 answered the same day (D31: a result's number type says where its value came from; the
-  m14b-open fix built before 2.0), then D32 (precision first: abs's 0 stays exact, the step functions give ints,
-  sin's and cos's extrema exact, the acos clip stays exact; abs defined as `(X ∪ -X) ∩ [0, inf]`, ties in the
-  kernel). gate 27798 + 7143 (2026-10-08). Still owed: the push (x10 prepush; the owner's go); the CORE-MATH full check (the
-  owner's call)
-* **2026-10-07** (no entry by its session; written 2026-10-08 from the commits) the 1788 libraries on PyPI
-  (`a0a8939`, `references/python-1788-libraries-2026-10-07.md`), the context-framework audit's doc fixes recorded
-  as owed (`b77c2e8`; done 2026-10-08), and `tools/pyintval_check.py` (`25c2f1a`), the `ieee1788` layer against
-  pyintval, local only (owner): 768,000 comparisons over three seeds, nothing found in the library (that file's
-  last section). gate 27798 + 7143 on its code (2026-10-07). not pushed
-* **2026-10-06** Q24 (the owner: refuse trailing and doubled separators, "okay yes refuse both"; asked whether to
-  drop the refusal of juxtaposed items, took the session's recommendation to keep it). recorded (`8c92770`); an opus
-  agent built it in `../intervals-q24` (plan §2 "Q24 built"); the session re-probed and re-sabotaged;
-  fast-forwarded to `086b3a6`, worktree and branch removed. gate 27798 + 7143 (2026-10-06). Still owed: the push (x10 prepush and
-  `gate:gmpy2`; the owner's go)
-
-* **2026-10-06** Q23 (the owner: refuse numbers with no separator and non-ASCII digits, "each number should be
-  something python can parse, split by a character that's not a valid part of the number"; hex only if needed, it
-  is, D28; then, asked: refuse `- 5`, keep `1 / 3`, accept `_` as python does, keep `∞`; then "should we require
-  commas or semicolons as separators": yes). recorded in `v2-plan.md`'s decision log (`f49bafd`); an opus agent
-  built it in `../intervals-q23` (plan §2 "M14-breadth", "Q23 built"); the session re-probed old against new and
-  re-sabotaged; fast-forwarded to `8edc643`, worktree and branch removed. gate 27798 + 6746 (2026-10-06; a first gate:rest died at 71% with no row). new Q24. Still owed: the push (x10
-  prepush and `gate:gmpy2`; the owner's go)
-
-* **2026-10-05/06** open items by subagents (the owner: "do some of the open tasks, but get subagents to do them").
-  first the rename: the previous context's gate run went MOVED (README edited mid-run), re-run green (27795 + 6509)
-  and committed (`c6a4cca`). then three opus agents, one worktree each off `c6a4cca`: vectors-ext (a), m14b-open's
-  parse and sampling items, T1. the session re-ran a sabotage row of each: the first two held; T1's first commit
-  had its central guard unpinned (a surviving break not failing the run passed all 35 tests), sent back, pinned
-  with 17 more self-sabotage rows and a race in `stop` fixed (plan §2 T1). rebased and fast-forwarded: `a3db14c`,
-  `281922b`, `076ad32`, `bf1ec7c`; worktrees and branches removed. gate 27798 + 6609 (2026-10-06). new Q23 (two
-  parse leftovers). Still owed: the push (x10 prepush and `gate:gmpy2`; the owner's go); nothing here touched the scalar
-  evaluator, so the CORE-MATH full check stays the owner's call from trig-rev-far (`tools/coremath.py status`)
+- Decisions: `docs/decisions/` (records); the pre-import log `docs/decisions.md` stays as the frozen original that
+  the README and the code cite by heading. Records of finished work: `docs/records.md`. The v2 plans:
+  `docs/archive/v2/`.
+- Owner questions Q1-Q27 are all answered (D-n records); their wordings are in git history and, for Q9-Q20, in
+  `references/owner-questions-2026-10-03/`. New questions are `ASK-n` on the board.
+- Session history: the engine ledger `docs/ledger/session-log.md` from the adoption on; `docs/session-log.md`
+  holds the entries of 2026-09-25..2026-10-05 and the banner, rows and bullets retired from the old handoff on
+  2026-10-08; the eight newest entries (2026-10-05..2026-10-08, with their commit ids) are only in the archived
+  old handoff, `docs/archive/HANDOFF.md`.
+- The old handoff, archived whole (its banner, ranked table, still-owed bullets and rotation rules):
+  `docs/archive/HANDOFF.md`. Its table rows and bullets are board items IV-1..IV-22; each cites its source row.
