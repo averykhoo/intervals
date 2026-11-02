@@ -77,8 +77,10 @@ COLUMNS = ('started', 'dur_s', 'phase', 'status', 'code', 'src', 'facts', 'log')
 ALGO = 'intervals-gate-ledger/1'
 # fuzz.yml's default FUZZ_MULTIPLIER; a fuzz run below it does not clear a push
 PUSH_MULTIPLIER = 10
-# fuzz.yml's paths-ignore, written as globs there; `classify` is the rule
-SRC_IGNORED = ('**.md', 'references/**')
+# fuzz.yml's paths-ignore, written as globs there; `classify` is the rule. context.toml, docs/ledger/ and
+# docs/archive/ are the record engine's config, op log and archive (its redirect table is a README.md):
+# context-engine, adopted 2026-11-02. no test reads them
+SRC_IGNORED = ('**.md', 'references/**', 'context.toml', 'docs/ledger/**', 'docs/archive/**')
 UNKNOWN = 'unknown'
 PARTS = {'itf': ['tests/itf1788'], 'rest': ['--ignore=tests/itf1788']}
 PHASE_RE = re.compile(r'^(?:gate:(itf|rest)|fuzz-x([1-9]\d*):(itf|rest)|docs|(gate:gmpy2))$')
@@ -104,7 +106,7 @@ class TreeIdError(RuntimeError):
 def classify(path):
     """'prose' (in neither scope), 'readme' (code only) or 'src' (both)"""
     p = path.replace('\\', '/')
-    if p.startswith('references/'):
+    if p.startswith(('references/', 'docs/ledger/', 'docs/archive/')) or p == 'context.toml':
         return 'prose'
     if p.endswith('.md'):
         return 'readme' if p.rsplit('/', 1)[-1] == 'README.md' else 'prose'

@@ -135,3 +135,5 @@ dmypy.json
 
 # the run ledger (tools/gate.py); must stay ignored: the tree ids hash every non-ignored file
 .gate-runs/
+# the record engine's own env (context-engine), never this repo's
+.context-engine/

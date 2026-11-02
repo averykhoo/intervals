@@ -53,6 +53,8 @@ def repo(tmp_path):
     ('tests/itf1788/libieeep1788_elem.itl', 'src'), ('README.md', 'readme'), ('tests/itf1788/README.md', 'readme'),
     ('tools/README.md', 'readme'), ('references/owner-questions-2026-10-03/README.md', 'prose'), ('HANDOFF.md', 'prose'), ('.claude/skills/testing/SKILL.md', 'prose'),
     ('references/modulo-derivations/claude-fable/modulo_v3_prototype.py', 'prose'), ('tests\\x.md', 'prose'),
+    ('context.toml', 'prose'), ('docs/ledger/ops.jsonl', 'prose'), ('docs/archive/README.md', 'prose'),
+    ('docs/archive/v2/README.md', 'prose'), ('tests/context.toml', 'src'), ('docs/x.jsonl', 'src'),
 ])
 def test_classify(path, kind):
     assert gate.classify(path) == kind
@@ -342,8 +344,8 @@ def test_the_code_scope_keeps_what_pytest_collects_as_doctests():
 def test_the_src_scope_is_what_fuzz_yml_skips():
     """a push the fuzz job skips is one the ledger lets through without a fuzz run, and back"""
     text = (ROOT / '.github' / 'workflows' / 'fuzz.yml').read_text(encoding='utf-8')
-    assert re.search(r'paths-ignore: \["\*\*\.md", "references/\*\*"\]', text)
-    assert gate.SRC_IGNORED == ('**.md', 'references/**')
+    assert re.search(r'paths-ignore: \["\*\*\.md", "references/\*\*", "context\.toml", "docs/ledger/\*\*", "docs/archive/\*\*"\]', text)
+    assert gate.SRC_IGNORED == ('**.md', 'references/**', 'context.toml', 'docs/ledger/**', 'docs/archive/**')
     assert re.search(r"FUZZ_MULTIPLIER: \$\{\{ inputs\.multiplier \|\| '(\d+)' \}\}", text).group(1) == str(gate.PUSH_MULTIPLIER)
 
 
