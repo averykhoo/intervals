@@ -7,6 +7,17 @@ The banner is written at the first clean close by `context-engine banner set --s
 which puts a `## Banner (<session key>)` section before this note's first section. Do not
 write that heading by hand.
 
+## Banner (2026-11-02a)
+
+- The context-engine is adopted in this repo on branch `ce-cutover` (off `fa4cf12`): the board, the decisions and
+  the session ledger now go through `context-engine`. Not merged, not pushed.
+- Pushed: `origin/master` is `478654a` (CI and fuzz green, 2026-10-08). Local `master` is four docs-only commits
+  ahead of it; `ce-cutover` sits on top of them.
+- NOW: IV-1 (x2-cosh-zero: `x ** 2` and cosh give exact 0 and 1 at an operand end 0.0; D35). The other old rows
+  and the still-owed bullets are IV-2..IV-22, found by their old names too (`task show from-cuts-reason`).
+- Owed to the owner: the call on merging `ce-cutover`, and the go to push (full gate and `tools/prepush.sh` first,
+  then a CI watcher).
+
 ## Next session
 
 - Take NOW from `context-engine task list`; a task the owner assigns overrides the ranking. The old board
