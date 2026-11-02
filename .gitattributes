@@ -1,2 +1,5 @@
 # shell scripts stay LF on checkout: bash reads a CR as part of the command
 *.sh text eol=lf
+
+# context-engine: two branches' op lines merge line by line (FRAMEWORK §5.5 rule 4)
+docs/ledger/ops.jsonl merge=union

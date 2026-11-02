@@ -1,7 +1,8 @@
 # multiinterval: working rules
 
-the durable contract. what is true now (open items, questions, the session log) is in `HANDOFF.md`;
-read it in full at session start. decisions: `docs/decisions.md`, the one decisions log (never HANDOFF).
+the durable contract. what is true now is in `HANDOFF.md` (read it in full at session start) and on the
+board (`context-engine task list`). decisions: one record each in `docs/decisions/` (`D-n`), written through
+`context-engine`, never in HANDOFF; `docs/decisions.md` is the log they were imported from on 2026-11-02, frozen.
 records of finished work: `docs/records.md`. the v2 plans (design, milestones, every record up to v2) are
 archived, read-only, in `docs/archive/v2/`.
 
@@ -20,7 +21,8 @@ push still needs. read it at session start and before every commit and push; a r
 `python -m pytest -q` from the repo root, as two recorded calls (past the 10-minute tool limit in
 one): `tools/gate.py run gate:itf` (~1 min), then `tools/gate.py run gate:rest` (~10-14 min, in the
 background). commit when `tools/gate.py status --require commit` exits 0. python is
-`C:/Users/user/anaconda3/envs/intervals/python.exe`.
+`C:/Users/user/anaconda3/envs/intervals/python.exe`. then the record engine's lint (seconds), so the whole
+gate is `python -m pytest -q && context-engine lint`.
 
 ## push (owner, 2026-09-29: fuzzing runs fully autonomously or not at all)
 
@@ -53,6 +55,21 @@ the gate runs a vendored sample of CORE-MATH's hard-to-round inputs (`tests/test
 that changed the scalar evaluator (`elementary` and what it imports; `tools/coremath.py status` lists the files and
 the commits since the last full check), ask the owner whether to run it (2547 s at 4 jobs, 2026-10-02).
 
+## the record engine: `context-engine` (adopted 2026-11-02)
+
+* `context-engine` means `.context-engine/env/python.exe -m context_engine` from the repo root, with
+  `CE_ACTOR=claude-code/<model-id>` and `CE_SESSION=<key>` set in every command (shell state does not persist).
+  that env is the engine's own, gitignored, never this repo's (`envs/intervals`). on a fresh clone, rebuild it:
+  `conda create -y -p .context-engine/env python=3.12`, then `.context-engine/env/python.exe -m pip install
+  "context-engine @ git+https://github.com/averykhoo/context-engine@309641bd84837277ef9ddc7251b851a4e815dbe5"`.
+* `[gate]` in `context.toml` is off: `tools/gate.py` keeps the gate's ledger (its two calls outlast one tool
+  call), so `context-engine commit` does not check the gate; `tools/gate.py status --require commit` first.
+  `context.toml` and `docs/ledger/` are prose to `tools/gate.py` and the fuzz workflow, like markdown.
+* ids: decisions `D-n` (the log's `D17` is `D-17`), board `IV-n`, owner questions `ASK-n` (`Q1`-`Q27` are all
+  answered, in the decision records), stories `S-n`, goals `G-n`. never reuse or renumber one.
+* commit by path through `context-engine commit <paths> -m ...` (never `git add -A`, never `git stash`); an
+  agent commit ends in one trailer paragraph: `Session: <key>` and `Co-Authored-By:`, no blank line between.
+
 ## how to run each test
 
 the repo skill `testing` (`.claude/skills/testing/SKILL.md`): the gate, the fuzz profile, prepush,
@@ -67,3 +84,15 @@ the CI watch, reproducing and pinning a fuzz failure, sabotage checks, the exhau
 * stop a background process by the PID it had at launch, never by image name or command-line match.
   a monitor's `tail -f` outlives its session: stop it when done (sixteen orphans from earlier
   sessions held `.scratch/` open until 2026-09-29).
+
+<!-- context-engine kit 0.5 begin -->
+framework: 0.5
+
+This repo runs the context-engineering framework through `context-engine`. Its rules are the file
+imported on the next line, which the framework owns: an upgrade replaces it whole, so it is never
+edited here, and this repo's own rules go in this file, outside these markers. If those rules are
+not in your context, read that file; if it is missing, run the engine's lint
+(`<engine-python> -m context_engine lint`), which names the fix.
+
+@docs/framework/contract.md
+<!-- context-engine kit 0.5 end -->
