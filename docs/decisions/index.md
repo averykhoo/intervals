@@ -1,0 +1,95 @@
+# Decisions
+
+Generated from each decision's frontmatter by `context-engine decision index`; never edit it by hand (G-D6).
+
+## BUILT
+
+### untagged
+
+- [D-1](D-1-closure-at-infinity.md): closure at infinity *(unrecorded, 2026-09-23)*
+- [D-2](D-2-indeterminate-corners.md): indeterminate corners *(unrecorded, 2026-09-23)*
+- [D-3](D-3-int-int-that-is-not-integral.md): `int / int` that is not integral *(unrecorded, 2026-09-23)*
+- [D-4](D-4-infinities-for-the-time-layer.md): infinities for the time layer *(owner, 2026-10-04)*
+- [D-5](D-5-modulo-scope-for-v2-0.md): modulo scope for v2.0 *(unrecorded, 2026-09-23)*
+- [D-6](D-6-constructor-default-for-an-infinite-bound.md): constructor default for an infinite bound *(unrecorded, 2026-09-23)*
+- [D-7](D-7-a-box-that-is-an-indeterminate-point.md): a box that *is* an indeterminate point *(owner, 2026-09-23)*
+- [D-8](D-8-modulo-with-infinite-operands.md): modulo with infinite operands *(owner, 2026-09-24)*
+- [D-9](D-9-1788-s-numeric-ops-on-a-multi-interval.md): 1788's numeric ops on a multi-interval *(owner, 2026-09-25)*
+- [D-10](D-10-names-for-1788-s-interval-orders-since-and-are.md): names for 1788's interval orders, since `<` and `<=` are pointwise and return a `TruthSet` *(owner, 2026-09-25)*
+- [D-11](D-11-power.md): power *(owner, 2026-09-25)*
+- [D-12](D-12-a-reverse-op-whose-answer-has-infinitely-many.md): a reverse op whose answer has infinitely many or very many pieces *(owner, 2026-09-25)*
+- [D-13](D-13-cancelminus-a-b-is-the-minkowski-difference-the.md): `cancelMinus(A, B)` is the Minkowski difference, the largest `X` with `B + X ⊆ A` *(owner, 2026-09-25)*
+- [D-14](D-14-the-independent-oracle-for-the-elementary.md): the independent oracle for the elementary functions is `python-flint` *(owner, 2026-09-25)*
+- [D-15](D-15-licence.md): licence *(owner, 2026-09-25)*
+- [D-16](D-16-decorations-com-dac-def-trv-ill.md): decorations (com/dac/def/trv/ill) *(owner, 2026-09-25)*
+- [D-17](D-17-m13-does-not-block-the-2-0-0-release-and-there.md): M13 does not block the 2.0.0 release, and there is no hurry to release either *(owner, 2026-09-25)*
+- [D-18](D-18-m13-s-proposed-categories-and-choices.md): M13's proposed categories and choices *(owner, 2026-09-27)*
+- [D-19](D-19-the-solver-stack-s-first-part-m15.md): the solver stack's first part (M15) *(unrecorded, 2026-09-27)*
+- [D-20](D-20-the-solver-stack-s-second-part-m16a.md): the solver stack's second part (M16a) *(unrecorded, 2026-09-28)*
+- [D-21](D-21-the-1788-layer-m16b.md): the 1788 layer (M16b) *(unrecorded, 2026-09-28)*
+- [D-22](D-22-the-per-piece-allen-matrix-m16c.md): the per-piece allen matrix (M16c) *(unrecorded, 2026-09-28)*
+- [D-23](D-23-numpy-interop-m16d.md): numpy interop (M16d) *(unrecorded, 2026-09-28)*
+- [D-24](D-24-the-gmpy2-mpfr-backend-m16e.md): the gmpy2/mpfr backend (M16e) *(unrecorded, 2026-09-28)*
+- [D-25](D-25-cpython-3-11-s-fraction-pow-rounds-a-fraction.md): CPython 3.11's `Fraction.__pow__` rounds a Fraction base to a float before... *(owner, 2026-09-28)*
+- [D-26](D-26-to-nearest-a-reverse-op-s-exact-preimage-wholly.md): to nearest, a reverse op's exact preimage wholly past MAX squeezes to the point `[±inf]` *(owner, 2026-09-30)*
+- [D-27](D-27-four-departures-from-1788-that-were-build.md): four departures from 1788 that were build choices are deliberate *(owner, 2026-10-03)*
+- [D-28](D-28-pown-of-exact-operands-past-one-exact-result.md): pown of exact operands past one exact-result limit of about 2 ** 22 bits, shared by pown *(owner, 2026-10-03)*
+- [D-29](D-29-each-end-keeps-its-own-number-type.md): each end keeps its own number type *(owner, 2026-10-03)*
+- [D-30](D-30-m8-s-three-choices-and-the-smaller-ones-with.md): M8's three choices and the smaller ones with them *(owner, 2026-10-04)*
+- [D-31](D-31-a-result-s-number-type-says-where-its-value.md): a result's number type says where its value came from (Q26) *(owner, 2026-10-08)*
+- [D-32](D-32-precision-first-what-is-known-exactly-is-exact.md): precision first: what is known exactly is exact (revises D31) *(owner, 2026-10-08)*
+- [D-33](D-33-m14b-open-s-build-defaults-beside-d32-awaiting.md): m14b-open's build defaults beside D32 (awaiting the owner) *(unrecorded, 2026-10-08)*
+- [D-34](D-34-the-fuzz-and-gate-gmpy2-phases-run-on-pytest.md): the fuzz and gate:gmpy2 phases run on pytest-xdist (fuzz-xdist; a build's defaults, awaiting the owner) *(unrecorded, 2026-10-08)*
+- [D-35](D-35-an-extremum-known-exactly-is-an-exact-end-q27.md): an extremum known exactly is an exact end; Q27 answered *(owner, 2026-10-08)*
+- [D-36](D-36-mit-licence-a-publish-workflow-and-a-changelog.md): MIT licence, a publish workflow and a changelog for 2.0.0; Q25 answered *(owner, 2026-10-08)*
+- [D-37](D-37-negative-zero.md): negative zero *(unrecorded, 2025-12-12)*
+- [D-38](D-38-2025-12-wishlist-and-negative-zero-enums.md): 2025-12 wishlist and negative-zero enums *(unrecorded, 2025-12-12)*
+- [D-39](D-39-update.md): update *(unrecorded, 2025-12-17)*
+- [D-40](D-40-v2-consolidated-decisions-2026-08-16.md): v2 consolidated decisions (2026-08-16) *(unrecorded, 2026-08-16)*
+- [D-41](D-41-signed-zero-dropped.md): signed zero dropped *(unrecorded, 2026-09-22)*
+- [D-42](D-42-degenerate-indeterminate-boxes-return.md): degenerate indeterminate boxes return ∅ *(unrecorded, 2026-09-23)*
+- [D-43](D-43-d1-d6-settled.md): D1–D6 settled *(unrecorded, 2026-09-23)*
+- [D-44](D-44-implementability-review.md): implementability review *(unrecorded, 2026-09-23)*
+- [D-45](D-45-smaller-gaps-accepted-and-written-into-current.md): smaller gaps, accepted and written into "current design" 2026-09-23 *(unrecorded, 2026-09-23)*
+- [D-46](D-46-implementability-review.md): implementability review *(unrecorded, 2026-09-23)*
+- [D-47](D-47-m12-the-unblocked-backlog-built.md): M12, the unblocked backlog built *(unrecorded, 2026-09-25)*
+- [D-48](D-48-m13-and-m14-planned-not-built.md): M13 and M14 planned (not built) *(unrecorded, 2026-09-25)*
+- [D-49](D-49-m13a-and-m14-s-fuzz-job-and-oracle-built.md): M13a and M14's fuzz job and oracle built *(unrecorded, 2026-09-25)*
+- [D-50](D-50-m13h-the-reductions-built.md): M13h, the reductions, built *(unrecorded, 2026-09-26)*
+- [D-51](D-51-m13b-the-numeric-functions-built.md): M13b, the numeric functions, built *(unrecorded, 2026-09-26)*
+- [D-52](D-52-m13c-the-interval-orders-and-the-interior-built.md): M13c, the interval orders and the interior, built *(unrecorded, 2026-09-26)*
+- [D-53](D-53-m13f-cancellation-built.md): M13f, cancellation, built *(unrecorded, 2026-09-26)*
+- [D-54](D-54-m13d-power-and-the-rest-of-the-elementary.md): M13d, power and the rest of the elementary functions, built *(unrecorded, 2026-09-26)*
+- [D-55](D-55-m13g-part-1-signals-and-bare-constructors-built.md): M13g part 1, signals and bare constructors, built *(unrecorded, 2026-09-26)*
+- [D-56](D-56-m13g-part-2-the-decorated-type-built.md): M13g part 2, the decorated type, built *(unrecorded, 2026-09-26)*
+- [D-57](D-57-m13g-part-3-decoration-propagation-built.md): M13g part 3, decoration propagation, built *(unrecorded, 2026-09-26)*
+- [D-58](D-58-m13g-decorations-constructors-and-signals-done.md): M13g, decorations, constructors and signals, done *(unrecorded, 2026-09-26)*
+- [D-59](D-59-m13e-first-part-sqr-rev-abs-rev-pown-rev-cosh.md): M13e, first part (sqr_rev, abs_rev, pown_rev, cosh_rev), built *(unrecorded, 2026-09-26)*
+- [D-60](D-60-m13e-second-part-mul-rev-built.md): M13e, second part (mul_rev), built *(unrecorded, 2026-09-26)*
+- [D-61](D-61-m13e-third-part-sin-rev-cos-rev-tan-rev-built.md): M13e, third part (sin_rev, cos_rev, tan_rev), built *(unrecorded, 2026-09-26)*
+- [D-62](D-62-m13e-fourth-part-pow-rev1-pow-rev2-built.md): M13e, fourth part (pow_rev1, pow_rev2), built *(unrecorded, 2026-09-26)*
+- [D-63](D-63-m13e-the-reverse-ops-built.md): M13e, the reverse ops, built *(unrecorded, 2026-09-26)*
+- [D-64](D-64-owner-answers-to-the-open-questions.md): owner answers to the open questions *(unrecorded, 2026-09-26)*
+- [D-65](D-65-m13-merged-m13-s-exit-met.md): M13 merged, M13's exit met *(unrecorded, 2026-09-27)*
+- [D-66](D-66-owner-answers-on-m13-s-proposed-categories-d18.md): owner answers on M13's proposed categories (D18) *(unrecorded, 2026-09-27)*
+- [D-67](D-67-m15-autodiff-and-interval-newton-h3-s-first.md): M15, autodiff and interval newton (H3's first part), built *(unrecorded, 2026-09-27)*
+- [D-68](D-68-m16a-the-solver-in-several-variables-h3-s.md): M16a, the solver in several variables (H3's second part), built *(owner, 2026-09-28)*
+- [D-69](D-69-m16b-the-1788-layer-h3-s-second-part-built.md): M16b, the 1788 layer (H3's second part), built *(unrecorded, 2026-09-28)*
+- [D-70](D-70-m16c-the-per-piece-allen-matrix-h3-s-second.md): M16c, the per-piece allen matrix (H3's second part), built *(owner, 2026-09-28)*
+- [D-71](D-71-m16d-numpy-interop-h3-s-second-part-built.md): M16d, numpy interop (H3's second part), built *(unrecorded, 2026-09-28)*
+- [D-72](D-72-m16e-the-gmpy2-mpfr-backend-h3-s-second-part.md): M16e, the gmpy2/mpfr backend (H3's second part), built *(owner, 2026-09-28)*
+- [D-73](D-73-python-3-12-minimum-owner-d25.md): python 3.12 minimum (owner, D25) *(unrecorded, 2026-09-28)*
+- [D-74](D-74-pown-huge-built.md): pown-huge, built *(unrecorded, 2026-09-29)*
+- [D-75](D-75-and-keep-each-cut-s-type-fuzz-symmetry.md): `-` and `+` keep each cut's type (fuzz-symmetry) *(unrecorded, 2026-09-29)*
+- [D-76](D-76-fuzz-on-push-not-on-a-schedule.md): fuzz on push, not on a schedule *(unrecorded, 2026-09-29)*
+- [D-77](D-77-to-nearest-a-reverse-op-meets-x-before-rounding.md): to nearest, a reverse op meets `x` before rounding (D26) *(unrecorded, 2026-09-30)*
+- [D-78](D-78-owner-answers-to-q9-q20-and-the-owner-s-call.md): owner answers to Q9-Q20 and the owner's-call items *(unrecorded, 2026-10-03)*
+- [D-79](D-79-v1-s-leftovers-settled-shifts-dropped.md): v1's leftovers settled; shifts dropped *(unrecorded, 2026-10-04)*
+- [D-80](D-80-the-time-layer-s-choices-m8-d30.md): the time layer's choices (M8, D30) *(unrecorded, 2026-10-04)*
+- [D-81](D-81-m8-the-time-layer-built.md): M8, the time layer, built *(unrecorded, 2026-10-04)*
+- [D-82](D-82-m8-s-review-round-three-reviews-one-fixer.md): M8's review round (three reviews, one fixer) *(unrecorded, 2026-10-04)*
+- [D-83](D-83-strict-flags-v1-deleted-q22.md): strict flags; v1 deleted (Q22) *(unrecorded, 2026-10-04)*
+- [D-84](D-84-m8-s-choices-confirmed-q21.md): M8's choices confirmed (Q21) *(unrecorded, 2026-10-05)*
+- [D-85](D-85-the-package-is-multiinterval.md): the package is `multiinterval` *(owner, 2026-10-05)*
+- [D-86](D-86-a-number-is-what-python-reads-q23.md): a number is what python reads (Q23) *(owner, 2026-10-06)*
+- [D-87](D-87-separators-exactly-between-items-q24.md): separators exactly between items (Q24) *(owner, 2026-10-06)*

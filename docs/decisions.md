@@ -1,5 +1,7 @@
 # decisions
 
+FROZEN 2026-11-02 (session 2026-11-02a): every entry is imported as a record under docs/decisions/ (context-engine CE-11); never appended to again
+
 the one decisions log of `multiinterval` (since 2026-10-08): what was decided, by whom, why, and what it
 superseded. nothing else in the repo records a decision; `HANDOFF.md`, the code and the archived v2 plans
 (`docs/archive/v2/`) point here.
