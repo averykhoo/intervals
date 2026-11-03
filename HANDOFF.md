@@ -7,16 +7,17 @@ The banner is written at the first clean close by `context-engine banner set --s
 which puts a `## Banner (<session key>)` section before this note's first section. Do not
 write that heading by hand.
 
-## Banner (2026-11-02a)
+## Banner (2026-11-03a)
 
-- The context-engine is adopted in this repo on branch `ce-cutover` (off `fa4cf12`): the board, the decisions and
-  the session ledger now go through `context-engine`. Not merged, not pushed.
-- Pushed: `origin/master` is `478654a` (CI and fuzz green, 2026-10-08). Local `master` is four docs-only commits
-  ahead of it; `ce-cutover` sits on top of them.
+- The context-engine is adopted and merged: `master` was fast-forwarded from `fa4cf12` to `ce-cutover` (`8f1cbab`)
+  on the owner's go (context-engine DEC-147). The board, the decisions and the session ledger go through
+  `context-engine` (`.context-engine/env`, pin `309641b`).
+- Pushed: `origin/master` is `8f1cbab` (2026-11-03, `478654a..8f1cbab`); CI run 41601384313 and fuzz run
+  41601384275 green. Local `master` is ahead only by this close's records commits (docs-only).
 - NOW: IV-1 (x2-cosh-zero: `x ** 2` and cosh give exact 0 and 1 at an operand end 0.0; D35). The other old rows
   and the still-owed bullets are IV-2..IV-22, found by their old names too (`task show from-cuts-reason`).
-- Owed to the owner: the call on merging `ce-cutover`, and the go to push (full gate and `tools/prepush.sh` first,
-  then a CI watcher).
+- Owed to the owner: ASK-26 in context-engine (delete or keep the `intervals-ce-cutover` worktree, the
+  rehearsal and the backup); filling `docs/charter.md` and `docs/criteria.md`, still the kit's templates.
 
 ## Next session
 
@@ -25,17 +26,23 @@ write that heading by hand.
 - Rules for gate, commit, push and CORE-MATH are `CLAUDE.md`'s. Before a commit, `tools/gate.py status
   --require commit`; before a push, `tools/prepush.sh` and a CI watcher after it.
 
-## Pushed state (read 2026-11-02; `git log origin/master..master` regenerates it)
+## Pushed state (read 2026-11-03; `git log origin/master..master` regenerates it)
 
-- `origin/master` is `478654a` (pushed 2026-10-08 with m14b-open and fuzz-xdist): CI run 37754291429 and fuzz
-  run 37754291528 were both green, seen to the end.
-- Local `master` is four docs-only commits ahead of it (`4d04fe3`, `acdd9c3`, `64b9dcc`, `fa4cf12`: the handoff
-  prose, D35, D36 and the Q27 entries). Pushing them is the owner's go. The engine adoption sits on branch
-  `ce-cutover` on top of `fa4cf12`; none of it is pushed or merged.
+- `origin/master` is `8f1cbab` (pushed 2026-11-03T16:10:49+08:00, `478654a..8f1cbab`): CI run 41601384313 and
+  fuzz run 41601384275 were both green, seen to the end. The engine is adopted and merged: on the owner's go
+  (context-engine DEC-147), `master` was fast-forwarded from `fa4cf12` to `ce-cutover` (`8f1cbab`), so the push
+  carried the four docs-only commits and the whole adoption. The push was made by context-engine session
+  2026-11-03a (its CE-11 finish), outside any session here; this repo's session 2026-11-03a recorded it.
+- Before the push, on `8f1cbab`: gate:itf 27798 passed, gate:rest 7188 passed, lint clean; `tools/prepush.sh`
+  fuzz x10 passed (27798 + 7188).
+- Still on disk, for the owner to delete or keep (context-engine ASK-26): the worktree `intervals-ce-cutover`
+  (branch `ce-cutover`), `C:/Users/user/ce11-rehearsal` and the backup `C:/Users/user/intervals-backup-2026-11-02`.
+  This checkout has its own engine env, `.context-engine/env` (pin `309641b`), and the `SessionStart` hook in
+  `.claude/settings.local.json`.
 
 ## Verified figures (dated; re-measure rather than difference)
 
-- Gate on the code of 2026-10-08: 27798 + 7182 passed (`tools/gate.py status` says what is green now). The fuzz
+- Gate on `8f1cbab` (2026-11-03): 27798 + 7188 passed (`tools/gate.py status` says what is green now). The fuzz
   and gate:gmpy2 phases run on 8 pytest-xdist workers (D34); prepush takes about 30 min.
 - CORE-MATH full check clean at `7dd2c0d` (2026-10-08): 17959805 inputs, 3 directions, 0 mismatches, 2930 s at
   4 jobs; the rows are in `references/coremath-runs.tsv`. Run it again only if the scalar evaluator changes.
