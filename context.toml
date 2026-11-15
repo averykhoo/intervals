@@ -44,7 +44,7 @@ prefix = "D"
 dir = "docs/decisions"
 mode = "append-only"
 required = ["title", "actor", "decided", "session", "decision_status"]
-enums = { decision_status = ["BUILT", "PROVISIONAL", "DEFERRED", "SUPERSEDED", "REJECTED"] }  # FRAMEWORK §6.5
+enums = { decision_status = ["BUILT", "ACCEPTED", "PROVISIONAL", "DEFERRED", "SUPERSEDED", "REJECTED"] }  # FRAMEWORK §6.5
 types = { aliases = "list", decided = "date", session = "key", tags = "list", supersedes = "list", superseded_by = "list", relaxes = "list", narrowed_by = "list", creates = "list", amends = "list", retires = "list", tasks = "list", code = "list", refs = "list", ruled_by = "str" }  # link fields: FRAMEWORK §6.5; ruled_by: who ruled on the owner's delegation (§6.5, G-I3)
 extra_dirs = []
 
@@ -227,6 +227,13 @@ component = "Tasks and owner questions"
 path = "tasks"
 pattern = "<id>-<slug>.md"
 mode = "frontmatter through `context-engine task`/`context-engine ask`, bodies by hand"
+
+[[routes]]
+component = "Unverified hazards"
+path = "tasks"
+pattern = "<id>-<slug>.md"
+mode = "a board row labelled `hazard` (`context-engine task set <id> --set labels=[hazard]`, `context-engine task list --label hazard`); its close resolves it into a register entry, a fix or a dismissal (FRAMEWORK §7.4)"
+note = "a trap true only while one task is open goes in that task's ## Traps; a confirmed, durable one in the register; never the banner"
 
 [[routes]]
 component = "Batons and pause records"

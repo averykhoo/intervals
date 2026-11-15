@@ -1,7 +1,7 @@
 ---
 type: Decision
 id: D-46
-title: implementability review
+title: implementability review, second pass
 actor: unrecorded
 decided: 2026-09-23
 session: 2026-11-02a

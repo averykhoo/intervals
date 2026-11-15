@@ -1,6 +1,6 @@
 # The framework contract
 
-framework: 0.5
+framework: 0.6
 
 This repo runs the context-engineering framework (FRAMEWORK.md, in the engine repo at the
 pinned ref) through the record engine, `context-engine`. `§` references below are FRAMEWORK
@@ -68,7 +68,8 @@ top item with `context-engine task show <id>`.
 (procedures § Clean close) in that same turn, before the final reply. Never ask whether to close,
 and never leave the session open waiting for instructions: what is left for the owner (an answer,
 a check, a push) goes in the close's digest. Stay open only when the owner says so. More work
-asked for after the close starts a new session.
+asked for after the close starts a new session, with `session start --follows <key>` when it
+fixes what the closed session left.
 
 Every other procedure (intake, clean close, pause, resume, push and CI, reconciling foreign
 commits, housekeeping), in order, each step with its engine command and its by-hand step, is
@@ -107,19 +108,27 @@ this role for every request, one task or several, and by default whenever the bo
   agent's, recorded PROVISIONAL with its own actor and flagged in the close digest, not raised as
   a question. A local commit or a record write is cheap to undo; a push, a release, a published
   tag, deleting untracked files, owner words and anything outside the repo are not, and stay the
-  owner's. A call the owner delegates ("you decide") is still the one who made it: recorded with
-  `ruled_by`, apart from the owner's words, never as `actor: owner` (FRAMEWORK §6.5).
+  owner's. A call the owner delegates ("you decide") is still the call of whoever made it:
+  recorded with `ruled_by`, apart from the owner's words, never as `actor: owner`, and
+  PROVISIONAL like any agent's call (FRAMEWORK §6.5).
+- **Decision status** (FRAMEWORK §6.5): a decision in the owner's own words is born ACCEPTED,
+  since it awaits nothing. An agent's call stays PROVISIONAL until the owner has reviewed it; then
+  `context-engine decision accept <ids>` (ids and ranges, `D-4..9`, in one call) marks it
+  ACCEPTED. Never accept by hand or with `decision set`. BUILT is for a decision a task carried
+  out.
 - **Do not use `fable` subagents unless the owner asks for them or they are really necessary.**
   Never fan out with fable: it wastes tokens.
-- Commit by path, through `context-engine commit <paths> -m "<message>"`, which takes the op
-  lines still uncommitted and the records they name with them (a plain `git commit -o <paths>`
-  only for paths no uncommitted op line names); never `git add -A`, never `git stash`: sessions
-  may share the working tree.
+- Commit by path, through `context-engine commit <paths> -m "<message>"`, which takes this
+  session's op lines still uncommitted, and another session's only where they name a file the
+  commit carries, with the records they name (it says which lines it left behind; a plain `git
+  commit -o <paths>` only for paths no uncommitted op line names); never `git add -A`, never
+  `git stash`: sessions may share the working tree.
 - An agent commit's message ends in one trailer paragraph: `Session: <key>` with every other
   trailer (`Co-Authored-By:`, and `Closes:` where FRAMEWORK §6.10 puts it), no blank line among
   them and nothing after. Git reads trailers only from the last paragraph, so a `Session:` line
-  anywhere else leaves the commit foreign. `context-engine commit` adds `Session:` there; the
-  template is in `docs/runbooks/manual-mode.md` § context-engine commit.
+  anywhere else leaves the commit foreign. `context-engine commit` adds `Session:` and
+  `Co-Authored-By:` there, as every engine commit does; the template is in
+  `docs/runbooks/manual-mode.md` § context-engine commit.
 - Push (§6.8): gate before every push; push only with permission; a background CI watcher for
   every push, keyed on the commit hash; the push is not done until the watcher reports; the
   watcher only watches. A release also follows `docs/runbooks/release.md`.

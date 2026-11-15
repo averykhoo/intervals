@@ -41,11 +41,14 @@ against each scope's content id, so the code gate runs only when the code change
 | Run the gate as `context-engine gate run`, not the bare command | only a recorded run lets the next commit skip a re-run |
 | Before a commit, `context-engine gate status --require <scope>`, and run what it names | a green run on the scope's current id already covers the code |
 | After a hand edit to a file the scope leaves out, `context-engine gate status --require <scope>+readers`, and `context-engine gate run --readers` if it is red | the readers read files the scope leaves out; they re-run on every file. The commit refusal does not check them: their id moves on every engine write, any session's |
-| Exclude only what no test reads but the readers, and keep a guard that fails any other test that opens an excluded path | an exclusion fails open: an excluded file never makes a green run stale |
+| Exclude only what no test reads but the readers, and keep a guard that fails any other test that opens an excluded path (with parts, of the part's own scope: `gate run` names the running part in `CE_GATE_PART`) | an exclusion fails open: an excluded file never makes a green run stale |
 | Review by hand what the guard cannot see: a test that only checks whether an excluded path exists (`stat`, `exists`), and a read at collection time (module level, a `parametrize` argument) | neither raises the event the guard watches during a test |
 | Run the guard where the tests run: its module must be importable in the repo's test environment without installing the engine there (put the engine's `src` on `PYTHONPATH`), and `[gate] command` names that environment's interpreter (`{python}` only where the engine's own environment is the test environment, as in the engine's repo) | the engine is never installed into a target's environment, and `{python}` is the engine's interpreter |
 | A run whose files changed while it ran records only the ids that did not move; when every id moved (`INCONSISTENT`) it counts for nothing: run it again | it tested no set of those files anyone can name |
-| Push on a whole-gate run, plus CI's platform job | the id does not cover gitignored files or the environment |
+| Keep the checkout's line endings as committed: `core.autocrlf` `input` or `false`, not `true` (the kit README § 2a has the one-time fix for a clone already CRLF) | the id hashes bytes, so CRLF where the engine wrote LF stales a green run with no change, and an LF worktree never matches a CRLF main checkout |
+| Split a gate too long for one command into parts (`[gate.parts.<name>]`), each keyed on the scope it reads, and keep a long part off a scope that holds HANDOFF.md or the records | a part re-runs only when its own files move, so a close's writes re-run only the parts that read records |
+| After the close, `context-engine gate run --stale`, then `context-engine gate status --require <scope>+parts` | the commit refusal checks only that every part passed on the code; this checks that every part is fresh |
+| Push on a whole-gate run (with parts, `--require <scope>+parts` green), plus CI's platform job | the id does not cover gitignored files or the environment |
 
 ## Test baselines
 

@@ -44,7 +44,10 @@ without it:
 1. Run every operation as `<interpreter> -m context_engine ...` for the rest of the session.
 2. Register the server once for this machine: `claude mcp add --scope local context-engine --
    <interpreter> -m context_engine.mcp`. Check it with `claude mcp get context-engine`.
-3. Tell the owner to restart Claude Code; the tools appear at the next start.
+3. Tell the owner to restart Claude Code; the tools appear at the next start. The first tool
+   call that reaches the engine writes `<lockfile dir>/mcp-seen` (by default
+   `.context/mcp-seen`, never tracked), and orient's `MCP server not seen` part goes; deleting
+   the file brings it back.
 
 **Why:** Claude Code starts MCP servers only when a session launches, so nothing done mid-session
 brings the tools in. The local registration carries the interpreter's absolute path outside the
@@ -60,34 +63,43 @@ These hold for every operation below. The per-operation sections only list what 
 | Rule | By hand | Why |
 |---|---|---|
 | **Take the lock** | No lock exists by hand. Instead: re-read the file immediately before editing it, and run `git status` and `git log -3` before committing. | Several sessions share one checkout. The engine's OS lock stops two writers losing each other's change; by hand, re-reading is the only defence. |
-| **Check the caller** | Know your session key (like `2026-10-08e`) and your actor (`human:<id>`, `process:<id>`, or `<producer>/<version>` such as `claude-code/<model-id>`). Every write below records them. | Each write has to say which session made it and who did it. Without that, nobody can find a change or trace it back (OKF §7). |
+| **Check the caller** | Know your session key (like `2026-10-08e`) and your actor (`human:<id>`, `process:<id>`, or `<producer>/<version>` such as `claude-code/<model-id>`). Every write below records them. A subagent working one task under the coordinator's key also sets its lane, `CE_AGENT=<task id>` (the global `--agent`, MCP `agent`): every line it writes carries `"lane": "<task id>"`, so its commits take its own lines and no one else's. | Each write has to say which session made it and who did it. Without that, nobody can find a change or trace it back (OKF §7). |
 | **Validate before writing** | Check the result against its kind's schema (table below). If it fails, do not save it. | A bad record that reaches disk breaks every later reader. The engine checks before writing any byte. |
 | **Change only your own lines** | Edit only the frontmatter keys the operation names. Keep every other line exactly as it was: order, quoting, comments, unknown keys. Keep the file's line endings. | Byte-stable writes keep diffs reviewable and keep keys that other tools own (OKF §4.1). |
-| **YAML shapes** | Lists in flow style: `deps: [T-2, T-3]`. Dates unquoted: `created: 2026-10-08`. Null is the bare key: `closed:`. Quote any value with `: ` in it. | Quoted dates fail the `date` type, and an unquoted colon makes the YAML mean something else or fail to parse. |
+| **YAML shapes** | Lists in flow style: `deps: [PRJ-2, PRJ-3]`. Dates unquoted: `created: 2026-10-08`. Null is the bare key: `closed:`. Quote any value with `: ` in it. | Quoted dates fail the `date` type, and an unquoted colon makes the YAML mean something else or fail to parse. |
 | **New keys go last** | A key the record does not have yet (`status`, `closed`, `answered`, `done`, `evidence`, `resumed`, `expired_to`, `body_sha`) is added after the last key. An existing key is replaced where it stands, keeping an end-of-line comment. | Keeps every untouched line in place, so the diff shows only the change. |
 | **New records** | Frontmatter, the closing `---`, one blank line, the body, one final newline. `deps: []` is written even when empty. | One shape for every record keeps hand-written and engine-written files identical. |
 | **Bump `updated`** | On every write to a board item (task or question), set `updated: <session key>`. | It is how a reader sees a record was touched this session without reading the op log. |
 | **Log the operation** | Append one line to `docs/ledger/ops.jsonl` (format below). | The op log is the audit trail: who changed which keys, in which session. G-W7 reads it. |
-| **Commit the write** | At a milestone, commit the op log with every path its uncommitted lines name, by path and at once; every other write stays uncommitted and goes into the next commit. The milestones (`[engine] commit = "milestones"`, the default): task close; record new, amend, retire and confirm; decision supersede; ask answer; baton add; pause open; session close, session pause and session abandon; banner set. The uncommitted lines are those `git diff HEAD -- docs/ledger/ops.jsonl` adds; if git has never seen the op log, every line. Leave out a named path git ignores, or one that is gone and git never knew. `git add -- <paths git has never seen>`, then `git commit --only -m "engine: <op> <id>, <op> <id>" -m "Session: <key>" -- docs/ledger/ops.jsonl <paths>` (with many paths, `--pathspec-from-file`; this operation's own `<op> <id>` first; a task close and a pause take the titles their sections give). Take only your session's lines (their `session` is your key), plus another session's line naming a path you commit (that file holds its write), every decision's line when you commit the decision index (it is generated from all of them), and a line that does not parse; for those add `-m "Also carries <n> op log lines left uncommitted by session <key>, with the files they name."` before the trailer. Leave every other line uncommitted, and say whose and how many you left. With none left, commit the op log as it is; with some left, the op log you commit is HEAD's plus the lines you take, built in a temporary index: `GIT_INDEX_FILE=<tmp> git read-tree HEAD`, then with the same variable `git add -- <paths>`, `git update-index --add --cacheinfo 100644,<blob>,docs/ledger/ops.jsonl` where `<blob>` is `git hash-object -w --no-filters <a file of HEAD's op log plus the lines you take>`, and `git commit -F <message file>`; then, without it, `git reset -q HEAD -- docs/ledger/ops.jsonl <paths>`. Never rewrite the working op log. Taking every line, whoever wrote it, is the sweep, for a session known dead (§ context-engine commit). Your own commits take the same lines and files with them (§ context-engine commit). Never `--no-verify`; if the commit fails, `git rm -q --cached` what you added. Do not commit during a merge, rebase, cherry-pick, revert or bisect, on a detached HEAD, with `GIT_DIR` or `GIT_INDEX_FILE` set, before `context.toml` is tracked, while the op log lacks lines HEAD has, or while a record it would carry does not parse (a hand edit in progress): commit when that is fixed. The engine does all this itself and says `not committed: <why>` in the reply of a write it would have committed, when it cannot. With `"every-write"` every write operation commits; with `"off"` the engine commits only a pause and says nothing, and the session commits no later than its close or pause (an older `context.toml` saying `true` means `"milestones"`, and `false` means `"off"`). | Lint reads the op log and the records together (G-W7), so a record committed without its line fails lint on a clean checkout. By path, so what another session staged or left untracked stays as it was. At milestones, because what they commit is costly to lose or must be at HEAD now, while a write left uncommitted costs little to lose: the next commit carries it, whoever makes it (FRAMEWORK §5.5 rule 4). |
+| **Commit the write** | At a milestone, commit the op log with every path its uncommitted lines name, by path and at once; every other write stays uncommitted and goes into the next commit. The milestones (`[engine] commit = "milestones"`, the default): task close; record new, amend, retire and confirm; decision supersede; ask answer; baton add; pause open; session close, session pause and session abandon; banner set. The uncommitted lines are those `git diff HEAD -- docs/ledger/ops.jsonl` adds; if git has never seen the op log, every line. Leave out a named path git ignores, or one that is gone and git never knew. `git add -- <paths git has never seen>`, then `git commit --only -m "engine: <op> <id>, <op> <id>" --trailer "Session: <key>" --trailer "Co-Authored-By: <name> <email>" -- docs/ledger/ops.jsonl <paths>` (with many paths, `--pathspec-from-file`; this operation's own `<op> <id>` first; a task close and a pause take the titles their sections give). The two `--trailer`s make one last paragraph, which is where git reads trailers (two `-m`s would split them); `<name> <email>` is the `Co-Authored-By:` value § context-engine commit resolves for the last writer of the lines committed (`CE_CO_AUTHOR`, else the actor's model), and with an actor that has no `/` (a person) leave that `--trailer` out. Take only your session's lines (their `session` is your key) of your lane (their `lane` is your `CE_AGENT`; a line with no `lane` is the coordinator's; a session close, session pause or pause record takes every lane of its session), plus another session's or lane's line naming a path you commit (that file holds its write), every decision's line when you commit the decision index (it is generated from all of them), and a line that does not parse; for those add `-m "Also carries <n> op log lines left uncommitted by session <key>, with the files they name."` before the trailer. Leave every other line uncommitted, and say whose and how many you left. With none left, commit the op log as it is; with some left, the op log you commit is HEAD's plus the lines you take, built in a temporary index: `GIT_INDEX_FILE=<tmp> git read-tree HEAD`, then with the same variable `git add -- <paths>`, `git update-index --add --cacheinfo 100644,<blob>,docs/ledger/ops.jsonl` where `<blob>` is `git hash-object -w --no-filters <a file of HEAD's op log plus the lines you take>`, and `git commit -F <message file>`, the file holding the same message, its last paragraph the `Session:` and `Co-Authored-By:` lines; then, without it, `git reset -q HEAD -- docs/ledger/ops.jsonl <paths>`. Never rewrite the working op log. The orientation note (`[working] handoff`, HANDOFF.md) is the one file that goes as less than the working file: when the lines you take name it and every one of them is `banner.set`, HEAD has it, and `git diff HEAD -- HANDOFF.md` changes lines outside the banner (a hand edit, maybe another session's), commit HEAD's note with the new banner in it, built in the temporary index: `git update-index --add --cacheinfo 100644,<blob>,HANDOFF.md` where `<blob>` is `git hash-object -w --no-filters <a file of HEAD's HANDOFF.md with its banner section replaced by the working one, in HEAD's line endings>`, and add HANDOFF.md to the `git reset`; the hand edits stay uncommitted for their author to commit by path, a note given by path to your own commit goes whole, and say `HANDOFF.md: its banner only`. Taking every line, whoever wrote it, is the sweep, for a session known dead (§ context-engine commit). Your own commits take the same lines and files with them (§ context-engine commit). Never `--no-verify`; if the commit fails, `git rm -q --cached` what you added. Do not commit during a merge, rebase, cherry-pick, revert or bisect, on a detached HEAD, with `GIT_DIR` or `GIT_INDEX_FILE` set, before `context.toml` is tracked, while the op log lacks lines HEAD has, or while a record it would carry does not parse (a hand edit in progress): commit when that is fixed. The engine does all this itself and says `not committed: <why>` in the reply of a write it would have committed, when it cannot. With `"every-write"` every write operation commits; with `"off"` the engine commits only a pause and says nothing, and the session commits no later than its close or pause (an older `context.toml` saying `true` means `"milestones"`, and `false` means `"off"`). | Lint reads the op log and the records together (G-W7), so a record committed without its line fails lint on a clean checkout. By path, so what another session staged or left untracked stays as it was. At milestones, because what they commit is costly to lose or must be at HEAD now, while a write left uncommitted costs little to lose: the next commit carries it, whoever makes it (FRAMEWORK §5.5 rule 4). |
 | **Engine-owned keys** | Never hand-edit `type`, `id` or `body_sha` on an existing record. | Ids are never reused or renumbered (P3). `body_sha` pins an owner's words (G-D10). |
 
 **Op log line**, one JSON object per line, UTF-8, `\n` endings:
 
 ```json
-{"at": "2026-10-08T18:10:28+08:00", "session": "2026-10-08e", "actor": "claude-code/<model-id>", "op": "close", "id": "T-8", "path": "tasks/T-8-dogfood-adoption.md", "fields": ["state", "status", "closed", "moved", "updated", "body"], "mechanical": false}
+{"at": "2026-10-08T18:10:28+08:00", "session": "2026-10-08e", "actor": "claude-code/<model-id>", "op": "close", "id": "PRJ-8", "path": "tasks/PRJ-8-dogfood-adoption.md", "fields": ["state", "status", "closed", "moved", "updated", "body"], "mechanical": false}
 ```
 
 `at` is local time with its offset. `fields` lists the keys changed, plus `"body"` if the body
 changed. `mechanical` is `true` only for housekeeping and the `--mechanical` flag. `as`, only on
-`hk.stamp_asked` lines, maps a session-keyed field to the key it was set to when that is not the
-writer's session: `"as": {"last_asked": "<the receipt's key>"}` (G-W7 checks the field against it).
+`hk.stamp_asked` and `task import` lines, maps a session-keyed field to the key it was set to when
+that is not the writer's session: `"as": {"last_asked": "<the receipt's key>"}` (G-W7 checks the
+field against it); a `task import` line maps each of `moved`, `updated`, `closed` and `last_asked`
+the record holds to its kept legacy value.
+`lane`, only on a line written with `CE_AGENT` (`--agent`, MCP `agent`) set, comes right after
+`session`: the task id the subagent works on; a line without it is the coordinator's.
+`ids` and `paths`, only on a line that stands for several records (`decision accept`), list each
+record's id and file, in the same order; `id` is then the list folded into ranges (`DEC-n..m, DEC-k`)
+and `path` the first file. Every file in `paths` goes into the commit that carries the line, as
+`path` does.
 
 | Operation | `op` | `id`, `path` | `fields` |
 |---|---|---|---|
 | any new record (task, question, decision, baton, pause) | `new` | the record | every frontmatter key, `type`, `id` and `body_sha` included |
 | task set, promote, dep, comment, touch, close, reopen, section | `set`, `promote`, `dep`, `comment`, `touch`, `close`, `reopen`, `section` | the item | the changed keys, then `updated`, then `body` if the body changed |
 | ask raised | `ask.raised` | one line per question, then one with id = session key, path = the ledger | `["last_asked", "updated"]`; the ledger line `["asked"]` |
-| ask later, ask answer | `ask.later`, `ask.answer` (answer also writes a `new` line for its `D-n`; `ask new --answered` writes the question's `new` line first) | the question | the changed keys, `updated`, `body` |
+| ask later, ask answer | `ask.later`, `ask.answer` (answer also writes a `new` line for its `DEC-n`; `ask new --answered` writes the question's `new` line first; with `--grant`, no `DEC-n`, and a second `ask.answer` line with id = session key, path = the ledger) | the question | the changed keys, `updated`, `body`; the `--grant` ledger line `["granted"]` |
+| ask decide | a `new` line for its `DEC-n`, then `ask.decide` | the question; then a second `ask.decide` line with id = session key, path = the ledger | the changed keys, `updated`, `body` (`state`, `status`, `closed`, `last_asked`, `agent_decided`); the ledger line `["decided"]` |
 | baton done, pause resume | `baton.done`, `pause.resume` | the record | the changed keys |
 | baton expire | `new` then `hk.expire_batons`, both mechanical | the task, then the baton or pause | as above |
 | hk close | `close`, mechanical (the task close's line) | the item | as task close |
@@ -102,9 +114,11 @@ writer's session: `"as": {"last_asked": "<the receipt's key>"}` (G-W7 checks the
 | decision supersede, decision link | `supersede`, `link`: one line per record changed | the record | the changed keys |
 | decision relink | `relink` | the decision | `["code"]` |
 | decision set | `set` | the decision | the changed keys (no `updated`: decisions do not carry it) |
+| decision accept | `accept`: ONE line for every decision accepted | id = the ids folded into ranges, path = the first file, `ids` and `paths` = every one | `["decision_status"]` |
 | decision import | `import`, one line per record | the record | every frontmatter key |
-| any write to a decision, when `decision_index` is set and the index changed | `index`, mechanical | id `index`, path = the index | `["index"]` |
-| task close of an item with residuals | `register.append`, before the `close` line | the task, path = the register | the new INV ids |
+| task import | `import`, one line per record, with `as` when it holds a session-keyed value | the record | every frontmatter key |
+| task close of an item with residuals | `register.append`, before the `close` line | the task, path = the register | the new register ids |
+| register retire | `register.retire`; with `--into`, a second line for the target | id = the entry (then the target), path = the register | `["retired"]`; the target's `["merged"]` |
 | id reserve | `id.reserve`, one line per id | id = the reserved id, path = `""` (it writes no file) | `[]` |
 | doc freeze | `doc.freeze` | id and path = the doc | `["liveness"]` |
 | doc archive | `doc.archive`, three lines | id = the old path; path = the old path, then the archived copy, then the redirect table (`--lines`: the doc, then the archive file, then the table) | `["moved"]` (`--lines`: `["pruned"]`), `["archived"]`, `["redirect"]` |
@@ -114,12 +128,12 @@ writer's session: `"as": {"last_asked": "<the receipt's key>"}` (G-W7 checks the
 
 | Kind | Id | Directory | Mode | Required keys | Enums and types |
 |---|---|---|---|---|---|
-| decision | `D-n` | `docs/decisions` | append-only | title, actor, decided, session, decision_status | decision_status: BUILT, PROVISIONAL, DEFERRED, SUPERSEDED, REJECTED; decided date; session key; tags, supersedes, superseded_by, relaxes, narrowed_by, creates, amends, retires, tasks, code, refs lists |
-| story | `S-n` | `docs/stories` | append-only | title, actor, date, story_status, goals | story_status: live, unspecified, unconfirmed, retired; date date; goals, supersedes, superseded_by lists |
-| task | `T-n` | `tasks` | replaced | title, pri, state, created | pri: NOW, NEXT, LATER, SOMEDAY; state: open, closed; created date; moved, updated, closed keys; deps, labels, review lists |
+| decision | `DEC-n` | `docs/decisions` | append-only | title, actor, decided, session, decision_status | decision_status: BUILT, ACCEPTED, PROVISIONAL, DEFERRED, SUPERSEDED, REJECTED; decided date; session key; tags, supersedes, superseded_by, relaxes, narrowed_by, creates, amends, retires, tasks, code, refs lists |
+| story | `STORY-n` | `docs/stories` | append-only | title, actor, date, story_status, goals | story_status: live, unspecified, unconfirmed, retired; date date; goals, supersedes, superseded_by lists |
+| task | `<prefix>-n`, the prefix init was given (`PRJ-n`) | `tasks` | replaced | title, pri, state, created | pri: NOW, NEXT, LATER, SOMEDAY, HOLD; state: open, closed; created date; moved, updated, closed keys; deps, labels, review lists |
 | question | `ASK-n` | `tasks` | replaced | title, pri, state, created | as task, plus blocks list, last_asked key |
-| baton | `BTN-n` | `docs/working` | stamped | title, session, state, created | state: open, done, expired; session, done keys; created date |
-| pause | `PAU-n` | `docs/working` | stamped | title, session, state, created, branch, resume_step | state: open, done, expired; session, resumed keys; created date; uncommitted, deferred lists |
+| baton | `BATON-n` | `docs/working` | stamped | title, session, state, created | state: open, done, expired; session, done keys; created date |
+| pause | `PAUSE-n` | `docs/working` | stamped | title, session, state, created, branch, resume_step | state: open, done, expired; session, resumed keys; created date; uncommitted, deferred lists |
 
 The Mode column is the kind's `mode` value; `stamped` is the session-stamped mode (FRAMEWORK
 §8.0.1).
@@ -187,13 +201,18 @@ different case or one extra BOM gives a hash that never matches the engine's.*
    abandoned one's baton done). Its stub then carries `- **follows:** <key>` between the
    `opened` and `start head` lines. Never edit the closed entry. Your close or pause later keeps
    the `follows` line, first in the entry, above `rows`.
+   **The next turn of a conversation** (`--continues <key>`: the owner replied after that
+   session's eager close) does the same with `- **continues:** <key>`: the same check that the
+   entry is `kind: close`, the same place in the stub, kept the same way. A session carries one
+   of the two links or neither, never both.
 4. Leave it uncommitted: a session start is not a milestone, so it stays uncommitted and goes
    into the next commit, yours or another session's (§ What every write does, **Commit the
    write**).
 
 `HANDOFF.md` may be missing, or have no `## Banner (<key>)` heading yet (before the first clean
 close): then no banner key counts in step 2, and nothing refuses (`orient` says `no banner`,
-`banner show` gives hash `none`, and the first `banner set` writes the heading).
+`banner show` gives hash `none`, and the first close, given a banner with `--seen none`, writes
+the heading).
 
 The engine re-renders the whole ledger on every write: the preamble ends in a `---` line, entries
 are separated by a blank line, `---` and a blank line, and the last entry has no `---` after it.
@@ -206,51 +225,110 @@ counts too, because a session may have written the banner before its ledger entr
 head is where this session's reconciling of foreign commits ends and the next session's begins
 (procedures.md § Reconciling foreign commits). The ledger is append-only, so a closed session is
 never reopened: a follow-up links back to it with `follows`, and reads what it left (its rows,
-digest and still-owed lines, which orient shows) before starting.
+digest and still-owed lines, which orient shows) before starting. A continuation links back with
+`continues`, so a design conversation is a thread of short sessions, each closed eagerly, rather
+than one session left open that looks live after it dies (G-W11); follow the `continues:` links
+back to read the thread.
 
 ### context-engine session close
+
+The close in one call: steps 1 to 3 check everything before anything is written, then step 4
+runs the close housekeeping, step 5 writes the entry, step 6 the banner when one was given, and
+step 7 reads the board the close leaves.
+The engine makes them one commit; by hand, commit them together at the end.
 
 1. Your stub must exist and still say `kind: open`. A session closes or pauses only once. The
    entry you write must add no G-D1, G-D5 or G-D8 failure to the ledger (as § context-engine
    banner set, in its step 4, does for the banner).
 2. You need: `rows` (the items you touched, not empty); a summary of 1 to 7 lines (the owner
    digest); a `guards` receipt (gate and lint results, verbatim); a `read` receipt (what you read
-   to start work). `asked` and `Still owed` are optional; an empty `Still owed` is written as
-   `nothing`. Where `[working] gate_receipt` is set, the `guards` text must match that regex
-   (joined onto one line): the gate's pass count (`1112 passed`), or that it was not run and why.
+   to start work). `asked`, `pushed` and `Still owed` are optional; an empty `Still owed` is
+   written as `nothing`. Unless `[working] gate_receipt` is `''`, the `guards` text must match it (by
+   default the kit's pattern), joined onto one line: the gate's pass count (`1112 passed`), or
+   that it was not run and why.
 3. Check the asked ids: the ids in your `asked` text **plus** those in the stub's `- **asked:**`
    line (written by `ask raised`). Together they must name every open owner question at NOW or
    NEXT, and every overdue one. A question is overdue if `last_asked` is empty, or at least 5
    closes/pauses have happened since it, or it is at least 7 days old. The receipt written is your
    `asked` text if you gave one, otherwise the stub's line.
+   Then the stub's `- **granted:**` line (written by `ask answer --grant`), if any: it becomes
+   the `granted:` receipt, and your summary, its lines joined with runs of whitespace read as one
+   space, must contain each named question's `## Grant` words read the same way; stop otherwise,
+   and add a line like `ASK-n granted: "<words>"` yourself.
+   Then the stub's `- **decided:**` line (written by `ask decide`), if any: it becomes the
+   `decided:` receipt. Each id on it must carry `agent_decided: {decision: DEC-n}` (stop otherwise:
+   restore it from git), and your summary must have, for each, some one line that names both ids
+   (a line may name several pairs): stop otherwise, and add a line like `ASK-n decided by the
+   agent as DEC-n (overturn: ask answer ASK-n)` yourself, one per question.
    Then check the stub's `- **tasks:**` line (written by `session tasks`): your `rows` must
    name every id on it, closed or not, with how it ended.
-4. Replace the stub's text, keeping its position, with (bullets wrapped at 100 columns,
+   Then `pushed`, if given (a push orient flagged as made while no session was open): before its
+   first colon, one or more hashes, comma- or space-separated, each 7 to 40 hex characters that
+   `git rev-parse --verify <hash>^{commit}` resolves; after it, a note (what was pushed, and
+   whether the gate ran first). Stop otherwise. Write it with its whitespace collapsed.
+   Then the banner. **Only if one of its durable lines changed** (FRAMEWORK §5.1: never for
+   what orient generates), you have a new banner and the hash `banner show` gave you: do §
+   context-engine banner set's steps 1 and 4 now, and stop if either refuses; the receipt is
+   `banner: set`. If the banner's key is this session's (you did § context-engine banner set
+   before the close), the receipt is `banner: set` too. Otherwise the receipt is `banner: kept
+   <the banner's key now>`; with no `## Banner (<key>)` heading at all, stop: the first close
+   writes the first banner (`--seen none`). And stop if no `kind: close` entry in the ledger
+   says `banner: set` or `banner: kept <the banner's key now>`: the banner predates the receipt
+   and may still hold lines orient now generates, so cut it to its durable lines and write it
+   (`banner: set`) this once.
+4. Unless told to skip it (`--no-housekeeping`), do § context-engine hk run's close phase, and
+   note its count line (`hk run close: <n> writes, <m> op log lines`) as the `housekeeping:`
+   receipt. Outside a git checkout with history, skip it and write `hk run close not run: no git
+   history here (run `hk run close` once there is)`.
+5. Replace the stub's text, keeping its position, with (bullets wrapped at 100 columns,
    continuation lines indented):
 
    ```
    ## <key> · kind: close
 
-   - **rows:** T-8 (runbook written); S-11 (amended)
+   - **rows:** PRJ-8 (runbook written); STORY-11 (amended)
    - **receipts:**
      - guards: `<gate>` green, N passed; context-engine lint: ...
      - read: ...
      - asked: none open
+     - granted: ASK-9
+     - decided: ASK-10
+     - housekeeping: hk run close: 0 writes, 0 op log lines
+     - banner: kept 2026-10-08d
+     - pushed: 5c61449: main to origin, gate green first
    - **summary** (the owner digest):
      - one line per point, 1 to 7 of them
    - **Still owed:**
      - nothing
    - **start head:** <the stub's start head, unchanged>
    ```
-   Leave out the `asked:` line if it is empty, and the `start head` line if the stub has none.
-   A follow-up session's stub carries `- **follows:** <key>`: keep it as the entry's first
-   bullet, above `rows` (a pause keeps it the same way).
+   Leave out the `asked:` line if it is empty, the `granted:` and `decided:` lines unless the stub has one, the `pushed:` line unless a push is recorded, the
+   `housekeeping:` line if step 4 was skipped
+   on request, and the `start head` line if the stub has none.
+   A follow-up session's stub carries `- **follows:** <key>` (a continuation's, `- **continues:**
+   <key>`): keep it as the entry's first bullet, above `rows` (a pause keeps it the same way).
    A stub's `- **tasks:**` line goes next, after `follows` and above `rows` (a pause keeps it
    the same way).
    Op log: `session.close`, fields `["kind"]`.
+6. With a new banner, do § context-engine banner set's steps 2, 3 and 5, under your session
+   key.
+7. Last, count the open board items and those at NOW, as the close leaves them (step 4 may have
+   closed one). If NOW holds fewer than its cap (`[working.caps]`, 1 by default) while any item not
+   at HOLD is open, G-W5 is red: the close stands (a warning, never a refusal), but say so in the owner
+   digest, with G-W5's message, naming the NEXT items (or saying NEXT is empty), and ask the owner
+   which one to promote (§ context-engine task promote). Do not pick it yourself. The engine says
+   the same at the end of its reply's first line, after `WARNING:`, whoever emptied NOW; it says
+   nothing when NOW is at or over its cap, when nothing but held (HOLD) items is open, or when
+   `[guards] off` names G-W5.
 
 **Why:** the close is what the next session trusts. The receipts prove the gate ran and say
 what was read. The asked check stops owner questions going unraised for days (G-W6, G-W8). The 7-line cap keeps the digest something the owner will actually read (FRAMEWORK §5.6).
+One call that checks first and writes last is what makes a close cheap enough to make after
+every reply; the banner is left alone unless a durable line changed, because orient
+reads the rest from the records, and the `banner: kept` receipt is what lets G-W1 tell a close
+that kept the banner from one that forgot it. An empty NOW at the close is a warning, not a
+refusal: a close once everything asked for is done is legitimate, and the next NOW item is the
+owner's pick, so the close only makes sure the owner hears of it.
 
 ### context-engine session pause
 
@@ -328,7 +406,7 @@ clone or CI does not see it; to make it seen, commit the op log (§ context-engi
 Intake, step 7). By hand:
 
 1. Each id must be an existing item of a board kind (a task or a question), and of the form
-   capital letters, a hyphen, digits (`T-12`): the `tasks:` line is read back in that form, so
+   capital letters, a hyphen, digits (`PRJ-12`): the `tasks:` line is read back in that form, so
    an id of another form would drop out of the check unseen. For a request with no item yet, file
    a task first (§ context-engine task new). Your session must have an open stub.
 2. In your stub, delete any `- **tasks:**` line and add one at the end, with no blank line
@@ -347,39 +425,124 @@ refuses rows that do not name each one (§ context-engine session close, step 3)
 ### context-engine orient
 
 Read and report, in this order, in at most 6000 bytes in total (`orient_max_bytes`), counted as
-UTF-8 with LF line ends. Every part's heading appears. The bytes go first to parts 0, 2, 3 and 5,
-which a session must act on, then to 4, then to 6 and 7, and the banner (1) takes what is left; so
-cut the banner first. Cut a part between items (a line and the indented lines under it) and end it
-with a note naming the command that lists the rest (`banner show`, `baton list`, a `grep` of the
-ledger for `kind: open`, `task list`, `task show <id>`, `register show --engine`):
+UTF-8 with LF line ends. Every part shown keeps its heading, but for one (below); a part said to
+come only when something holds is left out, heading too, when it does not, and says whose bytes
+its own come with. The bytes go first to parts 0, 2, 3 and 5, which a session must act on, then
+to 4, then to 6 and 7, then to the banner (1), and the `Last close` part (3) takes what is left;
+so cut that part first, and leave it out, heading too, when even its heading and cut note would
+cut the banner; then cut the banner. Cut a part between items (a line and the indented lines
+under it) and end it with a note naming the command that lists the rest (`banner show`, `baton
+list`, a `grep` of the ledger for `kind: open`, `task list`, `task show <id>`, `register show
+--engine`, and for each part below that comes only when something holds, the place it names):
 
 0. only when G-D0 fails (§ lint), and `[guards] off` does not name it: a `Contract: fix this
    first` section, one line per failure with its remedy;
-1. the banner (`HANDOFF.md` § Banner);
-2. open batons and pauses (`docs/working/`, `state: open`), your own session's first, then
-   pauses before batons, each pause with its resume step and branch;
-3. other sessions with an open stub in the ledger, which the session then shows the owner, one
-   line each (`procedures.md` § Session start): the key, its `opened` value, and `; last active
-   <time> (<what>)`, the newest of its op log lines (`op <op>`, by its `at`) and of the commits
-   whose `Session:` trailer names it (`commit <sha>`, by committer date), so a session that died
-   without a close shows how long it has been quiet; say `none` when there are none; a stub
-   with a `follows:` line adds `; follows <key>` after its `opened` value;
+1. the banner (`HANDOFF.md` § Banner), headed `Banner (<key>)` with the banner's key, or headed
+   `Banner` alone with the body `no banner` when there is none;
+2. open batons and pauses (`docs/working/`, `state: open`), headed `Batons and pauses: do these
+   first`: your own session's first, then pauses before batons, each pause with its resume step
+   and branch; say `none` when there are none;
+3. other sessions with an open stub in the ledger, headed `Other open sessions: show the owner,
+   one line each`, which the session then shows the owner, one line each (`procedures.md` §
+   Session start): the key, its `opened` value, and `; last active <time> (<what>)`, the newest
+   of its op log lines (`op <op>`, by its `at`) and of the commits whose `Session:` trailer names
+   it (`commit <sha>`, by committer date), so a session that died without a close shows how long
+   it has been quiet; say `none` when there are none; a stub with a `follows:` line adds `;
+   follows <key>` after its `opened` value; a stub with a `continues:` line adds `; continues
+   <key>` the same way;
    then, only when your own stub carries `follows: <key>`, a `Follows <key>: what it closed
    with` part (its bytes come with part 4's): `- rows: ...` from that closed entry, then one
    `- digest: ...` line per summary item and one `- still owed: ...` line per `Still owed` item;
-4. board items at NOW and NEXT (as `context-engine task list`);
+   or, when it carries `continues: <key>`, a `Continues <key>: what it closed with` part, the
+   same lines after a first `- thread: <oldest> > ... > <key> > <your key>` line (follow each
+   entry's `continues:` back, at most 30 keys);
+   then, unless the newest `kind: close` entry is the one that part shows, a `Last close <key>:
+   what it closed with` part with the same lines for it (its `- thread:` line only when it
+   continued one; its bytes come after the banner's, as the ledger holds it whole): the close's
+   digest is read here, not copied into the banner;
+   then, only when your own stub carries a `tasks:` line, a `Tasks the owner asked for: close
+   when every one is closed` part (its bytes come with parts 0, 2, 3 and 5's): one `- <id>:
+   <state>` line per id the line names (`missing` when no record has the id), then `- <n> of <m>
+   still open`, or `- every one is closed: do the clean close now`; the rest is `session tasks`;
+4. board items at NOW and NEXT (as `context-engine task list`), headed `Board: NOW and NEXT`; say
+   `empty` when there are none;
    then, only when a re-rank is due (§ The last rerank), a `Rerank due: tell the owner` part:
    one line per reason, then where the re-rank is (`procedures.md` § Rerank);
-5. owner questions to raise now: open at NOW or NEXT, or overdue (see session close step 3);
-6. the NOW item's brief, `## Traps` and `## Read first` (with no NOW item, `no NOW item`, and
-   `: rerank due (above)` after it when a re-rank is due);
+   then, each only when it has a line, in this order:
+   - a `Next work waits on parked items: tell the owner` part (its bytes come with part 4's):
+     for each open NOW or NEXT item, and each board id on a banner line holding the word
+     `next`, whose `deps` names an open SOMEDAY or HOLD item, `- <id> (<pri>, named next in the
+     banner) waits on <dep>, which is SOMEDAY (parked): drop the dep, promote it, or re-rank <id>`
+     (for a HOLD dep, `which is HOLD (held)`; the `, named next in the banner` only for a banner id); the rest is `task show <id>`;
+   - a `Plans to freeze: their items are closed` part (its bytes come with part 4's; off
+     with G-D4): each ACTIVE-PLAN doc G-D4 reads whose named board items are all closed, with how
+     to freeze it: `doc freeze <path>`, or, when it has a `[guards] liveness_given` entry, that
+     entry set to FROZEN; the rest is `lint` (G-D4);
+   - an `Unspecified stories and the items G-T1 counts` part (its bytes come with parts 6
+     and 7's; off while `[guards] stories` is unset): each `story_status: unspecified` story,
+     with the open board items naming it, which G-T1 counts (check one is the task to specify
+     it), or saying no open board item names it (G-T1 is red: `task new` the work to specify it);
+     the rest is `lint` (G-T1);
+   - a `Housekeeping owed` part (its bytes come with part 4's): a line counting the stale `kind:
+     open` stubs, with their keys (your own included, since the hook holds no key: if one is
+     yours, `session touch`), a line counting the open questions an `asked` receipt names more
+     newly than their `last_asked` (only with a question kind), then a last line saying to run
+     `hk run start`; the rest is `hk run start --check`. It only shows what is owed: the session
+     runs it (procedures.md § Housekeeping, at session start);
+   - a `Foreign commits to reconcile` part (its bytes come with parts 6 and 7's): the
+     foreign commits of your session's range, less those a `kind: foreign` entry names (none
+     without a key), then those of the newest five abandoned sessions' ranges, at most 8 lines a
+     range and then `- (+<n> more in <whose>)`, each `- <sha7> <subject> (<author>; <whose>)`,
+     `<whose>` being `this session's range` or `abandoned <key>'s range`; the rest is
+     `procedures.md` § Reconciling foreign commits;
+   - the `Templates still unfilled: ask the owner` and `Charter unconfirmed: ask the owner`
+     parts (described below);
+   - a `Deprecated config: tell the owner` part (its bytes come with parts 6 and 7's):
+     one line while `[working] decision_index` is set, saying the engine no longer writes a
+     decision index: delete the key from `context.toml`, and `git rm` the index file when it
+     exists; `decision index` prints the listing and `site build <dir>` publishes it; the rest is
+     FRAMEWORK §6.5;
+   - an `MCP server not seen: register it` part (its bytes come with parts 6 and 7's): one line
+     while `<lockfile dir>/mcp-seen` (by default `.context/mcp-seen`) is absent, naming the
+     `claude mcp add` command and the restart, and saying the CLI carries every operation until
+     then; none when the lockfile sits at the repo root; the rest is kit README § 1. By hand: `ls
+     .context/mcp-seen`;
+   - the `Upstream` part (described below);
+5. owner questions to raise now, headed `Raise in chat now, one line each`: open at NOW or NEXT,
+   or overdue (see session close step 3); say `none` when there are none;
+6. the NOW item's brief, `## Traps` and `## Read first`, headed `Top item: <id> <title>` (with no
+   NOW item, headed `Top item` with the body `no NOW item`, and `: rerank due (above)` after it
+   when a re-rank is due);
 7. in a repo whose `[working] register` is not the engine's own `REGISTER.md`: one line,
    `Engine register (<version>): <N> residual risks, context-engine register show --engine`.
 
+Two parts ask the owner for what bootstrap left unfilled (their bytes come with parts 6 and 7's),
+each only when it has a line. `Templates still unfilled: ask the owner`: a line for the charter
+(`[guards] charter`, else `docs/charter.md`) and one for the criteria file (`[working] criteria`,
+else `docs/criteria.md`) when it is still the kit's template whole, or when it still holds one of
+the template's `*(...)*` placeholders, naming each (kit README § 2a). `Charter unconfirmed: ask
+the owner`: one line while the charter's frontmatter says `charter_status: unconfirmed`, an
+agent's reconstruction (off while `[guards] charter` is unset or G-I1 is off): bring it to the
+owner as an owner question, record the answer as a decision, then set `charter_status:
+confirmed` (FRAMEWORK §3.1, §11.4). Lint fails neither, since every repo starts from the
+templates and a migrated one from an unconfirmed charter, so orient asks at every session start
+until they are done.
+
+Where a branch has an upstream, the `Upstream` part (its bytes come with parts 6 and 7's): `- HEAD
+is <a> commits ahead of <upstream> and <b> behind (as of the last fetch)` (`git rev-list
+--left-right --count HEAD...@{upstream}`), then the newest `update by push` entry of `git reflog
+show --date=iso-strict <the upstream's full ref>`: `- the last push to <upstream>: <short sha>, at
+<time>` when an open session's window (its `session.start` op line to its close, pause or
+abandon) holds that time, or the line saying it came while no session was open, with its
+`--pushed` remedy. Once a `kind: close` entry's `pushed:` receipt names a prefix of that commit's
+hash before its colon, it reads `- the last push to <upstream>: <short sha>, at <time> (while no
+session was open; recorded in <key>'s close)`, naming the newest such close.
+
 **Why:** one bounded read at session start replaces opening a dozen files. The
 order is the order of urgency: a contract that did not load, then work carried over from earlier sessions and live sessions,
-then new work; the banner leads as the context for the rest, but it is the part cut first, so a
-long banner never hides what the session must act on. A `SessionStart` hook runs it in an adopted repo (kit README § Hook), with no
+then new work; the banner leads as the context for the rest, but it is cut before any part but
+`Last close`, so a long banner never hides what the session must act on, and a past digest the
+ledger holds never hides the banner's durable lines. A `SessionStart` hook runs it in an adopted repo (kit README § Hook), with no
 session key; a failing hook is silent, so a session that finds no orient output in its context
 does this by hand.
 
@@ -397,12 +560,17 @@ can check it (G-R1) and every repo can carry its own (FRAMEWORK §2).
 Read the files G-D12 reads (`[guards] coverage_spec` and `coverage_maps`; § lint): with
 neither set, or G-D12 red on its config, its spec's extraction or its maps, there is no status
 to give, so stop and say why. Otherwise list each component of the spec's §2 table, each §5.6
-and §6.n procedure heading, and each G-id it names, by class, G-ids in order of their letter and
-number. Give each one the first status that holds:
+and §6.n procedure heading, each G-id it names, and each operation §8.0.2 names (§ lint, G-D12),
+by class, G-ids in order of their letter and number, operations by name. Give each one the first
+status that holds:
 
-1. **built**: a G-id `context-engine lint` reports (§ lint lists them);
-2. **deferred**: the newest coverage map's row for it has the class DEFERRED; note the row's
-   reason, which says what un-defers it;
+1. **built**: a G-id `context-engine lint` reports (§ lint lists every one, G-D6 among them,
+   which checks nothing in the engine), or one an operation enforces at write time (G-W8,
+   `session close`'s refusal; G-W10, `hk run`'s count), or an operation the engine registers
+   (its name with the dot as an underscore is an MCP tool, `hk_run`);
+2. **deferred**: the newest coverage map's row for it has the class DEFERRED, whatever open
+   board item names it (a mention cannot tell work from an aside); note the row's reason, which
+   says what un-defers it;
 3. **prose-only**: that row has the class PROSE-ONLY; note the row's home, where the rule lives;
 4. **open work**: the board item the row's class names (`EXISTING <id>`, `NEW <id>`) is open, or
    an open board item names it as G-D12 reads a mention;
@@ -418,13 +586,47 @@ the status is generated from what G-D12 already reads instead of written by hand
 demand, never stored: a stored table would go stale with every board close, and a closed item
 or a deferred row is the board's and the map's word, not proof the code exists.
 
+### context-engine site build
+
+`context-engine site build <dir>` (MCP `site_build(outdir)`), a read: it writes the records as a
+static HTML site into `<dir>` and nothing in the repo (no lock, no op log line, no commit).
+`<dir>` is relative to the repo root, or absolute; it must be new or empty, and outside the repo
+or git-ignored in it (`git check-ignore`), or the op refuses. CI runs it on every push to `main`
+and deploys `<dir>` to GitHub Pages (`.github/workflows/pages.yml`); on another host, wrap the
+same op in that host's pages job. By hand, write these pages, each with a link bar to the six
+listings:
+1. `index.html`: the repo's name, what the site holds, links to the listings.
+2. `decisions.html`: § context-engine decision index's groups and lines, each id a link to its
+   page, `superseded by` ids too.
+3. `stories.html`: the stories (`[guards] stories`) by `story_status` in the kind's enum order:
+   id, title, actor, date.
+4. `board.html`: the open items of every `[working] board` kind by tier in `pri`'s enum order,
+   by prefix and number, with their `brief`; then every closed item, with its `closed` key.
+5. `coverage.html`: § context-engine coverage's tables, or why it is not available here.
+6. `register.html`: each `## <prefix>-n` entry of `[working] register` (`RISK-n`, or the
+   prefix a register kept from before uses) with its fields, anchored `#<prefix>-n`.
+7. One page per decision, story and board item at `<kind>/<id>.html`: its path, its frontmatter
+   keys and values, and its body as escaped, wrapped markdown text (not rendered).
+
+On every page, an id the site holds (a record above, or an entry id in the register) is a link to it,
+and every `http(s)://` URL is a link; other ids stay text.
+
+**Why:** a reader without the CLI (the owner on a phone, anyone on GitHub) gets the listings that
+a stored index once gave, and more, without anything generated being stored: a stored copy goes
+stale and couples sessions through commits. The op is the engine's, not a CI
+script, so a repo on another host publishes the same site.
+
 ### context-engine lint
 
-Check every record, then the working state. `--working` does only the second half.
+Check every record, then the working state. `--working` does only the second half, and the
+first bullet's check that every record parses.
 
-- **schema**: every record in a kind's directory whose name starts with its id parses (valid
-  YAML, a closing `---`), has the right `type` and `id`, every required key, enum values in
-  range, values of the declared type, and an OKF `status` from draft/stable/deprecated.
+- **schema**: every record in a kind's directory whose name starts with its id parses (UTF-8,
+  valid YAML, a closing `---`), has the right `type` and `id`, every required key, enum values in
+  range, values of the declared type, and an OKF `status` from draft/stable/deprecated. A record
+  that does not parse fails here by name, and every other guard passes over it. *Why: a hand
+  edit is legal, so one left half-done is a failure naming the file, never a crash of lint or
+  of a commit that does not carry it.*
 - **G-D10**: every append-only record (decision, story) has `body_sha`; its `corrected:` lines
   each match the body; and with them undone, the body hash above matches `body_sha`. *Why:
   owner words are verbatim, so a rewrite must show up, and so must a bracket whose `corrected:`
@@ -433,8 +635,14 @@ Check every record, then the working state. `--working` does only the second hal
   each kind's directory), subdirectories included, parses and has frontmatter with a `type`. The exceptions are `log.md` and
   `index.md`, and `index.md` may carry no frontmatter key but `okf_version`. *Why: a typeless file is invisible to
   every tool.*
-- **G-W1**: the banner key is not older than the newest `kind: close` entry. *Why: a close that
-  did not replace the banner leaves the next session reading an out-of-date banner.*
+- **G-W1**: the banner key is not older than the newest `kind: close` entry, unless that entry's
+  `banner:` receipt is `kept <the banner's key>` and another close says `banner: set` or kept
+  that same banner; and once a session has closed, the orientation note has a `## Banner
+  (<key>)` heading. *Why: a close that neither replaced the banner nor said it kept it may have
+  left the next session reading an out-of-date banner; one that says it kept it judged that no
+  durable line changed, and orient generates the rest (FRAMEWORK §5.1). A banner no close has
+  written since closes carry the receipt may still copy what orient generates, so it is cut
+  once before any close keeps it.*
 - **G-W2**: at most 2 `kind: pause` entries above the topmost close (G-W2 and G-W6 read the file
   top-down; G-W1 compares keys).
 - **G-W3**: no open baton or pause from a session with 2 or more closes/pauses after it. *Why:
@@ -442,13 +650,16 @@ Check every record, then the working state. `--working` does only the second hal
 - **G-W4**: on every board item, `state: closed` if and only if `status: deprecated`; no
   open question carries `answered:` (an answered question never reopens, § task reopen); every
   open question's body states its context, two or more options and a recommendation with its
-  reasoning, as § ask new says; and on every decision, `decision_status: SUPERSEDED` if and only
-  if `status: deprecated`. *Why: the owner answers a question in one line only when it carries
+  reasoning, as § ask new says; on every decision, `decision_status: SUPERSEDED` if and only
+  if `status: deprecated`; and every decision that is `ACCEPTED` and not the owner's own (its
+  `actor` is not `owner` or `human:<id>`, or it has `ruled_by`) is named in the `ids` of an
+  `accept` op log line (§ decision accept). *Why: the owner answers a question in one line only when it carries
   what they need to decide; the doc guards and G-I3 skip a deprecated decision as history, so a
-  hand-set `status` hides one.*
-- **G-W5**: NOW holds exactly 1 open item (if any are open). NEXT holds at most 5.
+  hand-set `status` hides one; an agent's call accepted by hand leaves no record of its review.*
+- **G-W5**: NOW holds exactly 1 open item (if any not at HOLD are open: a board of held items
+  only may leave NOW empty). NEXT holds at most 5.
 - **G-W6**: the newest close has `rows:`, a `guards:` receipt and a `read:` receipt; its
-  `guards:` text matches `[working] gate_receipt` where that is set; and where it has a
+  `guards:` text matches `[working] gate_receipt` unless that is `''`; and where it has a
   `- **tasks:**` line, its `rows:` names every id on that line. *Why: the close's refusal of
   rows that miss a named task (§ context-engine session close) does not cover a close written or
   edited by hand.*
@@ -462,7 +673,7 @@ Check every record, then the working state. `--working` does only the second hal
   `task promote`. *Why: the promotion refused it, so a failing review there was edited by hand.*
 - **G-W13**: every `- residual:` line of a closed item carrying `review:` has a register entry
   with the same risk text and that task in `from:`; every register entry has `affects`, `why not
-  eliminated`, `control` and `from` lines; no two entries share an INV id. *Why: the register is
+  eliminated`, `control` and `from` lines; no two entries share an id or a number. *Why: the register is
   what is handed over, so a residual missing from it is a risk nobody downstream is told about.*
 - **G-R1**: every `[[routes]]` path in `context.toml` exists, unless the route says
   `optional = true`. *Why: a routing table that points at a moved file sends every reader to
@@ -480,7 +691,10 @@ Check every record, then the working state. `--working` does only the second hal
   the contract's own directory, that exists and equals the engine's `kit/contract.md` once line
   endings are ignored (`git diff --no-index --ignore-cr-at-eol`). *Why: Claude Code loads the
   framework's rules through that import, and the framework owns the file; a missing or edited
-  copy means a session runs on rules nobody shipped.*
+  copy means a session runs on rules nobody shipped.* With that kit block, and a decision kind
+  (`[working] decision`) whose `decision_status` enum lists values, the enum holds `ACCEPTED`.
+  *Why: `init` never edits an existing `context.toml`, so an upgraded repo keeps the old enum, and
+  its owner decisions are born PROVISIONAL against its contract.*
 - **G-D1**: for each `[[routes]]` entry with `max_lines`, `max_bytes` or `max_width`, the routed
   file (or each `.md` under a routed directory) has at most that many lines and bytes, and no
   line wider than that many characters except table rows (lines starting `|`). *Why: a place
@@ -488,6 +702,9 @@ Check every record, then the working state. `--working` does only the second hal
   never just cut it (a rule to the contract or a runbook, a ruling to a decision, owed work to a
   task, what has gone stale to the archive, the ledger or an evidence doc), and delete it only
   once it has landed there, or rules are lost in the trimming.*
+  With `--headroom`, `lint` also lists each such file at or over 95% of `max_lines` or
+  `max_bytes`, with the same remedy, as a warning that fails nothing; none while `[guards] off`
+  names G-D1.
 - **G-D2**: in each kind's directories no two files carry the same id, by file name or by `id:`;
   and no id appears in two `new` or `import` lines of the op log. Every alias (`aliases:`, a
   record's earlier ids) is one word of printable ASCII with no quote, comma, bracket, brace, `/`
@@ -510,7 +727,8 @@ Check every record, then the working state. `--working` does only the second hal
   *Why: a dead reference sends
   the reader to a file that is not there, and on Windows a link with the wrong case still opens,
   so the mistake goes unseen there.*
-- **G-D4** (only when `[guards]` lists `liveness` or `history` paths): read the first
+- **G-D4** (its liveness half only when `[guards]` lists `liveness` or `history` paths; its
+  freshness half, the `stale_after` grep at the end, always): read the first
   `liveness_lines` lines (10 by default) of each `.md` there. It declares its liveness by a
   frontmatter `liveness:` key (quotes and a `#` comment allowed; any other value is red), or by a
   line outside fenced code that opens a block (the first line, or one after a blank line, a
@@ -540,6 +758,11 @@ Check every record, then the working state. `--working` does only the second hal
   `§6`, `G-D5`) and is not a count. A list whose docs are all FROZEN or ACTIVE-PLAN is red. *Why: a count typed in prose is
   never re-derived, so it goes stale unseen (P5); delete it and point at what counts it, and put
   a rule's value or a label (`Step 3 checks`) in backticks.*
+- **G-D6**: nothing to check. The engine stores no generated index (listings are printed on
+  demand, FRAMEWORK §6.5), so there is none to compare with its regeneration; the id stays one
+  lint knows, so `[guards] off` may name it, and `coverage` reads it as built. *Why: the guard
+  is for a repo's own indexes still built by parsing prose, checked from a cutoff id (FRAMEWORK
+  §8.3), and the engine builds none.*
 - **G-T3**: in each file `[guards] existence` lists, skipping fenced code, blockquotes and lines
   with `*HISTORY —*`: every backticked name of a file (a path with a `/`, or a name ending in a
   text extension such as `.py` or `.md`) exists case-exact, and every `file::symbol` resolves as
@@ -553,7 +776,8 @@ Check every record, then the working state. `--working` does only the second hal
   unset: `[guards] charter` (G-I1), `[guards] stories`, the kind holding the stories (G-I1, G-I2,
   G-T1, G-T6), `[working] criteria` (G-T1, G-T2, G-T6) and `[guards] tests` (G-T2). A set path
   that does not exist is red. List three things: the charter's goals (each table row whose first
-  cell is a goal id, `G-n`; a legacy `G3` is red there, but reads as `G-3` in a story's `goals`),
+  cell is a goal id, `GOAL-n`, or `G-n` in a charter that uses it; a legacy `G3` is red there, but
+  reads as goal 3 in a story's `goals`; `GOAL-3`, `G-3` and `G3` are one goal, by number),
   the criteria (each table row whose first cell is an id, with its `from` and `status` cells by the
   table's header; a source column may be headed `from`, `story` or `source`), and the claims (each
   match of the `[guards] claim` pattern, by default `criterion("AC-n")` or `criterion: AC-n`, in
@@ -594,23 +818,49 @@ Check every record, then the working state. `--working` does only the second hal
   names). *Why:
   a ruling stamped `actor: owner`, or quoted as the owner's words, becomes frozen owner intent that
   nobody can amend away (FRAMEWORK §6.5).*
+- **G-I4**, duplicate titles (only when `[working] decision` is set). No two decisions that are
+  not `status: deprecated` have the same `title`, compared with case ignored and each run of
+  spaces read as one space; REJECTED and DEFERRED decisions count. Taking the decisions in id
+  order (by number, so 9 before 10), each one after the first of a shared title fails, naming the
+  earlier ones. Fix it with `decision supersede <earlier> <later>` when the later replaces the
+  earlier, or else retitle one to say how it differs (§ context-engine decision set). Not read:
+  titles that differ in a word or in punctuation, two decisions that conflict in meaning under
+  different titles, and a superseded decision. *Why: two current records with one title are one
+  decision recorded twice (a replacement recorded with the old title and never superseded in) or
+  two that conflict; either way `decision find` shows both as standing.*
 - **G-D12** (only when `[guards]` sets `coverage_spec` or `coverage_maps`; red if only one is
   set, if the spec is missing, or if the `coverage_maps` glob is absolute or has a `..`, matches
   no file, or matches a file with no `YYYY-MM-DD` in its name): outside fenced code in the spec,
   list (1) the bold component name in each numbered row of §2's table, (2) each `### 5.6` and
-  `### 6.n` heading as `§6.n`, and (3) every `G-` id (`G-D3`, not `XG-D3` or `G-D3x`); fewer
-  than 20, 10 or 30 of a class is red (the engine's floors; a repo whose spec they do not fit
-  sets `[guards] off = ["G-D12"]`). Take the newest map by the date and session letters in its
+  `### 6.n` heading as `§6.n`, (3) every `G-` id (`G-D3`, not `XG-D3` or `G-D3x`), and (4)
+  each backticked `noun.verb` name followed by `(` or the closing backtick inside §8.0.2 (from its
+  `###` heading to the next heading of that level or higher), not one whose verb is a file
+  extension (`gate.md`), nor the operations it writes bare (`list`); fewer than 20, 10, 30 or 30
+  of a class is red (the engine's floors; a repo whose spec they do not fit sets `[guards] off =
+  ["G-D12"]`). An operation the engine registers (its name with the dot as an underscore is an
+  MCP tool) owns itself; check only the rest. Take the newest map by the date and session letters in its
   file name, ordered as session keys (`z` before `aa`). Each listed thing must be a whole cell
   in its class's column of a table in that map: under `Component` for a component (the cell
   may add ` (...)`), under `§` in a table with a `Procedure` column, or a `Ritual` column (the
-  old name, kept by frozen maps), for a procedure, under `Guard` for a G-id. Or it appears as a
-  whole word in some board file, open or closed (`§6.1` is not `§6.13`, `G-D1` is not `XG-D1`).
+  old name, kept by frozen maps), for a procedure, under `Guard` for a G-id, under `Operation`
+  for an operation. Or it appears as a whole word in some board file, open or closed (`§6.1` is
+  not `§6.13`, `G-D1` is not `XG-D1`; an operation as `hk.ratchet` or `hk_ratchet`).
   A component's former name, which the engine still accepts, counts as its name in both places:
   `Invariants` for the Residual-risk register, `Law / NFRs` for Non-functional requirements, so
   a map frozen before the rename still owns it. *Why: a spec that gains a procedure or guard
   nothing owns drifts unseen; the map is frozen, so the fix is a new dated map or a `task new`
   naming it, never an edit.*
+- **G-D13** (only when `[guards] reader_docs` lists paths; a listed path that is missing is red):
+  in each file there (each `.md` under a listed directory), outside fenced code and frontmatter,
+  first blank every link destination (`](...)`), every reference definition line (`[x]: ...`) and
+  every URL (`scheme://...`, `<scheme://...>`); then no id of a series the repo keeps stands
+  alone (not glued to a letter, digit or `-` on either side): a kind's `prefix` in
+  `context.toml`, the prefix leading the criteria rows (`[working] criteria`), the register's
+  entry prefix (`[working] register`), and `GOAL-n` and `G-n` while `[guards] charter` is set.
+  Inline code is read too. A guard id (`G-D1`), a section (`§8.0`) and a session key are not
+  ids. *Why: the README is the page a stranger reads first; an id is a pointer they cannot
+  follow, and what is built and what is next belongs on the board, so give the reader the
+  words, or point at the board or the records site.*
 - **G-D7**: in each file `[guards] signals` lists, outside fenced code: at most `warn_max` ⚠, at
   most `bold_caps_max` bold spans with a run of four capitals and no lower case (`**NEVER**`),
   and none of `retired_glyphs`. *Why: a signal stands out only while it is rare.*
@@ -625,8 +875,9 @@ Check every record, then the working state. `--working` does only the second hal
 - **G-W7**: for each board item and each of `moved`, `updated`, `closed`, `last_asked`: the value
   equals the `session` of the newest op log line for that id whose `fields` lists the key; with
   no such line, the value is older than the log's first session. Every op log line parses as
-  JSON. A line carrying `as` (housekeeping's `last_asked` stamp) is checked against the key
-  `as` gives for that field instead. *Why: those keys are written only by operations, so a
+  JSON, and a `lane`, where a line has one, is a lane id (a letter or digit, then up to 63
+  letters, digits, `.`, `_` or `-`). A line carrying `as` (housekeeping's `last_asked` stamp, or a `task import` keeping a
+  legacy board's history) is checked against the key `as` gives for that field instead. *Why: those keys are written only by operations, so a
   mismatch is a hand edit.*
 - **G-W9**: for each op log line with `"op": "close"` and `"mechanical": true`: the item's
   `## Log` has a line `- <that session> (<actor>): closed: done in <sha> (its `Closes: <id>`
@@ -642,13 +893,38 @@ Check every record, then the working state. `--working` does only the second hal
 A guard id listed in `[guards] off` is not reported (only ids lint reports may be listed), and
 the write-time stops that check the same rule are off with it (among them G-I1 and G-I2 in
 § context-engine record new for a story, G-I3 there and in § context-engine ask answer for a
-decision, G-W4 in § context-engine ask new). Two stops are no guard's twin and stay on: the
+decision, G-W4 in § context-engine ask new, G-D4 for `stale_after` in § context-engine record
+new, task set and decision set). Two stops are no guard's twin and stay on: the
 `## Amendments` stop of record new and ask answer, and record new's stop on a decision given a
-`status` key or `decision_status: SUPERSEDED`. A path listed in `[guards]` that does not exist is
+`status` key, `decision_status: SUPERSEDED`, `supersedes` or `superseded_by`. A path listed in `[guards]` that does not exist is
 itself a failure.
 
 **Why:** lint is the check on the stored files. It catches what a write-time refusal cannot: hand edits, and
 records that were valid when written but stale now. A non-empty result is a failure (exit 1).
+
+### context-engine plan check
+
+Before a builder starts on a plan (FRAMEWORK §6.6, the build ladder), check every citation in
+the plan file, given from the repo root or as an absolute path (refused, exit 2, when it names
+no file). Outside fenced code and frontmatter, read each backticked span as § lint's **G-D3**
+reads one: a `path::Name.attr` names a file that exists case-exact (a bare file name may be
+anywhere in the repo) whose text has each dotted part as a word; any other span shaped as a
+file name or a path with a `/` (no spaces, globs or `<placeholders>`, not starting with `.` or
+`/`) names a file or directory that exists case-exact, from the repo root or, for a plan inside
+the repo, from the plan's own directory. A bare name not at the repo root that matches files
+whose texts differ fails too. A span followed by ` (new)`, with at most one space between, is
+one the plan creates: skip it, and every other citation of that path, of a path under it, of
+its bare name, or of that `path::Name` and the names under it (`Name.attr`), wherever it stands
+in the plan. That holds only while the path does not exist: a marked path that exists (a bare
+name: any file of that name) is not new, so its mark skips nothing and fails as `marked (new) but
+exists`; a plan that adds to a file marks each new `path::Name`, not the file. Write each failing
+span as `line <n>: <problem>`. Any failure, or a plan with no
+citation at all (none checked and none marked new), fails the check (exit 1), and the plan goes
+back to its planner.
+
+**Why:** a builder handed a plan that cites a file or symbol that is not there guesses, or builds
+on a misreading; a mechanical check before the build catches it at no model cost, by the rules
+G-D3 already holds the docs to. A plan that cites nothing would pass a check that read nothing.
 
 ## Reserved ids
 
@@ -679,7 +955,7 @@ is one no other write hands out, so the citation is right before the record exis
 
 ### context-engine task new
 
-1. Pick the kind: task (`T-n`) or question (`ASK-n`; prefer `context-engine ask new`).
+1. Pick the kind: task (`<prefix>-n`, `PRJ-n` say) or question (`ASK-n`; prefer `context-engine ask new`).
 2. The brief is at most 120 characters. Every named dep must exist. The tier's cap must have room
    (NOW 1, NEXT 5, counting open items of both kinds). Otherwise, demote something first.
 3. Id: the highest number in the series + 1. Count file names *and* `id:` keys, open and closed.
@@ -693,8 +969,8 @@ is one no other write hands out, so the citation is right before the record exis
    it is over 48 characters, take the first 48 and drop everything from the last `-` on, even a
    whole word. An empty slug gives `tasks/<id>.md`. The slug never changes afterwards.
 5. Frontmatter, in order: `type`, `id`, `title`, `brief` (if any), `pri` (default LATER),
-   `state: open`, `deps: [...]`, `goals: [G-n, ...]` (for a task where `[guards] task_goals` names
-   the kind: at least one goal of the charter, in the form `G-n`), `source: session <key>`,
+   `state: open`, `deps: [...]`, `goals: [GOAL-n, ...]` (for a task where `[guards] task_goals` names
+   the kind: at least one goal of the charter, spelled as the charter spells it), `source: session <key>`,
    `created: <today>`, `moved: <key>`, `updated: <key>`. Body, unless you write your own:
 
    ```
@@ -714,11 +990,38 @@ is one no other write hands out, so the citation is right before the record exis
 **Why:** one file per item, with no renames, so every reference keeps working. The caps keep the
 board a ranking, not a pile (G-W5). The brief is a constraint, not a summary (FRAMEWORK §5.2).
 
+### context-engine task import
+
+Bring a legacy board in with its history (FRAMEWORK §11.4): `task import <file> [--kind <board
+kind>]`. Nothing is written if any check fails.
+1. The file is JSON Lines, UTF-8 (a byte-order mark is read past): each non-blank line is one
+   object, `{"id": "<id>", "fields": {...}, "body": "<text>"}`, `body` optional, no other key.
+   Name every line that is not one at once, and stop.
+2. The kind is a board kind. Each id is new, as § context-engine task new step 3 says for a kept
+   number, and no two lines share one. Write each value as given, with nothing defaulted (no
+   `moved`, `updated`, `source` or body the line lacks); a string under a key the kind types
+   `date` or `int` becomes one. A value under a key the kind types `key` must be a session key
+   (a date and letters): a plain date (`moved: 2026-07-29`) stops the import, naming its line and
+   id; keep such a value in a key of the repo's own (`legacy_moved`), never converted.
+3. Write each file as § context-engine task new steps 4 and 5 say (its path from its title), with
+   `type`, `id`, then the fields as given, and `status: deprecated` on one whose `state` is
+   `closed` (a `status` the `state` contradicts stops the import). Each record must pass the
+   kind's schema.
+4. One op line per record (§ What every write does): `"op": "import"`, `"fields"`: every
+   frontmatter key, and `"as"`: each of `moved`, `updated`, `closed` and `last_asked` the record
+   holds, with its value (no `as` when it holds none). No tier cap, deps or goals check: run lint
+   on the result. Not a milestone: commit it by path.
+
+**Why:** G-W7 checks every `moved`, `updated`, `closed` and `last_asked` against the op log, so a
+legacy value no operation wrote is red; the import line's `as` records the values it kept, and
+G-W7 checks the file against them, so a later hand edit is still red. A plain date is refused
+because a session-key field holds only a key, and converting one would invent history.
+
 ### context-engine task set
 
 Change any key except the ones operations own. `state`, `status` and `closed` change by
 `close`/`reopen`. `moved` changes by `touch`/`promote`. `pri` by `promote`. `deps` by `dep`.
-`last_asked` by `ask raised`/`ask later`. `answered` by `ask answer` only. `updated` changes on
+`last_asked` by `ask raised`/`ask later`. `answered` by `ask answer` only, and `agent_decided` by `ask decide` only. `updated` changes on
 every write. `type`, `id` and `body_sha` never change. The brief stays at most 120 characters. Values take the kind's declared
 type: an empty value, `null` or `~` means null (so `brief=` clears the brief); a list is
 comma-separated, with or without `[...]`; a date is `YYYY-MM-DD`; a key must look like
@@ -732,7 +1035,11 @@ repo's own board (`aliases=[1h, est-activity]`), under G-D2's alias rule (§ lin
 replaces the old one: name every alias that is dropped in the reply, since it no longer resolves.
 Only a write that sets `aliases` checks them; a clash made elsewhere shows in lint G-D2.
 `goals` on a task where `[guards] task_goals` names the kind: at least one goal of the charter,
-each in the form `G-n`; never unset it on an open task (lint G-I1).
+each spelled as the charter spells it; never unset it on an open task (lint G-I1).
+Stop, writing nothing, if you were given `stale_after` and it is empty, not a timestamp with
+its offset (`2026-12-01T00:00:00Z`, OKF §5.5; a bare date is not one), or already passed by the
+clock (one equal to now is taken), whatever the item's state: G-D4 of § context-engine lint
+would be red on it (off with it). Unsetting it is always taken.
 
 **Why:** the keys with an operation each carry a rule: caps, consistency of `state` and `status`,
 `moved` meaning real progress. A raw edit would skip that rule.
@@ -742,6 +1049,16 @@ each in the form `G-n`; never unset it on an open task (lint G-I1).
 Item open; `pri` a valid tier; the target tier has room, not counting the item itself. Set `pri`,
 `moved: <key>`, `updated: <key>`. **Moving the NOW item down** can leave NOW short: check NOW as
 in § task close and tell the owner.
+
+**HOLD** (the last tier, where the task kind's `pri` enum has it) means held: parked until
+something outside the board releases it. A held item is never ready: G-W5's NOW rule and the
+empty-NOW warnings do not count it, a re-rank never reads or moves it (`procedures.md` § Rerank),
+and orient flags a NOW or NEXT item whose dep is held. Move an item into HOLD with a
+`task comment` naming what releases it, and out of it (`task promote <id> <tier>`) when that
+happens or the owner says so; neither move is restricted, and HOLD has no cap. Where the enum
+lacks HOLD, a promote to it is refused like any unknown tier, and the remedy says how to enable
+it: add "HOLD" to `pri` in `enums` under `[kinds.<kind>]`, after SOMEDAY, as the kit's
+`context.toml.template` has it. A question is never held.
 
 **Promoting to NOW an item that carries `review:`** (it is above the threshold, FRAMEWORK §5.2):
 first check its `## Design review` section by hand, and do not promote while any check fails.
@@ -776,8 +1093,8 @@ The charter's `Last rerank:` line (in its § Next milestone) holds the session k
 full re-rank (`procedures.md` § Rerank), or `never`. Step 5 of the re-rank replaces the value with
 the session's key; it is the one edit to the charter that needs no owner. The line is a record of
 when the re-rank ran, never a trigger. A re-rank is due (what orient says) only when NEXT holds no
-task while tasks are open: what NOW holds does not matter, and an owner question does not count
-as a task. Where `[guards] charter` is set and the line has a value, orient quotes it after the
+task while tasks not at HOLD are open: what NOW holds does not matter, an owner question does not
+count as a task, and neither does a held task. Where `[guards] charter` is set and the line has a value, orient quotes it after the
 reason (`(last rerank: <value>)`). The owner can ask for a re-rank at any time.
 
 **Why:** the full re-rank reads the whole board, so it runs once a sprint: when the five NEXT
@@ -818,8 +1135,11 @@ Do not move or rename the file.
 check fails, fix the review, do not close. Then copy each `- residual:` line into the register
 (`[working] register`; the kit's default is `docs/invariants.md`). Skip a residual already there
 with the same risk text and the same task id in its `from:` line. Create the file with the
-heading `# Residual-risk register` if it is missing. Each entry takes the next `INV-n` (one above the
-highest in the file and in any `register.append` line of the op log, so an id is never reused),
+heading `# Residual-risk register` if it is missing. Each entry takes the register's next id:
+the prefix its entries use (all one prefix: with two, stop and rename them to one by hand, each
+keeping its number), or with no entries the prefix of the last id a `register.append` line of the
+op log names, or with neither `RISK`; and the number one above the highest in the file and in any
+`register.append` line, whatever the prefix, so a number is never reused,
 after one blank line:
 
 ```
@@ -832,7 +1152,7 @@ after one blank line:
 ```
 
 Log one op line per close that added entries: `op: register.append`, `id` the task, `path` the
-register, `fields` the new INV ids. With residuals and no register configured, stop: configure
+register, `fields` the new register ids. With residuals and no register configured, stop: configure
 one first.
 
 **Ask, before every close, whether the work left a residual risk** (a risk that was not
@@ -845,13 +1165,19 @@ refuse `none` given with a risk, and refuse `none` for an item whose design revi
 `- residual:` line (its risks are filed at this close, so the answer is not "none": close without
 `--residual`, or state only the risks the review does not list). File each risk as above, with the
 review's, its own `affects` in its entry, creating the register on first use. Append the answer
-to the close's `## Log` line as a second line, indented two spaces: `residual risk: <the INV ids
+to the close's `## Log` line as a second line, indented two spaces: `residual risk: <the register ids
 filed>`, the review's included, then `; already in the register: <ids>` for each of this task's
 risks (the review's and those stated) that an earlier close filed, the part before it left out
 when nothing new was filed; or `residual risk: none`. A close that states nothing and has no
 risk of this task's to name writes no such line, so the record tells a question skipped from a "none"; where a register is configured and the item
 carries no `review:`, the engine's reply says the risk was not stated. A risk missed at close goes
 into the register by hand, as above.
+
+**If the item is labelled `hazard`** (its `labels` hold `hazard`, in any case: a suspected,
+unconfirmed hazard, FRAMEWORK §7.4), refuse the close unless it states a resolution: a risk line
+(the hazard is confirmed: file it as above), `none` (it was fixed or dismissed: the message names
+the fix's commit or why it is dismissed), or a design review that lists a `- residual:` line. A
+housekeeping close (§ hk close) is refused the same way: housekeeping never resolves a hazard.
 
 **If the item carries a `## Kill bar`** (a bar written before a run, saying which measure and
 which threshold fires it), the close must give a verdict against it, `--verdict "<outcome>:
@@ -872,8 +1198,8 @@ engine refuses the close until then, and names each such doc; with `[guards] off
 does not check.
 
 **If the item was at NOW**, count the open items at NOW once it is closed. If NOW holds fewer
-than its cap (`[working.caps]`, 1 by default) while any item stays open, G-W5 is red from now
-on: tell the owner, naming the NEXT items (or saying NEXT is empty), and ask which one to
+than its cap (`[working.caps]`, 1 by default) while any item not at HOLD stays open, G-W5 is red
+from now on: tell the owner, naming the NEXT items (or saying NEXT is empty), and ask which one to
 promote (§ task promote) before you run the gate. Do not pick it yourself. The engine closes
 anyway and says the same at the end of its reply to the close. It says nothing when NOW is still at or
 over its cap (G-W5's own remedy applies then) or when `[guards] off` names G-W5.
@@ -886,7 +1212,7 @@ the whole message, if the title cut it or it runs over a line; then the `Verdict
 the close gave one; then the body given with `--body`
 or `--body-file` (the `Sabotage:` lines [sabotage.md](sabotage.md) step 5 asks for, and any
 receipts); then the `Also carries ...` paragraph when another session's lines go in; then one
-trailer paragraph, `Closes: <id>` and `Session: <key>`. Close a task once its work is committed,
+trailer paragraph, `Closes: <id>`, `Session: <key>` and `Co-Authored-By: <name> <email>` (§ What every write does, **Commit the write**, says which; none for a person). Close a task once its work is committed,
 so these lines follow the work they describe. If a close is
 refused after its write was made, that write is committed without `Closes:`.
 
@@ -917,25 +1243,31 @@ looks for: `Closes:` names the task in the commit that finished it (FRAMEWORK §
 
 A message is required, and the item must be closed. **Never reopen an owner question that
 carries `answered:`**, and never delete its `answered:`: its answer is a decision (the one
-`answered: {decision: D-n}` names). To change the answer, `record amend D-n` or
-`decision supersede D-n <new>`, where D-n is the decision that stands now (follow its
-`superseded_by`); for a follow-up, `ask new` citing ASK-n and D-n. A question
+`answered: {decision: DEC-n}` names). To change the answer, `record amend DEC-n` or
+`decision supersede DEC-n <new>`, where DEC-n is the decision that stands now (follow its
+`superseded_by`); for a follow-up, `ask new` citing ASK-n and DEC-n. A question
 closed without `answered:` (by a `task close` run before `close` began refusing questions) may be
-reopened: that is its repair. Set `state: open`, set `closed:` to null, delete `status`, and set `moved` and `updated`.
+reopened: that is its repair. **Never reopen an owner question that carries `agent_decided:`**
+either (and no `answered:`): an agent closed it with a PROVISIONAL decision, and a reopened
+question beside that live decision is a limbo. Overturn it with § context-engine ask answer, or
+confirm the decision with § context-engine decision accept. Set `state: open`, set `closed:` to null, delete `status`, and set `moved` and `updated`.
 Append `- <key> (<actor>): reopened: <message>`.
 
 **Why:** the mirror of close, keeping G-W4 true. Reopening an answered question would leave it
 open while claiming an answer; clearing `answered:` instead would orphan the decision whose
 `answers:` names it, and a second `ask answer` would make two decisions answer one question
-(FRAMEWORK §5.3).
+(FRAMEWORK §5.3). A question an agent decided has no owner answer to protect, but the decision
+that closed it is live, so only the owner's answer or acceptance moves it on.
 
 ### context-engine task section
 
-Replace the content under `## <name>` up to the next `## ` heading. Add the section at the end if
-it is missing. Never `## Log`: use `comment`. On an open NOW item carrying `review:`, check the
+Replace the content under `## <name>` up to the next `## ` heading. Add the section above `## Log`
+if it is missing (at the end if there is no Log), so the Log stays last. Never `## Log`: use
+`comment`. On an open NOW item carrying `review:`, check the
 result's `## Design review` as in `task promote`, and do not write it while a check fails. On a
 closed item, never `## Kill bar`: its close judged it (comment the correction, or reopen the
-item and run again).
+item and run again). On a question, never `## Grant`: it holds owner words that only § ask
+answer's one-off permission writes (comment instead).
 
 **Why:** the `## Traps` and `## Read first` sections are replaced as they get better. The Log is history, so it is only
 ever appended to.
@@ -943,7 +1275,7 @@ ever appended to.
 ### context-engine task list
 
 From frontmatter only: open items by default (`--state closed|all`), optionally filtered by
-`--pri` or `--label`. Sort by tier (NOW, NEXT, LATER, SOMEDAY), then prefix alphabetically (ASK
+`--pri` or `--label`. Sort by tier (NOW, NEXT, LATER, SOMEDAY, HOLD), then prefix alphabetically (ASK
 before T), then number. One line each: pri and id each padded to 7 characters, the title, then
 `  (closed <key>)` and `  [deps: a, b]` where they apply. No match prints `no matching items`.
 
@@ -972,10 +1304,18 @@ As `task new` with kind question, default `pri: NEXT`, plus `last_asked:` (null)
 `blocks: [...]` if it blocks items. The body states three parts, and the engine refuses one
 that lacks any (with `--body` or `--body-file`; with neither it refuses too): **context**, under
 `Context` or `Background`; **two or more options**, one list item (`- A. ...`, `1. ...`, `A)
-...`) or `###` heading each, under `Options`; and a **recommendation with its reasoning**, at
-least five words, or `none` saying which exemption applies (too costly to reach, or it needs
-human judgement) and why. A part is a heading (`## Options`), a bold label (`**Options:**`) or
-a plain one (`Options:`); a `<...>` placeholder counts as nothing. The template:
+...`) or `###` heading each, under `Options`, or, where it has neither, one line led by a bold
+label (`**A:** ...`) each; and a **recommendation with its reasoning**, at least five words,
+or `none` saying which exemption applies (too costly to reach, or it needs human judgement) and
+why. A part is a heading (`##
+Options`), a bold label naming one of the parts (`**Options:**`) or, in a body that writes none
+of its parts as a heading or a bold label, a plain one (`Options:`); any other such line is text
+of the part it is in, and only the heading `## Log` ends the body (a `Log:` line is prose). A
+line indented to the text of the list item above it is that item's text (a sub-bullet, or a bold
+`**Why:**` note), everything under a `###` option is its text, and a line indented past a bold
+option is its text, so none of them is another option; beside a list, a bold intro or note
+(`**Pick one**`, `**Note:** ...`) is no option either. A `<...>` placeholder counts as nothing.
+The template:
 
 ```
 **Question:** <title>
@@ -1017,7 +1357,9 @@ Asked in chat and answered there, so it was never open on the board; recorded wi
 ## Log
 ```
 
-and answer it at once, as § context-engine ask answer does, steps 2 to 4, in the same commit. Its
+and answer it at once, as § context-engine ask answer does, steps 2 to 4, in the same commit (with
+`--grant` and no `--decision-title`, its one-off permission steps instead, with this body's last
+sentence naming `ask new --answered --grant`). Its
 tier cap is not checked: it is closed before the commit, so it never holds a place there. Its
 body need not state the three parts: it was asked and answered in chat, and the decision holds
 the answer.
@@ -1059,38 +1401,152 @@ or demoted to LATER.
 1. The question must be open and carry no `answered:`, and you need the owner's words verbatim
    (the engine takes them as an argument, or written to a file and passed with `--file`). Open with `answered:` means someone reopened it by hand (G-W4): restore `state: closed` and
    `status: deprecated` from git and change the answer through its decision, as in `task reopen`.
-2. New decision `D-n`: `title`, `actor: owner`, `decided: <today>`, `session: <key>`,
-   `decision_status: PROVISIONAL`, `answers: ASK-n`. Body:
+2. New decision `DEC-n`: `title`, `actor: owner`, `decided: <today>`, `session: <key>`,
+   `decision_status: ACCEPTED` (`PROVISIONAL` if the decision kind's enum lacks `ACCEPTED`), `answers: ASK-n`. Body:
    `Owner, answering ASK-n: *"<words>"*`. Stamp its `body_sha` at once.
    **If the owner delegated the ruling** ("you decide", and an agent or another human made the
    call; the engine takes the ruling with `--ruling` or `--ruling-file` and who made it with
    `--ruled-by`, both or neither): the words are only the owner's delegating words, `actor: owner
-   asked`, add `ruled_by: <who ruled>` (never `owner`), and the body is
+   asked`, `decision_status: PROVISIONAL` (the ruler's call, reviewed later through § context-engine
+   decision accept), add `ruled_by: <who ruled>` (never `owner`), and the body is
    `Owner, answering ASK-n by delegating the ruling to <who ruled>: *"<words>"*`, a blank line,
    `## Ruling`, a blank line, `Ruled by <who ruled> on the owner's delegation; only the quote above
    is the owner's words.`, a blank line, then the ruling. Stop if the words hold a `## Ruling`
    heading of their own (G-I3, unless `[guards] off` names it), or if the words or the ruling
    hold a `## Amendments` line (the text below it would fall outside `body_sha` and read as a
-   later amendment; this stop holds whatever `[guards] off` names).
+   later amendment; this stop holds whatever `[guards] off` names), and stop as § context-engine
+   record new step 2 does if the body cites an id no record has.
 3. On the question, set `state: closed`, `status: deprecated`, `closed: <key>`,
-   `last_asked: <key>`, `answered: {on: <today>, session: <key>, decision: D-n}` (with
+   `last_asked: <key>`, `answered: {on: <today>, session: <key>, decision: DEC-n}` (with
    `ruled_by: <who ruled>` added for a delegated ruling) and `updated`.
-   Append `- <key> (<actor>): answered by the owner: D-n` (for a delegated ruling,
-   `- <key> (<actor>): answered on the owner's delegation, ruled by <who ruled>: D-n`).
+   Append `- <key> (<actor>): answered by the owner: DEC-n` (for a delegated ruling,
+   `- <key> (<actor>): answered on the owner's delegation, ruled by <who ruled>: DEC-n`).
 4. Report what it unblocks: open items whose deps include it and whose deps are now all closed,
    plus everything in its `blocks`.
 5. If the question was at NOW, check NOW as in § task close and tell the owner.
 
+Without `--grant`, stop before step 2 if the title is empty: the decision needs one.
+
+**A one-off permission** (`--grant`, no `--title`): the owner said yes to one thing (a push, a
+release) and made no choice that later work must keep, so no decision is written. Step 1 as
+above, then, in place of steps 2 and 3:
+
+1. Stop, before writing anything, if a title, a ruling or `ruled_by` is given (a ruling is a call:
+   drop `--grant`), if the words are empty, if a line of them starts `## ` (it would end the
+   section), or if `[working] ledger` is unset or your session has no `kind: open` stub.
+2. On the question, add a `## Grant` section above `## Log` holding exactly
+   `Owner, granting ASK-n: *"<words>"*` (the words with CRLF read as LF and outer whitespace
+   stripped). Its hash is `sha256:` and the hex sha256 of that text plus one `\n`, in UTF-8. Set
+   `state: closed`, `status: deprecated`, `closed: <key>`, `last_asked: <key>`,
+   `answered: {on: <today>, session: <key>, grant: <the hash>}` (no `decision` key) and `updated`.
+   Append `- <key> (<actor>): granted by the owner, a one-off permission: no decision`.
+   Op log: `ask.answer`.
+3. In your stub, delete any `- **granted:**` line and add one at the end, as § ask raised does for
+   `asked:`: `- **granted:** <every id granted so far this session>`. Op log: `ask.answer`, id
+   your key, the ledger's path, fields `["granted"]`.
+4. Steps 4 and 5 above. At your close, quote each grant's words in the summary
+   (`ASK-n granted: "<words>"`, § session close step 3).
+
+Never edit the `## Grant` words afterwards, nor write the section with `task section`: lint
+(G-W4) fails a question whose section is missing or whose text no longer hashes to its `grant`.
+
+**Overturning an agent decision.** A question closed by § context-engine ask decide (closed, with
+`agent_decided: {decision: DEC-a}` and no `answered:`) takes the owner's answer, which overturns
+the agent's call. The inputs are the owner's words and a title, as above; stop before writing
+anything if `--grant` is given (a grant mints no decision, so it cannot overturn one), if the
+title is empty, or if `DEC-a` is not a decision. Then, in place of step 1's open check: write the
+owner's decision `DEC-n` as steps 2 does (`answers: ASK-n`, or the delegated form); on the
+question set `answered: {on: <today>, session: <key>, decision: DEC-n}` (with `ruled_by` added
+for a delegated ruling) and `last_asked: <key>`, leave `state`, `status` and `closed` as they are,
+set `updated`, and append `- <key> (<actor>): overturned by the owner: DEC-n supersedes DEC-a`
+(delegated: `overturned on the owner's delegation, ruled by <who ruled>: DEC-n supersedes DEC-a`);
+then § context-engine decision supersede `DEC-a` `DEC-n`. The question stays closed and unblocks
+nothing new. A closed question carrying both `answered:` and `agent_decided:` takes no second
+answer. To confirm the agent's call instead, § context-engine decision accept `DEC-a`.
+
 **Why:** an answer is a decision in the owner's own words. It is stamped so the words cannot
 drift, and closing the question points to the decision rather than burying the answer in a log
 line (FRAMEWORK §6.2). A ruling made on the owner's delegation is not the owner's words: inside the
-owner's quote, or under `actor: owner`, it would be frozen as owner intent (FRAMEWORK §6.5).
+owner's quote, or under `actor: owner`, it would be frozen as owner intent (FRAMEWORK §6.5). A
+one-off permission makes no choice for later work to keep, so a decision would only pad the
+log; its words still stay where they cannot drift, hashed on the question, and reach
+the owner digest through the summary quote.
+
+### context-engine ask decide
+
+Closes an open owner question with the agent's own decision, when the question follows from what
+the owner already said (FRAMEWORK §5.3). You need the reasoning (`why`), a title, the ids it is
+derived from (`sources`), one second opinion from the arbiter (FRAMEWORK §6.6) verbatim
+(`opinion`), and who gave it (`opinion_by`, a model id). Any session with an open stub may do it.
+
+1. The question must be an owner question (`ASK-n`). Your actor must be an agent's
+   (`<harness>/<model-id>`, not `human:` or `process:`): the decision's actor is `agent
+   (<model-id>)`, the text after the first `/`, and never `owner` or `owner asked`.
+2. Stop if the title or the why is empty, if the opinion or `opinion_by` is empty, or if
+   `opinion_by` is `owner` or `human:<id>` (the owner's words are never a second opinion).
+3. Stop if a line of the why or of the opinion starts `## ` (it would split the decision's
+   sections; this also keeps a `## Amendments` line, whose text would fall outside `body_sha`, out).
+4. Stop if there are no sources, if one names no record (resolve an alias as elsewhere) and no
+   charter goal, if the question itself is listed, or if none is owner-authored: a story with
+   `story_status: live`, a decision whose `actor` is `owner` or `human:<id>` (any case, no
+   `ruled_by`) that is not SUPERSEDED or REJECTED, or a charter goal id.
+5. Stop if the question is not `state: open` (already closed), carries `answered:` (open and
+   answered is a by-hand reopen, G-W4: restore it from git), or carries `agent_decided:` (the same).
+6. Stop if `[working] ledger` is unset or your session has no `kind: open` stub, if the body of
+   step 7 cites an id no record has (as § context-engine record new step 2), or if closing the
+   question would leave an ACTIVE-PLAN doc that names it as its last open item unfrozen (as
+   § context-engine ask answer does).
+   Nothing is written until every stop has passed.
+7. New decision `DEC-n`: `title`, `actor: agent (<model-id>)`, `decided: <today>`, `session:
+   <key>`, `decision_status: PROVISIONAL`, `refs: [ASK-n, <each source>]` (no id twice), and **no**
+   `answers`. Body, with CRLF read as LF and the why, the opinion trimmed of outer whitespace
+   (the opinion otherwise as given):
+
+   ```
+   Agent decision closing ASK-n, PROVISIONAL until the owner confirms it (`decision accept` on this decision) or overturns it (`ask answer ASK-n`).
+
+   <why>
+
+   Derived from: <the sources, comma-space joined>.
+
+   ## Second opinion
+
+   <opinion_by>, <today>, verbatim:
+
+   <opinion>
+   ```
+
+   Stamp its `body_sha` at once.
+8. On the question set `state: closed`, `status: deprecated`, `closed: <key>`, `last_asked:
+   <key>`, `agent_decided: {on: <today>, session: <key>, decision: DEC-n}` and `updated`. Append
+   `- <key> (<actor>): decided by the agent, PROVISIONAL until the owner confirms or overturns it: DEC-n`.
+9. In your stub, delete any `- **decided:**` line and add one at the end, as § ask raised does for
+   `asked:`: `- **decided:** <every question id decided so far this session>`, comma-space
+   joined. Op log: `ask.decide`, id your key, the ledger's path, fields `["decided"]`.
+10. Steps 4 and 5 of § ask answer: report what it unblocks (a decided question counts as closed
+    exactly as an answered one), and check NOW. At your close, name each question with its
+    decision in the summary (`ASK-n decided by the agent as DEC-n (overturn: ask answer ASK-n)`,
+    § session close step 3).
+
+Not checked: whether the question really follows from its sources, and whether the opinion agrees
+with the decision. Both are judgement, and the opinion sits verbatim in the body for the owner's
+review. The owner confirms the decision with § context-engine decision accept, or overturns it
+with § context-engine ask answer; § context-engine task reopen refuses a decided question. Lint
+(G-W4) fails a question carrying `agent_decided:` that is open, that names no decision, whose
+decision is the owner's, or whose `refs` do not name the question.
+
+**Why:** a question the owner's own records already settle should not cost the owner's attention,
+but a decision an agent made must never pass for the owner's words (FRAMEWORK §6.5). So it is a
+PROVISIONAL decision under the agent's own actor, grounded in an owner-authored record, checked by
+a second opinion kept verbatim where the owner can read it, and named in the digest, so the owner
+can overturn it. Closing the question points to that decision, as an answer does, so nothing it
+blocks waits.
 
 ## Batons and pauses
 
 ### context-engine baton add
 
-New `BTN-n` in `docs/working/`: `title` (first line of the step, cut to 100 characters, never
+New `BATON-n` in `docs/working/`: `title` (first line of the step, cut to 100 characters, never
 refused), `session: <key>`, `state: open`, `created: <today>`, `why` (`''` if none given). Body:
 `<step>` + blank line + `**Why skipped:** <why or "not given">`.
 
@@ -1136,14 +1592,15 @@ blocking orientation (G-W3).
    included (`git status --porcelain=v1 --untracked-files=all`; for a rename take the new path),
    from git itself. Leave out the op log and every path its uncommitted lines name: step 3
    commits them.
-2. New `PAU-n`: `title` (first line of what was in flight, cut to 100 characters), `session`, `state: open`, `created`,
+2. New `PAUSE-n`: `title` (first line of what was in flight, cut to 100 characters), `session`, `state: open`, `created`,
    `branch`, `uncommitted: [...]`, `resume_step`, `evidence` (or `none`), `deferred: [...]`. Body:
    `**In flight:** ...` + blank line + `**Resume step:** ...`.
 3. Commit that file with the op log, at once: `git add -- <path>`, then
-   `git commit --only -m "pause PAU-n (<key>): <first 60 characters of the title>" -m "Session: <key>" -- <path> docs/ledger/ops.jsonl`,
+   `git commit --only -m "pause PAUSE-n (<key>): <first 60 characters of the title>" --trailer "Session: <key>" --trailer "Co-Authored-By: <name> <email>" -- <path> docs/ledger/ops.jsonl`,
    adding any path the op log's other uncommitted lines name (§ What every write does,
    **Commit the write**). (`--only` on a file git has never seen fails without the `add`. The
-   second `-m` is the `Session:` trailer every agent commit ends with, FRAMEWORK §6.10.) The
+   `--trailer`s are the one trailer paragraph every agent commit ends with, FRAMEWORK §6.10, and
+   `<name> <email>` is as **Commit the write** says.) The
    engine commits a pause whatever `[engine] commit` says, `"off"` included, and when it cannot
    commit one, it refuses but keeps the record; commit it by hand.
 
@@ -1159,8 +1616,8 @@ The pause must be open. Set `state: done`, `resumed: <key>`.
 
 ## Housekeeping (FRAMEWORK §6.11)
 
-Two of housekeeping's operations live with their records: `baton expire` (MCP
-`hk_expire_batons`) and `decision index` (MCP `hk_regen_index`). The others are here. Each
+One of housekeeping's operations lives with its records: `baton expire` (MCP
+`hk_expire_batons`). The others are here. Each
 write is mechanical (`"mechanical": true`), with actor `process:housekeep` unless the caller
 gives one, and none forms new intent: each carries out what a commit or the ledger already says.
 
@@ -1210,14 +1667,15 @@ nothing, so the question would come back as overdue though the owner saw it.
 
 ### context-engine hk run
 
-`context-engine hk run start` after `session start`, and `hk run close` before `session close`
-(MCP `hk_run(phase, check)`; `--check` lists the plan and writes nothing). By hand, do the rows of
+`context-engine hk run start` after `session start`, and `hk run close` before `session close`,
+which runs it itself, first, unless given `--no-housekeeping` (MCP `hk_run(phase, check,
+anyway)`; `--check` lists the plan and writes nothing; `--anyway` runs a plan bigger than
+`[housekeeping] max_writes`, on the owner's word, step 5). By hand, do the rows of
 procedures.md § Housekeeping in order:
 
 1. **start:** § context-engine session abandon with `--stale`, § context-engine hk stamp, then §
    context-engine hk comment with `--scan`.
-2. **close:** § context-engine baton expire, § context-engine hk close with `--scan`, then §
-   context-engine decision index where `[working] decision_index` is set.
+2. **close:** § context-engine baton expire, then § context-engine hk close with `--scan`.
 3. Each write as its own section says: the actor is yours, or `process:housekeep`; every line is
    `"mechanical": true` but an abandon's. When the run abandoned or closed anything (milestones),
    commit all its writes in one commit by path at the end; otherwise they go with your next commit.
@@ -1243,15 +1701,20 @@ open task its title leads with. By hand:
 1. **The range** (`--scan`): your session's range of § Reconciling foreign commits (procedures.md),
    `<baseline>..<your start head>`, or `<rev>..HEAD` with `--since`. List it oldest first:
    `git log --reverse --format='%H %s [%(trailers:key=Session,valueonly)] [%(trailers:key=Closes,valueonly,separator=%x2C)]' <baseline>..<end>`.
-2. For each commit whose title leads with ids (`T-3: ...`, `T-3, T-4: ...`: the comma-separated
+2. For each commit whose title leads with ids (`PRJ-3: ...`, `PRJ-3, PRJ-4: ...`: the comma-separated
    ids before the first colon) naming an open task (never a question): skip it if its message has no
    `Session:` line (it is foreign: reconcile it, and say so), if its `Closes:` trailers name the item
    (leave it for § context-engine hk close), or if the item's `## Log` already cites the hash (a
-   hash in the log that the commit's full hash starts with).
+   hash in the log that the commit's full hash starts with). A commit with a `Session:` line whose
+   title names an open task anywhere else (`tidy the docs for PRJ-4`, or `PRJ-3: ... PRJ-4` for
+   PRJ-4) is a `tier 1` line for that task, unless its `Closes:` names it or the log already cites
+   the hash: write nothing for it, list it, and leave it to a judgement (yours, or the repo's
+   tier-1 housekeeping agent's, FRAMEWORK §6.11). Commit bodies are not read for ids.
 3. Otherwise add `- <your key> (<actor>): <short sha>: <subject>` to the item's `## Log` (§
    context-engine task comment) and log `comment` with `"mechanical": true`. One item by hand is
    the same with that commit, which must be in HEAD's history (`git merge-base --is-ancestor <sha>
-   HEAD`); with words of your own (`--text`) the title need not lead with the id.
+   HEAD`); with words of your own (`--text`) the title need not lead with the id, and the line is
+   `<short sha>: <words>`, unless the words already cite a hash the commit's full hash starts with.
 4. List what you commented and what you skipped, with why.
 
 **Why:** the item's log should show its history without reading git, and a title that leads with
@@ -1266,9 +1729,12 @@ second run write nothing.
 ### context-engine register show
 
 Read the register file named by `[working] register` (the kit's default is `docs/invariants.md`).
-Print `register <path>: <N> residual risks`, then for each `## INV-n: <risk>` entry, a blank
-line, `INV-n: <risk>` and its `affects`, `why not eliminated`, `control` and `from` lines, each
-indented two spaces. A register file that does not exist yet is empty: print `register <path>: 0
+Print `register <path>: <N> residual risks`, N counting every entry, retired ones too, and then
+`, <M> retired` when M entries are retired. Then, for each `## <id>: <heading>` entry (`RISK-n`,
+or a kept register's own prefix), print a blank line, `<id>: <heading>` with the heading as written
+(a retired entry's `(retired <session>: <why>)` included), and its `affects`, `why not
+eliminated`, `control`, `from`, `merged` and `retired` lines, those it has, each indented two
+spaces. A register file that does not exist yet is empty: print `register <path>: 0
 residual risks` and say the first `task close` that files a residual creates it (a missing
 `[working] register` is still an error). With `--engine`, read instead the `REGISTER.md` inside the installed
 `context_engine` package (`<interpreter> -c "import context_engine, os;
@@ -1278,7 +1744,45 @@ print(os.path.dirname(context_engine.__file__))"` prints the directory) and say 
 **Why:** the register is handed over with the work (P17: regulations 7 and 11 of Singapore's Design for Safety
 Regulations). The engine's own
 register ships inside the package, so a repo the engine is pointed at can read what the engine
-cannot protect it from, without a checkout of the engine (FRAMEWORK §7.4).
+cannot protect it from, without a checkout of the engine (FRAMEWORK §7.4). A retired entry prints
+its marker and its `retired:` line, so it does not read as live.
+
+### context-engine register retire
+
+`register retire <id> --why "<why>"`, or `--into <id>` to merge it into another entry, retires
+an entry in place. It is never deleted.
+
+1. Refuse, writing nothing, when:
+   - `[working] register` is not set;
+   - `--why` holds a line break or a round bracket;
+   - `--why` is empty and there is no `--into`;
+   - the register has no entry `<id>`, or no file yet;
+   - the entry is already retired: its heading says `(retired ...)`, or it has a `retired:` line.
+     A retirement is final.
+   - With `--into <target>`: the target is `<id>` itself, is not in the register, or is retired.
+2. The reason is `<why>`. With `--into <target>` it is `merged into <target>`, then `, <why>`
+   when a why is given.
+3. Rewrite the entry's heading `## <id>: <risk>` as `## <id>: (retired <session>: <reason>) <risk>`.
+4. After the entry's last `- **<field>:**` line, add `- **retired:** session <session> (<actor>):
+   <reason>; kept so its id is never reused`.
+5. With `--into`, go to the target's entry. If it has a `- **merged:**` line, extend that line with
+   `; <id> folded into this entry, session <session>`. If it has none, add `- **merged:** <id> folded
+   into this entry, session <session>` after its last field line.
+6. Change no other byte. A CRLF file is written back LF.
+7. Log one op line: `op: register.retire`, `id` the entry, `path` the register, `fields:
+   ["retired"]`. With `--into`, log a second line: `id` the target, `fields: ["merged"]`. This is
+   not a milestone: the next commit carries it.
+
+**Why:** an id is never reused (FRAMEWORK P3, §7.4). So an entry that is no longer live, a
+duplicate or one folded into another, stays in the file, and it must not read as live:
+- the heading says so to a reader of plain git;
+- the `retired:` line says who retired it, when and why;
+- `register show` prints both.
+
+The marker is parsed off the heading, so the entry's risk is unchanged, and G-W13 and a re-close
+still match a task's residual to it. G-W13 fails an entry whose heading and `retired:` line
+disagree, so a retirement half done by hand shows. The reason is one line without brackets
+because the marker is found by its brackets.
 
 ## Docs: freeze and archive
 
@@ -1293,8 +1797,12 @@ closed item keeps its file (FRAMEWORK §6.7).
    emphasis, by LIVING, ACTIVE-PLAN or FROZEN, or by `ARCHIVED <date>`; or a frontmatter
    `liveness:` key. Stop if it is already FROZEN: nothing to do. Stop if `[guards]
    liveness_given` names the doc: its opening lines are not this repo's to edit. If it declares
-   nothing, write the FROZEN line below as its own block near the top. If the declaration is a
-   frontmatter key, set it to `FROZEN` and say when and why in the body.
+   nothing, "that line" below is the line after its title, when the first non-blank line after
+   any frontmatter is a `# ` title (past the blank line that follows the title, when a line
+   follows that blank); else the line first after the frontmatter; else its first line. Stop if
+   the FROZEN line would then fall outside the first `liveness_lines` lines, where G-D4 does not
+   read it (the engine refuses): put it within them instead, or raise `[guards] liveness_lines`.
+   If the declaration is a frontmatter key, set it to `FROZEN` and say when and why in the body.
 2. Right above that line, insert `FROZEN <today, YYYY-MM-DD> (session <key>): <why>` and one
    blank line, in the doc's own line endings; wrap the FROZEN line at 100 characters. With no
    `--note`, the why of an ACTIVE-PLAN doc that names board items is `<their ids> closed; below,
@@ -1311,12 +1819,15 @@ is frozen (§ task close), so G-D4 is never red between a close and its freeze.
 ### context-engine doc archive
 
 For a file git tracks, with no uncommitted change: a whole doc or other file (the steps below),
-or a passage of a doc (§ Pruning part of a doc, after them).
+or a passage of a doc (§ Pruning part of a doc, after them). Neither the redirect table nor,
+for a passage, the archive file may have an uncommitted change no op line names (an earlier
+archive's own writes, still uncommitted, are fine): a hand edit would ride into the commit.
 
 1. The archive directory is `--to`, else `[working] archive` (the kit's default is
    `docs/archive`). Stop if the file is already in it, if a file of its name is already there
-   (choose another directory, or a dated name), or if it is named `README.md`, which is the
-   redirect table's name.
+   (choose another directory, or a dated name), if it is named `README.md`, which is the
+   redirect table's name, or if it is the engine's own `context.toml` or op log (`[engine]
+   oplog`): moved, every later command goes on without it.
 2. Move it: `git mv <file> <dir>/<name>`. Never repair it: no fixed links, no updated text. (The
    engine moves the file without staging it, and the next commit records the move; git shows a
    rename either way.)
@@ -1325,8 +1836,12 @@ or a passage of a doc (§ Pruning part of a doc, after them).
    the doc as it was, in its own line endings. A doc with frontmatter keeps it on top: the
    ARCHIVED line goes first after its closing `---`, where G-D4 reads it too, and a `liveness:`
    key in it, which G-D4 reads first, becomes
-   `liveness: FROZEN  # ARCHIVED <today>; was <its old value>`. Material that is not markdown
-   moves byte for byte, with no ARCHIVED line: its row dates it.
+   `liveness: FROZEN  # ARCHIVED <today>; was <its old value>`. If the frontmatter has no
+   `liveness:` key and the ARCHIVED line would fall below G-D4's window (`[guards]
+   liveness_lines`, 10 by default), put `liveness: FROZEN  # ARCHIVED <today>` first in the
+   frontmatter; if its `liveness:` key lies outside the window, stop: move the key to the top
+   by hand and commit that first. Material that is not markdown moves byte for byte, with no
+   ARCHIVED line: its row dates it.
 4. Add its row to `<dir>/README.md`, the directory's one redirect table, after the last
    row of the table headed `| Was | Now | Archived | Why |`. Its cells: the old path; a markdown
    link whose text and target are both the archived file's name; `<today> (session <key>)`; the
@@ -1341,7 +1856,8 @@ or a passage of a doc (§ Pruning part of a doc, after them).
    to the old path in a doc lint reads (G-D3) is red too: in a living doc, point it at the
    archived copy by hand. The engine rewrites none of them; its reply names each pointer G-D3
    newly reports (by hand: compare `context-engine lint`'s G-D3 lines before and after the
-   move). The archived copy's own links are never repaired: if G-D3 reads the archive
+   move; a pointer already red that only changed line, or moved into the archived copy, is
+   not new). The archived copy's own links are never repaired: if G-D3 reads the archive
    directory, take it out of `[guards] links` and `paths`.
 
 **Pruning part of a doc** (an orientation note over its cap): which lines go is a judgement;
@@ -1350,9 +1866,10 @@ doc is markdown, tracked, committed (the lines named are the lines in git) and n
 frozen doc is never edited).
 
 1. Cut lines A to B, numbered from 1 as an editor numbers them. Not the whole doc (archive it
-   whole), not into its frontmatter, and not so that G-D4 reads another liveness: keep the
-   declaration, and the blank line, heading or frontmatter that opens its block, out of the
-   range. A blank passage is nothing to prune.
+   whole), not into its frontmatter, and not so that G-D4 reads another liveness, or a
+   declaration where the doc declared none (whatever `[guards] liveness_given` gives it):
+   keep the declaration, and the blank line, heading or frontmatter that opens its block, out
+   of the range, and keep the line above a word in passing. A blank passage is nothing to prune.
 2. Append the passage unchanged to `<dir>/<stem>-pruned.md` (for `HANDOFF.md`,
    `HANDOFF-pruned.md`): a blank line, `## Pruned from <doc> on <today>`, a blank line, the
    passage. The headings are the file's index. A new archive file opens with
@@ -1423,7 +1940,9 @@ it. Neither is a milestone: the next commit carries the file and the op line.
    every row of the file and every id a `criterion.new` op line created, so an id is never handed
    out twice (P3), even after a row was deleted. Sessions drafting at once in separate worktrees do
    not see each other's rows: take ids from a block handed out for the purpose and pass `--id`.
-   G-D2 and the duplicate-row check (G-T1, G-T2, G-T6) red a clash once the work is merged.
+   A given id keeps the rows' prefix (any prefix while there are no rows): a second prefix leaves
+   the next id unclear, so the engine refuses one. G-D2 and the duplicate-row check (G-T1, G-T2,
+   G-T6) red a clash once the work is merged.
 3. Check what the row will say, as the guards will read it. Its source names at least one story or
    decision that exists (G-T6). Its status is `planned`, `tested`, `manual`, `deviates` or `retired`.
    `tested` or `manual` only once a test or driver claims the id under `[guards] tests` (the
@@ -1444,7 +1963,8 @@ Rows only, because where a new section goes and what it is called are choices fo
 1. Find the one row the id leads, in a criteria table (step 1 above). An id leading two rows is
    resolved first: the later row takes the next free id.
 2. Rewrite only the cells you change: status, criterion or from. Each changed cell becomes
-   ` <value> `; every other cell keeps its bytes (spacing, emphasis, an escaped `\|`, a missing
+   ` <value> `, but the last cell of a row with no closing pipe becomes ` <value>` (the row's
+   trailing spaces stay after it); every other cell keeps its bytes (spacing, emphasis, an escaped `\|`, a missing
    closing pipe), and the row keeps its line ending. A status is compared as lint reads it
    (`**Planned**` is already `planned`), so nothing is rewritten just to drop formatting.
 3. Make the checks of § criterion new step 3 on the values that change. Moving a row to `tested`
@@ -1463,17 +1983,19 @@ keeps its criteria `planned` (FRAMEWORK §3.3).
 ### context-engine record new
 
 1. Take the next free id in the kind's series (as `context-engine task new`), or `--id`, one this
-   session reserved: `D-n` in `docs/decisions`, `S-n` in `docs/stories`, file `<id>-<slug>.md`.
+   session reserved: `DEC-n` in `docs/decisions`, `STORY-n` in `docs/stories`, file `<id>-<slug>.md`.
 2. Frontmatter: `type`, `id`, `title`, then the keys you were given. Any **required** key you
    were not given is filled only if its only possible value is the present: a date-typed key (`decided`,
    `date`) with today, a key-typed one (`session`) with your session key. Everything else
-   required, `actor` above all, must be given; if it is missing, stop. For a story (the kind
+   required, `actor` above all, must be given; if it is missing, stop. If you were given
+   `stale_after`, stop unless it is a timestamp with its offset that has not yet passed (G-D4 of
+   § context-engine lint; off with it). For a story (the kind
    `[guards] stories` names), stop too unless it passes G-I2 and G-I1 of § context-engine lint:
    `actor` is `owner`, `human:<id>` or `agent (reconstructed from ...)`, `story_status` is from the
    vocabulary but not `retired`, and `unconfirmed` when the actor is an agent's (§ context-engine
    record confirm moves it on), there is no `status: deprecated`, `supersedes` or
    `superseded_by` (§ context-engine record retire writes those), and `goals` names at least one
-   goal of the charter, each written `G-n`. A record carried over from a repo's own log (an entry
+   goal of the charter, each spelled as the charter spells it (`GOAL-n`, or `G-n`). A record carried over from a repo's own log (an entry
    added after its import) gets `aliases: [<old id>]` here, under G-D2's alias rule; a decision's
    aliases are fixed from then on (`decision set` refuses them). For a decision, stop unless it
    passes G-I3 of § context-engine lint: a ruling made on the owner's delegation (the owner said
@@ -1481,12 +2003,27 @@ keeps its criteria `planned` (FRAMEWORK §3.3).
    `owner`, in any case) and an `actor` that is not the owner alone (`owner asked`), and its body
    is the owner's delegating words verbatim, then a `## Ruling` heading with the ruling under it;
    any other decision has no `## Ruling` heading (both checks off while `[guards] off` names
-   G-I3). Stop too, whatever `[guards] off` names, if a decision was given a `status` key or
-   `decision_status: SUPERSEDED`: only § context-engine decision supersede writes those, with
-   both links (G-W4 checks them at rest, but this stop is not behind its off switch). For every
+   G-I3). Stop too, whatever `[guards] off` names, if a decision was given a `status` key,
+   `decision_status: SUPERSEDED`, `supersedes` or `superseded_by`: only § context-engine
+   decision supersede writes those, with both links (G-W4 and G-D3 check them at rest, but this
+   stop is not behind their off switches). A
+   decision's `decision_status`, when you were not given one, is the status it is born with:
+   `ACCEPTED` if it is the owner's own (`actor` is `owner` or `human:<id>`, in any case, and it has
+   no `ruled_by`), else `PROVISIONAL` (an agent's call, or a ruling on the owner's delegation); a
+   decision kind whose enum lacks `ACCEPTED` (a `context.toml` from before it) gives the owner's
+   own `PROVISIONAL` too. Stop if the owner's own is given `PROVISIONAL` (that means a call
+   awaiting review, and the owner's word awaits nothing) while the enum has `ACCEPTED`, or if an
+   agent's call is given `ACCEPTED` (only § context-engine decision accept marks a call reviewed,
+   and logs it); `BUILT`, `DEFERRED` and `REJECTED` are taken as given. For every
    kind, whatever `[guards] off` names, stop if the text holds a `## Amendments` line: the text
    below it would fall outside `body_sha` and read as a later amendment (a later note goes in with
-   § context-engine record amend, once the record exists).
+   § context-engine record amend, once the record exists). Stop too, unless `[guards] off` names
+   G-D3, if the text, outside inline code, fenced code, blockquotes and `*HISTORY —*` lines,
+   cites an id of a configured series that no record or alias has (other than the id being
+   written, or one this session reserved: § context-engine id reserve), or a `<id> § <heading>`
+   whose target has no such heading: lint G-D3 would fail the stamped text for good. An id of
+   another repo goes in backticks, with the repo named in the words around it; in an owner's
+   quote that is markup, not a change of their words (or quote the words as a blockquote).
 3. Body: the text, verbatim (owner words keep their line breaks), one final newline.
 4. Stamp it at once (`context-engine record stamp`): `body_sha` is the last frontmatter key.
 
@@ -1510,7 +2047,10 @@ The only body change an append-only record takes (the engine takes the text as a
 written to a file and passed with `--file`). If the record is stamped, its hash must match
 first. If there is no `## Amendments` heading, add one at the end. Then append a blank line and
 `- **<key> (<actor>):** <first line>`, with further lines indented two spaces (blank lines stay
-blank).
+blank). Stop first, as § context-engine record new step 2 does, if the entry, read as it will
+stand, cites an id no record has: its first line follows the `- **<key> (<actor>):**` prefix, so
+a `>` or a fence opened there hides nothing, and its other lines are indented, so a `## ` line
+there is no heading.
 
 **Why:** owner intent changes by addition, so the original words and every change stay readable
 in order, and the hash above the heading still holds.
@@ -1523,7 +2063,10 @@ missing word, a `[sic]`. It only inserts.
 2. Take the original text: the body above `## Amendments`, in the body hash's canonical form
    (LF, outer newlines stripped, one final `\n`; § The two hashes). Find `after` in it: it must
    occur exactly once (count overlapping matches); if it is missing or occurs twice, stop and
-   pick a longer anchor. The anchor and the text are each one line.
+   pick a longer anchor. The anchor and the text are each one line, and stop as § context-engine
+   record new step 2 does if the body as it would read, `[text]` in place and step 4's
+   `corrected:` entry (which repeats the anchor) included, cites an id no record has that it
+   did not cite before.
 3. Insert `[text]` right after it. Note the offset: the number of characters (not bytes) of the
    canonical text before the `[`.
 4. Append an amendment as in § context-engine record amend, with the text
@@ -1556,7 +2099,8 @@ name this step). `record retire <id> --by <who> --why "<words>" [--superseded-by
    the same. A story that an earlier `retire` line of the op log retired is final, even if a hand
    edit has since undone it: stop; restore it from git, and to bring its intent back, record a
    new story. A story already `retired` with no such line was retired by hand: retire it here,
-   so who and why are recorded.
+   so who and why are recorded. Stop as § context-engine record amend does if step 3's amendment
+   cites an id no record has.
 3. On the successor: add the story to `supersedes` (a list; a new key goes last). On the story:
    set `story_status: retired`, set `status: deprecated`, and with a successor add it to
    `superseded_by` (a list), each new key going last in that order. Then append an amendment
@@ -1601,7 +2145,8 @@ unconfirmed`): the owner read it and said it is what they meant. `record confirm
    confirmed it are recorded. Follow the story's `supersedes` links, and theirs in turn: if the
    words are those of a `confirmed (by <who>): <words>` amendment on any story found there
    (whitespace aside), stop, and ask the owner again; if they answer in the very same words,
-   quote them with when and where they said them.
+   quote them with when and where they said them. Stop as § context-engine record amend does
+   if step 3's amendment cites an id no record has.
 3. Set `story_status: live`, or `unspecified` with `--status unspecified` when no criterion comes
    from the story yet (lint G-T1 fails a `live` story with none). Leave `actor` as it is. Then
    append an amendment as in § context-engine record amend, with the text `confirmed (by
@@ -1623,8 +2168,8 @@ one: their earlier words, quoted here, would record a confirmation they never ga
 The decision kind is the one `[working] decision` names. Its link fields are lists:
 `supersedes` / `superseded_by`, `relaxes` / `narrowed_by` (each pair written together),
 `creates`, `amends`, `retires`, `tasks`, `code` (`file` or `file::symbol`) and `refs`.
-**Every write to a decision also regenerates the index** (§ context-engine decision index) when
-`[working] decision_index` is set; by hand, do that step after each one.
+No decision write stores an index: the listing is printed on demand (§ context-engine
+decision index) and published (§ context-engine site build).
 
 ### context-engine decision supersede
 
@@ -1659,25 +2204,62 @@ operation owns. Values take the kind's declared types, as in § context-engine t
 - the key is `reopen_if` and the decision would not be REJECTED after the change, or the change
   moves a decision off REJECTED and keeps its `reopen_if` (unset it in the same call);
 - the new `decision_status` is `SUPERSEDED`: use `decision supersede <id> <new>`;
+- the new `decision_status` is `ACCEPTED`: use `decision accept <id>`, which checks the decision
+  is PROVISIONAL and logs the review;
+- the key is `stale_after` and its value is empty, not a timestamp with its offset, or already
+  passed, as in § context-engine task set (G-D4; off with it): unsetting it is taken;
 - the decision is already SUPERSEDED and the change touches `decision_status`: a superseded
   decision stays superseded; to bring it back, record a new decision and supersede the one that
   replaced it.
 
 Re-read the file, then change only the named keys in place (a new key goes last). The body and
-`body_sha` do not change. Log one `set` line with the changed keys, then regenerate the index
-(§ context-engine decision index). **Move an owner's decision's status (PROVISIONAL to BUILT, or
-to REJECTED or DEFERRED) only on the owner's words, recorded first** (`record amend <id>
+`body_sha` do not change. Log one `set` line with the changed keys. **Move an owner's decision's status (to BUILT, REJECTED or
+DEFERRED) only on the owner's words, recorded first** (`record amend <id>
 "<words>"`): the engine cannot tell whether the owner said so, so this rule is the only control.
 
 **Why:** a decision's status, tags and `reopen_if` are not covered by `body_sha`, so they can be
 kept current without touching the words; but the keys other operations own carry a rule
 (both directions of a link, the derived OKF status, who decided), and a raw edit would skip it.
 
+### context-engine decision accept
+
+`decision accept <ids>` marks PROVISIONAL decisions reviewed: each becomes `ACCEPTED`. Run it once
+the owner has reviewed the agent's calls named (the close digest flags each one), never before.
+`<ids>` are ids, aliases or ranges (`DEC-n..m`, or `DEC-n..DEC-m`: one prefix, low to high, at most 500),
+comma- or space-separated, in any number. `--owners` adds every decision still PROVISIONAL that is
+the owner's own (`actor` is `owner` or `human:<id>`, in any case, and no `ruled_by`): the born-ACCEPTED
+rule of § context-engine record new applied to decisions recorded before it, once, after the
+upgrade that added `ACCEPTED`. Spell out the ranges, then refuse, and write nothing, when:
+- no id is given and no `--owners`;
+- the decision kind's `decision_status` enum in `context.toml` has no `ACCEPTED`: add it, as the
+  kit's `context.toml.template` has it;
+- an id names no decision (a range must not span a number no decision has), or a record that is
+  not a decision;
+- a decision named is not PROVISIONAL: say which, with its status (a SUPERSEDED one is history,
+  with the decision that replaced it; a BUILT one a task carried out; an ACCEPTED one already
+  reviewed);
+- `--owners` alone finds no owner's decision still PROVISIONAL.
+
+Check every decision first; then, on each, replace `decision_status: PROVISIONAL` with
+`decision_status: ACCEPTED` in place. The body and `body_sha` do not change. Log ONE `accept` line
+for all of them, not one per decision: `id` the ids folded into ranges, `path` the first file,
+`ids` and `paths` every id and file in order, `fields` `["decision_status"]`. It is not a milestone:
+the line rides along to the next commit, which carries every file in `paths`.
+
+**Why:** PROVISIONAL means one thing, an agent's call awaiting the owner's review:
+an owner's own word is born ACCEPTED, so the review queue holds only calls someone
+must still look at. One op for a whole review, in one line, keeps a review of sixty calls from
+being sixty `decision set` lines. `decision set` refuses ACCEPTED so that every acceptance is in
+the op log; lint (G-W4) fails an agent's call that is ACCEPTED with no `accept` line naming it.
+Whether the owner really reviewed the calls is the caller's word: the line records who said so.
+
 ### context-engine decision link
 
 Add `<target>` to one link field of a decision. `--rel` names the field; without it, a board
 item's id goes to `tasks` and anything with `::` or `/` to `code`; a decision needs
-`--rel relaxes` (which also adds this decision to the other's `narrowed_by`). Check the target
+`--rel relaxes` for one this decision narrows (which also adds this decision to the other's
+`narrowed_by`) or `--rel refs` for one it only relates to; one it replaces is § context-engine
+decision supersede. Check the target
 first: a record id must exist; a criterion id must be a row (`| AC-n |`) of the criteria file
 `[working] criteria` names; any other id is refused; a `code` path must be written from the
 repo root with `/` (no `\`, no `..`, no leading `/` or drive), name a file (not a directory or
@@ -1705,8 +2287,7 @@ names moves. Refuse, and write nothing, when:
 
 Re-read the file, then replace `<old>` with `<new>` in place in `code:` (if `<new>` is already
 there, drop `<old>` and keep `<new>` once). The body and `body_sha` do not change. Log one
-`relink` line with fields `["code"]`, then regenerate the index (§ context-engine decision
-index). **Relink only to where the same behaviour now lives**, in the commit that moves it: if
+`relink` line with fields `["code"]`. **Relink only to where the same behaviour now lives**, in the commit that moves it: if
 what the code did is gone, the decision no longer describes the code, so supersede it.
 
 **Why:** a moved file or renamed symbol leaves the link dead, G-T3 red and `why()` answering
@@ -1733,24 +2314,23 @@ every non-empty link field and `tags`, one per line, then the body, or only the
 
 ### context-engine decision index
 
-Housekeeping (`hk_regen_index`). Rewrite `[working] decision_index` from the decisions'
-frontmatter alone, never their prose:
+A read (MCP `decision_index`): every decision, from its frontmatter alone, never its prose. Write
+nothing; print:
 1. `# Decisions`, a blank line, then the line
-   ``Generated from each decision's frontmatter by `context-engine decision index`; never edit it by hand (G-D6).``
+   ``Printed on demand from each decision's frontmatter by `context-engine decision index`; never stored.``
 2. For each `decision_status` in the kind's enum order (then any other value, alphabetically)
    that has decisions: a blank line, `## <status>`.
 3. Under it, group by each decision's first tag (`untagged` if none): tags alphabetical,
    `untagged` last. Per group: a blank line, `### <tag>`, a blank line, then one line per
    decision by id number:
-   `- [<id>](<file name relative to the index>): <description, else title> *(<actor>, <decided>)*`,
+   `- [<id>](<the record's path from the repo root>): <description, else title> *(<actor>, ruled by <ruled_by> where set, <decided>)*`,
    followed by `; superseded by <ids, comma-separated>` when `superseded_by` is set.
-4. LF line endings and one final `\n`.
 
-Lint G-D6 compares the file with a regeneration (line endings normalised), and fails a missing
-index while any decision exists.
-
-**Why:** an index built from frontmatter is checked by byte equality, so it cannot drift
-quietly; one line per decision keeps it small as the series grows (FRAMEWORK §6.5).
+**Why:** the listing is what a stored `index.md` used to hold, and printing it on demand means it
+can never be stale and no two sessions collide on it. OKF v0.2 §8 lets a consumer synthesize an
+index on the fly, and the published site (§ context-engine site build) carries it for a reader
+without the CLI (FRAMEWORK §6.5). A repo that still sets `[working] decision_index` loads as
+before; orient names the key and the stored file to remove.
 
 ### context-engine decision import
 
@@ -1775,7 +2355,10 @@ on a branch; nothing is written if any check fails.
    also lists every `#`/`## ` heading kept inside an entry, by line, so check that each belongs
    where it landed (a group heading with an intro under it, such as `## Earlier` followed by a
    paragraph, lands in the entry above, and an appendix after the last entry lands in that
-   entry: move it above the first entry in the copy).
+   entry: move it above the first entry in the copy), and, in a list of its own, every `###` to
+   `######` heading kept inside one (sub-headings, kept as text). A log with no entry heading
+   stops the import, naming its `###` headings. Line numbers in the output are those of the file
+   given: after normalising a copy, they are the copy's.
    The import stops, naming every such line at once, on a line it cannot read:
    - a `### ` heading that starts with an id but is not an entry heading (`### D-107 FIX`,
      `### D-4 (amended)`, a letter id such as `### D-159b -- ...`, and an entry heading not at
@@ -1816,11 +2399,11 @@ on a branch; nothing is written if any check fails.
    `actor: agent`; `decided`: the last date in the row's middle cells, else the date of the
    first entry its last cell names; `refs`: the new ids of the entries its last cell names;
    `attribution`: which table, and where the reasoning is.
-6. Stamp every record, log one `import` line each, and regenerate the index.
+6. Stamp every record and log one `import` line each.
 7. The id map, one table row per record (`| id in the log | record | status | title |`, a
    rejected row's first cell `(rejected table row <n>)`), under a title and a FROZEN line, saved
-   as an evidence doc, with a `## Not imported` and a `## Headings kept inside entries` list
-   (step 2); `--dry-run` prints it, ready to save, after its summary, and writes nothing to the
+   as an evidence doc, with a `## Not imported`, a `## Headings kept inside entries` and a
+   `## Sub-headings kept inside entries` list (step 2); `--dry-run` prints it, ready to save, after its summary, and writes nothing to the
    repo, not even the lock file. Every entry the import set BUILT because the log gave no status is
    reviewed, and `decision set <id> --set decision_status=<status>` corrects any that was parked,
    deferred or not built.
@@ -1845,17 +2428,18 @@ instead of grepping a log.
 
 ### context-engine commit
 
-`context-engine commit [<paths> ...] -m "<title>" [-m "<paragraph>" ...] [--sweep]` (or `-F
-<file>`; over MCP `commit(paths, message, sweep)`). It takes your session's uncommitted op lines,
-not another's (§ What every write does, **Commit the write**), and its reply names the lines it
-left: `left uncommitted: <n> op lines of <key>`. `--sweep` takes every line, whoever wrote it:
+`context-engine commit [<paths> ...] -m "<title>" [-m "<paragraph>" ...] [--sweep] [--co-author
+"<name> <email>" | --model <model-id>]` (or `-F <file>`; over MCP `commit(paths, message, sweep,
+co_author, model)`). It takes your session's uncommitted op lines of your lane (`CE_AGENT`),
+not another session's or lane's (§ What every write does, **Commit the write**), and its reply names the lines it
+left: `left uncommitted: <n> op lines of <key>` (`<key> lane <lane>` for a subagent's). `--sweep` takes every line, whoever wrote it:
 use it once the owner, or housekeeping's stale-stub step, says that session is dead. **Run the gate first:** it runs none. When `[gate] require` names
 a scope, it refuses a path in that scope (a directory: any file under it) unless a green gate run
 covers the scope's id (§ context-engine gate status); the paths the op log's lines name are not
 counted. By hand: check that first, then:
 
 1. Re-read `git status` and `git log -3`: another session may have committed since.
-2. Take your session's uncommitted op lines (with `--sweep`, every line) and the paths they
+2. Take your session's uncommitted op lines of your lane (with `--sweep`, every line) and the paths they
    name, as § What every write does, **Commit the write**, says.
 3. `git add -- <each named file git has never seen>` that you take, and every new file under a
    directory you name (with lines left behind, add them to the temporary index of step 5 instead). Do not name a path git ignores (the engine refuses one; `git add
@@ -1864,11 +2448,13 @@ counted. By hand: check that first, then:
    says).
 4. The message is your text, then the engine's lines, then your closing trailer paragraphs: `Ops:
    <op> <id>, ...` naming the op lines the commit carries, and the `Also carries ...` paragraph
-   when another session's lines go in. Then `Session: <key>`, added to your last paragraph when
-   that is a trailer paragraph (every line `Token: value`, or indented to continue the one
-   before), else as a paragraph of its own: git reads trailers only there. A last paragraph
-   that has the `Session:` trailer already keeps it, and one naming another session is
-   refused.
+   when another session's lines go in. Then `Session: <key>` and the `Co-Authored-By:` line (below), added to your last paragraph when
+   that is a closing trailer paragraph (every line `Token: value`, or indented to continue the
+   one before, and one of them `Session:`, `Closes:` or a `<who>-by:` such as `Signed-off-by:`),
+   else as a paragraph of its own, so a last paragraph of `Sabotage:` lines stays body: git reads
+   trailers only from the last paragraph. A closing paragraph that has the `Session:` trailer
+   already keeps it, as it keeps a `Co-Authored-By:` naming the same address, and one naming
+   another session is refused.
 5. With no line left behind: `git commit --only -F <message file> -- <your paths>
    docs/ledger/ops.jsonl <the paths the lines name>`; if it fails, `git rm -q --cached` what step 3
    added. With lines left behind, never `--only` on the op log (it would carry their lines
@@ -1907,7 +2493,20 @@ Session: <key>
 Co-Authored-By: <name> <email>
 ```
 
-Through `context-engine commit`, leave `Session:` out: the engine adds it to that paragraph.
+Through `context-engine commit`, leave `Session:` and `Co-Authored-By:` out: the engine adds
+both to that paragraph, and so does every commit it makes of its own writes. A work commit has
+no `Closes:`, so its message ends in the `Sabotage:` lines; the engine reads a last paragraph
+with no `Session:`, `Closes:` or `<who>-by:` trailer (`Co-Authored-By:`, `Signed-off-by:`) as
+body, and puts its two lines in a paragraph of their own after it, so the `Sabotage:` lines
+stay body. The
+`Co-Authored-By:` value is, first hit wins: `--co-author "<name> <email>"` (`none` for no line);
+the name `--model <model-id>` reads; `CE_CO_AUTHOR` in the environment (`<name> <email>` or
+`none`); else the actor's model: `CE_ACTOR=claude-code/claude-opus-5-5` gives `Claude Opus 5.5
+<noreply@anthropic.com>`, and a `claude...` harness whose model it cannot read gives `Claude
+<noreply@anthropic.com>`. An actor with no `/` (`human:<id>`, `process:<id>`) gets none, so a
+person's commit never says an agent co-wrote it. A `Co-Authored-By:` line you leave in the
+message's last paragraph stands, and one for the same address is not added twice. By hand, write
+the line yourself, as the template does.
 
 **Why:** a milestone policy leaves board writes uncommitted in the tree, so a plain
 `git commit -o` of a record would commit it without its op line, and G-W7 fails that commit on a
@@ -1953,24 +2552,38 @@ readers appended), `scopes` (id name -> id, only the ids that did not move), `mo
 of those that did, when any did), `log`, `head`, `session`, `actor`. The ledger must be
 gitignored and untracked (a fresh directory gets a `.gitignore` of `*`).
 
+With `[gate.parts]` (`gate run [--part NAME]... [--stale]`): do the above once per part, in
+declared order, with the part's `command` (run with `CE_GATE_PART` set to the part's name, so
+the scope guard checks it against the part's scope) and every id; `part` is the part's name and
+`args` empty. Go on past a part that fails, and append each line as its part ends. `--part` runs the
+parts named; `--stale` runs only the stale ones (as § gate status), and none when none is stale.
+
 **Why:** a recorded result is what lets the next commit skip a re-run, and a run whose files
 moved under it tested nothing nameable for those ids; the ids that did not move were tested
 whole, so another session's write during a long run costs only the ids it touched. An unignored ledger would sit inside the ids it records,
 so every row would be born stale. `--readers`: a change outside a scope cannot change what its
-other tests read, so only the tests that read it need to run again. A gate run is out of the
-MCP's scope (FRAMEWORK §8.0.2).
+other tests read, so only the tests that read it need to run again. A part records every id, so
+a part keyed on every file still counts toward the code scope; and a long gate wants every
+part's verdict from one pass. A gate run is out of the MCP's scope (FRAMEWORK §8.0.2).
 
 ### context-engine gate status
 
-`context-engine gate status [--require <scope>[+readers]]` (over MCP `gate_status`). By hand:
-compute each id; it is covered when the newest ledger line whose `scopes` holds that id has
+`context-engine gate status [--require <scope>[+readers|+parts]]` (over MCP `gate_status`). By
+hand: compute each id; it is covered when the newest ledger line whose `scopes` holds that id has
 `status` `PASSED` and the `command` configured now. With `--require <scope>`, exit 1 unless that
 scope's id is covered: what `context-engine commit` checks for a path in it. With `--require
 <scope>+readers`, its `+readers` id too: what a hand edit to a file the scope leaves out needs.
 
+With `[gate.parts]`, read only each part's own lines (`part` its name; `PASSED` or `FAILED`):
+a scope is covered when, for every part, the newest such line holding the scope's id passed
+with the part's `command` now. A part is fresh when it covers its own `scope`, and stale when it
+is not fresh or does not cover the `require` scope. `--require <scope>+parts`: the scope
+covered and every part fresh, what the close and the push need.
+
 **Why:** "did the gate pass on these files?" is answered from the ledger, not from memory. The
 newest line decides, so a green run then a red one on the same files is red; and a run of
-another command proves nothing about this one.
+another command proves nothing about this one. The commit checks coverage, never freshness: a
+part keyed on every file goes stale on every op-log line, any session's.
 
 ## Bootstrap
 
@@ -1982,9 +2595,15 @@ engine repo at the pinned ref (or `context_engine/kit/` in the installed package
 1. If `context.toml` exists, keep it: check it loads (`context-engine lint` names what it
    refuses; stop and fix that first), and in steps 3 and 5 create only what it points at (a kind's
    `dir`, a `[working]` path, a route's `path`, the lock's directory).
-2. Otherwise copy `context.toml.template` to `context.toml`; to change a kind's id prefix, edit
-   `prefix` in its `[kinds.<name>]` table (no two kinds may share one, and none may collide with
-   ids the repo already uses).
+2. Otherwise copy `context.toml.template` to `context.toml`, and set `[kinds.task]` `prefix` to
+   the one the owner chose: 2 to 5 capitals naming the board (the kit's `TASK` is a placeholder;
+   without the owner's choice, stop and ask, as the engine refuses). To change another kind's id
+   prefix, edit `prefix` in its `[kinds.<name>]` table. A prefix is 2 to 5 capitals; none may be
+   reserved (`EXP`, `HAZ`) or another kind's standard one (FRAMEWORK P3: `DEC`, `STORY`, `AC`,
+   `ASK`, `RISK`, `GOAL`, `BATON`, `PAUSE`), no two kinds may share one, and none may collide with
+   ids the repo already uses: search the files git tracks (`git ls-files`, skipping binary files
+   and any over 1 MB) for each prefix as an id of its own, `<PREFIX>-n` or `<PREFIX>n`, and warn
+   for each prefix found, with how often and where first.
 3. Copy `HANDOFF.md`, `docs/charter.md`, `docs/criteria.md`, `docs/ledger/session-log.md` and
    every runbook under the kit's `docs/runbooks/` (`manual-mode.md`, `procedures.md`, `gate.md`,
    `sabotage.md`, `fan-out.md` and `release.md`) from the kit to the same paths, skipping any that
@@ -2020,11 +2639,17 @@ engine repo at the pinned ref (or `context_engine/kit/` in the installed package
    line (FRAMEWORK §5.5 rule 4)` and `<op log> merge=union` the same way; a path with a space or a
    wildcard needs quoting there, so write that line with care, or warn and leave it.
 6. Report in one line what you created, what you skipped, and a warning for each thing the
-   owner must act on (the settings file's ignore line; on a dry run, the settings question), and,
+   owner must act on (the settings file's ignore line; a prefix already in use; a checkout that
+   converts line endings, where `git config --get core.autocrlf` prints `true` and
+   `git check-attr text eol -- context.toml` shows neither `eol: lf` nor `text: unset`, whose
+   fix is the kit README § 2a; on a dry run, the
+   settings question and a task prefix not yet chosen), and,
    when you wrote `context.toml` or the kit block, the next steps: fill `docs/charter.md` with the owner, replace the Gate stub's
    placeholder in `CLAUDE.md` with the repo's test command (or, with no stub, check the repo's own
-   Gate ends with `&& context-engine lint`), run lint, commit the kit's files by path, then
-   `session start`; registering the MCP server is optional. Never overwrite an existing file, and
+   Gate ends with `&& context-engine lint`), run lint, commit the kit's files by path, register
+   the MCP server with `claude mcp add --scope local context-engine -- "<interpreter>" -m
+   context_engine.mcp` and ask the owner to restart Claude Code (kit README § 1), then
+   `session start`. Never overwrite an existing file, and
    never install anything into the repo's environment (the engine's own is `.context-engine/env/`,
    made before init, kit README § 1).
 

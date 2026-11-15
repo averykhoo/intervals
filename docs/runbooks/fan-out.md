@@ -22,7 +22,7 @@ and cheaper models, for one) are in its `CLAUDE.md`.
   file contents? Then delegate it and take back a table. A lookup whose file and symbol are
   already known is done inline there.
 - **The prompt names** the question, the verdict form (`file::symbol` evidence, never file
-  dumps), and the one file the agent persists to.
+  dumps), the one file the agent persists to, and a task agent's lane (`CE_AGENT=<task id>`).
 - **Persist incrementally, one file per agent:** each finding is appended as it lands, not
   buffered to the end, so an agent that dies leaves a partial result; two agents on one file lose
   work. Only an agent that can write files can persist (not `Explore`).
@@ -59,7 +59,8 @@ do it: haiku, or sonnet when it must read the logs.
 
 ## Build rounds
 
-The steps are FRAMEWORK §6.6's, in its order and with its numbers.
+The steps are FRAMEWORK §6.6's, in its order and with its numbers. Above its size floor, its build
+ladder says who plans, builds, fixes and verifies, on which model tier.
 
 | # | Step | How | Why |
 |---|---|---|---|

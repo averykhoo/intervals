@@ -61,7 +61,7 @@ the commits since the last full check), ask the owner whether to run it (2547 s 
   `CE_ACTOR=claude-code/<model-id>` and `CE_SESSION=<key>` set in every command (shell state does not persist).
   that env is the engine's own, gitignored, never this repo's (`envs/intervals`). on a fresh clone, rebuild it:
   `conda create -y -p .context-engine/env python=3.12`, then `.context-engine/env/python.exe -m pip install
-  "context-engine @ git+https://github.com/averykhoo/context-engine@309641bd84837277ef9ddc7251b851a4e815dbe5"`.
+  "context-engine @ git+https://github.com/averykhoo/context-engine@989982a953c47b849d1397e0d385602c477ed86c"`.
 * `[gate]` in `context.toml` is off: `tools/gate.py` keeps the gate's ledger (its two calls outlast one tool
   call), so `context-engine commit` does not check the gate; `tools/gate.py status --require commit` first.
   `context.toml` and `docs/ledger/` are prose to `tools/gate.py` and the fuzz workflow, like markdown.
@@ -85,8 +85,8 @@ the CI watch, reproducing and pinning a fuzz failure, sabotage checks, the exhau
   a monitor's `tail -f` outlives its session: stop it when done (sixteen orphans from earlier
   sessions held `.scratch/` open until 2026-09-29).
 
-<!-- context-engine kit 0.5 begin -->
-framework: 0.5
+<!-- context-engine kit 0.6 begin -->
+framework: 0.6
 
 This repo runs the context-engineering framework through `context-engine`. Its rules are the file
 imported on the next line, which the framework owns: an upgrade replaces it whole, so it is never
@@ -95,4 +95,4 @@ not in your context, read that file; if it is missing, run the engine's lint
 (`<engine-python> -m context_engine lint`), which names the fix.
 
 @docs/framework/contract.md
-<!-- context-engine kit 0.5 end -->
+<!-- context-engine kit 0.6 end -->
