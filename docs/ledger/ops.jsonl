@@ -134,3 +134,5 @@
 {"at": "2026-11-03T17:04:21+08:00", "session": "2026-11-03a", "actor": "claude-code/claude-opus-5-5", "op": "banner.set", "id": "2026-11-03a", "path": "HANDOFF.md", "fields": ["banner"], "mechanical": false}
 {"at": "2026-11-16T02:09:14+08:00", "session": "2026-11-16a", "actor": "claude-code/claude-opus-5-5", "op": "session.start", "id": "2026-11-16a", "path": "docs/ledger/session-log.md", "fields": ["kind"], "mechanical": false}
 {"at": "2026-11-16T02:11:43+08:00", "session": "2026-11-16a", "actor": "claude-code/claude-opus-5-5", "op": "set", "id": "D-46", "path": "docs/decisions/D-46-implementability-review.md", "fields": ["title"], "mechanical": false}
+{"at": "2026-11-16T02:35:17+08:00", "session": "2026-11-16a", "actor": "claude-code/claude-opus-5-5", "op": "session.close", "id": "2026-11-16a", "path": "docs/ledger/session-log.md", "fields": ["kind"], "mechanical": false}
+{"at": "2026-11-16T02:35:17+08:00", "session": "2026-11-16a", "actor": "claude-code/claude-opus-5-5", "op": "banner.set", "id": "2026-11-16a", "path": "HANDOFF.md", "fields": ["banner"], "mechanical": false}

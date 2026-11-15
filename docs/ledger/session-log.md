@@ -4,9 +4,30 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
-## 2026-11-16a · kind: open
+## 2026-11-16a · kind: close
 
-- **opened:** 2026-11-16T02:09:14+08:00 by claude-code/claude-opus-5-5
+- **rows:** D-46 (retitled "implementability review, second pass", G-I4); no board item (the work is
+  context-engine CE-235)
+- **receipts:**
+  - guards: gate:itf 27798 passed, gate:rest 7188 passed (tools/gate.py, on c:3ffd72bd649a); lint
+    clean
+  - read: orient; CLAUDE.md; HANDOFF.md banner and next-session; kit README § Upgrade
+  - housekeeping: hk run close: 0 writes, 0 op log lines
+  - banner: set
+  - pushed: 8f1cbab: pushed 2026-11-03 by context-engine session 2026-11-03a (its CE-11 finish)
+    after the gate ran (27798 + 7188 passed, prepush fuzz x10); recorded in HANDOFF
+- **summary** (the owner digest):
+  - Engine upgraded 309641b -> 989982a (framework 0.5 -> 0.6) per kit README § Upgrade: contract,
+    kit block, runbooks, ACCEPTED enum, Unverified hazards route (5b5c011).
+  - README cites no record id and is listed under [guards] reader_docs, so G-D13 guards it
+    (baf3269), for context-engine CE-235.
+  - Agent call, PROVISIONAL in spirit: D-46 retitled "implementability review, second pass" so G-I4
+    passes; both D-44 and D-46 stand.
+  - Sabotage: D-26 put back in README.md prose -> G-D13 red, restored -> clean.
+  - Old engine env kept at .context-engine/env-309641b (gitignored) for the owner to delete.
+- **Still owed:**
+  - Push master (5b5c011, baf3269 and records), on the owner's go, with a CI watcher
+  - Delete .context-engine/env-309641b (the 0.5 engine env) once nothing names it
 - **start head:** 594ef0f42b7d6f5c4034cc3cf5ae5e21a20f3165
 
 ---

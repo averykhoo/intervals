@@ -7,13 +7,14 @@ The banner is written at the first clean close by `context-engine banner set --s
 which puts a `## Banner (<session key>)` section before this note's first section. Do not
 write that heading by hand.
 
-## Banner (2026-11-03a)
+## Banner (2026-11-16a)
 
 - The context-engine is adopted and merged: `master` was fast-forwarded from `fa4cf12` to `ce-cutover` (`8f1cbab`)
   on the owner's go (context-engine DEC-147). The board, the decisions and the session ledger go through
-  `context-engine` (`.context-engine/env`, pin `309641b`).
+  `context-engine` (`.context-engine/env`, pin `989982a`, framework 0.6 since 2026-11-16a; was `309641b`).
 - Pushed: `origin/master` is `8f1cbab` (2026-11-03, `478654a..8f1cbab`); CI run 41601384313 and fuzz run
-  41601384275 green. Local `master` is ahead only by this close's records commits (docs-only).
+  41601384275 green. Local `master` is ahead by records commits and 2026-11-16a's engine upgrade and README
+  commits (prose only to the gate), not pushed.
 - NOW: IV-1 (x2-cosh-zero: `x ** 2` and cosh give exact 0 and 1 at an operand end 0.0; D35). The other old rows
   and the still-owed bullets are IV-2..IV-22, found by their old names too (`task show from-cuts-reason`).
 - Owed to the owner: ASK-26 in context-engine (delete or keep the `intervals-ce-cutover` worktree, the
