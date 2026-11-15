@@ -131,6 +131,7 @@ max_writes = 0               # the most operations one `hk run` may make before 
 off = []                     # guard ids lint does not report (`context-engine lint` names them); say why in a comment
 links = ["CLAUDE.md", "HANDOFF.md", "docs/runbooks", "docs/charter.md", "docs/criteria.md", "tasks"]   # G-D3: relative links, their #anchors and `file::symbol` spans resolve, case-exact
 paths = []                   # G-D3: docs whose every backticked file name or repo path points into this repo and must resolve; list only docs that cite no example or other repo's paths (the README, say)
+reader_docs = ["README.md"]  # G-D13: docs a stranger reads first (the README) whose prose may cite no record id of a series the repo keeps
 existence = ["docs/criteria.md"]   # G-T3: files and `file::symbol` named in normative text exist; add the residual-risk register and any NFR doc once they exist
 signals = ["CLAUDE.md", "HANDOFF.md", "docs/runbooks", "docs/charter.md", "docs/criteria.md"]   # G-D7: the signal budgets below
 warn_max = 3                 # ⚠ per file (G-D7); provenance: JUDGEMENT, engine default; wrong if a real trap goes unmarked to stay under it

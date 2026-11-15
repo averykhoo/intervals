@@ -285,7 +285,7 @@ Interval(float('-inf'), float('inf'))
   largest double is `inf` (`MultiInterval(1e308) * 10` is `[inf]`, the point, so `& (0, inf)` leaves
   nothing); the outward class keeps it as `(MAX, inf)`. the reverse ops meet `x` before rounding, as
   1788 does: a part of the answer inside `x` that rounds wholly onto one double is that double, even
-  an end `x` excludes (D26)
+  an end `x` excludes
 * **a faster backend, optional** (M16e): `pip install multiinterval[fast]` adds gmpy2, and
   `MULTIINTERVAL_BACKEND=gmpy2` (or `auto`: gmpy2 when it imports, else the pure path, silently) picks
   it at `import multiinterval`. it computes the same doubles as the default pure-python path, only
@@ -342,8 +342,9 @@ Interval(float('-inf'), float('inf'))
 
 ## departures from ieee 1788
 
-where the library answers otherwise than 1788, on purpose, and where each choice is recorded: `D` rows
-and headings are `docs/decisions.md`'s, `Q` items the owner's questions, answered there (`v2-plan.md`'s
+where the library answers otherwise than 1788, on purpose, and where each choice is recorded: each quoted
+name is a decision's title (one record each in `docs/decisions/`) or a heading of `docs/decisions.md`, the
+dated log they were imported from, where the owner's answers to the open questions are too (`v2-plan.md`'s
 headings are in `docs/archive/v2/`). 1788's own answers are in `multiinterval.ieee1788`, the thin layer. the itf1788 adapter
 (`tests/itf1788/test_itf1788.py`) names the rows each departure produces; most produce none, since the
 adapter compares closed hulls in binary64 (`docs/archive/v2/v2-plan.md` "ieee 1788"). surveyed 2026-09-30.
@@ -351,26 +352,26 @@ adapter compares closed hulls in binary64 (`docs/archive/v2/v2-plan.md` "ieee 17
 | | 1788 | this library | recorded |
 |---|---|---|---|
 | sets | connected intervals; a hull (`1/[-1, 1]` is entire) | finite unions (`[-inf, -1] ∪ [1, inf]`); reverse ops give the union | "ieee 1788"; "division semantics vs ieee 1788" |
-| ends | closed; infinity never attained | open or closed; ±inf are points, `[inf]` is legal | D1, D6; "domain and semantics" |
-| numbers | a floating-point format | int and Fraction exact, never rounded (a power past 2**22 bits is a float) | D3 |
-| indeterminate points | not writable | `[0] * [inf]`, `1/[0]` are empty, with a warning | D2, D7 |
+| ends | closed; infinity never attained | open or closed; ±inf are points, `[inf]` is legal | "closure at infinity", "constructor default for an infinite bound"; "domain and semantics" |
+| numbers | a floating-point format | int and Fraction exact, never rounded (a power past 2**22 bits is a float) | "`int / int` that is not integral" |
+| indeterminate points | not writable | `[0] * [inf]`, `1/[0]` are empty, with a warning | "indeterminate corners", "a box that *is* an indeterminate point" |
 | a domain end with no value | dropped (`log([0])` empty) | its limit, a point (`log([0])` is `[-inf]`) | "elementary and step functions"; rows: degenerate infinities |
 | rounded ends | closed | outward, a moved end is open | "arithmetic" (flags at rounded ends) |
 | rounding | every result encloses | `MultiInterval` rounds to nearest as python's float (overflow is the point `inf`); `OutwardMultiInterval` encloses; pown to nearest is correctly rounded, not libm's `pow` | "arithmetic" (rounding) |
-| reverse ops and `x`, to nearest | `x` first, then enclose | `x` first, then round to nearest: a part rounding onto one double is kept, even an end `x` excludes | D26 |
-| periodic reverse ops | the hull | exact pieces; the hull past 1000 or over an unbounded `x` | D12 |
+| reverse ops and `x`, to nearest | `x` first, then enclose | `x` first, then round to nearest: a part rounding onto one double is kept, even an end `x` excludes | "to nearest, a reverse op's exact preimage wholly past MAX squeezes to the point `[±inf]`" |
+| periodic reverse ops | the hull | exact pieces; the hull past 1000 or over an unbounded `x` | "a reverse op whose answer has infinitely many or very many pieces" |
 | step functions | `floor([-1.5, 1.5])` is `[-2, 1]` | the points `{-2, -1, 0, 1}`; the hull past 1000 | "elementary and step functions" (no decision of its own) |
-| cancellation | entire as "no answer" | the Minkowski difference | D13; rows: cancellation as a Minkowski difference |
+| cancellation | entire as "no answer" | the Minkowski difference | "`cancelMinus(A, B)` is the Minkowski difference"; rows: cancellation as a Minkowski difference |
 | relations | `overlap([1, 2], [2, 3])` is meets | overlaps: they share the point 2 | "comparisons"; rows: cut-based relations |
-| interval orders | `less`, `strictLess` | `weakly_less()`, `strictly_less()`; `<` is pointwise, a `TruthSet` | D10 |
-| NaI and signals | NaI; signals are flags | no NaI; UndefinedOperation raises, PossiblyUndefined warns | D16; "2026-09-26 revision: owner answers to the open questions" (Q1, Q8); rows: no NaI |
-| parsing | may round first | exact: validity decided on the exact bounds | D18(b); rows: exact parsing decides validity |
-| constructors | the binary64 hull | the exact set (`[0.1, infinity]` is `[1/10, inf)`); the hull is `ieee1788.text_to_interval` | "2026-09-26 revision: M13g part 1"; D21(d) (Q10 closed as built, owner 2026-10-03) |
-| tightness | some vectors 1-2 doubles loose | the tightest enclosure | D18(a); rows: tighter than the vector |
-| decorations | on every op; decided in binary64 | only on `DecoratedInterval`; decided on the exact set, per piece | D16, D18(c), D18(d); "2026-09-26 revision: M13g part 3" |
-| mulRevToPair's decoration | the first interval as `c / b` | `mul_rev` is one op, trv; 1788's pair is `ieee1788.mul_rev_to_pair` | D21(c) (Q9 closed as built, owner 2026-10-03); rows: decoration expectations |
-| numbers of the empty set | NaN | `ValueError`; `mig`/`mag` of the set, not the hull; `ieee1788`'s are NaN | D9; the layer: D21(b) (Q13(b), owner 2026-10-03) |
-| reductions | NaN for nan, `inf + -inf`, `0 * inf` | `ValueError`; `ieee1788`'s are NaN | "2026-09-26 revision: owner answers to the open questions" (Q2); the layer: Q13(b) |
+| interval orders | `less`, `strictLess` | `weakly_less()`, `strictly_less()`; `<` is pointwise, a `TruthSet` | "names for 1788's interval orders" |
+| NaI and signals | NaI; signals are flags | no NaI; UndefinedOperation raises, PossiblyUndefined warns | "decorations (com/dac/def/trv/ill)"; "2026-09-26 revision: owner answers to the open questions"; rows: no NaI |
+| parsing | may round first | exact: validity decided on the exact bounds | "M13's proposed categories and choices" (b); rows: exact parsing decides validity |
+| constructors | the binary64 hull | the exact set (`[0.1, infinity]` is `[1/10, inf)`); the hull is `ieee1788.text_to_interval` | "2026-09-26 revision: M13g part 1"; "the 1788 layer (M16b)" (d) (the owner's question closed as built, 2026-10-03) |
+| tightness | some vectors 1-2 doubles loose | the tightest enclosure | "M13's proposed categories and choices" (a); rows: tighter than the vector |
+| decorations | on every op; decided in binary64 | only on `DecoratedInterval`; decided on the exact set, per piece | "decorations (com/dac/def/trv/ill)"; "M13's proposed categories and choices" (c), (d); "2026-09-26 revision: M13g part 3" |
+| mulRevToPair's decoration | the first interval as `c / b` | `mul_rev` is one op, trv; 1788's pair is `ieee1788.mul_rev_to_pair` | "the 1788 layer (M16b)" (c) (the owner's question closed as built, 2026-10-03); rows: decoration expectations |
+| numbers of the empty set | NaN | `ValueError`; `mig`/`mag` of the set, not the hull; `ieee1788`'s are NaN | "1788's numeric ops on a multi-interval"; the layer: "the 1788 layer (M16b)" (b) (the owner's answer, 2026-10-03) |
+| reductions | NaN for nan, `inf + -inf`, `0 * inf` | `ValueError`; `ieee1788`'s are NaN | "2026-09-26 revision: owner answers to the open questions"; the layer: "the 1788 layer (M16b)" (b) |
 | zero | signed | one zero | "2026-09-22 revision: signed zero dropped" |
 | warnings | none | `EmptySetPropagationWarning`, `DomainClippedWarning`, `IndeterminateResultWarning`, `HullWarning` | "empties and warnings" |
 
@@ -394,12 +395,14 @@ Allen relations and matrices, `TruthSet` comparisons.
 * `tests/` — the suite; `tests/oracles.py` holds the brute-force reference the arithmetic is checked
   against, `tests/itf1788/` the vendored conformance vectors (Apache 2.0, LGPL-2.1-or-later or
   all-permissive per file; see its README)
-* `docs/decisions.md` — every decision, D1–D30 and a dated log
+* `docs/decisions/` — every decision, one record each (`context-engine decision find <words>` searches them);
+  `docs/decisions.md` is the dated log they were imported from, frozen
 * `docs/records.md` — what was built after v2, each item's evidence
 * `docs/archive/v2/` — the v2 plans, read-only: the design (`v2-plan.md`, its "current design" the fullest
   statement of the semantics as built) and the milestones with their records (`v2-implementation-plan.md`)
-* `HANDOFF.md` — what is open now: ranked items, questions for the owner, a session log (older entries in
-  `docs/session-log.md`)
+* `HANDOFF.md` — the orientation note for whoever works here next; what is open (ranked items, questions
+  for the owner) is the board, `tasks/` (`context-engine task list`), and the session log is
+  `docs/ledger/session-log.md` (older entries in `docs/session-log.md`)
 * `references/` — papers and the modulo derivations; `v1-readme.md` is the previous implementation's
   README, kept for its notes. v1 itself was deleted on 2026-10-04 once v2 did everything it did
   (`references/v1-parity-2026-10-04/`); git history has it (`git show 22e16f8:archive/v1/multi_interval.py`)
